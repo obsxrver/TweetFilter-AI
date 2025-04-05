@@ -24,7 +24,7 @@
     const tweetIDRatingCache = {}; // ID-based cache for persistent storage
     const PROCESSING_DELAY_MS = 1000; // Delay before processing a tweet (ms)
     const API_CALL_DELAY_MS = 2000; // Minimum delay between API calls (ms)
-    let currentFilterThreshold = 5; // Filter threshold for tweet visibility
+    let currentFilterThreshold = 1; // Filter threshold for tweet visibility
     let observedTargetNode = null;
     let lastAPICallTime = 0;
     let pendingRequests = 0;
@@ -1139,6 +1139,69 @@
         processedTweets.add(tweetId);
         setTimeout(() => { delayedProcessTweet(tweetArticle, tweetId); }, PROCESSING_DELAY_MS);
     }
+    
+/**
+ * Extracts the full context of a tweet article and returns a formatted string.
+ *
+ * Schema:
+ * [TWEET]:
+ * @[the author of the tweet]
+ * [the text of the tweet]
+ * [MEDIA_DESCRIPTION]:
+ * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ * [QUOTED_TWEET]:
+ * [the text of the quoted tweet]
+ * [QUOTED_TWEET_MEDIA_DESCRIPTION]:
+ * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ *
+ * @param {Element} tweetArticle - The tweet article element.
+ * @param {string} tweetId - The tweet's ID.
+ * @param {string} apiKey - API key used for getting image descriptions.
+ * @returns {Promise<string>} - The full context string.
+ */
+async function getFullContext(tweetArticle, tweetId, apiKey) {
+    const userHandle = getUserHandle(tweetArticle);
+    const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+    const mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
+    
+    // Retrieve media descriptions for the main tweet, if available.
+    let mainMediaDescriptions = "";
+    if (mainMediaLinks.length > 0) {
+        // Assuming getImageDescription returns a string formatted as:
+        // "[IMAGE 1]: description, [IMAGE 2]: description, etc."
+        mainMediaDescriptions = await getImageDescription(mainMediaLinks, apiKey);
+    }
+    
+    // Retrieve quoted tweet content (if any)
+    let quotedText = "";
+    let quotedMediaDescriptions = "";
+    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+    if (quoteContainer) {
+        quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
+        const quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
+        if (quotedMediaLinks.length > 0) {
+            quotedMediaDescriptions = await getImageDescription(quotedMediaLinks, apiKey);
+        }
+    }
+    
+    // Build the formatted context string.
+    let fullContext = `[TWEET]:
+@${userHandle}
+${mainText}
+[MEDIA_DESCRIPTION]:
+${mainMediaDescriptions}
+`;
+    if (quotedText) {
+        fullContext += `[QUOTED_TWEET]:
+${quotedText}
+[QUOTED_TWEET_MEDIA_DESCRIPTION]:
+${quotedMediaDescriptions}
+`;
+    }
+    
+    return fullContext;
+}
+
 
     /**
      * Applies filtering to all tweets currently in the observed container.
@@ -1161,17 +1224,54 @@
             }
         });
     }
+    var threadHist=""
+    async function handleThreads() {
+        let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+        if(conversation) {
+            
+            if(conversation.dataset.threadHist==undefined) {
+                conversation.dataset.threadHist= 'pending';
+                threadHist="";
+                //wait half a second then continue
+                await new Promise(resolve => setTimeout(resolve, 500));
 
+                //janky, but we're assuming that since threadHist is undefined, we just opened the thread and therefore the first article is the head. 
+                const firstArticle = document.querySelector('article[data-testid="tweet"]');
+                const apiKey = GM_getValue('openrouter-api-key', '');
+                const tweetId = getTweetID(firstArticle);
+                console.log(firstArticle);
+                const fullcxt = await getFullContext(firstArticle,tweetId,apiKey);
+                threadHist=fullcxt.fullContextWithImageDescription;
+                conversation.dataset.threadHist=threadHist;
+                //this lets us know if we are still on the main post of the conversation or if we are on a reply to the main post. Will disapear every time we dive deeper
+                conversation.firstChild.dataset.canary="true";
+            }
+            else if(conversation.dataset.threadHist=="pending") {
+                return;
+            }
+            else if(conversation.dataset.threadHist!="pending" && conversation.firstChild.dataset.canary==undefined) {
+                conversation.firstChild.dataset.canary="pending";
+                const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
+                const apiKey = GM_getValue('openrouter-api-key', '');
+                const tweetId = getTweetID(nextArticle);
+                const newContext = await getFullContext(nextArticle,tweetId,apiKey);
+                threadHist=  newContext.fullContextWithImageDescription+"\n[IN REPLY TO]\n"+threadHist;
+                conversation.dataset.threadHist=threadHist;
+            }
+        }
+    }
     // ----- MutationObserver Setup -----
-
     /**
      * Handles DOM mutations to detect new tweets added to the timeline.
      * @param {MutationRecord[]} mutationsList - List of observed mutations.
      */
     function handleMutations(mutationsList) {
+        
         for (const mutation of mutationsList) {
+            handleThreads();
             if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                 mutation.addedNodes.forEach(node => {
+                    
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
                             scheduleTweetProcessing(node);
