@@ -779,7 +779,7 @@
         let userMessage = [
             {
                 "type": "text",
-                "text": "Return a brief description of each image in the format [IMAGE 1]: Description, [IMAGE 2]: Description, etc."
+                "text": "Respond with a nuanced, description of each image in the format [IMAGE 1]: Description [newline] [IMAGE 2]: Description [newline] etc."
             }
         ];
         urls.forEach((url) => {
@@ -869,11 +869,33 @@
                                 "role": "user",
                                 "content":
                                     `You are an expert critic of tweets.
-                                Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact. 
+                                 You will be given a Tweet, structured like this:
+
+                                 _______TWEET SCHEMA_______
+                                 _______BEGIN TWEET_______
+                                [TWEET]: (the tweet which you are to review)
+                                @[the author of the tweet]
+                                [the text of the tweet] 
+                                [MEDIA_DESCRIPTION]: 
+                                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                                [QUOTED_TWEET]: (if the author is quoting another tweet)
+                                [the text of the quoted tweet]
+                                [QUOTED_TWEET_MEDIA_DESCRIPTION]:
+                                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                                [IN REPLY TO]: (if the author is replying to another tweet)
+                                [the text of the tweet being replied to]
+                                [MEDIA_DESCRIPTION]: 
+                                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                                _______END TWEET_______
+                                _______END TWEET SCHEMA_______
+
+                                Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.
                                 Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format: 
                                 [SCORE: X], where X is a number from 1 (lowest quality) to 10 (highest quality).
-                                Tweet:
-                                ${tweetText}`
+                                _______BEGIN TWEET_______
+                                ${tweetText}
+                                _______END TWEET_______`
+
                             }
                         ],
                         "temperature": 0.8,
@@ -976,123 +998,115 @@
      * @param {string} tweetId - The tweet ID.
      */
     async function delayedProcessTweet(tweetArticle, tweetId) {
-    const apiKey = GM_getValue('openrouter-api-key', '');
-    console.groupCollapsed(`Tweet Log (Delayed ${PROCESSING_DELAY_MS}ms): ${tweetId}`);
-    let score = 5; // Default score if rating fails
-    let description = "";
-    try {
-        // Check if tweet's author is blacklisted (fast path)
-        const userHandle = getUserHandle(tweetArticle);
-        if (userHandle && isUserBlacklisted(userHandle)) {
-            console.debug(`[${tweetId}] Author @${userHandle} is blacklisted, assigning score 10`);
-            tweetArticle.dataset.sloppinessScore = '10';
-            tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'rated';
-            tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            setScoreIndicator(tweetArticle, 10, 'rated', "Blacklisted user");
+        const apiKey = GM_getValue('openrouter-api-key', '');
+        console.groupCollapsed(`Tweet Log (Delayed ${PROCESSING_DELAY_MS}ms): ${tweetId}`);
+        let score = 5; // Default score if rating fails
+        let description = "";
+        try {
+            // Check if tweet's author is blacklisted (fast path)
+            const userHandle = getUserHandle(tweetArticle);
+            if (userHandle && isUserBlacklisted(userHandle)) {
+                console.debug(`[${tweetId}] Author @${userHandle} is blacklisted, assigning score 10`);
+                tweetArticle.dataset.sloppinessScore = '10';
+                tweetArticle.dataset.blacklisted = 'true';
+                tweetArticle.dataset.ratingStatus = 'rated';
+                setScoreIndicator(tweetArticle, 10, 'rated');
+                filterSingleTweet(tweetArticle);
+                console.groupEnd();
+                return;
+            }
+
+            // Check if a cached rating exists (either ID-based or text-based)
+            if (applyTweetCachedRating(tweetArticle)) {
+                console.debug(`[${tweetId}] Using cached rating: ${tweetArticle.dataset.sloppinessScore}`);
+                console.groupEnd();
+                return;
+            }
+
+            // --- Set pending status before calling API ---
+            tweetArticle.dataset.ratingStatus = 'pending';
+            setScoreIndicator(tweetArticle, null, 'pending');
+
+            // --- Extract Main Tweet Content ---
+            const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+            let mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
+            // --- Extract Quoted Tweet Content (if any) ---
+            let quotedText = "";
+            let quotedMediaLinks = [];
+            const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+            if (quoteContainer) {
+                quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
+                quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
+            }
+
+            //easiest way to differentiate qt's media from origional tweet's media: remove all media elinks from mainmedialinks if they are in quotedMediaLinks
+            mainMediaLinks = mainMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+
+            let fullContext = `[TWEET]\n@${userHandle}:\n`;
+
+            fullContext += mainText;
+            let fullContextWithImageDescription = fullContext;
+            if (mainMediaLinks.length > 0) {
+                let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey);
+                fullContext += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinks.join(", ");
+                fullContextWithImageDescription += "\n[MEDIA_DESCRIPTION]\n" + mainMediaLinksDescription;
+            }
+            if (quotedText) {
+                fullContext += "\n[QUOTED_TWEET]: \n" + quotedText;
+                fullContextWithImageDescription += "\n[QUOTED_TWEET]: \n" + quotedText;
+                if (quotedMediaLinks.length > 0) {
+                    let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey);
+                    fullContext += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]\n" + quotedMediaLinks.join(", ");
+                    fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]\n" + quotedMediaLinksDescription;
+                }
+            }
+
+            console.debug(`[${tweetId}] Full context for rating: ${fullContextWithImageDescription}`);
+            // --- API Call or Fallback ---
+
+            if (apiKey && fullContext) {
+                //console.debug(`[${tweetId}] Rating with model: ${selectedModel} using full context...`);
+                try {
+                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey);
+                    score = rating.score;
+                    description = rating.content;
+                    tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
+                    tweetArticle.dataset.ratingDescription=description||"not available";
+                } catch (apiError) {
+                    console.error(`[${tweetId}] API error:`, apiError);
+                    score = Math.floor(Math.random() * 10) + 1; // Fallback to a random score
+                    tweetArticle.dataset.ratingStatus = 'error';
+                }
+            } else {
+                // If there's no API key or no textual content (e.g. only media), use a fallback random score.
+                score = Math.floor(Math.random() * 10) + 1;
+                tweetArticle.dataset.ratingStatus = 'rated';
+                if (!apiKey) {
+                    console.debug(`[${tweetId}] No API key - using random score: ${score}`);
+                } else if (!fullContext) {
+                    console.debug(`[${tweetId}] No textual content - using random score: ${score}`);
+                }
+            }
+
+            tweetArticle.dataset.sloppinessScore = score.toString();
+            setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
             filterSingleTweet(tweetArticle);
-            console.groupEnd();
-            return;
-        }
 
-        // Check if a cached rating exists (either ID-based or text-based)
-        if (applyTweetCachedRating(tweetArticle)) {
-            // Even if cached, update conversation context if possible.
-            if (tweetArticle.dataset.fullContextWithImageDescription) {
-                updateConversationContext(tweetArticle, tweetArticle.dataset.fullContextWithImageDescription);
-            }
-            console.debug(`[${tweetId}] Using cached rating: ${tweetArticle.dataset.sloppinessScore}`);
-            console.groupEnd();
-            return;
-        }
-
-        // --- Set pending status before calling API ---
-        tweetArticle.dataset.ratingStatus = 'pending';
-        setScoreIndicator(tweetArticle, null, 'pending');
-
-        // --- Extract Main Tweet Content ---
-        const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-        const mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
-
-        // --- Extract Quoted Tweet Content (if any) ---
-        let quotedText = "";
-        let quotedMediaLinks = [];
-        const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-        if (quoteContainer) {
-            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
-            quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
-        }
-
-        let fullContext = `${userHandle}\n` + mainText;
-        let fullContextWithImageDescription = fullContext;
-
-        if (mainMediaLinks.length > 0) {
-            let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey);
-            fullContext += "\nMedia: " + mainMediaLinks.join(", ");
-            fullContextWithImageDescription += "\nMedia Description: " + mainMediaLinksDescription;
-        }
-        if (quotedText) {
-            fullContext += "\nQuoted tweet: " + quotedText;
-            fullContextWithImageDescription += "\nQuoted tweet: " + quotedText;
-            if (quotedMediaLinks.length > 0) {
-                let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey);
-                fullContext += "\nQuoted Media: " + quotedMediaLinks.join(", ");
-                fullContextWithImageDescription += "\nQuoted Media Description: " + quotedMediaLinksDescription;
-            }
-        }
-
-        // --- Save full context in dataset for future reference ---
-        tweetArticle.dataset.fullContextWithImageDescription = fullContextWithImageDescription;
-
-        // --- Conversation Thread Handling ---
-        // Even if the tweet isn’t newly processed, update the conversation container.
-        updateConversationContext(tweetArticle, fullContextWithImageDescription);
-
-        console.debug(`[${tweetId}] Full context for rating: ${fullContextWithImageDescription}`);
-
-        // --- API Call or Fallback ---
-        if (apiKey && fullContext) {
-            try {
-                const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey);
-                score = rating.score;
-                description = rating.content;
-                tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
-                tweetArticle.dataset.ratingDescription = description || "not available";
-            } catch (apiError) {
-                console.error(`[${tweetId}] API error:`, apiError);
-                score = Math.floor(Math.random() * 10) + 1; // Fallback to a random score
+            console.log(`${tweetId}: ${fullContext} (Score: ${score})`);
+        } catch (error) {
+            console.error("Error processing tweet:", tweetId, error);
+            if (!tweetArticle.dataset.sloppinessScore) {
+                tweetArticle.dataset.sloppinessScore = '5';
                 tweetArticle.dataset.ratingStatus = 'error';
+                
+                tweetArticle.dataset.ratingDescription="error processing tweet";
+                setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
+                filterSingleTweet(tweetArticle);
             }
-        } else {
-            // Fallback if there's no API key or textual content.
-            score = Math.floor(Math.random() * 10) + 1;
-            tweetArticle.dataset.ratingStatus = 'rated';
-            if (!apiKey) {
-                console.debug(`[${tweetId}] No API key - using random score: ${score}`);
-            } else if (!fullContext) {
-                console.debug(`[${tweetId}] No textual content - using random score: ${score}`);
-            }
+        } finally {
+            console.groupEnd();
         }
-
-        tweetArticle.dataset.sloppinessScore = score.toString();
-        setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
-        filterSingleTweet(tweetArticle);
-        console.log(`${tweetId}: ${fullContext} (Score: ${score})`);
-    } catch (error) {
-        console.error("Error processing tweet:", tweetId, error);
-        if (!tweetArticle.dataset.sloppinessScore) {
-            tweetArticle.dataset.sloppinessScore = '5';
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = "error processing tweet";
-            setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
-            filterSingleTweet(tweetArticle);
-        }
-    } finally {
-        console.groupEnd();
     }
-}
-
-    
 
 
     /**
