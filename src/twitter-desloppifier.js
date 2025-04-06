@@ -40,6 +40,29 @@
     let modelTopP = GM_getValue('modelTopP', 0.9);
     let imageModelTemperature = GM_getValue('imageModelTemperature', 0.7);
     let imageModelTopP = GM_getValue('imageModelTopP', 0.9);
+    
+    /**
+     * Helper function to check if a model supports images based on its architecture
+     * @param {string} modelId - The model ID to check
+     * @returns {boolean} - Whether the model supports image input
+     */
+    function modelSupportsImages(modelId) {
+        if (!availableModels || availableModels.length === 0) {
+            return false; // If we don't have model info, assume it doesn't support images
+        }
+        
+        const model = availableModels.find(m => m.id === modelId);
+        if (!model) {
+            return false; // Model not found in available models list
+        }
+        
+        // Check if model supports images based on its architecture
+        return model.architecture && 
+            ((model.architecture.input_modalities && 
+              model.architecture.input_modalities.includes('image')) ||
+             (model.architecture.modality && 
+              model.architecture.modality.includes('image')));
+    }
 
     // Load cached ratings from persistent storage (if any)
     let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -1649,6 +1672,129 @@
                 pendingRequests++;
                 showStatus(`Rating tweet... (${pendingRequests} pending)`);
                 
+                let messages = [
+                    {
+                        "role": "user",
+                        "content":
+                            `
+                         You will be given a Tweet, structured like this:
+
+                         _______TWEET SCHEMA_______
+                         _______BEGIN TWEET_______
+                       
+                        
+                        [TWEET TweetID]
+                        [the text of the tweet being replied to]
+                        [MEDIA_DESCRIPTION]: 
+                        [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                        [REPLY] (if the author is replying to another tweet)
+                        [TWEET TweetID]: (the tweet which you are to review)
+                        @[the author of the tweet]
+                        [the text of the tweet] 
+                        [MEDIA_DESCRIPTION]: 
+                        [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                        [QUOTED_TWEET]: (if the author is quoting another tweet)
+                        [the text of the quoted tweet]
+                        [QUOTED_TWEET_MEDIA_DESCRIPTION]:
+                        [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                        _______END TWEET_______
+                        _______END TWEET SCHEMA_______
+
+                        You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}. 
+                        Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.
+                        Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
+                        {score: X}, where X is a number from 1 (lowest quality) to 10 (highest quality).
+                        for example: {score: 1}, {score: 2}, {score: 3}, {score: 4}, {score: 5}, {score: 6}, {score: 7}, {score: 8}, {score: 9}, {score: 10}
+                        If one of the above is not present, the program will not be able to parse the response and will return an error.
+                        Ensure that you consider these additionaluser-defined instructions in your analysis and scoring:
+                        [USER-DEFINED INSTRUCTIONS]:
+                        ${USER_DEFINED_INSTRUCTIONS}
+                        _______BEGIN TWEET_______
+                        ${tweetText}
+                        _______END TWEET_______`
+                    }
+                ];
+
+                // Check if the selected model supports images
+                const supportsImages = modelSupportsImages(selectedModel);
+                
+                if (supportsImages) {
+                    // Extract image URLs from JSON format in the tweet text
+                    const extractImageUrls = (text) => {
+                        // Look for JSON-like format of image URLs
+                        const mediaUrlsRegex = /\[MEDIA_URLS\]:\s*{([^}]+)}/g;
+                        const quotedMediaUrlsRegex = /\[QUOTED_TWEET_MEDIA_URLS\]:\s*{([^}]+)}/g;
+                        
+                        let imageUrls = [];
+                        let match;
+                        
+                        // Extract from main tweet
+                        while ((match = mediaUrlsRegex.exec(text)) !== null) {
+                            try {
+                                // Get the JSON-like content
+                                const jsonContent = match[1];
+                                
+                                // Use a simpler regex approach to extract the URLs directly
+                                const urlRegex = /Image\d+:\s*"(https?:\/\/[^"]+)"/g;
+                                let urlMatch;
+                                
+                                while ((urlMatch = urlRegex.exec(jsonContent)) !== null) {
+                                    if (urlMatch[1]) {
+                                        imageUrls.push(urlMatch[1]);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Error extracting main image URLs:', e);
+                            }
+                        }
+                        
+                        // Extract from quoted tweet
+                        while ((match = quotedMediaUrlsRegex.exec(text)) !== null) {
+                            try {
+                                // Get the JSON-like content
+                                const jsonContent = match[1];
+                                
+                                // Use a simpler regex approach to extract the URLs directly
+                                const urlRegex = /Image\d+:\s*"(https?:\/\/[^"]+)"/g;
+                                let urlMatch;
+                                
+                                while ((urlMatch = urlRegex.exec(jsonContent)) !== null) {
+                                    if (urlMatch[1]) {
+                                        imageUrls.push(urlMatch[1]);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Error extracting quoted image URLs:', e);
+                            }
+                        }
+                        
+                        return imageUrls;
+                    };
+                    
+                    // Extract image URLs from text and add them to the message
+                    const imageUrls = extractImageUrls(tweetText);
+                    console.log(`Found ${imageUrls.length} image URLs to pass to vision model`);
+                    
+                    if (imageUrls.length > 0) {
+                        // Convert simple message to content array format for multimodal input
+                        const textContent = messages[0].content;
+                        messages[0].content = [
+                            {
+                                "type": "text",
+                                "text": textContent
+                            }
+                        ];
+                        
+                        // Add each image URL as content to the message
+                        for (const url of imageUrls) {
+                            messages[0].content.push({
+                                "type": "image_url",
+                                "image_url": { "url": url }
+                            });
+                        }
+                    }
+                }
+                
                 GM_xmlhttpRequest({
                     method: "POST",
                     url: "https://openrouter.ai/api/v1/chat/completions",
@@ -1660,52 +1806,10 @@
                     },
                     data: JSON.stringify({
                         "model": selectedModel,
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content":
-                                    `
-                                 You will be given a Tweet, structured like this:
-
-                                 _______TWEET SCHEMA_______
-                                 _______BEGIN TWEET_______
-                               
-                                
-                                [TWEET TweetID]
-                                [the text of the tweet being replied to]
-                                [MEDIA_DESCRIPTION]: 
-                                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                                [REPLY] (if the author is replying to another tweet)
-                                [TWEET TweetID]: (the tweet which you are to review)
-                                @[the author of the tweet]
-                                [the text of the tweet] 
-                                [MEDIA_DESCRIPTION]: 
-                                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                                [QUOTED_TWEET]: (if the author is quoting another tweet)
-                                [the text of the quoted tweet]
-                                [QUOTED_TWEET_MEDIA_DESCRIPTION]:
-                                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                                _______END TWEET_______
-                                _______END TWEET SCHEMA_______
-
-                                You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}. 
-                                Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.
-                                Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
-                                {score: X}, where X is a number from 1 (lowest quality) to 10 (highest quality).
-                                for example: {score: 1}, {score: 2}, {score: 3}, {score: 4}, {score: 5}, {score: 6}, {score: 7}, {score: 8}, {score: 9}, {score: 10}
-                                If one of the above is not present, the program will not be able to parse the response and will return an error.
-                                Ensure that you consider these additionaluser-defined instructions in your analysis and scoring:
-                                [USER-DEFINED INSTRUCTIONS]:
-                                ${USER_DEFINED_INSTRUCTIONS}
-                                _______BEGIN TWEET_______
-                                ${tweetText}
-                                _______END TWEET_______`
-
-                            }
-                        ]
+                        "messages": messages,
+                        "temperature": modelTemperature,
+                        "top_p": modelTopP
                     }),
-                    "temperature": modelTemperature,
-                    "top_p": modelTopP,
                     timeout: 30000, // 30 seconds timeout
                     onload: function (response) {
                         pendingRequests--;
@@ -1882,7 +1986,13 @@
       
           if (mainMediaLinks.length > 0) {
             let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-            fullContext += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinks.join(", ");
+            fullContext += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
+            let urlstr="{";
+            for (let i = 0; i < mainMediaLinks.length; i++) {
+                urlstr += `Image${i+1}: "${mainMediaLinks[i]}"${i==mainMediaLinks.length-1 ? "" : ", "}`;
+            }
+            urlstr+="}"
+            fullContextWithImageDescription += "\n[MEDIA_URLS]:\n" + urlstr;
             fullContextWithImageDescription += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinksDescription;
             
             logData.imageDescription = mainMediaLinksDescription;
@@ -1893,7 +2003,13 @@
             fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n" + quotedText;
             if (quotedMediaLinks.length > 0) {
               let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-              fullContext += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaLinks.join(", ");
+              fullContext += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
+              let urlstr="{";
+              for (let i = 0; i < quotedMediaLinks.length; i++) {
+                  urlstr += `Image${i+1}: "${quotedMediaLinks[i]}"${i==quotedMediaLinks.length-1 ? "" : ", "}`;
+              }
+              urlstr+="}"
+              fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + urlstr;
               fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaLinksDescription;
               
               if (logData.imageDescription) {
@@ -2160,19 +2276,46 @@ ${quotedMediaDescriptions}
 
         for (const mutation of mutationsList) {
             handleThreads();
-            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                mutation.addedNodes.forEach(node => {
-
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
-                            scheduleTweetProcessing(node);
+            if (mutation.type === 'childList') {
+                // Process added nodes
+                if (mutation.addedNodes.length > 0) {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                                scheduleTweetProcessing(node);
+                            }
+                            else if (node.querySelectorAll) {
+                                const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                                tweetsInside.forEach(scheduleTweetProcessing);
+                            }
                         }
-                        else if (node.querySelectorAll) {
-                            const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                            tweetsInside.forEach(scheduleTweetProcessing);
+                    });
+                }
+                
+                // Process removed nodes to clean up description elements
+                if (mutation.removedNodes.length > 0) {
+                    mutation.removedNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            // Check if the removed node is a tweet article or contains tweet articles
+                            const isTweet = node.matches && node.matches(TWEET_ARTICLE_SELECTOR);
+                            const removedTweets = isTweet ? [node] : 
+                                (node.querySelectorAll ? Array.from(node.querySelectorAll(TWEET_ARTICLE_SELECTOR)) : []);
+                            
+                            // For each removed tweet, find and remove its description element
+                            removedTweets.forEach(tweet => {
+                                const indicator = tweet.querySelector('.score-indicator');
+                                if (indicator && indicator.dataset.id) {
+                                    const descId = 'desc-' + indicator.dataset.id;
+                                    const descBox = document.getElementById(descId);
+                                    if (descBox) {
+                                        descBox.remove();
+                                        console.debug(`Removed description box ${descId} for tweet that was removed from the DOM`);
+                                    }
+                                }
+                            });
                         }
-                    }
-                });
+                    });
+                }
             }
         }
     }
@@ -2215,6 +2358,16 @@ ${quotedMediaDescriptions}
         }
 
         return allValid;
+    }
+
+    /**
+     * Cleans up all score description elements from the DOM
+     */
+    function cleanupDescriptionElements() {
+        // Remove all score description elements
+        const descElements = document.querySelectorAll('.score-description');
+        descElements.forEach(el => el.remove());
+        console.log(`Cleaned up ${descElements.length} description elements`);
     }
 
     /**
@@ -2263,6 +2416,10 @@ ${quotedMediaDescriptions}
                 if (settingsUI) settingsUI.remove();
                 const statusIndicator = document.getElementById('status-indicator');
                 if (statusIndicator) statusIndicator.remove();
+                
+                // Clean up all description elements
+                cleanupDescriptionElements();
+                
                 console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
