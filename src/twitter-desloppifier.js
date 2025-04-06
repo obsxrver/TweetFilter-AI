@@ -12,6 +12,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      openrouter.ai
 // @run-at       document-idle
+// @license      MIT
 // ==/UserScript==
 
 (function () {
