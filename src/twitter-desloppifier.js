@@ -413,8 +413,8 @@
     /* Rating indicator shown on tweets */
     .score-indicator {
         position: absolute;
-        top: 5px;
-        right: 5px;
+        bottom: 5px;
+        left: 5px;
         background-color: rgba(22, 24, 28, 0.9);
         color: #e7e9ea;
         padding: 4px 10px;
@@ -679,6 +679,21 @@
     function addSliderUI() {
         if (document.getElementById('tweet-filter-container')) return;
         
+        // Create toggle button for reopening the slider
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'filter-toggle';
+        toggleBtn.className = 'toggle-button';
+        toggleBtn.textContent = 'Filter Slider';
+        toggleBtn.style.display = 'none'; // Hidden by default since slider is visible
+        toggleBtn.onclick = () => {
+            const container = document.getElementById('tweet-filter-container');
+            if (container) {
+                container.classList.remove('hidden');
+                toggleBtn.style.display = 'none';
+            }
+        };
+        document.body.appendChild(toggleBtn);
+        
         const container = document.createElement('div');
         container.id = 'tweet-filter-container';
         
@@ -688,6 +703,11 @@
         closeBtn.innerHTML = '×';
         closeBtn.onclick = () => {
             container.classList.add('hidden');
+            // Show the toggle button when slider is closed
+            const filterToggle = document.getElementById('filter-toggle');
+            if (filterToggle) {
+                filterToggle.style.display = 'block';
+            }
         };
         container.appendChild(closeBtn);
         
