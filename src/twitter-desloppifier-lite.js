@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         X/Twitter De-Sloppifier
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.1
+// @version      Version 1.0
 // @description  Advanced tweet rating and filtering with model search, enhanced rating indicator, API retry functionalities, and blacklist support.
 // @author       Obsxrver
 // @match        *://twitter.com/*
@@ -84,28 +84,50 @@
     const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 
     // ----- UI Styling -----
-    GM_addStyle(`/*
-        Modern X-Inspired Styles - Compact Version
-        ---------------------------------
-    */
+    GM_addStyle(`
+    /* Common styles */
+    .toggle-button, #tweet-filter-container, #settings-container, #status-indicator, .score-description {
+        position: fixed;
+        background-color: rgba(22, 24, 28, 0.95);
+        color: #e7e9ea;
+        border-radius: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        z-index: 9999;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+    }
 
     /* Main tweet filter container */
     #tweet-filter-container {
-        position: fixed;
         top: 70px;
         right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
         padding: 10px 12px;
         border-radius: 12px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 13px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
         display: flex;
         align-items: center;
         gap: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Hidden state */
+    .hidden {
+        display: none !important;
+    }
+    
+    /* Show/hide button */
+    .toggle-button {
+        right: 15px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    
+    #filter-toggle {
+        top: 70px;
+    }
+    
+    #settings-toggle {
+        top: 120px;
     }
 
     /* Close button styles */
@@ -132,35 +154,7 @@
         opacity: 1;
     }
 
-    /* Hidden state */
-    .hidden {
-        display: none !important;
-    }
-
-    /* Show/hide button */
-    .toggle-button {
-        position: fixed;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 8px 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
-        z-index: 9999;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    #filter-toggle {
-        top: 70px;
-    }
-
-    #settings-toggle {
-        top: 120px;
-    }
-
+    /* Slider styles */
     #tweet-filter-container label {
         margin: 0;
         font-weight: bold;
@@ -182,49 +176,22 @@
         border-radius: 4px;
     }
 
-    /* Settings UI with Tabs */
+    /* Settings Container */
     #settings-container {
-        position: fixed;
         top: 120px;
         right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
         padding: 12px 15px;
-        border-radius: 12px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 13px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
         display: flex;
         flex-direction: column;
         gap: 6px;
         width: 320px;
         max-height: 70vh;
         overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
         line-height: 1.3;
     }
 
-    /* Scrollbar styling for settings container */
-    #settings-container::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    #settings-container::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-
-    #settings-container::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-
-    #settings-container::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
-    /* Tab Navigation */
+    /* Tab styles */
     .tab-navigation {
         display: flex;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -245,7 +212,6 @@
         cursor: pointer;
         border-bottom: 2px solid transparent;
         font-size: 13px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     .tab-button.active {
@@ -253,7 +219,6 @@
         border-bottom: 2px solid #1d9bf0;
     }
 
-    /* Tab Content */
     .tab-content {
         display: none;
     }
@@ -262,14 +227,9 @@
         display: block;
     }
 
-    /* Form elements - compact version */
-    #openrouter-api-key,
-    #model-selector,
-    #model-search-box,
-    #image-model-selector,
-    #image-model-search-box,
-    #handle-input,
-    #user-instructions {
+    /* Form elements */
+    #openrouter-api-key, #model-selector, #model-search-box, 
+    #image-model-selector, #image-model-search-box, #handle-input, #user-instructions {
         width: 100%;
         padding: 6px;
         border-radius: 6px;
@@ -278,7 +238,6 @@
         margin-bottom: 6px;
         background-color: rgba(39, 44, 48, 0.95);
         color: #e7e9ea;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 12px;
     }
 
@@ -287,7 +246,7 @@
         resize: vertical;
     }
 
-    /* Parameter controls - compact version */
+    /* Parameter controls */
     .parameter-row {
         display: flex;
         align-items: center;
@@ -330,7 +289,6 @@
 
     .parameter-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
-        appearance: none;
         width: 10px;
         height: 10px;
         border-radius: 50%;
@@ -338,12 +296,11 @@
         cursor: pointer;
     }
 
-    /* Section styles - compact */
+    /* Section styles */
     .section-title {
         font-weight: bold;
         margin-top: 10px;
         margin-bottom: 3px;
-        color: #e7e9ea;
     }
 
     .section-description {
@@ -353,7 +310,7 @@
         opacity: 0.8;
     }
 
-    /* Handle list styling - compact */
+    /* Handle list */
     .handle-list {
         margin-top: 6px;
         max-height: 100px;
@@ -376,7 +333,6 @@
     }
 
     .handle-text {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 12px;
     }
 
@@ -401,7 +357,7 @@
         margin-left: 5px;
     }
 
-    /* Button styling - compact */
+    /* Buttons */
     .settings-button {
         background-color: #1d9bf0;
         color: white;
@@ -411,7 +367,6 @@
         cursor: pointer;
         font-weight: bold;
         transition: background-color 0.2s;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         margin-top: 6px;
         margin-bottom: 2px;
         width: 100%;
@@ -434,7 +389,7 @@
         background-color: #e53935;
     }
 
-    /* Rating indicator shown on tweets */ 
+    /* Rating indicator */
     .score-indicator {
         position: absolute;
         top: 10px;
@@ -443,83 +398,61 @@
         color: #e7e9ea;
         padding: 4px 10px;
         border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 14px;
         font-weight: bold;
         z-index: 100;
         cursor: pointer;
-        border: 1px solid rgba(255, 255, 255, 0.1);
         min-width: 20px;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
-
-    /* Scrollbar styling for all scrollable elements */
-    .handle-list::-webkit-scrollbar {
-        width: 5px;
+    
+    /* Scrollbar styling */
+    .handle-list::-webkit-scrollbar, #settings-container::-webkit-scrollbar {
+        width: 6px;
     }
-
-    .handle-list::-webkit-scrollbar-track {
+    
+    .handle-list::-webkit-scrollbar-track, #settings-container::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
     }
 
-    .handle-list::-webkit-scrollbar-thumb {
+    .handle-list::-webkit-scrollbar-thumb, #settings-container::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.2);
         border-radius: 3px;
     }
 
-    .handle-list::-webkit-scrollbar-thumb:hover {
+    .handle-list::-webkit-scrollbar-thumb:hover, #settings-container::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.3);
     }
 
-    /* Refresh animation */
-    .refreshing {
-        animation: spin 1s infinite linear;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* Refresh models button */
-    .refresh-models {
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-size: 13px;
-        cursor: pointer;
-        margin-left: 3px;
-        opacity: 0.8;
-        transition: opacity 0.2s;
-    }
-
-    .refresh-models:hover {
-        opacity: 1;
-    }
-
-    /* The description box for ratings */
+    /* Rating description */
     .score-description {
         display: none;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
         padding: 16px 20px;
         border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 16px;
         line-height: 1.5;
         z-index: 99999999;
-        position: absolute;
         width: clamp(300px, 30vw, 500px);
         max-height: 60vh;
         overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
     }
 
-    /* Rating status classes */
+    /* Status indicator */
+    #status-indicator {
+        bottom: 20px;
+        right: 20px;
+        padding: 10px 15px;
+        font-size: 12px;
+        display: none;
+    }
+    
+    #status-indicator.active {
+        display: block;
+    }
+    
+    /* Rating status styles */
     .cached-rating {
         background-color: rgba(76, 175, 80, 0.9) !important;
         color: white !important;
@@ -540,24 +473,28 @@
         color: white !important;
     }
 
-    /* Status indicator at bottom-right */
-    #status-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 15px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-        z-index: 9999;
-        display: none;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+    /* Misc */
+    .refreshing {
+        animation: spin 1s infinite linear;
     }
-
-    #status-indicator.active {
-        display: block;
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .refresh-models {
+        background: none;
+        border: none;
+        color: #e7e9ea;
+        font-size: 13px;
+        cursor: pointer;
+        margin-left: 3px;
+        opacity: 0.8;
+    }
+    
+    .refresh-models:hover {
+        opacity: 1;
     }
 
     /* Form elements for dropdowns */
@@ -577,16 +514,28 @@
      * Displays a temporary status message on the screen.
      * @param {string} message - The message to display.
      */
-    function showStatus(message) {
+    function showStatus(message, duration = 3000) {
         let indicator = document.getElementById('status-indicator');
         if (!indicator) {
             indicator = document.createElement('div');
             indicator.id = 'status-indicator';
             document.body.appendChild(indicator);
         }
+        
         indicator.textContent = message;
         indicator.classList.add('active');
-        setTimeout(() => { indicator.classList.remove('active'); }, 3000);
+        
+        // Clear any existing timeout
+        if (indicator.dataset.timeoutId) {
+            clearTimeout(parseInt(indicator.dataset.timeoutId));
+        }
+        
+        // Set new timeout
+        const timeoutId = setTimeout(() => { 
+            indicator.classList.remove('active');
+        }, duration);
+        
+        indicator.dataset.timeoutId = timeoutId.toString();
     }
 
     /**
@@ -628,57 +577,69 @@
         const selector = document.getElementById(selectorId);
         if (!selector) return;
 
-        const modelToSelect = currentSelection ||
-            (selectorId === 'model-selector' ? selectedModel : selectedImageModel);
+        const isImageSelector = selectorId === 'image-model-selector';
+        const modelToSelect = isImageSelector ? selectedImageModel : selectedModel;
 
         // Clear existing options
         selector.innerHTML = '';
 
-        // Add available models that match the filter
-        if (availableModels && availableModels.length > 0) {
-            availableModels.forEach(model => {
-                let displayText = model.id;
-                if (model.pricing && model.pricing.prompt) {
-                    const promptPrice = parseFloat(model.pricing.prompt);
-                    if (!isNaN(promptPrice)) {
-                        displayText += ` - $${promptPrice.toFixed(7)}/token`;
-                    }
-                }
-
-                // Check if model supports images
+        // If no models available yet, add just the selected model
+        if (!availableModels || availableModels.length === 0) {
+            const option = document.createElement('option');
+            option.value = modelToSelect;
+            option.textContent = modelToSelect;
+            option.selected = true;
+            selector.appendChild(option);
+            return;
+        }
+        
+        // Add matching models
+        const matchingModels = availableModels.filter(model => {
+            // Check if model supports images for image selector
+            if (isImageSelector) {
                 const supportsImages = model.architecture &&
-                    ((model.architecture.input_modalities &&
-                        model.architecture.input_modalities.includes('image')) ||
-                        (model.architecture.modality &&
-                            model.architecture.modality.includes('image')));
-
-                // Add an icon for image-capable models in both selectors
-                if (supportsImages) {
-                    displayText = '🖼️ ' + displayText;
-                }
-
-                // For image model selector, only show vision models
-                if (selectorId === 'image-model-selector') {
-                    if (!supportsImages) {
-                        return; // Skip models that don't support image input
-                    }
-                }
-
-                if (filter && !displayText.toLowerCase().includes(filter.toLowerCase())) {
-                    return; // Skip options that don't match the search query
-                }
-
+                    ((model.architecture.input_modalities && model.architecture.input_modalities.includes('image')) ||
+                     (model.architecture.modality && model.architecture.modality.includes('image')));
+                     
+                if (!supportsImages) return false;
+            }
+            
+            // Apply text filter if specified
+            if (filter) {
+                return model.id.toLowerCase().includes(filter.toLowerCase());
+            }
+            
+            return true;
+        });
+        
+        // Add matching models to selector
+        matchingModels.forEach(model => {
                 const option = document.createElement('option');
                 option.value = model.id;
-                option.textContent = displayText;
-                if (model.id === modelToSelect) {
-                    option.selected = true;
+            
+            // Format display text
+            let displayText = model.id;
+            
+            // Add pricing if available
+            if (model.pricing?.prompt) {
+                const price = parseFloat(model.pricing.prompt);
+                if (!isNaN(price)) {
+                    displayText += ` - $${price.toFixed(7)}/token`;
                 }
+            }
+            
+            // Add icon for image models
+            const supportsImages = modelSupportsImages(model.id);
+            if (supportsImages) {
+                displayText = '🖼️ ' + displayText;
+            }
+            
+            option.textContent = displayText;
+            option.selected = model.id === modelToSelect;
                 selector.appendChild(option);
             });
-        }
 
-        // If no matching models, add the selected model to the list
+        // If no matches found but we have a selected model, add it
         if (selector.options.length === 0 || !Array.from(selector.options).some(opt => opt.value === modelToSelect)) {
             const option = document.createElement('option');
             option.value = modelToSelect;
@@ -1377,38 +1338,38 @@
     // ----- Rating Indicator Functions -----
     /**
      * Updates or creates the rating indicator element within a tweet article.
-     * Displays different content based on the rating status:
-     * - "pending" : shows ⏳
-     * - "error"   : shows ⚠️
-     * - "rated"   : shows the numeric score
-     * When you hover over the rating box, it shows a description of the rating.
-     *
      * @param {Element} tweetArticle - The tweet element.
      * @param {number|null} score - The numeric rating (if available).
-     * @param {string} description - The description of the rating (if available).
      * @param {string} status - The rating status ('pending', 'rated', or 'error').
+     * @param {string} description - Optional description of the rating.
      */
     function setScoreIndicator(tweetArticle, score, status, description = "") {
-        // 1. Create (or get) the score indicator inside tweetArticle
+        // Create or get existing indicator
         let indicator = tweetArticle.querySelector('.score-indicator');
         if (!indicator) {
             indicator = document.createElement('div');
             indicator.className = 'score-indicator';
             tweetArticle.style.position = 'relative';
             tweetArticle.appendChild(indicator);
+            
+            // Assign a unique ID for description linking
+            indicator.dataset.id = Math.random().toString(36).substr(2, 9);
         }
 
-        // Remove any previous status classes
+        // Reset and update status classes
         indicator.classList.remove('cached-rating', 'blacklisted-rating', 'pending-rating', 'error-rating');
 
-        // Set the indicator text and add status classes
-        if (status === 'pending') {
+        // Set content based on status
+        switch (status) {
+            case 'pending':
             indicator.classList.add('pending-rating');
             indicator.textContent = '⏳';
-        } else if (status === 'error') {
+                break;
+            case 'error':
             indicator.classList.add('error-rating');
             indicator.textContent = '⚠️';
-        } else { // rated
+                break;
+            default: // 'rated'
             if (tweetArticle.dataset.blacklisted === 'true') {
                 indicator.classList.add('blacklisted-rating');
             } else if (tweetArticle.dataset.cachedRating === 'true') {
@@ -1417,13 +1378,11 @@
             indicator.textContent = score;
         }
 
-        // 2. Create (or get) a globally positioned description box
-        // We'll use a unique ID per indicator (assign one if needed)
-        if (!indicator.dataset.id) {
-            indicator.dataset.id = Math.random().toString(36).substr(2, 9);
-        }
+        // Create or update description box if needed
+        if (description) {
         const descId = 'desc-' + indicator.dataset.id;
         let descBox = document.getElementById(descId);
+            
         if (!descBox) {
             descBox = document.createElement('div');
             descBox.className = 'score-description';
@@ -1431,94 +1390,68 @@
             document.body.appendChild(descBox);
         }
 
-        // Format the description with better styling if it exists
-        if (description) {
-            // Add formatting to the SCORE line if present
-            description = description.replace(/\{score:\s*(\d+)\}/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+            // Format description
+            description = description
+                .replace(/\{score:\s*(\d+)\}/g, 
+                    '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>')
+                .replace(/\n\n/g, '</p><p style="margin-top:16px;">')
+                .replace(/\n/g, '<br>');
+                
+            descBox.innerHTML = `<p>${description}</p>`;
 
-            // Add some spacing between paragraphs
-            description = description.replace(/\n\n/g, '</p><p style="margin-top: 16px;">');
-            description = description.replace(/\n/g, '<br>');
-
-            // Wrap in paragraphs
-            description = `<p>${description}</p>`;
-
-            descBox.innerHTML = description;
-        } else {
-            descBox.textContent = '';
+            // Show description on hover
+            setupHoverBehavior(indicator, descBox);
         }
+    }
 
-        // If there's no description, hide the box and exit
-        if (!description) {
-            descBox.style.display = 'none';
-            return;
-        }
-
-        // 3. Set up hover events on the indicator to show/hide the description box.
-        // (Remove any previously attached listeners to avoid duplicates.)
+    /**
+     * Sets up hover behavior for the rating indicator.
+     * @param {Element} indicator - The indicator element.
+     * @param {Element} descBox - The description box element.
+     */
+    function setupHoverBehavior(indicator, descBox) {
+        // Show description on mouseenter
         indicator.onmouseenter = () => {
-            // Get the position of the indicator in viewport coordinates
             const rect = indicator.getBoundingClientRect();
 
-            // Calculate available space to the right and below
-            const availableWidth = window.innerWidth - rect.right - 20; // 20px margin
-            const availableHeight = window.innerHeight - rect.top - 20;
-
-            // Set the description box's position
-            descBox.style.position = 'fixed'; // Use fixed instead of absolute for better positioning
-
-            // Position horizontally - prefer right side if space allows
+            // Position horizontally
+            const availableWidth = window.innerWidth - rect.right - 20;
             if (availableWidth >= 300) {
-                // Position to the right of the indicator
                 descBox.style.left = (rect.right + 10) + 'px';
                 descBox.style.right = 'auto';
             } else {
-                // Position to the left of the indicator
                 descBox.style.right = (window.innerWidth - rect.left + 10) + 'px';
                 descBox.style.left = 'auto';
             }
 
-            // Position vertically - aim to center, but adjust if needed
-            const descHeight = Math.min(window.innerHeight * 0.6, 400); // Estimated max height
+            // Position vertically
+            const descHeight = Math.min(window.innerHeight * 0.6, 400);
             let topPos = rect.top + (rect.height / 2) - (descHeight / 2);
-
-            // Ensure box stays in viewport
-            if (topPos < 10) topPos = 10;
-            if (topPos + descHeight > window.innerHeight - 10) {
-                topPos = window.innerHeight - descHeight - 10;
-            }
+            topPos = Math.max(10, Math.min(topPos, window.innerHeight - descHeight - 10));
 
             descBox.style.top = topPos + 'px';
-            descBox.style.maxHeight = '60vh'; // Set max height for scrolling
-
-            // Show the box
+            descBox.style.position = 'fixed';
             descBox.style.display = 'block';
         };
 
+        // Hide on mouseleave with smart buffer zone check
         indicator.onmouseleave = (e) => {
-            // Don't hide immediately - check if cursor moved to the description box
             const rect = descBox.getBoundingClientRect();
             const mouseX = e.clientX;
             const mouseY = e.clientY;
 
-            // If mouse is moving toward the description box, don't hide
+            // Check if mouse is moving toward description box
             if (mouseX >= rect.left - 20 && mouseX <= rect.right + 20 &&
                 mouseY >= rect.top - 20 && mouseY <= rect.bottom + 20) {
-                // Mouse is heading toward the description box, don't hide
-                // Instead, set up mouse events on the description box
-                descBox.onmouseenter = () => {
-                    descBox.style.display = 'block';
-                };
-                descBox.onmouseleave = () => {
-                    descBox.style.display = 'none';
-                };
+                
+                // Add hover events to the description box
+                descBox.onmouseenter = () => { descBox.style.display = 'block'; };
+                descBox.onmouseleave = () => { descBox.style.display = 'none'; };
                 return;
             }
 
-            // Otherwise hide
-            setTimeout(() => {
-                descBox.style.display = 'none';
-            }, 100);
+            // Otherwise hide after short delay
+            setTimeout(() => { descBox.style.display = 'none'; }, 100);
         };
     }
 
@@ -1578,43 +1511,36 @@
         return false;
     }
     async function getImageDescription(urls, apiKey, tweetId, userHandle) {
-        // If no URLs, return empty string immediately
-        if (!urls || urls.length === 0) {
+        // If no URLs or no API key, return immediately
+        if (!urls || urls.length === 0 || !apiKey) {
             return "[No images to describe]";
         }
         
-        // Process images one at a time and aggregate the descriptions
+        // Process only up to 3 images maximum to reduce API calls
+        const imagesToProcess = urls.slice(0, 3);
         let fullDescription = '';
         
-        for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
+        for (let i = 0; i < imagesToProcess.length; i++) {
+            const url = imagesToProcess[i];
+            // Create a simpler system message for image description
             let msgs = [
-                {
-                    role: "system",
-                    content: `You are a helpful assistant that can describe images.`
-                },
-                {
-                    role: "user",
-                    content: `Describe this image clearly and concisely in a few sentences.`
-                },
+                { role: "system", content: "Describe this image concisely in 1-2 sentences." },
                 {
                     role: "user",
                     content: [
-                        { 
-                            "type": "text", 
-                            "text": `Here is the image:` 
-                        }, 
-                        { 
-                            "type": "image_url", 
-                            "image_url": { "url": url } 
-                        }
+                        { "type": "text", "text": "Describe this image:" },
+                        { "type": "image_url", "image_url": { "url": url } }
                     ]
                 }
             ];
             
             try {
-                const imageDescription = await new Promise((resolve) => {
-                    GM.xmlHttpRequest({
+                const imageDescription = await new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(() => {
+                        reject(new Error("Image description request timed out"));
+                    }, 10000); // 10-second timeout
+                    
+                    GM_xmlhttpRequest({
                         method: "POST",
                         url: 'https://openrouter.ai/api/v1/chat/completions',
                         headers: {
@@ -1625,49 +1551,50 @@
                             model: selectedImageModel,
                             messages: msgs,
                             temperature: imageModelTemperature,
-                            top_p: imageModelTopP
+                            top_p: imageModelTopP,
+                            max_tokens: 150 // Limit token count for efficiency
                         }),
                         onload: function (response) {
+                            clearTimeout(timeoutId);
                             try {
                                 if (response.status === 200) {
                                     const data = JSON.parse(response.responseText);
-                                    if (data && data.choices && data.choices.length > 0 && data.choices[0].message) {
-                                        resolve(data.choices[0].message.content || "[No description available]");
+                                    if (data?.choices?.[0]?.message?.content) {
+                                        resolve(data.choices[0].message.content);
                                     } else {
-                                        console.error("Invalid response structure from image API:", data);
-                                        resolve("[Error: Invalid API response structure]");
+                                        resolve("[Error: Invalid API response]");
                                     }
                                 } else {
-                                    console.error("Error fetching image description:", response.status, response.statusText);
-                                    resolve(`[Error fetching image description: ${response.status}]`);
+                                    resolve(`[Error: ${response.status}]`);
                                 }
                             } catch (error) {
-                                console.error("Exception while processing image API response:", error);
-                                resolve("[Error processing image description]");
+                                resolve("[Error processing description]");
                             }
                         },
-                        onerror: function (error) {
-                            console.error("Network error while fetching image description:", error);
-                            resolve("[Error: Network problem while fetching image description]");
+                        onerror: function () {
+                            clearTimeout(timeoutId);
+                            resolve("[Network error]");
                         },
                         ontimeout: function() {
-                            console.error("Timeout while fetching image description");
-                            resolve("[Error: Timeout while fetching image description]");
+                            resolve("[Timeout error]");
                         }
                     });
                 });
                 
-                // Add the description to our aggregate with proper formatting
                 fullDescription += `[IMAGE ${i+1}]: ${imageDescription}\n`;
                 
-                // Add a small delay between API calls to avoid rate limiting
-                if (i < urls.length - 1) {
+                // Add delay only between successful API calls
+                if (i < imagesToProcess.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             } catch (error) {
-                console.error(`Error getting description for image ${i+1}:`, error);
-                fullDescription += `[IMAGE ${i+1}]: [Error getting description]\n`;
+                fullDescription += `[IMAGE ${i+1}]: [Error: ${error.message || "Unknown error"}]\n`;
             }
+        }
+        
+        // If more than 3 images, add a note
+        if (urls.length > 3) {
+            fullDescription += `[+${urls.length - 3} more images not processed to reduce API usage]`;
         }
         
         return fullDescription.trim();
@@ -1677,36 +1604,30 @@
 
     /**
      * Rates a tweet using the OpenRouter API with automatic retry functionality.
-     * The function retries up to 3 times in case of failures.
      * @param {string} tweetText - The text content of the tweet.
      * @param {string} tweetId - The unique tweet ID.
      * @param {string} apiKey - The API key for authentication.
      * @param {number} [attempt=1] - The current attempt number.
      * @param {number} [maxAttempts=3] - The maximum number of retry attempts.
-     * @returns {Promise<{score: number, error: boolean}>} The rating score and error flag.
+     * @returns {Promise<{score: number, content: string, error: boolean}>} The rating results.
      */
     function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, attempt = 1, maxAttempts = 3) {
-        return new Promise((resolve, reject) => {
-            /**
-             * Attempts the API call. On failure (or certain HTTP errors), retries if under maxAttempts.
-             * On success, parses the response and resolves with the score.
-             * On final failure, resolves with a default score (5) and an error flag.
-             * @param {number} currentAttempt - The current attempt number.
-             */
-
+        return new Promise((resolve) => {
             function attemptRating(currentAttempt) {
-                // Rate limit: wait if needed between API calls
+                // Apply rate limiting
                 const now = Date.now();
                 const timeElapsed = now - lastAPICallTime;
                 if (timeElapsed < API_CALL_DELAY_MS) {
-                    setTimeout(() => { attemptRating(currentAttempt); }, API_CALL_DELAY_MS - timeElapsed);
+                    setTimeout(() => attemptRating(currentAttempt), API_CALL_DELAY_MS - timeElapsed);
                     return;
                 }
 
-                lastAPICallTime = Date.now();
+                lastAPICallTime = now;
                 pendingRequests++;
                 showStatus(`Rating tweet... (${pendingRequests} pending)`);
 
+                // Create base prompt for rating
+                const promptText = `
                 let messages = [
                     {
                         "role": "user",
@@ -1946,143 +1867,98 @@
 
     async function delayedProcessTweet(tweetArticle, tweetId) {
         const apiKey = GM_getValue('openrouter-api-key', '');
+        const userHandle = getUserHandle(tweetArticle);
         let score = 5; // Default score if rating fails
         let description = "";
         
-        // Create a single data object to collect all information during processing
-        const logData = {
-          status: "Started processing",
-          tweetId: tweetId
-        };
+        // Lightweight logging object
+        const logData = { status: "Processing", tweetId, handle: userHandle };
         
         try {
-          // Get user handle
-          const userHandle = getUserHandle(tweetArticle);
-          logData.handle = userHandle;
-          
-          // Check if tweet's author is blacklisted (fast path)
+          // Fast-path for blacklisted (auto-rated) users
           if (userHandle && isUserBlacklisted(userHandle)) {
-            logData.status = "Blacklisted user - auto-score 10/10";
-            logData.score = 10;
+            score = 10;
+            description = "Auto-rated user";
             
             tweetArticle.dataset.sloppinessScore = '10';
             tweetArticle.dataset.blacklisted = 'true';
             tweetArticle.dataset.ratingStatus = 'rated';
-            tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            setScoreIndicator(tweetArticle, 10, 'rated', "Blacklisted user");
+            tweetArticle.dataset.ratingDescription = description;
+            
+            setScoreIndicator(tweetArticle, score, 'rated', description);
             filterSingleTweet(tweetArticle);
             
-            // Log final information
+            logData.status = "Auto-rated user";
+            logData.score = score;
             logFinalRating(tweetId, userHandle, logData);
             return;
           }
       
-          // Check if a cached rating exists
-          if (applyTweetCachedRating(tweetArticle)) {
-            logData.status = "Using cached rating";
-            logData.score = parseInt(tweetArticle.dataset.sloppinessScore, 10);
-            
-            // Log final information
-            logFinalRating(tweetId, userHandle, logData);
-            return;
-          }
-      
-          // Status is already set to pending in scheduleTweetProcessing
-          logData.status = "Processing tweet";
-      
-          // --- Extract Main Tweet Content ---
-          const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+          // Extract content
+          const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "";
           let mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
 
-          // --- Extract Quoted Tweet Content (if any) ---
+          // Get quoted content if present
           let quotedText = "";
           let quotedMediaLinks = [];
           const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+          
           if (quoteContainer) {
-            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
+            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
             quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
+            // Remove any duplicates between main and quoted media
+            mainMediaLinks = mainMediaLinks.filter(link => !quotedMediaLinks.includes(link));
           }
 
-          // Remove any media links from the main tweet that also appear in the quoted tweet
-          mainMediaLinks = mainMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-
-          // Collect media URLs
+          // Log media links for debugging
           if (mainMediaLinks.length > 0 || quotedMediaLinks.length > 0) {
-            logData.mediaUrls = [...mainMediaLinks, ...quotedMediaLinks];
+            logData.mediaCount = mainMediaLinks.length + quotedMediaLinks.length;
           }
 
-          // --- Build the full context ---
-          let fullContext = `[TWEET ${tweetId}]\n Author:@${userHandle}:\n` + mainText;
-          let fullContextWithImageDescription = fullContext;
+          // Build context for API with proper formatting
+          let fullContext = `[TWEET ${tweetId}]\n@${userHandle}:\n${mainText}`;
 
+          // Add media descriptions if present
           if (mainMediaLinks.length > 0) {
-            // Process main tweet images
-            let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-            fullContext += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
+            // Get descriptions for main tweet media
+            const mainMediaDescriptions = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
             
-            // Add media URLs in JSON format
-            let urlstr="{";
-            for (let i = 0; i < mainMediaLinks.length; i++) {
-                urlstr += `Image${i+1}: "${mainMediaLinks[i]}"${i==mainMediaLinks.length-1 ? "" : ", "}`;
-            }
-            urlstr+="}"
-            fullContextWithImageDescription += "\n[MEDIA_URLS]:\n" + urlstr;
-            fullContextWithImageDescription += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinksDescription;
-
-            logData.imageDescription = mainMediaLinksDescription;
+            // Add URL and description data to the context
+            fullContext += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaDescriptions;
           }
 
+          // Add quoted tweet content if present
           if (quotedText) {
             fullContext += "\n[QUOTED_TWEET]:\n" + quotedText;
-            fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n" + quotedText;
             
             if (quotedMediaLinks.length > 0) {
-              // Process quoted tweet images
-              let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-              fullContext += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
-              
-              // Add quoted media URLs in JSON format
-              let urlstr="{";
-              for (let i = 0; i < quotedMediaLinks.length; i++) {
-                  urlstr += `Image${i+1}: "${quotedMediaLinks[i]}"${i==quotedMediaLinks.length-1 ? "" : ", "}`;
-              }
-              urlstr+="}"
-              fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + urlstr;
-              fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaLinksDescription;
-
-              if (logData.imageDescription) {
-                logData.imageDescription += "\n\nQUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
-              } else {
-                logData.imageDescription = "QUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
-              }
+              // Get descriptions for quoted tweet media
+              const quotedMediaDescriptions = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
+              fullContext += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaDescriptions;
             }
           }
 
-          // --- Conversation Thread Handling ---
+          // Handle conversation threads
           const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-          if (conversation && conversation.dataset.threadHist) {
-            // If this tweet is not the original tweet, prepend the thread history.
-            if (!isOriginalTweet(tweetArticle)) {
-              fullContextWithImageDescription = conversation.dataset.threadHist + "\n[REPLY]\n" + fullContextWithImageDescription;
+          if (conversation?.dataset.threadHist && !isOriginalTweet(tweetArticle)) {
+            fullContext = conversation.dataset.threadHist + "\n[REPLY]\n" + fullContext;
               logData.isReply = true;
-            }
           }
 
-          logData.fullContext = fullContextWithImageDescription;
-          tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+          // Store context for later use
+          tweetArticle.dataset.fullContext = fullContext;
+          logData.contextLength = fullContext.length;
 
-          // --- API Call or Fallback ---
+          // Make API call if we have an API key and content
           if (apiKey && fullContext) {
             try {
-              const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey);
+              const rating = await rateTweetWithOpenRouter(fullContext, tweetId, apiKey);
               score = rating.score;
               description = rating.content;
               tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
-              tweetArticle.dataset.ratingDescription = description || "not available";
 
-              logData.status = rating.error ? "Rating error" : "Rating complete";
+              logData.status = rating.error ? "Rating error" : "Rated successfully";
               logData.score = score;
-              logData.modelResponse = description;
               logData.isError = rating.error;
 
               if (rating.error) {
@@ -2093,51 +1969,38 @@
               logData.error = apiError.toString();
               logData.isError = true;
 
-              score = Math.floor(Math.random() * 10) + 1; // Fallback to a random score
+              score = Math.floor(Math.random() * 10) + 1; // Fallback random score
               tweetArticle.dataset.ratingStatus = 'error';
             }
           } else {
-            // If there's no API key or textual content (e.g., only media), use a fallback random score.
+            // Handle missing API key or empty content
             score = Math.floor(Math.random() * 10) + 1;
             tweetArticle.dataset.ratingStatus = 'rated';
-
-            if (!apiKey) {
-              logData.status = "No API key - using random score";
-            } else if (!fullContext) {
-              logData.status = "No textual content - using random score";
-            }
-
+            logData.status = !apiKey ? "No API key" : "Empty content";
             logData.score = score;
           }
 
+          // Update the tweet with rating
           tweetArticle.dataset.sloppinessScore = score.toString();
-          setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
+          tweetArticle.dataset.ratingDescription = description || "No description available";
+          setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, description);
           filterSingleTweet(tweetArticle);
 
-          // Update final status
-          if (!logData.status.includes("complete")) {
-            logData.status = "Rating process complete";
-          }
-
-          // Log all collected information at once
-          logFinalRating(tweetId, userHandle, logData);
-
         } catch (error) {
-          logData.status = "Error processing tweet";
+          logData.status = "Processing error";
           logData.error = error.toString();
           logData.isError = true;
 
-          // Log the error information
-          logFinalRating(tweetId, userHandle || "unknown", logData);
-
-          if (!tweetArticle.dataset.sloppinessScore) {
+          // Set default values in case of error
             tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = "error processing tweet";
+          tweetArticle.dataset.ratingDescription = "Error: " + error.message;
             setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
             filterSingleTweet(tweetArticle);
           }
-        }
+        
+        // Always log the final result
+        logFinalRating(tweetId, userHandle || "unknown", logData);
     }
 
     /**
@@ -2261,418 +2124,209 @@ ${quotedMediaDescriptions}
             }
         });
     }
-    var threadHist = ""
+    // Simplified thread handling with better error handling
+    let threadHist = "";
     async function handleThreads() {
-        let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-        if (conversation) {
+        const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+        if (!conversation) return;
 
-            if (conversation.dataset.threadHist == undefined) {
-
-                threadHist = "";
+        try {
+            // Initialize thread history if needed
+            if (conversation.dataset.threadHist === undefined) {
                 const firstArticle = document.querySelector('article[data-testid="tweet"]');
-                if (firstArticle) {
+                if (!firstArticle) return;
+                
                     conversation.dataset.threadHist = 'pending';
                     const tweetId = getTweetID(firstArticle);
-                    if (tweetIDRatingCache[tweetId]) {
+                
+                // Use cached content if available, otherwise build it
+                if (tweetIDRatingCache[tweetId]?.tweetContent) {
                         threadHist = tweetIDRatingCache[tweetId].tweetContent;
                     } else {
-
-
-
-                        //janky, but we're assuming that since threadHist is undefined, we just opened the thread and therefore the first article is the head.
-
                         const apiKey = GM_getValue('openrouter-api-key', '');
-
-                        console.log(firstArticle);
-                        const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
-                        threadHist = fullcxt;
-                    }
-                    conversation.dataset.threadHist = threadHist;
-                    //this lets us know if we are still on the main post of the conversation or if we are on a reply to the main post. Will disapear every time we dive deeper
-                    conversation.firstChild.dataset.canary = "true";
+                    const newContext = await getFullContext(firstArticle, tweetId, apiKey);
+                    threadHist = newContext;
                 }
-            }
-            else if (conversation.dataset.threadHist == "pending") {
+                
+                    conversation.dataset.threadHist = threadHist;
+                    conversation.firstChild.dataset.canary = "true";
                 return;
             }
-            else if (conversation.dataset.threadHist != "pending" && conversation.firstChild.dataset.canary == undefined) {
+            
+            // Skip if still pending
+            if (conversation.dataset.threadHist === "pending") return;
+            
+            // Handle navigation to replies
+            if (conversation.dataset.threadHist !== "pending" && conversation.firstChild.dataset.canary === undefined) {
                 conversation.firstChild.dataset.canary = "pending";
+                
                 const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
+                if (!nextArticle) return;
+                
                 const tweetId = getTweetID(nextArticle);
-                if (tweetIDRatingCache[tweetId]) {
+                
+                // Use cached content or build new content
+                if (tweetIDRatingCache[tweetId]?.tweetContent) {
                     threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
+                    conversation.dataset.threadHist = threadHist;
                 } else {
                     const apiKey = GM_getValue('openrouter-api-key', '');
-                    await new Promise(resolve => setTimeout(resolve, 500));
                     const newContext = await getFullContext(nextArticle, tweetId, apiKey);
                     threadHist = threadHist + "\n[REPLY]\n" + newContext;
                     conversation.dataset.threadHist = threadHist;
                 }
             }
+        } catch (error) {
+            console.error("Thread handling error:", error);
+            // Reset any pending states to avoid getting stuck
+            if (conversation.dataset.threadHist === "pending") {
+                conversation.dataset.threadHist = "";
+            }
+            if (conversation.firstChild?.dataset.canary === "pending") {
+                delete conversation.firstChild.dataset.canary;
+            }
         }
     }
-    // ----- MutationObserver Setup -----
+
+    // ----- MutationObserver & Initialization -----
+    
     /**
-     * Handles DOM mutations to detect new tweets added to the timeline.
+     * Handles DOM mutations to detect new tweets and thread updates.
      * @param {MutationRecord[]} mutationsList - List of observed mutations.
      */
     function handleMutations(mutationsList) {
+        // Try to handle thread information first
+        handleThreads();
 
         for (const mutation of mutationsList) {
-            handleThreads();
-            if (mutation.type === 'childList') {
-                // Process added nodes
+            if (mutation.type !== 'childList') continue;
+            
+            // Process added nodes to find tweets to rate
                 if (mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    
+                    // Direct tweet match
                             if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
                                 scheduleTweetProcessing(node);
                             }
+                    // Container with tweets inside
                             else if (node.querySelectorAll) {
-                                const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                                tweetsInside.forEach(scheduleTweetProcessing);
+                        const tweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                        if (tweets.length > 0) {
+                            tweets.forEach(scheduleTweetProcessing);
                             }
                         }
-                    });
+                }
                 }
 
-                // Process removed nodes to clean up description elements
+            // Process removed nodes to clean up resources
                 if (mutation.removedNodes.length > 0) {
-                    mutation.removedNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            // Check if the removed node is a tweet article or contains tweet articles
-                            const isTweet = node.matches && node.matches(TWEET_ARTICLE_SELECTOR);
-                            const removedTweets = isTweet ? [node] :
-                                (node.querySelectorAll ? Array.from(node.querySelectorAll(TWEET_ARTICLE_SELECTOR)) : []);
-
-                            // For each removed tweet, find and remove its description element
-                            removedTweets.forEach(tweet => {
+                for (const node of mutation.removedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                    
+                    // Gather all tweets being removed
+                    const tweetsToCleanup = [];
+                    if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                        tweetsToCleanup.push(node);
+                    } else if (node.querySelectorAll) {
+                        node.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(
+                            tweet => tweetsToCleanup.push(tweet)
+                        );
+                    }
+                    
+                    // Clean up each tweet's rating description
+                    for (const tweet of tweetsToCleanup) {
                                 const indicator = tweet.querySelector('.score-indicator');
-                                if (indicator && indicator.dataset.id) {
+                        if (indicator?.dataset.id) {
                                     const descId = 'desc-' + indicator.dataset.id;
-                                    const descBox = document.getElementById(descId);
-                                    if (descBox) {
-                                        descBox.remove();
-                                        console.debug(`Removed description box ${descId} for tweet that was removed from the DOM`);
-                                    }
-                                }
-                            });
+                            document.getElementById(descId)?.remove();
                         }
-                    });
+                    }
                 }
             }
         }
     }
 
-    // ----- Initialization -----
-
     /**
-     * Validates that critical UI elements exist after creation.
-     * Logs warnings for any missing elements.
+     * Cleans up resources when script is unloaded
      */
-    function validateUIElements() {
-        console.log('Simplified logging enabled. All tweet processing will be logged at completion.');
-
-        const requiredElements = [
-            { id: 'openrouter-api-key', description: 'API Key Input' },
-            { id: 'model-selector', description: 'Model Selector' },
-            { id: 'image-model-selector', description: 'Image Model Selector' },
-            { id: 'handle-input', description: 'Handle Input' },
-            { id: 'handle-list', description: 'Handle List' },
-            { id: 'user-instructions', description: 'User Instructions Textarea' },
-            { id: 'tweet-filter-container', description: 'Filter Container' },
-            { id: 'settings-container', description: 'Settings Container' },
-            { id: 'settings-tab', description: 'Settings Tab' },
-            { id: 'instructions-tab', description: 'Instructions Tab' }
+    function cleanupResources() {
+        saveTweetRatings();
+        
+        // Remove UI elements
+        const elementsToRemove = [
+            'tweet-filter-container', 
+            'settings-container', 
+            'status-indicator',
+            'filter-toggle',
+            'settings-toggle'
         ];
-
-        let allValid = true;
-        for (const element of requiredElements) {
-            const el = document.getElementById(element.id);
-            if (!el) {
-                console.error(`UI Validation: ${element.description} (${element.id}) is missing`);
-                allValid = false;
-            }
-        }
-
-        if (allValid) {
-            console.log('UI validation successful: All required elements exist');
-        } else {
-            console.error('UI validation failed: Some elements are missing. Check the error messages above.');
-        }
-
-        return allValid;
+        
+        elementsToRemove.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.remove();
+        });
+        
+        // Remove all score descriptions
+        document.querySelectorAll('.score-description').forEach(el => el.remove());
+        
+        console.log("X/Twitter Tweet De-Sloppification Deactivated.");
     }
 
     /**
-     * Cleans up all score description elements from the DOM
+     * Initializes the extension
      */
-    function cleanupDescriptionElements() {
-        // Remove all score description elements
-        const descElements = document.querySelectorAll('.score-description');
-        descElements.forEach(el => el.remove());
-        console.log(`Cleaned up ${descElements.length} description elements`);
-    }
-
-    /**
-     * Initializes the observer on the main content area, adds the UI elements,
-     * starts processing visible tweets, and sets up periodic checks.
-     */
-    function initializeObserver() {
+    function initialize() {
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
-        if (target) {
+        if (!target) {
+            // Retry initialization if target not found
+            setTimeout(initialize, 1000);
+            return;
+        }
+        
             observedTargetNode = target;
             console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
+        
+        // Add UI components
             addSliderUI();
             addSettingsUI();
 
-            // Validate that UI elements were created correctly
-            validateUIElements();
-
-            // Create and add status indicator element
+        // Create status indicator
             const statusIndicator = document.createElement('div');
             statusIndicator.id = 'status-indicator';
             document.body.appendChild(statusIndicator);
 
-            // If no API key is found, prompt the user
+        // Check API key and load models
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
                 showStatus("No API key found. Please enter your OpenRouter API key.");
             } else {
-                showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
+            const ratingCount = Object.keys(tweetIDRatingCache).length;
+            showStatus(`Loaded ${ratingCount} cached ratings. Starting to rate tweets...`);
                 fetchAvailableModels();
             }
 
-            // Process all currently visible tweets
-            observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+        // Process visible tweets
+        target.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+        
+        // Setup observer
             const observer = new MutationObserver(handleMutations);
-            observer.observe(observedTargetNode, { childList: true, subtree: true });
+        observer.observe(target, { childList: true, subtree: true });
 
-            // Periodically ensure all tweets have been processed
-            setInterval(ensureAllTweetsRated, 3000);
+        // Setup tweet processing check interval
+        const checkInterval = setInterval(ensureAllTweetsRated, 3000);
 
+        // Setup cleanup on page unload
             window.addEventListener('beforeunload', () => {
-                saveTweetRatings();
                 observer.disconnect();
-                const sliderUI = document.getElementById('tweet-filter-container');
-                if (sliderUI) sliderUI.remove();
-                const settingsUI = document.getElementById('settings-container');
-                if (settingsUI) settingsUI.remove();
-                const statusIndicator = document.getElementById('status-indicator');
-                if (statusIndicator) statusIndicator.remove();
-
-                // Clean up all description elements
-                cleanupDescriptionElements();
-
-                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
-            });
-        } else {
-            setTimeout(initializeObserver, 1000);
-        }
-    }
-
-    /**
-     * Fetches the list of available models from the OpenRouter API.
-     * Uses the stored API key, and updates the model selector upon success.
-     */
-    function fetchAvailableModels() {
-        const apiKey = GM_getValue('openrouter-api-key', '');
-        if (!apiKey) {
-            console.log('No API key available, skipping model fetch');
-            return;
-        }
-        const refreshBtn = document.querySelector('.refresh-models');
-        if (refreshBtn) refreshBtn.classList.add('refreshing');
-        showStatus('Fetching available models...');
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: "https://openrouter.ai/api/v1/models",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://twitter.com",
-                "X-Title": "Tweet Rating Tool"
-            },
-            onload: function (response) {
-                if (refreshBtn) refreshBtn.classList.remove('refreshing');
-                if (response.status >= 200 && response.status < 300) {
-                    try {
-                        const data = JSON.parse(response.responseText);
-                        availableModels = data.data || [];
-                        console.log(`Fetched ${availableModels.length} models from OpenRouter`);
-                        updateModelSelector();
-                        updateImageModelSelector();
-                        showStatus(`Loaded ${availableModels.length} models!`);
-                    } catch (error) {
-                        console.error('Error parsing model list:', error);
-                        showStatus('Error loading models!');
-                    }
-                } else {
-                    console.error(`Failed to fetch models: ${response.status}`);
-                    showStatus('Error fetching models!');
-                }
-            },
-            onerror: function (error) {
-                if (refreshBtn) refreshBtn.classList.remove('refreshing');
-                console.error('Error fetching models:', error);
-                showStatus('Failed to fetch models!');
-            }
+            clearInterval(checkInterval);
+            cleanupResources();
         });
     }
-
-    // Start observing tweets and initializing the UI
-    initializeObserver();
-
-    /**
-     * Adds a UI panel for user-defined instructions for the scoring model.
-     */
-    function addInstructionsUI() {
-        if (document.getElementById('instructions-container')) return;
-
-        // Create toggle button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.id = 'instructions-toggle';
-        toggleBtn.className = 'toggle-button';
-        toggleBtn.textContent = 'Scoring Instructions';
-        toggleBtn.onclick = () => {
-            const container = document.getElementById('instructions-container');
-            if (container.classList.contains('hidden')) {
-                container.classList.remove('hidden');
-                toggleBtn.textContent = 'Hide Instructions';
-            } else {
-                container.classList.add('hidden');
-                toggleBtn.textContent = 'Scoring Instructions';
-            }
-        };
-        document.body.appendChild(toggleBtn);
-
-        const container = document.createElement('div');
-        container.id = 'instructions-container';
-        container.classList.add('hidden');
-
-        // Add close button
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'close-button';
-        closeBtn.innerHTML = '×';
-        closeBtn.onclick = () => {
-            container.classList.add('hidden');
-            toggleBtn.textContent = 'Scoring Instructions';
-        };
-        container.appendChild(closeBtn);
-
-        // Title
-        const title = document.createElement('div');
-        title.textContent = 'Custom Tweet Scoring Instructions';
-        title.style.fontWeight = 'bold';
-        container.appendChild(title);
-
-        // Description
-        const description = document.createElement('div');
-        description.textContent = 'Add custom instructions for how the model should score tweets. These will be applied to all tweet ratings.';
-        description.style.fontSize = '12px';
-        description.style.marginTop = '4px';
-        description.style.marginBottom = '8px';
-        description.style.opacity = '0.8';
-        container.appendChild(description);
-
-        // Textarea for instructions
-        const instructionsTextarea = document.createElement('textarea');
-        instructionsTextarea.id = 'user-instructions';
-        instructionsTextarea.placeholder = 'Examples:\n- Give high scores to tweets about technology\n- Penalize clickbait-style tweets\n- Rate educational content higher\n- Ignore political bias when scoring';
-        instructionsTextarea.value = GM_getValue('userDefinedInstructions', '');
-        container.appendChild(instructionsTextarea);
-
-        // Save button
-        const saveBtn = document.createElement('button');
-        saveBtn.id = 'save-instructions';
-        saveBtn.textContent = 'Save Instructions';
-        saveBtn.onclick = () => {
-            USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
-            GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
-            showStatus('Scoring instructions saved! New tweets will use these instructions.');
-
-            // Clear cache if user wants to re-rate existing tweets with new instructions
-            if (confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
-                clearTweetRatings();
-            }
-        };
-        container.appendChild(saveBtn);
-
-        document.body.appendChild(container);
-    }
-
-    /**
-     * Structured debug logger with grouping and consistent format.
-     * @param {string} tweetId - The tweet ID for identifying the log group.
-     * @param {string} handle - The author's handle.
-     * @param {Object} data - Data to log (media URLs, contexts, ratings, etc.).
-     * @param {boolean} [isError=false] - Whether this is an error log.
-     */
-    function debugLog(tweetId, handle, data, isError = false) {
-        // Only log if we're in a development environment or debug mode
-        // You could add a debug mode toggle in settings if needed
-
-        const groupTitle = `Tweet ${tweetId} (@${handle})`;
-
-        if (isError) {
-            console.group(`❌ ERROR: ${groupTitle}`);
-        } else {
-            console.groupCollapsed(`🔍 ${groupTitle}`);
-        }
-
-        // Log each piece of data with clear labels
-        if (data.mediaUrls && data.mediaUrls.length) {
-            console.log('📷 Media URLs:', data.mediaUrls);
-        }
-
-        if (data.fullContext) {
-            console.log('📝 Full Context:', data.fullContext);
-        }
-
-        if (data.imageDescription) {
-            console.log('🖼️ Image Description:', data.imageDescription);
-        }
-
-        if (data.modelResponse) {
-            console.log('🤖 Model Response:', data.modelResponse);
-        }
-
-        if (data.score !== undefined) {
-            console.log(`⭐ Rating Score: ${data.score}/10`);
-        }
-
-        if (data.error) {
-            console.error('Error Details:', data.error);
-        }
-
-        // Additional custom data
-        for (const [key, value] of Object.entries(data)) {
-            if (!['mediaUrls', 'fullContext', 'imageDescription', 'modelResponse', 'score', 'error'].includes(key)) {
-                console.log(`${key}:`, value);
-            }
-        }
-
-        console.groupEnd();
-    }
-
-    /**
-     * Simple debug logger that logs all relevant information about a tweet rating in a single log.
-     * @param {string} tweetId - The tweet ID.
-     * @param {string} handle - The author's handle.
-     * @param {Object} data - Complete data about the tweet and its rating.
-     * @param {boolean} [isError=false] - Whether this is an error log.
-     */
-    function debugLog(tweetId, handle, data, isError = false) {
-        // Just store the log data for now, actual logging happens at the end of processing
-        if (!tweetId || !handle) return;
-
-        // We don't actually log here, we just add to the log data
-        if (!data.logged) {
-            data.tweetId = tweetId;
-            data.handle = handle;
-            data.isError = isError;
-            data.logged = false; // Will be set to true when logged
-        }
-    }
+    
+    // Start the extension
+    initialize();
 
     /**
      * Logs the final rating result once all processing is complete.
@@ -2691,16 +2345,6 @@ ${quotedMediaDescriptions}
         // Log media if present
         if (data.mediaUrls && data.mediaUrls.length) {
             console.log(`Media URLs:`, data.mediaUrls);
-        }
-
-        // Log the full context
-        if (data.fullContext) {
-            console.log(`Tweet context:`, data.fullContext);
-        }
-
-        // Log model response
-        if (data.modelResponse) {
-            console.log(`Model response:`, data.modelResponse);
         }
 
         // Log errors if any
