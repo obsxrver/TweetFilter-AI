@@ -3,8 +3,6 @@
 Advanced tweet rating and filtering userscript with model selection, enhanced rating indicators, API retry functionalities, and handle management.
 
 
-![Custom Instructions Example](images/menu-display.png)
-
 ## Features
 
 - **Tweet Rating**: Automatically rates tweets on a scale from 1-10 using AI
