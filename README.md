@@ -2,7 +2,8 @@
 ## Version 1.0.1
 Advanced tweet rating and filtering userscript with model selection, enhanced rating indicators, API retry functionalities, and handle management.
 
-![Tweet Analysis Example](images/analysis-example.png)
+
+![Custom Instructions Example](images/menu-display.png)
 
 ## Features
 
@@ -14,6 +15,15 @@ Advanced tweet rating and filtering userscript with model selection, enhanced ra
 - **Custom Instructions**: Define your own criteria for how tweets should be rated
 - **Dark Theme UI**: Sleek interface matching X's design language
 - **Parameter Control**: Adjust temperature and top-p values for both models
+
+<div align="center">
+  <img src="images/menu-display.png" width="400" alt="Menu Display" style="margin-right: 10px;"/>
+  <img src="images/menu-model-select.png" width="400" alt="Model Selection" style="margin-left: 10px;"/>
+</div>
+
+<div align="center">
+  <img src="images/analysis-example.png" width="800" alt="Tweet Analysis Example" style="margin-top: 10px;"/>
+</div>
 
 ## Installation
 

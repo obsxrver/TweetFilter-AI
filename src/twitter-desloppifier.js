@@ -1,9 +1,8 @@
 // ==UserScript==
-// @name         X/Twitter De-Sloppifier
+// @name         AI Tweet Filter for Twitter/X
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.1
-// @description  Advanced tweet rating and filtering with model search, enhanced rating indicator, API retry functionalities, and blacklist support.
-// @author       Obsxrver
+// @version      Version 1.2
+// @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!// @author       Obsxrver
 // @match        *://twitter.com/*
 // @match        *://x.com/*
 // @grant        GM_addStyle
@@ -24,21 +23,25 @@
     const processedTweets = new Set(); // Set of tweet IDs already processed in this session
     const tweetIDRatingCache = {}; // ID-based cache for persistent storage
     const PROCESSING_DELAY_MS = 1000; // Delay before processing a tweet (ms)
-    const API_CALL_DELAY_MS = 2000; // Minimum delay between API calls (ms)
+    const API_CALL_DELAY_MS = 250; // Minimum delay between API calls (ms)
     let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', '');
     let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter threshold for tweet visibility
     let observedTargetNode = null;
     let lastAPICallTime = 0;
     let pendingRequests = 0;
     let availableModels = []; // List of models fetched from API
-    let selectedModel = GM_getValue('selectedModel', 'deepseek/deepseek-r1-distill-llama-70b');
-    let selectedImageModel = GM_getValue('selectedImageModel', 'openrouter/quasar-alpha');
+    let selectedModel = GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct');
+    let selectedImageModel = GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct');
     let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
+    // Settings variables
+    let enableImageDescriptions = GM_getValue('enableImageDescriptions', true);
+
+
     // Model parameters
-    let modelTemperature = GM_getValue('modelTemperature', 0.7);
+    let modelTemperature = GM_getValue('modelTemperature', 0.5);
     let modelTopP = GM_getValue('modelTopP', 0.9);
-    let imageModelTemperature = GM_getValue('imageModelTemperature', 0.7);
+    let imageModelTemperature = GM_getValue('imageModelTemperature', 0.5);
     let imageModelTopP = GM_getValue('imageModelTopP', 0.9);
 
     /**
@@ -51,17 +54,14 @@
             return false; // If we don't have model info, assume it doesn't support images
         }
 
-        const model = availableModels.find(m => m.id === modelId);
+        const model = availableModels.find(m => m.slug === modelId);
         if (!model) {
             return false; // Model not found in available models list
         }
 
         // Check if model supports images based on its architecture
-        return model.architecture &&
-            ((model.architecture.input_modalities &&
-              model.architecture.input_modalities.includes('image')) ||
-             (model.architecture.modality &&
-              model.architecture.modality.includes('image')));
+        return model.input_modalities &&
+            model.input_modalities.includes('image');
     }
 
     // Load cached ratings from persistent storage (if any)
@@ -79,13 +79,13 @@
     const USER_NAME_SELECTOR = 'div[data-testid="User-Name"] span > span';
     const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
     const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
-    const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img[src*="pbs.twimg.com/media/"]';
-    const MEDIA_VIDEO_SELECTOR = 'div[data-testid="videoPlayer"] video[poster*="pbs.twimg.com"]';
+    const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
+    const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]';
     const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 
     // ----- UI Styling -----
     GM_addStyle(`/*
-        Modern X-Inspired Styles - Compact Version
+        Modern X-Inspired Styles - Enhanced
         ---------------------------------
     */
 
@@ -110,26 +110,25 @@
 
     /* Close button styles */
     .close-button {
-        position: absolute;
-        top: 5px;
-        right: 5px;
         background: none;
         border: none;
         color: #e7e9ea;
         font-size: 16px;
         cursor: pointer;
         padding: 0;
-        width: 20px;
-        height: 20px;
+        width: 28px;
+        height: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
         opacity: 0.8;
         transition: opacity 0.2s;
+        border-radius: 50%;
     }
 
     .close-button:hover {
         opacity: 1;
+        background-color: rgba(255, 255, 255, 0.1);
     }
 
     /* Hidden state */
@@ -151,6 +150,14 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    
+    .toggle-button:hover {
+        background-color: rgba(29, 155, 240, 0.2);
     }
 
     #filter-toggle {
@@ -185,42 +192,75 @@
     /* Settings UI with Tabs */
     #settings-container {
         position: fixed;
-        top: 120px;
+        top: 70px;
         right: 15px;
         background-color: rgba(22, 24, 28, 0.95);
         color: #e7e9ea;
-        padding: 12px 15px;
-        border-radius: 12px;
+        padding: 0; /* Remove padding to accommodate sticky header */
+        border-radius: 16px;
         z-index: 9999;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 13px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        width: 320px;
-        max-height: 70vh;
-        overflow-y: auto;
+        width: 380px;
+        max-height: 85vh;
+        overflow: hidden; /* Hide overflow to make the sticky header work properly */
         border: 1px solid rgba(255, 255, 255, 0.1);
         line-height: 1.3;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform-origin: top right;
     }
-
+    
+    #settings-container.hidden {
+        opacity: 0;
+        transform: scale(0.9);
+        pointer-events: none;
+    }
+    
+    /* Header section */
+    .settings-header {
+        padding: 12px 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        background-color: rgba(22, 24, 28, 0.98);
+        z-index: 20;
+        border-radius: 16px 16px 0 0;
+    }
+    
+    .settings-title {
+        font-weight: bold;
+        font-size: 16px;
+    }
+    
+    /* Content area with scrolling */
+    .settings-content {
+        overflow-y: auto;
+        max-height: calc(85vh - 110px); /* Account for header and tabs */
+        padding: 0;
+    }
+    
     /* Scrollbar styling for settings container */
-    #settings-container::-webkit-scrollbar {
+    .settings-content::-webkit-scrollbar {
         width: 6px;
     }
 
-    #settings-container::-webkit-scrollbar-track {
+    .settings-content::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 3px;
     }
 
-    #settings-container::-webkit-scrollbar-thumb {
+    .settings-content::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.2);
         border-radius: 3px;
     }
 
-    #settings-container::-webkit-scrollbar-thumb:hover {
+    .settings-content::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.3);
     }
 
@@ -228,12 +268,12 @@
     .tab-navigation {
         display: flex;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        margin-bottom: 10px;
         position: sticky;
         top: 0;
-        background-color: rgba(22, 24, 28, 0.95);
+        background-color: rgba(22, 24, 28, 0.98);
         z-index: 10;
-        padding-bottom: 5px;
+        padding: 10px 15px;
+        gap: 8px;
     }
 
     .tab-button {
@@ -243,86 +283,231 @@
         color: #e7e9ea;
         font-weight: bold;
         cursor: pointer;
-        border-bottom: 2px solid transparent;
-        font-size: 13px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        flex: 1;
+        text-align: center;
+    }
+
+    .tab-button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
     }
 
     .tab-button.active {
         color: #1d9bf0;
+        background-color: rgba(29, 155, 240, 0.1);
         border-bottom: 2px solid #1d9bf0;
     }
 
     /* Tab Content */
     .tab-content {
         display: none;
+        animation: fadeIn 0.3s ease;
+        padding: 15px;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 
     .tab-content.active {
         display: block;
     }
 
-    /* Form elements - compact version */
+    /* Enhanced dropdowns */
+    .select-container {
+        position: relative;
+        margin-bottom: 15px;
+    }
+    
+    .select-container .search-field {
+        position: sticky;
+        top: 0;
+        background-color: rgba(39, 44, 48, 0.95);
+        padding: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 1;
+    }
+    
+    .select-container .search-input {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.9);
+        color: #e7e9ea;
+        font-size: 12px;
+        transition: border-color 0.2s;
+    }
+    
+    .select-container .search-input:focus {
+        border-color: #1d9bf0;
+        outline: none;
+    }
+    
+    .custom-select {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
+    
+    .select-selected {
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        transition: border-color 0.2s;
+    }
+    
+    .select-selected:hover {
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .select-selected:after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border: 2px solid #e7e9ea;
+        border-width: 0 2px 2px 0;
+        display: inline-block;
+        transform: rotate(45deg);
+        margin-left: 10px;
+        transition: transform 0.2s;
+    }
+    
+    .select-selected.select-arrow-active:after {
+        transform: rotate(-135deg);
+    }
+    
+    .select-items {
+        position: absolute;
+        background-color: rgba(39, 44, 48, 0.98);
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 99;
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        margin-top: 5px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        display: none;
+    }
+    
+    .select-items div {
+        color: #e7e9ea;
+        padding: 10px 12px;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .select-items div:hover {
+        background-color: rgba(29, 155, 240, 0.1);
+    }
+    
+    .select-items div.same-as-selected {
+        background-color: rgba(29, 155, 240, 0.2);
+    }
+    
+    /* Scrollbar for select items */
+    .select-items::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .select-items::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .select-items::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+    
+    .select-items::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Form elements */
     #openrouter-api-key,
-    #model-selector,
-    #model-search-box,
-    #image-model-selector,
-    #image-model-search-box,
-    #handle-input,
     #user-instructions {
         width: 100%;
-        padding: 6px;
-        border-radius: 6px;
+        padding: 10px 12px;
+        border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.2);
-        margin-top: 4px;
-        margin-bottom: 6px;
+        margin-bottom: 12px;
         background-color: rgba(39, 44, 48, 0.95);
         color: #e7e9ea;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
+        font-size: 13px;
+        transition: border-color 0.2s;
+    }
+    
+    #openrouter-api-key:focus,
+    #user-instructions:focus {
+        border-color: #1d9bf0;
+        outline: none;
     }
 
     #user-instructions {
-        height: 100px;
+        height: 120px;
         resize: vertical;
     }
 
-    /* Parameter controls - compact version */
+    /* Parameter controls */
     .parameter-row {
         display: flex;
         align-items: center;
-        margin-top: 6px;
-        margin-bottom: 6px;
+        margin-bottom: 12px;
         gap: 8px;
+        padding: 6px;
+        border-radius: 8px;
+        transition: background-color 0.2s;
+    }
+    
+    .parameter-row:hover {
+        background-color: rgba(255, 255, 255, 0.05);
     }
 
     .parameter-label {
         flex: 1;
-        font-size: 12px;
-        opacity: 0.9;
+        font-size: 13px;
+        color: #e7e9ea;
     }
 
     .parameter-control {
-        flex: 1;
+        flex: 1.5;
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 8px;
     }
 
     .parameter-value {
-        width: 25px;
+        min-width: 28px;
         text-align: center;
         background-color: rgba(255, 255, 255, 0.1);
-        padding: 2px 4px;
-        border-radius: 3px;
-        font-size: 11px;
+        padding: 3px 5px;
+        border-radius: 4px;
+        font-size: 12px;
     }
 
     .parameter-slider {
         flex: 1;
         -webkit-appearance: none;
-        height: 3px;
-        border-radius: 3px;
+        height: 4px;
+        border-radius: 4px;
         background: rgba(255, 255, 255, 0.2);
         outline: none;
         cursor: pointer;
@@ -331,44 +516,106 @@
     .parameter-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
-        width: 10px;
-        height: 10px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
         background: #1d9bf0;
         cursor: pointer;
+        transition: transform 0.1s;
+    }
+    
+    .parameter-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
     }
 
-    /* Section styles - compact */
+    /* Section styles */
     .section-title {
         font-weight: bold;
-        margin-top: 10px;
-        margin-bottom: 3px;
+        margin-top: 20px;
+        margin-bottom: 8px;
         color: #e7e9ea;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+    }
+    
+    .section-title:first-child {
+        margin-top: 0;
     }
 
     .section-description {
-        font-size: 11px;
-        margin-top: 2px;
-        margin-bottom: 4px;
+        font-size: 12px;
+        margin-bottom: 8px;
         opacity: 0.8;
+        line-height: 1.4;
+    }
+    
+    /* Advanced options section */
+    .advanced-options {
+        margin-top: 5px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 12px;
+        background-color: rgba(255, 255, 255, 0.03);
+        overflow: hidden;
+    }
+    
+    .advanced-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        margin-bottom: 5px;
+    }
+    
+    .advanced-toggle-title {
+        font-weight: bold;
+        font-size: 13px;
+        color: #e7e9ea;
+    }
+    
+    .advanced-toggle-icon {
+        transition: transform 0.3s;
+    }
+    
+    .advanced-toggle-icon.expanded {
+        transform: rotate(180deg);
+    }
+    
+    .advanced-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-in-out;
+    }
+    
+    .advanced-content.expanded {
+        max-height: 300px;
     }
 
-    /* Handle list styling - compact */
+    /* Handle list styling */
     .handle-list {
-        margin-top: 6px;
-        max-height: 100px;
+        margin-top: 10px;
+        max-height: 120px;
         overflow-y: auto;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 6px;
-        padding: 3px;
+        border-radius: 8px;
+        padding: 5px;
     }
 
     .handle-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 3px 5px;
+        padding: 6px 10px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .handle-item:hover {
+        background-color: rgba(255, 255, 255, 0.05);
     }
 
     .handle-item:last-child {
@@ -387,6 +634,12 @@
         cursor: pointer;
         font-size: 14px;
         padding: 0 3px;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    
+    .remove-handle:hover {
+        opacity: 1;
     }
 
     .add-handle-btn {
@@ -394,28 +647,32 @@
         color: white;
         border: none;
         border-radius: 6px;
-        padding: 5px 8px;
+        padding: 7px 10px;
         cursor: pointer;
         font-weight: bold;
-        font-size: 11px;
+        font-size: 12px;
         margin-left: 5px;
+        transition: background-color 0.2s;
+    }
+    
+    .add-handle-btn:hover {
+        background-color: #1a8cd8;
     }
 
-    /* Button styling - compact */
+    /* Button styling */
     .settings-button {
         background-color: #1d9bf0;
         color: white;
         border: none;
-        border-radius: 6px;
-        padding: 7px 10px;
+        border-radius: 8px;
+        padding: 10px 14px;
         cursor: pointer;
         font-weight: bold;
         transition: background-color 0.2s;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        margin-top: 6px;
-        margin-bottom: 2px;
+        margin-top: 8px;
         width: 100%;
-        font-size: 12px;
+        font-size: 13px;
     }
 
     .settings-button:hover {
@@ -425,6 +682,10 @@
     .settings-button.secondary {
         background-color: rgba(255, 255, 255, 0.1);
     }
+    
+    .settings-button.secondary:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
 
     .settings-button.danger {
         background-color: #ff5c5c;
@@ -432,6 +693,45 @@
 
     .settings-button.danger:hover {
         background-color: #e53935;
+    }
+    
+    /* For smaller buttons that sit side by side */
+    .button-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    
+    .button-row .settings-button {
+        margin-top: 0;
+    }
+    
+    /* Stats display */
+    .stats-container {
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .stats-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .stats-row:last-child {
+        border-bottom: none;
+    }
+    
+    .stats-label {
+        font-size: 12px;
+        opacity: 0.8;
+    }
+    
+    .stats-value {
+        font-weight: bold;
     }
 
     /* Rating indicator shown on tweets */ 
@@ -452,25 +752,11 @@
         min-width: 20px;
         text-align: center;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        transition: transform 0.15s ease;
     }
-
-    /* Scrollbar styling for all scrollable elements */
-    .handle-list::-webkit-scrollbar {
-        width: 5px;
-    }
-
-    .handle-list::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-
-    .handle-list::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-
-    .handle-list::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+    
+    .score-indicator:hover {
+        transform: scale(1.05);
     }
 
     /* Refresh animation */
@@ -481,22 +767,6 @@
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
-    }
-
-    /* Refresh models button */
-    .refresh-models {
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-size: 13px;
-        cursor: pointer;
-        margin-left: 3px;
-        opacity: 0.8;
-        transition: opacity 0.2s;
-    }
-
-    .refresh-models:hover {
-        opacity: 1;
     }
 
     /* The description box for ratings */
@@ -554,20 +824,121 @@
         z-index: 9999;
         display: none;
         border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+        transform: translateY(100px);
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
     #status-indicator.active {
         display: block;
+        transform: translateY(0);
+    }
+    
+    /* Toggle switch styling */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.2);
+        transition: .3s;
+        border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+        background-color: #1d9bf0;
+    }
+    
+    input:checked + .toggle-slider:before {
+        transform: translateX(16px);
+    }
+    
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        margin-bottom: 12px;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        transition: background-color 0.2s;
+    }
+    
+    .toggle-row:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+    
+    .toggle-label {
+        font-size: 13px;
+        color: #e7e9ea;
     }
 
-    /* Form elements for dropdowns */
-    select {
-        appearance: none;
-        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23e7e9ea%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.7em top 50%;
-        background-size: 0.65em auto;
-        padding-right: 1.4em;
+    /* Existing styles */
+    
+    /* Sort container styles */
+    .sort-container {
+        margin: 10px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .sort-container label {
+        font-size: 14px;
+        color: var(--text-color);
+    }
+    
+    .sort-container select {
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-size: 14px;
+        cursor: pointer;
+    }
+    
+    .sort-container select:hover {
+        border-color: #1d9bf0;
+    }
+    
+    .sort-container select:focus {
+        outline: none;
+        border-color: #1d9bf0;
+        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
+    }
+    
+    /* Dropdown option styling */
+    .sort-container select option {
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
     }
     `);
 
@@ -618,83 +989,9 @@
         }
     }
 
-    /**
-     * Updates the model selector dropdown based on the available models and an optional filter.
-     * @param {string} [filter=''] - Optional text to filter the models.
-     * @param {string} [selectorId='model-selector'] - The ID of the selector to update.
-     * @param {string} [currentSelection] - The currently selected model.
-     */
-    function updateModelSelector(filter = '', selectorId = 'model-selector', currentSelection = null) {
-        const selector = document.getElementById(selectorId);
-        if (!selector) return;
 
-        const modelToSelect = currentSelection ||
-            (selectorId === 'model-selector' ? selectedModel : selectedImageModel);
 
-        // Clear existing options
-        selector.innerHTML = '';
 
-        // Add available models that match the filter
-        if (availableModels && availableModels.length > 0) {
-            availableModels.forEach(model => {
-                let displayText = model.id;
-                if (model.pricing && model.pricing.prompt) {
-                    const promptPrice = parseFloat(model.pricing.prompt);
-                    if (!isNaN(promptPrice)) {
-                        displayText += ` - $${promptPrice.toFixed(7)}/token`;
-                    }
-                }
-
-                // Check if model supports images
-                const supportsImages = model.architecture &&
-                    ((model.architecture.input_modalities &&
-                        model.architecture.input_modalities.includes('image')) ||
-                        (model.architecture.modality &&
-                            model.architecture.modality.includes('image')));
-
-                // Add an icon for image-capable models in both selectors
-                if (supportsImages) {
-                    displayText = '🖼️ ' + displayText;
-                }
-
-                // For image model selector, only show vision models
-                if (selectorId === 'image-model-selector') {
-                    if (!supportsImages) {
-                        return; // Skip models that don't support image input
-                    }
-                }
-
-                if (filter && !displayText.toLowerCase().includes(filter.toLowerCase())) {
-                    return; // Skip options that don't match the search query
-                }
-
-                const option = document.createElement('option');
-                option.value = model.id;
-                option.textContent = displayText;
-                if (model.id === modelToSelect) {
-                    option.selected = true;
-                }
-                selector.appendChild(option);
-            });
-        }
-
-        // If no matching models, add the selected model to the list
-        if (selector.options.length === 0 || !Array.from(selector.options).some(opt => opt.value === modelToSelect)) {
-            const option = document.createElement('option');
-            option.value = modelToSelect;
-            option.textContent = modelToSelect;
-            option.selected = true;
-            selector.appendChild(option);
-        }
-    }
-
-    /**
-     * Updates the image model selector dropdown based on available vision-capable models.
-     * @param {string} [filter=''] - Optional text to filter the models.
-     */
-    function updateImageModelSelector(filter = '') {
-        updateModelSelector(filter, 'image-model-selector');
-    }
 
     /**
      * Adds the filtering slider UI to the page.
@@ -770,84 +1067,109 @@
         const toggleBtn = document.createElement('button');
         toggleBtn.id = 'settings-toggle';
         toggleBtn.className = 'toggle-button';
-        toggleBtn.textContent = 'Open Menu';
+        toggleBtn.innerHTML = '<span style="font-size: 14px;">⚙️</span> Settings';
         toggleBtn.onclick = () => {
             const container = document.getElementById('settings-container');
             if (container.classList.contains('hidden')) {
                 container.classList.remove('hidden');
-                toggleBtn.textContent = 'Close Menu';
+                toggleBtn.innerHTML = '<span style="font-size: 14px;">✕</span> Close';
             } else {
                 container.classList.add('hidden');
-                toggleBtn.textContent = 'Open Menu';
+                toggleBtn.innerHTML = '<span style="font-size: 14px;">⚙️</span> Settings';
             }
         };
         document.body.appendChild(toggleBtn);
 
+        // Create the main container
         const container = document.createElement('div');
         container.id = 'settings-container';
         container.classList.add('hidden');
 
-        // Add close button
+        // Create sticky header
+        const header = document.createElement('div');
+        header.className = 'settings-header';
+
+        const title = document.createElement('div');
+        title.className = 'settings-title';
+        title.textContent = 'Twitter De-Sloppifier';
+        header.appendChild(title);
+
+        // Close button in header
         const closeBtn = document.createElement('button');
         closeBtn.className = 'close-button';
         closeBtn.innerHTML = '×';
         closeBtn.onclick = () => {
             container.classList.add('hidden');
-            toggleBtn.textContent = 'Open Menu';
+            toggleBtn.innerHTML = '<span style="font-size: 14px;">⚙️</span> Settings';
         };
-        container.appendChild(closeBtn);
+        header.appendChild(closeBtn);
 
-        // Title
-        const title = document.createElement('div');
-        title.textContent = 'X (frm. Twitter) De-Sloppifier';
-        title.style.fontWeight = 'bold';
-        title.style.fontSize = '16px';
-        title.style.marginBottom = '10px';
-        container.appendChild(title);
+        container.appendChild(header);
+
+        // Content area
+        const content = document.createElement('div');
+        content.className = 'settings-content';
+        container.appendChild(content);
 
         // Tab Navigation
         const tabNav = document.createElement('div');
         tabNav.className = 'tab-navigation';
 
-        // Settings Tab Button
-        const settingsTabBtn = document.createElement('button');
-        settingsTabBtn.className = 'tab-button active';
-        settingsTabBtn.textContent = 'Settings';
-        settingsTabBtn.onclick = () => {
-            switchTab('settings');
+        // General Tab Button
+        const generalTabBtn = document.createElement('button');
+        generalTabBtn.className = 'tab-button active';
+        generalTabBtn.textContent = 'General';
+        generalTabBtn.onclick = () => {
+            switchTab('general');
         };
-        tabNav.appendChild(settingsTabBtn);
+        tabNav.appendChild(generalTabBtn);
+
+        // Models Tab Button
+        const modelsTabBtn = document.createElement('button');
+        modelsTabBtn.className = 'tab-button';
+        modelsTabBtn.textContent = 'Models';
+        modelsTabBtn.onclick = () => {
+            switchTab('models');
+        };
+        tabNav.appendChild(modelsTabBtn);
 
         // Custom Instructions Tab Button
         const instructionsTabBtn = document.createElement('button');
         instructionsTabBtn.className = 'tab-button';
-        instructionsTabBtn.textContent = 'Custom Instructions';
+        instructionsTabBtn.textContent = 'Instructions';
         instructionsTabBtn.onclick = () => {
             switchTab('instructions');
         };
         tabNav.appendChild(instructionsTabBtn);
 
-        container.appendChild(tabNav);
+        content.appendChild(tabNav);
 
-        // Settings Tab Content
-        const settingsTab = document.createElement('div');
-        settingsTab.id = 'settings-tab';
-        settingsTab.className = 'tab-content active';
-        buildSettingsTabContent(settingsTab);
-        container.appendChild(settingsTab);
+        // General Tab Content
+        const generalTab = document.createElement('div');
+        generalTab.id = 'general-tab';
+        generalTab.className = 'tab-content active';
+        buildGeneralTabContent(generalTab);
+        content.appendChild(generalTab);
+
+        // Models Tab Content
+        const modelsTab = document.createElement('div');
+        modelsTab.id = 'models-tab';
+        modelsTab.className = 'tab-content';
+        buildModelsTabContent(modelsTab);
+        content.appendChild(modelsTab);
 
         // Custom Instructions Tab Content
         const instructionsTab = document.createElement('div');
         instructionsTab.id = 'instructions-tab';
         instructionsTab.className = 'tab-content';
         buildInstructionsTabContent(instructionsTab);
-        container.appendChild(instructionsTab);
+        content.appendChild(instructionsTab);
 
         document.body.appendChild(container);
 
         // Helper function to switch between tabs
         function switchTab(tabName) {
-            const tabs = container.querySelectorAll('.tab-content');
+            const tabs = content.querySelectorAll('.tab-content');
             const buttons = tabNav.querySelectorAll('.tab-button');
 
             // Hide all tabs
@@ -855,155 +1177,233 @@
             buttons.forEach(btn => btn.classList.remove('active'));
 
             // Show selected tab
-            if (tabName === 'settings') {
-                settingsTab.classList.add('active');
-                settingsTabBtn.classList.add('active');
+            if (tabName === 'general') {
+                generalTab.classList.add('active');
+                generalTabBtn.classList.add('active');
+            } else if (tabName === 'models') {
+                modelsTab.classList.add('active');
+                modelsTabBtn.classList.add('active');
             } else if (tabName === 'instructions') {
                 instructionsTab.classList.add('active');
                 instructionsTabBtn.classList.add('active');
             }
         }
+
+        // Initialize models data
+        fetchAvailableModels();
+    }
+
+
+
+    /**
+     * Exports all settings and cache to a JSON file for backup
+     */
+    function exportSettings() {
+        try {
+            const data = {
+                version: '1.1',
+                date: new Date().toISOString(),
+                settings: {
+                    apiKey: GM_getValue('openrouter-api-key', ''),
+                    selectedModel: selectedModel,
+                    selectedImageModel: selectedImageModel,
+                    enableImageDescriptions: enableImageDescriptions,
+                    modelTemperature: modelTemperature,
+                    modelTopP: modelTopP,
+                    imageModelTemperature: imageModelTemperature,
+                    imageModelTopP: imageModelTopP,
+                    filterThreshold: currentFilterThreshold,
+                    userDefinedInstructions: USER_DEFINED_INSTRUCTIONS
+                },
+                blacklistedHandles: blacklistedHandles,
+                tweetRatings: tweetIDRatingCache
+            };
+
+            // Create a download link
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `twitter-desloppifier-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+
+            showStatus('Settings exported successfully!');
+        } catch (error) {
+            console.error('Error exporting settings:', error);
+            showStatus('Error exporting settings: ' + error.message);
+        }
     }
 
     /**
-     * Builds the content for the Settings tab.
-     * @param {HTMLElement} tabElement - The tab element to fill with content.
+     * Imports settings and cache from a JSON file
      */
-    function buildSettingsTabContent(tabElement) {
-        // API Key section
-        const apiKeyLabel = document.createElement('div');
-        apiKeyLabel.className = 'section-title';
-        apiKeyLabel.textContent = 'OpenRouter API Key';
-        tabElement.appendChild(apiKeyLabel);
+    function importSettings() {
+        try {
+            // Create file input
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
 
-        const apiKeyInput = document.createElement('input');
-        apiKeyInput.type = 'password';
-        apiKeyInput.id = 'openrouter-api-key';
-        apiKeyInput.placeholder = 'Enter your OpenRouter API key';
-        apiKeyInput.value = GM_getValue('openrouter-api-key', '');
-        tabElement.appendChild(apiKeyInput);
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
 
-        // Scoring Model Section
-        const modelLabel = document.createElement('div');
-        modelLabel.className = 'section-title';
-        modelLabel.textContent = 'Tweet Rating Model';
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
 
-        // Refresh button to update model list
-        const refreshButton = document.createElement('button');
-        refreshButton.className = 'refresh-models';
-        refreshButton.innerHTML = '🔄';
-        refreshButton.title = 'Refresh model list';
-        refreshButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            fetchAvailableModels();
-        });
-        modelLabel.appendChild(refreshButton);
-        tabElement.appendChild(modelLabel);
+                        // Validate the file format
+                        if (!data.version || !data.settings) {
+                            throw new Error('Invalid settings file format');
+                        }
 
-        // Search box for filtering models
-        const modelSearchBox = document.createElement('input');
-        modelSearchBox.id = 'model-search-box';
-        modelSearchBox.type = 'text';
-        modelSearchBox.placeholder = 'Search models...';
-        modelSearchBox.addEventListener('input', function (e) {
-            updateModelSelector(this.value);
-        });
-        tabElement.appendChild(modelSearchBox);
+                        // Import the settings
+                        if (data.settings.apiKey) {
+                            GM_setValue('openrouter-api-key', data.settings.apiKey);
+                            document.getElementById('openrouter-api-key').value = data.settings.apiKey;
+                        }
 
-        // Dropdown for model selection
-        const modelSelector = document.createElement('select');
-        modelSelector.id = 'model-selector';
-        tabElement.appendChild(modelSelector);
+                        if (data.settings.selectedModel) {
+                            selectedModel = data.settings.selectedModel;
+                            GM_setValue('selectedModel', selectedModel);
+                        }
 
-        // Temperature parameter
-        createParameterControl(
-            tabElement,
-            'Temperature',
-            'modelTemperature',
-            'How random the model responses should be (0.0-1.0)',
-            modelTemperature,
-            0, 1, 0.1
-        );
+                        if (data.settings.selectedImageModel) {
+                            selectedImageModel = data.settings.selectedImageModel;
+                            GM_setValue('selectedImageModel', selectedImageModel);
+                        }
 
-        // Top-p parameter
-        createParameterControl(
-            tabElement,
-            'Top-p',
-            'modelTopP',
-            'Nucleus sampling parameter (0.0-1.0)',
-            modelTopP,
-            0, 1, 0.1
-        );
 
-        // Image Model Section
-        const imageModelLabel = document.createElement('div');
-        imageModelLabel.className = 'section-title';
-        imageModelLabel.textContent = 'Image Processing Model';
-        tabElement.appendChild(imageModelLabel);
 
-        // Add info about which models can process images
-        const imageModelNote = document.createElement('div');
-        imageModelNote.className = 'section-description';
-        imageModelNote.textContent = 'Only models with vision capabilities will work for image descriptions';
-        tabElement.appendChild(imageModelNote);
+                        if (data.settings.enableImageDescriptions !== undefined) {
+                            enableImageDescriptions = data.settings.enableImageDescriptions;
+                            GM_setValue('enableImageDescriptions', enableImageDescriptions);
+                        }
 
-        // Search box for filtering image models
-        const imageModelSearchBox = document.createElement('input');
-        imageModelSearchBox.id = 'image-model-search-box';
-        imageModelSearchBox.type = 'text';
-        imageModelSearchBox.placeholder = 'Search image models...';
-        imageModelSearchBox.addEventListener('input', function (e) {
-            updateImageModelSelector(this.value);
-        });
-        tabElement.appendChild(imageModelSearchBox);
+                        if (data.settings.modelTemperature !== undefined) {
+                            modelTemperature = data.settings.modelTemperature;
+                            GM_setValue('modelTemperature', modelTemperature);
+                        }
 
-        // Dropdown for image model selection
-        const imageModelSelector = document.createElement('select');
-        imageModelSelector.id = 'image-model-selector';
-        tabElement.appendChild(imageModelSelector);
+                        if (data.settings.modelTopP !== undefined) {
+                            modelTopP = data.settings.modelTopP;
+                            GM_setValue('modelTopP', modelTopP);
+                        }
 
-        // Image model temperature parameter
-        createParameterControl(
-            tabElement,
-            'Image Temperature',
-            'imageModelTemperature',
-            'Randomness for image descriptions (0.0-1.0)',
-            imageModelTemperature,
-            0, 1, 0.1
-        );
+                        if (data.settings.imageModelTemperature !== undefined) {
+                            imageModelTemperature = data.settings.imageModelTemperature;
+                            GM_setValue('imageModelTemperature', imageModelTemperature);
+                        }
 
-        // Image model top-p parameter
-        createParameterControl(
-            tabElement,
-            'Image Top-p',
-            'imageModelTopP',
-            'Nucleus sampling for image model (0.0-1.0)',
-            imageModelTopP,
-            0, 1, 0.1
-        );
+                        if (data.settings.imageModelTopP !== undefined) {
+                            imageModelTopP = data.settings.imageModelTopP;
+                            GM_setValue('imageModelTopP', imageModelTopP);
+                        }
 
-        // Save Button
-        const saveButton = document.createElement('button');
-        saveButton.className = 'settings-button';
-        saveButton.textContent = 'Save Settings';
-        saveButton.addEventListener('click', saveSettings);
-        tabElement.appendChild(saveButton);
+                        if (data.settings.filterThreshold !== undefined) {
+                            currentFilterThreshold = data.settings.filterThreshold;
+                            GM_setValue('filterThreshold', currentFilterThreshold);
+                        }
 
-        // Test Connection Button
-        const testButton = document.createElement('button');
-        testButton.className = 'settings-button';
-        testButton.style.marginTop = '5px';
-        testButton.textContent = 'Test Connection';
-        testButton.addEventListener('click', testAPIConnection);
-        tabElement.appendChild(testButton);
+                        if (data.settings.userDefinedInstructions !== undefined) {
+                            USER_DEFINED_INSTRUCTIONS = data.settings.userDefinedInstructions;
+                            GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
+                        }
 
-        // Clear Cache Button
-        const clearButton = document.createElement('button');
-        clearButton.className = 'settings-button danger';
-        clearButton.style.marginTop = '5px';
-        clearButton.textContent = 'Clear Rating Cache';
-        clearButton.addEventListener('click', clearTweetRatings);
-        tabElement.appendChild(clearButton);
+                        // Import blacklisted handles
+                        if (data.blacklistedHandles && Array.isArray(data.blacklistedHandles)) {
+                            blacklistedHandles = data.blacklistedHandles;
+                            GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+                        }
+
+                        // Import tweet ratings
+                        if (data.tweetRatings && typeof data.tweetRatings === 'object') {
+                            Object.assign(tweetIDRatingCache, data.tweetRatings);
+                            saveTweetRatings();
+                        }
+
+                        // Refresh UI to reflect the imported settings
+                        refreshSettingsUI();
+
+                        showStatus('Settings imported successfully!');
+                    } catch (error) {
+                        console.error('Error parsing settings file:', error);
+                        showStatus('Error importing settings: ' + error.message);
+                    }
+                };
+
+                reader.readAsText(file);
+            };
+
+            input.click();
+        } catch (error) {
+            console.error('Error importing settings:', error);
+            showStatus('Error importing settings: ' + error.message);
+        }
+    }
+
+    /**
+     * Refreshes the settings UI to reflect current settings
+     */
+    function refreshSettingsUI() {
+        // Update model selectors and dropdowns
+        refreshModelsUI();
+
+        // Update API key input
+        const apiKeyInput = document.getElementById('openrouter-api-key');
+        if (apiKeyInput) {
+            apiKeyInput.value = GM_getValue('openrouter-api-key', '');
+        }
+
+        // Update filter slider
+        const slider = document.getElementById('tweet-filter-slider');
+        const valueDisplay = document.getElementById('tweet-filter-value');
+        if (slider && valueDisplay) {
+            slider.value = currentFilterThreshold.toString();
+            valueDisplay.textContent = currentFilterThreshold.toString();
+        }
+
+        // Update image toggle
+        const imageToggleInputs = document.querySelectorAll('input[type="checkbox"]');
+        if (imageToggleInputs.length > 0) {
+            imageToggleInputs.forEach(input => {
+                if (input.parentElement.parentElement.querySelector('.toggle-label')?.textContent === 'Enable Image Descriptions') {
+                    input.checked = enableImageDescriptions;
+
+                    // Show/hide image model options
+                    const imageModelContainer = document.getElementById('image-model-container');
+                    if (imageModelContainer) {
+                        imageModelContainer.style.display = enableImageDescriptions ? 'block' : 'none';
+                    }
+                }
+            });
+        }
+
+        // Refresh handle list
+        const handleList = document.getElementById('handle-list');
+        if (handleList) {
+            refreshHandleList(handleList);
+        }
+
+        // Update instructions textarea
+        const instructionsTextarea = document.getElementById('user-instructions');
+        if (instructionsTextarea) {
+            instructionsTextarea.value = USER_DEFINED_INSTRUCTIONS;
+        }
+
+        // Update cache statistics
+        const cachedRatingsCount = document.getElementById('cached-ratings-count');
+        const whitelistedHandlesCount = document.getElementById('whitelisted-handles-count');
+
+        if (cachedRatingsCount) {
+            cachedRatingsCount.textContent = Object.keys(tweetIDRatingCache).length;
+        }
+
+        if (whitelistedHandlesCount) {
+            whitelistedHandlesCount.textContent = blacklistedHandles.length;
+        }
+
     }
 
     /**
@@ -1235,42 +1635,7 @@
         }
     }
 
-    /**
-     * Saves all settings from the UI to persistent storage.
-     */
-    function saveSettings() {
-        try {
-            // API Key
-            const apiKey = document.getElementById('openrouter-api-key').value;
-            GM_setValue('openrouter-api-key', apiKey);
 
-            // Models
-            const ratingModel = document.getElementById('model-selector').value;
-            const imageModel = document.getElementById('image-model-selector').value;
-
-            if (ratingModel) {
-                selectedModel = ratingModel;
-                GM_setValue('selectedModel', selectedModel);
-            }
-
-            if (imageModel) {
-                selectedImageModel = imageModel;
-                GM_setValue('selectedImageModel', selectedImageModel);
-            }
-
-            // Model parameters
-            GM_setValue('modelTemperature', modelTemperature);
-            GM_setValue('modelTopP', modelTopP);
-            GM_setValue('imageModelTemperature', imageModelTemperature);
-            GM_setValue('imageModelTopP', imageModelTopP);
-
-            // Show success message
-            showStatus('Settings saved successfully!');
-        } catch (error) {
-            console.error('Error saving settings:', error);
-            showStatus('Error saving settings: ' + error.message);
-        }
-    }
 
     // ----- DOM Utility Functions -----
 
@@ -1342,35 +1707,47 @@
      */
     function extractMediaLinks(scopeElement, tweetIdForDebug) {
         if (!scopeElement) return [];
+        
         const mediaLinks = new Set();
-        scopeElement.querySelectorAll(`${MEDIA_IMG_SELECTOR}, ${MEDIA_VIDEO_SELECTOR}`).forEach((mediaEl) => {
-            const rawUrl = (mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster);
-            if (!rawUrl || !rawUrl.includes('pbs.twimg.com')) return;
+        
+        // Find all images and videos in the tweet
+        scopeElement.querySelectorAll(`${MEDIA_IMG_SELECTOR}, ${MEDIA_VIDEO_SELECTOR}`).forEach(mediaEl => {
+            // Get the source URL (src for images, poster for videos)
+            const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
+            
+            // Skip if not a Twitter media URL
+            if (!sourceUrl || 
+               !(sourceUrl.includes('pbs.twimg.com/media') || 
+                 sourceUrl.includes('pbs.twimg.com/amplify_video_thumb'))) {
+                return;
+            }
+            
             try {
-                const url = new URL(rawUrl);
+                // Parse the URL to handle format parameters
+                const url = new URL(sourceUrl);
                 const format = url.searchParams.get('format');
-                let finalUrl = url.origin + url.pathname;
-                if (format) {
-                    finalUrl += `.${format}`;
-                    mediaLinks.add(finalUrl);
-                } else if (/\.(jpg|jpeg|png|gif|webp)$/i.test(url.pathname)) {
-                    mediaLinks.add(finalUrl);
-                } else if (mediaEl.tagName === 'VIDEO' && mediaEl.poster) {
-                    finalUrl += `.jpg`;
-                    mediaLinks.add(finalUrl);
-                } else if (mediaEl.tagName === 'IMG') {
-                    finalUrl += `.jpg`;
-                    mediaLinks.add(finalUrl);
-                } else {
-                    mediaLinks.add(finalUrl);
+                const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+                
+                // Create the final URL with the right format and size
+                let finalUrl = sourceUrl;
+                
+                // Try to get the original size by removing size indicator
+                if (name && name !== 'orig') {
+                    // Replace format=jpg&name=small with format=jpg&name=orig
+                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=orig');
                 }
-            } catch (e) {
-                console.error(`[${tweetIdForDebug}] Error parsing media URL: ${rawUrl}`, e);
-                if (rawUrl.includes('pbs.twimg.com')) {
-                    mediaLinks.add(rawUrl.split('?')[0]);
-                }
+                
+                // Log both the original and final URLs for debugging
+                console.log(`[Tweet ${tweetIdForDebug}] Processing media: ${sourceUrl} → ${finalUrl}`);
+                
+                mediaLinks.add(finalUrl);
+            } catch (error) {
+                console.error(`[Tweet ${tweetIdForDebug}] Error processing media URL: ${sourceUrl}`, error);
+                // Fallback: just add the raw URL as is
+                mediaLinks.add(sourceUrl);
             }
         });
+        
         return Array.from(mediaLinks);
     }
 
@@ -1552,7 +1929,7 @@
         const userHandle = getUserHandle(tweetArticle);
         // Blacklisted users are automatically given a score of 10
         if (userHandle && isUserBlacklisted(userHandle)) {
-            console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
+            //console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
             tweetArticle.dataset.sloppinessScore = '10';
             tweetArticle.dataset.blacklisted = 'true';
             tweetArticle.dataset.ratingStatus = 'rated';
@@ -1565,7 +1942,7 @@
         if (tweetIDRatingCache[tweetId]) {
             const score = tweetIDRatingCache[tweetId].score;
             const desc = tweetIDRatingCache[tweetId].description;
-            console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
+            //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             tweetArticle.dataset.ratingStatus = 'rated';
@@ -1578,41 +1955,44 @@
         return false;
     }
     async function getImageDescription(urls, apiKey, tweetId, userHandle) {
-        // If no URLs, return empty string immediately
-        if (!urls || urls.length === 0) {
-            return "[No images to describe]";
+        if (!urls || urls.length === 0) return '';
+
+        // Check if image descriptions are disabled
+        if (!enableImageDescriptions) {
+            return '[Image descriptions disabled]';
         }
-        
-        // Process images one at a time and aggregate the descriptions
-        let fullDescription = '';
-        
+
+        let imageDescriptions = ""
+        // Add image URLs to the request
         for (let i = 0; i < urls.length; i++) {
-            const url = urls[i];
-            let msgs = [
-                {
-                    role: "system",
-                    content: `You are a helpful assistant that can describe images.`
-                },
-                {
-                    role: "user",
-                    content: `Describe this image clearly and concisely in a few sentences.`
-                },
-                {
-                    role: "user",
-                    content: [
-                        { 
-                            "type": "text", 
-                            "text": `Here is the image:` 
-                        }, 
-                        { 
-                            "type": "image_url", 
-                            "image_url": { "url": url } 
-                        }
-                    ]
-                }
-            ];
-            
             try {
+                const requestBody = {
+                    model: selectedImageModel,
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Describe what you see in this image in a concise way, focusing on the main elements and any text visible. Keep the description under 100 words."
+                                },
+                                {
+                                    type: "image_url",
+                                    image_url: urls[i]
+                                }
+                            ]
+                        }
+                    ],
+                    temperature: imageModelTemperature,
+                    top_p: imageModelTopP
+                };
+                // Add provider sorting
+                const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+                const sortType = sortOrder.split('-')[0]; // Extract sort type (price, throughput, latency)
+                requestBody.provider = {
+                    sort: sortType,
+                    allow_fallbacks: true
+                };
                 const imageDescription = await new Promise((resolve) => {
                     GM.xmlHttpRequest({
                         method: "POST",
@@ -1621,12 +2001,7 @@
                             Authorization: `Bearer ${apiKey}`,
                             'Content-Type': 'application/json',
                         },
-                        data: JSON.stringify({
-                            model: selectedImageModel,
-                            messages: msgs,
-                            temperature: imageModelTemperature,
-                            top_p: imageModelTopP
-                        }),
+                        data: JSON.stringify(requestBody),
                         onload: function (response) {
                             try {
                                 if (response.status === 200) {
@@ -1650,27 +2025,21 @@
                             console.error("Network error while fetching image description:", error);
                             resolve("[Error: Network problem while fetching image description]");
                         },
-                        ontimeout: function() {
+                        ontimeout: function () {
                             console.error("Timeout while fetching image description");
                             resolve("[Error: Timeout while fetching image description]");
                         }
                     });
                 });
-                
+
                 // Add the description to our aggregate with proper formatting
-                fullDescription += `[IMAGE ${i+1}]: ${imageDescription}\n`;
-                
-                // Add a small delay between API calls to avoid rate limiting
-                if (i < urls.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
+                imageDescriptions += `[IMAGE ${i + 1}]: ${imageDescription}\n`;
             } catch (error) {
-                console.error(`Error getting description for image ${i+1}:`, error);
-                fullDescription += `[IMAGE ${i+1}]: [Error getting description]\n`;
+                console.error(`Error getting description for image:`, error);
+                return "[Error getting description]\n";
             }
         }
-        
-        return fullDescription.trim();
+        return imageDescriptions;
     }
 
     // ----- API Request with Retry Functionality -----
@@ -1685,7 +2054,7 @@
      * @param {number} [maxAttempts=3] - The maximum number of retry attempts.
      * @returns {Promise<{score: number, error: boolean}>} The rating score and error flag.
      */
-    function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, attempt = 1, maxAttempts = 3) {
+    function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt = 1, maxAttempts = 3) {
         return new Promise((resolve, reject) => {
             /**
              * Attempts the API call. On failure (or certain HTTP errors), retries if under maxAttempts.
@@ -1710,8 +2079,9 @@
                 let messages = [
                     {
                         "role": "user",
-                        "content":
-                            `
+                        "content": [{
+                            "type": "text", "text":
+                                `
                          You will be given a Tweet, structured like this:
 
                          _______TWEET SCHEMA_______
@@ -1738,8 +2108,8 @@
                         You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}.
                         Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.
                         Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
-                        {score: X}, where X is a number from 1 (lowest quality) to 10 (highest quality).
-                        for example: {score: 1}, {score: 2}, {score: 3}, {score: 4}, {score: 5}, {score: 6}, {score: 7}, {score: 8}, {score: 9}, {score: 10}
+                        SCORE_X where X is a number from 1 (lowest quality) to 10 (highest quality).
+                        for example: SCORE_1, SCORE_2, SCORE_3, etc.
                         If one of the above is not present, the program will not be able to parse the response and will return an error.
                         Ensure that you consider these additionaluser-defined instructions in your analysis and scoring:
                         [USER-DEFINED INSTRUCTIONS]:
@@ -1747,71 +2117,19 @@
                         _______BEGIN TWEET_______
                         ${tweetText}
                         _______END TWEET_______`
-                    }
-                ];
+                        }]
+                    }];
 
-                // Check if the selected model supports images
-                const supportsImages = modelSupportsImages(selectedModel);
+                // Check if image descriptions are enabled AND we have media URLs
+                if (mediaUrls && mediaUrls.length > 0) {
+                    // Check if the selected model supports images
+                    const supportsImages = modelSupportsImages(selectedModel);
 
-                if (supportsImages) {
-                    // Extract image URLs from JSON format in the tweet text
-                    const extractImageUrls = (text) => {
-                        try {
-                            // Look for JSON-like format of image URLs
-                            const mediaUrlsRegex = /\[MEDIA_URLS\]:\s*{([^}]+)}/g;
-                            const quotedMediaUrlsRegex = /\[QUOTED_TWEET_MEDIA_URLS\]:\s*{([^}]+)}/g;
-                            
-                            let imageUrls = [];
-                            let match;
-                            
-                            // Simple function to extract URLs from content using regex
-                            const extractUrlsFromContent = (content) => {
-                                const urls = [];
-                                // Match http/https URLs
-                                const urlRegex = /(https?:\/\/[^\s"]+)/g;
-                                let urlMatch;
-                                while ((urlMatch = urlRegex.exec(content)) !== null) {
-                                    if (urlMatch[1]) {
-                                        urls.push(urlMatch[1].replace(/[",]/g, '')); // Remove quotes and commas
-                                    }
-                                }
-                                return urls;
-                            };
-                            
-                            // Extract from main tweet
-                            while ((match = mediaUrlsRegex.exec(text)) !== null) {
-                                if (match[1]) {
-                                    const extractedUrls = extractUrlsFromContent(match[1]);
-                                    imageUrls.push(...extractedUrls);
-                                }
-                            }
-                            
-                            // Extract from quoted tweet
-                            while ((match = quotedMediaUrlsRegex.exec(text)) !== null) {
-                                if (match[1]) {
-                                    const extractedUrls = extractUrlsFromContent(match[1]);
-                                    imageUrls.push(...extractedUrls);
-                                }
-                            }
-                            
-                            // Filter out any non-image URLs (simple check for common image extensions)
-                            return imageUrls.filter(url => 
-                                /\.(jpg|jpeg|png|gif|webp)($|\?)/.test(url.toLowerCase()) || 
-                                url.includes('pbs.twimg.com/media/')
-                            );
-                        } catch (e) {
-                            console.error('Error extracting image URLs:', e);
-                            return [];
-                        }
-                    };
+                    if (supportsImages) {
+                        console.log(`Adding ${mediaUrls.length} image(s) to the tweet rating request`);
 
-                    // Extract image URLs from text and add them to the message
-                    const imageUrls = extractImageUrls(tweetText);
-                    console.log(`Found ${imageUrls.length} image URLs to pass to vision model`);
-
-                    if (imageUrls.length > 0) {
-                        // Convert simple message to content array format for multimodal input
-                        const textContent = messages[0].content;
+                        // Convert message content to array format for multimodal input
+                        const textContent = messages[0].content[0].text;
                         messages[0].content = [
                             {
                                 "type": "text",
@@ -1819,15 +2137,38 @@
                             }
                         ];
 
-                        // Add each image URL as content to the message
-                        for (const url of imageUrls) {
+                        // Add each image URL to the message content
+                        for (const url of mediaUrls) {
                             messages[0].content.push({
                                 "type": "image_url",
                                 "image_url": { "url": url }
                             });
                         }
+                    } else {
+                        console.log(`Selected model ${selectedModel} does not support images. Using text-only rating.`);
+                    }
+                } else {
+                    if (!mediaUrls || mediaUrls.length === 0) {
+                        console.log(`No media URLs to process for tweet ${tweetId}.`);
                     }
                 }
+
+                // Prepare the request body with provider options
+                const requestBody = {
+                    model: selectedModel,
+                    messages: messages,
+                    temperature: modelTemperature,
+                    top_p: modelTopP
+                };
+                console.log(messages);
+                // Add provider sorting
+                const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+                const sortType = sortOrder.split('-')[0]; // Extract sort type (price, throughput, latency)
+                requestBody.provider = {
+                    sort: sortType,
+                    allow_fallbacks: true
+                };
+                console.log(`Rating tweet ${tweetId} using model: ${selectedModel} with provider sort: ${sortType}`);
 
                 GM_xmlhttpRequest({
                     method: "POST",
@@ -1838,26 +2179,54 @@
                         "HTTP-Referer": "https://twitter.com",
                         "X-Title": "Tweet Rating Tool"
                     },
-                    data: JSON.stringify({
-                        "model": selectedModel,
-                        "messages": messages,
-                        "temperature": modelTemperature,
-                        "top_p": modelTopP
-                    }),
+                    data: JSON.stringify(requestBody),
                     timeout: 30000, // 30 seconds timeout
                     onload: function (response) {
                         pendingRequests--;
+
+                        // Log the response status and headers for debugging
+                        console.log(`API Response for tweet ${tweetId} - Status: ${response.status}`);
+
                         if (response.status >= 200 && response.status < 300) {
                             try {
                                 const data = JSON.parse(response.responseText);
                                 const content = data.choices?.[0]?.message?.content;
+
+                                // Check if we have a proper response
                                 if (!content) {
-                                    resolve({ score: 5, content: "No content in OpenRouter response", error: true });
+                                    console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
+
+                                    // Check for specific errors in the response
+                                    if (data.error) {
+                                        console.error(`Error from OpenRouter: ${data.error.message || JSON.stringify(data.error)}`);
+
+                                        // Handle rate limiting errors
+                                        if (data.error.type === 'rate_limit_exceeded' ||
+                                            data.error.message?.includes('rate limit') ||
+                                            data.error.message?.includes('quota')) {
+                                            showStatus('Rate limit exceeded. Waiting before retry...');
+
+                                            // Increase delay for future requests
+                                            const backoffTime = Math.min(API_CALL_DELAY_MS * 2, 10000);
+                                            console.log(`Increasing delay between requests to ${backoffTime}ms due to rate limiting`);
+                                            API_CALL_DELAY_MS = backoffTime;
+                                        }
+                                    }
+
+                                    // Retry with exponential backoff if not at max attempts
+                                    if (currentAttempt < maxAttempts) {
+                                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
+                                        console.log(`Retrying request for tweet ${tweetId} in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
+                                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
+                                        return;
+                                    }
+
+                                    resolve({ score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true });
                                     return;
                                 }
 
                                 // Extract score
-                                const scoreMatch = content.match(/\{score: (\d+)\}/);
+                                const scoreMatch = content.match(/\SCORE_(\d+)/);
                                 if (scoreMatch) {
                                     const score = parseInt(scoreMatch[1], 10);
 
@@ -1867,29 +2236,47 @@
                                     resolve({ score: score, content: content, error: false });
                                     return;
                                 } else {
+                                    console.error(`No rating score found in response for tweet ${tweetId}. Content:`, content);
                                     resolve({ score: 5, content: "No rating score found in response", error: true });
                                     return;
                                 }
                             } catch (error) {
+                                console.error(`Error parsing response for tweet ${tweetId}:`, error, response.responseText);
                                 resolve({ score: 5, content: "Error parsing response", error: true });
                                 return;
                             }
                         } else {
+                            console.error(`API error for tweet ${tweetId}: ${response.status}`, response.responseText);
+
+                            // If we got a 429 (too many requests) or 500+ (server error), add exponential backoff
+                            if ((response.status === 429 || response.status >= 500) && currentAttempt < maxAttempts) {
+                                const backoffDelay = Math.pow(2, currentAttempt) * 1000;
+                                console.log(`Rate limited or server error. Retrying in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
+                                setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
+                                return;
+                            }
+
                             resolve({ score: 5, content: `API error: ${response.status}`, error: true });
                         }
                     },
                     onerror: function (error) {
                         pendingRequests--;
+                        console.error(`Network error for tweet ${tweetId}:`, error);
                         if (currentAttempt < maxAttempts) {
-                            setTimeout(() => { attemptRating(currentAttempt + 1); }, API_CALL_DELAY_MS);
+                            const backoffDelay = Math.pow(2, currentAttempt) * 1000;
+                            console.log(`Network error. Retrying in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
+                            setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
                         } else {
                             resolve({ score: 5, content: "Error making request", error: true });
                         }
                     },
                     ontimeout: function () {
                         pendingRequests--;
+                        console.error(`Request timeout for tweet ${tweetId}`);
                         if (currentAttempt < maxAttempts) {
-                            setTimeout(() => { attemptRating(currentAttempt + 1); }, API_CALL_DELAY_MS);
+                            const backoffDelay = Math.pow(2, currentAttempt) * 1000;
+                            console.log(`Request timed out. Retrying in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
+                            setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
                         } else {
                             resolve({ score: 5, content: "Request timed out", error: true });
                         }
@@ -1900,26 +2287,7 @@
         });
     }
 
-    /**
-     * Tests the API connection by attempting to rate a test tweet.
-     */
-    async function testAPIConnection() {
-        const apiKey = GM_getValue('openrouter-api-key', '');
-        if (!apiKey) {
-            alert('Please enter and save your API key first.');
-            return;
-        }
-        showStatus("Testing API connection...");
-        try {
-            const testText = "This is a test tweet to check if the API connection is working.";
-            const result = await rateTweetWithOpenRouter(testText, "test-" + Date.now(), apiKey);
-            showStatus(`API test successful! Score: ${result.score}`);
-            alert(`API connection successful! Test rating: ${result.score} using model: ${selectedModel}`);
-        } catch (error) {
-            showStatus("API test failed!");
-            alert(`API test failed: ${error.toString()}`);
-        }
-    }
+
 
     // ----- Tweet Processing Functions -----
 
@@ -1948,195 +2316,192 @@
         const apiKey = GM_getValue('openrouter-api-key', '');
         let score = 5; // Default score if rating fails
         let description = "";
-        
+
         // Create a single data object to collect all information during processing
         const logData = {
-          status: "Started processing",
-          tweetId: tweetId
+            status: "Started processing",
+            tweetId: tweetId
         };
-        
+
         try {
-          // Get user handle
-          const userHandle = getUserHandle(tweetArticle);
-          logData.handle = userHandle;
-          
-          // Check if tweet's author is blacklisted (fast path)
-          if (userHandle && isUserBlacklisted(userHandle)) {
-            logData.status = "Blacklisted user - auto-score 10/10";
-            logData.score = 10;
-            
-            tweetArticle.dataset.sloppinessScore = '10';
-            tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'rated';
-            tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            setScoreIndicator(tweetArticle, 10, 'rated', "Blacklisted user");
+            // Get user handle
+            const userHandle = getUserHandle(tweetArticle);
+            logData.handle = userHandle;
+
+            // Check if tweet's author is blacklisted (fast path)
+            if (userHandle && isUserBlacklisted(userHandle)) {
+                logData.status = "Blacklisted user - auto-score 10/10";
+                logData.score = 10;
+
+                tweetArticle.dataset.sloppinessScore = '10';
+                tweetArticle.dataset.blacklisted = 'true';
+                tweetArticle.dataset.ratingStatus = 'rated';
+                tweetArticle.dataset.ratingDescription = "Blacklisted user";
+                setScoreIndicator(tweetArticle, 10, 'rated', "Blacklisted user");
+                filterSingleTweet(tweetArticle);
+
+                // Log final information
+                logFinalRating(tweetId, userHandle, logData);
+                return;
+            }
+
+            // Check if a cached rating exists
+            if (applyTweetCachedRating(tweetArticle)) {
+                logData.status = "Using cached rating";
+                logData.score = parseInt(tweetArticle.dataset.sloppinessScore, 10);
+
+                // Log final information
+                logFinalRating(tweetId, userHandle, logData);
+                return;
+            }
+
+            // Status is already set to pending in scheduleTweetProcessing
+            logData.status = "Processing tweet";
+
+            // --- Extract Main Tweet Content ---
+            const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+            let allMediaLinks = extractMediaLinks(tweetArticle, tweetId);
+
+            // --- Extract Quoted Tweet Content (if any) ---
+            let quotedText = "";
+            let quotedMediaLinks = [];
+            const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+            if (quoteContainer) {
+                quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
+                quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
+            }
+
+            // Remove any media links from the main tweet that also appear in the quoted tweet
+            let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+            //redefine allMediaLinks as the union of mainMediaLinks and quotedMediaLinks
+            // Collect media URLs
+            if (mainMediaLinks.length > 0 || quotedMediaLinks.length > 0) {
+                logData.mediaUrls = [...mainMediaLinks, ...quotedMediaLinks];
+            }
+
+            // --- Build the full context ---
+            let fullContext = `[TWEET ${tweetId}]\n Author:@${userHandle}:\n` + mainText;
+            let fullContextWithImageDescription = fullContext;
+
+            if (mainMediaLinks.length > 0) {
+                // Add media URLs always for context
+                fullContext += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
+
+                // Process main tweet images only if image descriptions are enabled
+                if (enableImageDescriptions) {
+                    let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                    fullContextWithImageDescription += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinksDescription;
+                    logData.imageDescription = mainMediaLinksDescription;
+                } else {
+                    // Just add the URLs when descriptions are disabled
+                    fullContextWithImageDescription += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
+                }
+            }
+
+            if (quotedText) {
+                fullContext += "\n[QUOTED_TWEET]:\n" + quotedText;
+                fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n" + quotedText;
+
+                if (quotedMediaLinks.length > 0) {
+                    // Add media URLs always for context
+                    fullContext += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
+
+                    // Process quoted tweet images only if image descriptions are enabled
+                    if (enableImageDescriptions) {
+                        let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
+                        fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaLinksDescription;
+
+                        if (logData.imageDescription) {
+                            logData.imageDescription += "\n\nQUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
+                        } else {
+                            logData.imageDescription = "QUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
+                        }
+                    } else {
+                        // Just add the URLs when descriptions are disabled
+                        fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
+                    }
+                }
+            }
+
+            // --- Conversation Thread Handling ---
+            const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+            if (conversation && conversation.dataset.threadHist) {
+                // If this tweet is not the original tweet, prepend the thread history.
+                if (!isOriginalTweet(tweetArticle)) {
+                    fullContextWithImageDescription = conversation.dataset.threadHist + "\n[REPLY]\n" + fullContextWithImageDescription;
+                    logData.isReply = true;
+                }
+            }
+
+            logData.fullContext = fullContextWithImageDescription;
+            tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+
+            // --- API Call or Fallback ---
+            if (apiKey && fullContext) {
+                try {
+                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, allMediaLinks);
+                    score = rating.score;
+                    description = rating.content;
+                    tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
+                    tweetArticle.dataset.ratingDescription = description || "not available";
+
+                    logData.status = rating.error ? "Rating error" : "Rating complete";
+                    logData.score = score;
+                    logData.modelResponse = description;
+                    logData.isError = rating.error;
+
+                    if (rating.error) {
+                        logData.error = rating.content;
+                    }
+                } catch (apiError) {
+                    logData.status = "API error";
+                    logData.error = apiError.toString();
+                    logData.isError = true;
+
+                    score = Math.floor(Math.random() * 10) + 1; // Fallback to a random score
+                    tweetArticle.dataset.ratingStatus = 'error';
+                }
+            } else {
+                // If there's no API key or textual content (e.g., only media), use a fallback random score.
+                score = Math.floor(Math.random() * 10) + 1;
+                tweetArticle.dataset.ratingStatus = 'rated';
+
+                if (!apiKey) {
+                    logData.status = "No API key - using random score";
+                } else if (!fullContext) {
+                    logData.status = "No textual content - using random score";
+                }
+
+                logData.score = score;
+            }
+
+            tweetArticle.dataset.sloppinessScore = score.toString();
+            setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
             filterSingleTweet(tweetArticle);
-            
-            // Log final information
+
+            // Update final status
+            if (!logData.status.includes("complete")) {
+                logData.status = "Rating process complete";
+            }
+
+            // Log all collected information at once
             logFinalRating(tweetId, userHandle, logData);
-            return;
-          }
-      
-          // Check if a cached rating exists
-          if (applyTweetCachedRating(tweetArticle)) {
-            logData.status = "Using cached rating";
-            logData.score = parseInt(tweetArticle.dataset.sloppinessScore, 10);
-            
-            // Log final information
-            logFinalRating(tweetId, userHandle, logData);
-            return;
-          }
-      
-          // Status is already set to pending in scheduleTweetProcessing
-          logData.status = "Processing tweet";
-      
-          // --- Extract Main Tweet Content ---
-          const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-          let mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
-
-          // --- Extract Quoted Tweet Content (if any) ---
-          let quotedText = "";
-          let quotedMediaLinks = [];
-          const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-          if (quoteContainer) {
-            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
-            quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
-          }
-
-          // Remove any media links from the main tweet that also appear in the quoted tweet
-          mainMediaLinks = mainMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-
-          // Collect media URLs
-          if (mainMediaLinks.length > 0 || quotedMediaLinks.length > 0) {
-            logData.mediaUrls = [...mainMediaLinks, ...quotedMediaLinks];
-          }
-
-          // --- Build the full context ---
-          let fullContext = `[TWEET ${tweetId}]\n Author:@${userHandle}:\n` + mainText;
-          let fullContextWithImageDescription = fullContext;
-
-          if (mainMediaLinks.length > 0) {
-            // Process main tweet images
-            let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-            fullContext += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
-            
-            // Add media URLs in JSON format
-            let urlstr="{";
-            for (let i = 0; i < mainMediaLinks.length; i++) {
-                urlstr += `Image${i+1}: "${mainMediaLinks[i]}"${i==mainMediaLinks.length-1 ? "" : ", "}`;
-            }
-            urlstr+="}"
-            fullContextWithImageDescription += "\n[MEDIA_URLS]:\n" + urlstr;
-            fullContextWithImageDescription += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinksDescription;
-
-            logData.imageDescription = mainMediaLinksDescription;
-          }
-
-          if (quotedText) {
-            fullContext += "\n[QUOTED_TWEET]:\n" + quotedText;
-            fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n" + quotedText;
-            
-            if (quotedMediaLinks.length > 0) {
-              // Process quoted tweet images
-              let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-              fullContext += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
-              
-              // Add quoted media URLs in JSON format
-              let urlstr="{";
-              for (let i = 0; i < quotedMediaLinks.length; i++) {
-                  urlstr += `Image${i+1}: "${quotedMediaLinks[i]}"${i==quotedMediaLinks.length-1 ? "" : ", "}`;
-              }
-              urlstr+="}"
-              fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + urlstr;
-              fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaLinksDescription;
-
-              if (logData.imageDescription) {
-                logData.imageDescription += "\n\nQUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
-              } else {
-                logData.imageDescription = "QUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
-              }
-            }
-          }
-
-          // --- Conversation Thread Handling ---
-          const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-          if (conversation && conversation.dataset.threadHist) {
-            // If this tweet is not the original tweet, prepend the thread history.
-            if (!isOriginalTweet(tweetArticle)) {
-              fullContextWithImageDescription = conversation.dataset.threadHist + "\n[REPLY]\n" + fullContextWithImageDescription;
-              logData.isReply = true;
-            }
-          }
-
-          logData.fullContext = fullContextWithImageDescription;
-          tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-
-          // --- API Call or Fallback ---
-          if (apiKey && fullContext) {
-            try {
-              const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey);
-              score = rating.score;
-              description = rating.content;
-              tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
-              tweetArticle.dataset.ratingDescription = description || "not available";
-
-              logData.status = rating.error ? "Rating error" : "Rating complete";
-              logData.score = score;
-              logData.modelResponse = description;
-              logData.isError = rating.error;
-
-              if (rating.error) {
-                logData.error = rating.content;
-              }
-            } catch (apiError) {
-              logData.status = "API error";
-              logData.error = apiError.toString();
-              logData.isError = true;
-
-              score = Math.floor(Math.random() * 10) + 1; // Fallback to a random score
-              tweetArticle.dataset.ratingStatus = 'error';
-            }
-          } else {
-            // If there's no API key or textual content (e.g., only media), use a fallback random score.
-            score = Math.floor(Math.random() * 10) + 1;
-            tweetArticle.dataset.ratingStatus = 'rated';
-
-            if (!apiKey) {
-              logData.status = "No API key - using random score";
-            } else if (!fullContext) {
-              logData.status = "No textual content - using random score";
-            }
-
-            logData.score = score;
-          }
-
-          tweetArticle.dataset.sloppinessScore = score.toString();
-          setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
-          filterSingleTweet(tweetArticle);
-
-          // Update final status
-          if (!logData.status.includes("complete")) {
-            logData.status = "Rating process complete";
-          }
-
-          // Log all collected information at once
-          logFinalRating(tweetId, userHandle, logData);
 
         } catch (error) {
-          logData.status = "Error processing tweet";
-          logData.error = error.toString();
-          logData.isError = true;
+            logData.status = "Error processing tweet";
+            logData.error = error.toString();
+            logData.isError = true;
 
-          // Log the error information
-          logFinalRating(tweetId, userHandle || "unknown", logData);
+            // Log the error information
+            logFinalRating(tweetId, logData.handle || "unknown", logData);
 
-          if (!tweetArticle.dataset.sloppinessScore) {
-            tweetArticle.dataset.sloppinessScore = '5';
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = "error processing tweet";
-            setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
-            filterSingleTweet(tweetArticle);
-          }
+            if (!tweetArticle.dataset.sloppinessScore) {
+                tweetArticle.dataset.sloppinessScore = '5';
+                tweetArticle.dataset.ratingStatus = 'error';
+                tweetArticle.dataset.ratingDescription = "error processing tweet";
+                setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
+                filterSingleTweet(tweetArticle);
+            }
         }
     }
 
@@ -2167,12 +2532,12 @@
         if (processedTweets.has(tweetId)) {
             return;
         }
-        
+
         // Immediately mark as pending before scheduling actual processing
         processedTweets.add(tweetId);
         tweetArticle.dataset.ratingStatus = 'pending';
         setScoreIndicator(tweetArticle, null, 'pending');
-        
+
         // Now schedule the actual rating processing
         setTimeout(() => { delayedProcessTweet(tweetArticle, tweetId); }, PROCESSING_DELAY_MS);
     }
@@ -2201,39 +2566,59 @@
         const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
         const mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
 
-        // Retrieve media descriptions for the main tweet, if available.
-        let mainMediaDescriptions = "[MEDIA_DESCRIPTION]:\n";
+        // Build the base formatted context string
+        let fullContext = `[TWEET]:
+@${userHandle}
+${mainText}
+`;
+
+        // Handle media content
         if (mainMediaLinks.length > 0) {
-            // Assuming getImageDescription returns a string formatted as:
-            // "[IMAGE 1]: description, [IMAGE 2]: description, etc."
-            mainMediaDescriptions = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+            if (enableImageDescriptions) {
+                // Get descriptions for images if enabled
+                const mainMediaDescriptions = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                fullContext += `[MEDIA_DESCRIPTION]:
+${mainMediaDescriptions}
+`;
+            } else {
+                // Just include the URLs if descriptions are disabled
+                fullContext += `[MEDIA_URLS]:
+${mainMediaLinks.join(", ")}
+`;
+            }
         }
 
         // Retrieve quoted tweet content (if any)
         let quotedText = "";
-        let quotedMediaDescriptions = "[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n";
+        let quotedMediaLinks = [];
         const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+
         if (quoteContainer) {
             quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
-            const quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
-            if (quotedMediaLinks.length > 0) {
-                quotedMediaDescriptions = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-            }
-        }
+            quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
 
-        // Build the formatted context string.
-        let fullContext = `[TWEET]:
-@${userHandle}
-${mainText}
-
-${mainMediaDescriptions}
-`;
-        if (quotedText) {
-            fullContext += `[QUOTED_TWEET]:
+            // Add quoted tweet content if present
+            if (quotedText) {
+                fullContext += `[QUOTED_TWEET]:
 ${quotedText}
+`;
 
+                // Handle quoted tweet media
+                if (quotedMediaLinks.length > 0) {
+                    if (enableImageDescriptions) {
+                        // Get descriptions for quoted tweet images if enabled
+                        const quotedMediaDescriptions = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
+                        fullContext += `[QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaDescriptions}
 `;
+                    } else {
+                        // Just include the URLs if descriptions are disabled
+                        fullContext += `[QUOTED_TWEET_MEDIA_URLS]:
+${quotedMediaLinks.join(", ")}
+`;
+                    }
+                }
+            }
         }
 
         return fullContext;
@@ -2353,7 +2738,7 @@ ${quotedMediaDescriptions}
                                     const descBox = document.getElementById(descId);
                                     if (descBox) {
                                         descBox.remove();
-                                        console.debug(`Removed description box ${descId} for tweet that was removed from the DOM`);
+                                        //console.debug(`Removed description box ${descId} for tweet that was removed from the DOM`);
                                     }
                                 }
                             });
@@ -2366,43 +2751,7 @@ ${quotedMediaDescriptions}
 
     // ----- Initialization -----
 
-    /**
-     * Validates that critical UI elements exist after creation.
-     * Logs warnings for any missing elements.
-     */
-    function validateUIElements() {
-        console.log('Simplified logging enabled. All tweet processing will be logged at completion.');
 
-        const requiredElements = [
-            { id: 'openrouter-api-key', description: 'API Key Input' },
-            { id: 'model-selector', description: 'Model Selector' },
-            { id: 'image-model-selector', description: 'Image Model Selector' },
-            { id: 'handle-input', description: 'Handle Input' },
-            { id: 'handle-list', description: 'Handle List' },
-            { id: 'user-instructions', description: 'User Instructions Textarea' },
-            { id: 'tweet-filter-container', description: 'Filter Container' },
-            { id: 'settings-container', description: 'Settings Container' },
-            { id: 'settings-tab', description: 'Settings Tab' },
-            { id: 'instructions-tab', description: 'Instructions Tab' }
-        ];
-
-        let allValid = true;
-        for (const element of requiredElements) {
-            const el = document.getElementById(element.id);
-            if (!el) {
-                console.error(`UI Validation: ${element.description} (${element.id}) is missing`);
-                allValid = false;
-            }
-        }
-
-        if (allValid) {
-            console.log('UI validation successful: All required elements exist');
-        } else {
-            console.error('UI validation failed: Some elements are missing. Check the error messages above.');
-        }
-
-        return allValid;
-    }
 
     /**
      * Cleans up all score description elements from the DOM
@@ -2427,7 +2776,7 @@ ${quotedMediaDescriptions}
             addSettingsUI();
 
             // Validate that UI elements were created correctly
-            validateUIElements();
+
 
             // Create and add status indicator element
             const statusIndicator = document.createElement('div');
@@ -2479,29 +2828,38 @@ ${quotedMediaDescriptions}
         const apiKey = GM_getValue('openrouter-api-key', '');
         if (!apiKey) {
             console.log('No API key available, skipping model fetch');
+            showStatus('Please enter your OpenRouter API key');
             return;
         }
-        const refreshBtn = document.querySelector('.refresh-models');
-        if (refreshBtn) refreshBtn.classList.add('refreshing');
+
         showStatus('Fetching available models...');
+
+        // Get the current sort order from storage or use default
+        const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+
         GM_xmlhttpRequest({
             method: "GET",
-            url: "https://openrouter.ai/api/v1/models",
+            url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
                 "HTTP-Referer": "https://twitter.com",
                 "X-Title": "Tweet Rating Tool"
             },
             onload: function (response) {
-                if (refreshBtn) refreshBtn.classList.remove('refreshing');
                 if (response.status >= 200 && response.status < 300) {
                     try {
                         const data = JSON.parse(response.responseText);
-                        availableModels = data.data || [];
-                        console.log(`Fetched ${availableModels.length} models from OpenRouter`);
-                        updateModelSelector();
-                        updateImageModelSelector();
-                        showStatus(`Loaded ${availableModels.length} models!`);
+                        if (data.data && data.data.models) {
+                            availableModels = data.data.models || [];
+                            console.log(`Fetched ${availableModels.length} models from OpenRouter`);
+
+                            // After fetching models, update any UI that depends on them
+                            refreshModelsUI();
+                            showStatus(`Loaded ${availableModels.length} models!`);
+                        } else {
+                            console.error('Unexpected data format from OpenRouter API:', data);
+                            showStatus('Error: Unexpected data format from API');
+                        }
                     } catch (error) {
                         console.error('Error parsing model list:', error);
                         showStatus('Error loading models!');
@@ -2512,167 +2870,79 @@ ${quotedMediaDescriptions}
                 }
             },
             onerror: function (error) {
-                if (refreshBtn) refreshBtn.classList.remove('refreshing');
                 console.error('Error fetching models:', error);
                 showStatus('Failed to fetch models!');
             }
         });
     }
 
+    /**
+     * Updates any UI elements that depend on the model list
+     */
+    function refreshModelsUI() {
+        // Update model selectors if they exist in the DOM
+        const modelSelectContainer = document.getElementById('model-select-container');
+        if (modelSelectContainer) {
+            // Clear current contents
+            modelSelectContainer.innerHTML = '';
+
+            // Recreate the custom select
+            createCustomSelect(
+                modelSelectContainer,
+                'model-selector',
+                availableModels.map(model => ({
+                    value: model.slug || model.permaslug,
+                    label: formatModelLabel(model)
+                })),
+                selectedModel,
+                (newValue) => {
+                    selectedModel = newValue;
+                    GM_setValue('selectedModel', selectedModel);
+                    showStatus('Rating model updated');
+                },
+                'Search rating models...'
+            );
+        }
+
+        // Update image model selector if it exists
+        const imageModelSelectContainer = document.getElementById('image-model-select-container');
+        if (imageModelSelectContainer) {
+            // Filter for vision models only
+            const visionModels = availableModels.filter(model => {
+                return model.input_modalities?.includes('image') ||
+                    model.architecture?.input_modalities?.includes('image') ||
+                    model.architecture?.modality?.includes('image');
+            });
+
+            // Clear current contents
+            imageModelSelectContainer.innerHTML = '';
+
+            // Recreate the custom select for image models
+            createCustomSelect(
+                imageModelSelectContainer,
+                'image-model-selector',
+                visionModels.map(model => ({
+                    value: model.slug || model.permaslug,
+                    label: formatModelLabel(model)
+                })),
+                selectedImageModel,
+                (newValue) => {
+                    selectedImageModel = newValue;
+                    GM_setValue('selectedImageModel', selectedImageModel);
+                    showStatus('Image model updated');
+                },
+                'Search vision models...'
+            );
+        }
+    }
+
+
+
+
     // Start observing tweets and initializing the UI
     initializeObserver();
 
-    /**
-     * Adds a UI panel for user-defined instructions for the scoring model.
-     */
-    function addInstructionsUI() {
-        if (document.getElementById('instructions-container')) return;
 
-        // Create toggle button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.id = 'instructions-toggle';
-        toggleBtn.className = 'toggle-button';
-        toggleBtn.textContent = 'Scoring Instructions';
-        toggleBtn.onclick = () => {
-            const container = document.getElementById('instructions-container');
-            if (container.classList.contains('hidden')) {
-                container.classList.remove('hidden');
-                toggleBtn.textContent = 'Hide Instructions';
-            } else {
-                container.classList.add('hidden');
-                toggleBtn.textContent = 'Scoring Instructions';
-            }
-        };
-        document.body.appendChild(toggleBtn);
-
-        const container = document.createElement('div');
-        container.id = 'instructions-container';
-        container.classList.add('hidden');
-
-        // Add close button
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'close-button';
-        closeBtn.innerHTML = '×';
-        closeBtn.onclick = () => {
-            container.classList.add('hidden');
-            toggleBtn.textContent = 'Scoring Instructions';
-        };
-        container.appendChild(closeBtn);
-
-        // Title
-        const title = document.createElement('div');
-        title.textContent = 'Custom Tweet Scoring Instructions';
-        title.style.fontWeight = 'bold';
-        container.appendChild(title);
-
-        // Description
-        const description = document.createElement('div');
-        description.textContent = 'Add custom instructions for how the model should score tweets. These will be applied to all tweet ratings.';
-        description.style.fontSize = '12px';
-        description.style.marginTop = '4px';
-        description.style.marginBottom = '8px';
-        description.style.opacity = '0.8';
-        container.appendChild(description);
-
-        // Textarea for instructions
-        const instructionsTextarea = document.createElement('textarea');
-        instructionsTextarea.id = 'user-instructions';
-        instructionsTextarea.placeholder = 'Examples:\n- Give high scores to tweets about technology\n- Penalize clickbait-style tweets\n- Rate educational content higher\n- Ignore political bias when scoring';
-        instructionsTextarea.value = GM_getValue('userDefinedInstructions', '');
-        container.appendChild(instructionsTextarea);
-
-        // Save button
-        const saveBtn = document.createElement('button');
-        saveBtn.id = 'save-instructions';
-        saveBtn.textContent = 'Save Instructions';
-        saveBtn.onclick = () => {
-            USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
-            GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
-            showStatus('Scoring instructions saved! New tweets will use these instructions.');
-
-            // Clear cache if user wants to re-rate existing tweets with new instructions
-            if (confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
-                clearTweetRatings();
-            }
-        };
-        container.appendChild(saveBtn);
-
-        document.body.appendChild(container);
-    }
-
-    /**
-     * Structured debug logger with grouping and consistent format.
-     * @param {string} tweetId - The tweet ID for identifying the log group.
-     * @param {string} handle - The author's handle.
-     * @param {Object} data - Data to log (media URLs, contexts, ratings, etc.).
-     * @param {boolean} [isError=false] - Whether this is an error log.
-     */
-    function debugLog(tweetId, handle, data, isError = false) {
-        // Only log if we're in a development environment or debug mode
-        // You could add a debug mode toggle in settings if needed
-
-        const groupTitle = `Tweet ${tweetId} (@${handle})`;
-
-        if (isError) {
-            console.group(`❌ ERROR: ${groupTitle}`);
-        } else {
-            console.groupCollapsed(`🔍 ${groupTitle}`);
-        }
-
-        // Log each piece of data with clear labels
-        if (data.mediaUrls && data.mediaUrls.length) {
-            console.log('📷 Media URLs:', data.mediaUrls);
-        }
-
-        if (data.fullContext) {
-            console.log('📝 Full Context:', data.fullContext);
-        }
-
-        if (data.imageDescription) {
-            console.log('🖼️ Image Description:', data.imageDescription);
-        }
-
-        if (data.modelResponse) {
-            console.log('🤖 Model Response:', data.modelResponse);
-        }
-
-        if (data.score !== undefined) {
-            console.log(`⭐ Rating Score: ${data.score}/10`);
-        }
-
-        if (data.error) {
-            console.error('Error Details:', data.error);
-        }
-
-        // Additional custom data
-        for (const [key, value] of Object.entries(data)) {
-            if (!['mediaUrls', 'fullContext', 'imageDescription', 'modelResponse', 'score', 'error'].includes(key)) {
-                console.log(`${key}:`, value);
-            }
-        }
-
-        console.groupEnd();
-    }
-
-    /**
-     * Simple debug logger that logs all relevant information about a tweet rating in a single log.
-     * @param {string} tweetId - The tweet ID.
-     * @param {string} handle - The author's handle.
-     * @param {Object} data - Complete data about the tweet and its rating.
-     * @param {boolean} [isError=false] - Whether this is an error log.
-     */
-    function debugLog(tweetId, handle, data, isError = false) {
-        // Just store the log data for now, actual logging happens at the end of processing
-        if (!tweetId || !handle) return;
-
-        // We don't actually log here, we just add to the log data
-        if (!data.logged) {
-            data.tweetId = tweetId;
-            data.handle = handle;
-            data.isError = isError;
-            data.logged = false; // Will be set to true when logged
-        }
-    }
 
     /**
      * Logs the final rating result once all processing is complete.
@@ -2710,6 +2980,773 @@ ${quotedMediaDescriptions}
 
         // Mark as logged
         data.logged = true;
+    }
+
+    /**
+     * Builds the content for the General tab.
+     * @param {HTMLElement} tabElement - The tab element to fill with content.
+     */
+    function buildGeneralTabContent(tabElement) {
+        // API Key section
+        const apiKeyLabel = document.createElement('div');
+        apiKeyLabel.className = 'section-title';
+        apiKeyLabel.innerHTML = '<span style="font-size: 14px;">🔑</span> OpenRouter API Key';
+        tabElement.appendChild(apiKeyLabel);
+
+        const apiKeyInput = document.createElement('input');
+        apiKeyInput.type = 'password';
+        apiKeyInput.id = 'openrouter-api-key';
+        apiKeyInput.placeholder = 'Enter your OpenRouter API key';
+        apiKeyInput.value = GM_getValue('openrouter-api-key', '');
+        tabElement.appendChild(apiKeyInput);
+
+        // API key save button
+        const saveApiKeyBtn = document.createElement('button');
+        saveApiKeyBtn.className = 'settings-button';
+        saveApiKeyBtn.textContent = 'Save API Key';
+        saveApiKeyBtn.addEventListener('click', saveApiKey);
+        tabElement.appendChild(saveApiKeyBtn);
+
+        // Cache Statistics Section
+        const cacheLabel = document.createElement('div');
+        cacheLabel.className = 'section-title';
+        cacheLabel.innerHTML = '<span style="font-size: 14px;">🗄️</span> Cache Statistics';
+        cacheLabel.style.marginTop = '20px';
+        tabElement.appendChild(cacheLabel);
+
+        // Stats display
+        const statsContainer = document.createElement('div');
+        statsContainer.className = 'stats-container';
+
+        // Ratings stats row
+        const ratingsRow = document.createElement('div');
+        ratingsRow.className = 'stats-row';
+
+        const ratingsLabel = document.createElement('div');
+        ratingsLabel.className = 'stats-label';
+        ratingsLabel.textContent = 'Cached Tweet Ratings';
+        ratingsRow.appendChild(ratingsLabel);
+
+        const ratingsValue = document.createElement('div');
+        ratingsValue.className = 'stats-value';
+        ratingsValue.id = 'cached-ratings-count';
+        ratingsValue.textContent = Object.keys(tweetIDRatingCache).length;
+        ratingsRow.appendChild(ratingsValue);
+
+        statsContainer.appendChild(ratingsRow);
+
+        // Handles stats row
+        const handlesRow = document.createElement('div');
+        handlesRow.className = 'stats-row';
+
+        const handlesLabel = document.createElement('div');
+        handlesLabel.className = 'stats-label';
+        handlesLabel.textContent = 'Whitelisted Handles';
+        handlesRow.appendChild(handlesLabel);
+
+        const handlesValue = document.createElement('div');
+        handlesValue.className = 'stats-value';
+        handlesValue.id = 'whitelisted-handles-count';
+        handlesValue.textContent = blacklistedHandles.length;
+        handlesRow.appendChild(handlesValue);
+
+        statsContainer.appendChild(handlesRow);
+
+        tabElement.appendChild(statsContainer);
+
+        // Clear Cache Button
+        const clearButton = document.createElement('button');
+        clearButton.className = 'settings-button danger';
+        clearButton.textContent = 'Clear Rating Cache';
+        clearButton.addEventListener('click', () => {
+            clearTweetRatings();
+            updateCacheStats();
+        });
+        tabElement.appendChild(clearButton);
+
+        // Backup & Restore Section
+        const backupLabel = document.createElement('div');
+        backupLabel.className = 'section-title';
+        backupLabel.innerHTML = '<span style="font-size: 14px;">💾</span> Backup & Restore';
+        backupLabel.style.marginTop = '20px';
+        tabElement.appendChild(backupLabel);
+
+        const backupDesc = document.createElement('div');
+        backupDesc.className = 'section-description';
+        backupDesc.textContent = 'Export your settings and cached ratings to a file for backup, or import previously saved settings.';
+        tabElement.appendChild(backupDesc);
+
+        // Buttons row
+        const buttonRow = document.createElement('div');
+        buttonRow.className = 'button-row';
+
+        // Export button
+        const exportButton = document.createElement('button');
+        exportButton.className = 'settings-button secondary';
+        exportButton.textContent = 'Export Settings';
+        exportButton.addEventListener('click', exportSettings);
+        buttonRow.appendChild(exportButton);
+
+        // Import button
+        const importButton = document.createElement('button');
+        importButton.className = 'settings-button secondary';
+        importButton.textContent = 'Import Settings';
+        importButton.addEventListener('click', importSettings);
+        buttonRow.appendChild(importButton);
+
+        tabElement.appendChild(buttonRow);
+
+        // Reset to defaults button
+        const resetButton = document.createElement('button');
+        resetButton.className = 'settings-button danger';
+        resetButton.style.marginTop = '15px';
+        resetButton.textContent = 'Reset to Defaults';
+        resetButton.addEventListener('click', resetSettings);
+        tabElement.appendChild(resetButton);
+
+        // Version info
+        const versionInfo = document.createElement('div');
+        versionInfo.style.marginTop = '20px';
+        versionInfo.style.fontSize = '11px';
+        versionInfo.style.opacity = '0.6';
+        versionInfo.style.textAlign = 'center';
+        versionInfo.textContent = 'Twitter De-Sloppifier v1.2';
+        tabElement.appendChild(versionInfo);
+
+        // Helper function to update cache statistics
+        function updateCacheStats() {
+            document.getElementById('cached-ratings-count').textContent = Object.keys(tweetIDRatingCache).length;
+            document.getElementById('whitelisted-handles-count').textContent = blacklistedHandles.length;
+        }
+
+        // Save API key function
+        function saveApiKey() {
+            const apiKey = apiKeyInput.value.trim();
+            if (apiKey) {
+                GM_setValue('openrouter-api-key', apiKey);
+                showStatus('API key saved successfully!');
+
+                // Refresh model list with new API key
+                fetchAvailableModels();
+            } else {
+                showStatus('Please enter a valid API key');
+            }
+        }
+    }
+
+    /**
+     * Resets all settings to defaults.
+     */
+    function resetSettings() {
+        if (confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings.')) {
+            // Reset global variables to defaults
+            selectedModel = 'mistralai/mistral-small-3.1-24b-instruct';
+            selectedImageModel = 'mistralai/mistral-small-3.1-24b-instruct';
+            enableImageDescriptions = true;
+            modelTemperature = 0.5;
+            modelTopP = 0.9;
+            imageModelTemperature = 0.5;
+            imageModelTopP = 0.9;
+            currentFilterThreshold = 1;
+            USER_DEFINED_INSTRUCTIONS = '';
+
+            // Save reset values to storage
+            GM_setValue('selectedModel', selectedModel);
+            GM_setValue('selectedImageModel', selectedImageModel);
+            GM_setValue('enableImageDescriptions', enableImageDescriptions);
+            GM_setValue('modelTemperature', modelTemperature);
+            GM_setValue('modelTopP', modelTopP);
+            GM_setValue('imageModelTemperature', imageModelTemperature);
+            GM_setValue('imageModelTopP', imageModelTopP);
+            GM_setValue('filterThreshold', currentFilterThreshold);
+            GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
+
+            // Refresh UI to reflect default values
+            refreshSettingsUI();
+
+            showStatus('Settings reset to defaults');
+        }
+    }
+
+    /**
+     * Builds the content for the Models tab.
+     * @param {HTMLElement} tabElement - The tab element to fill with content.
+     */
+    function buildModelsTabContent(tabElement) {
+        // Tweet Rating Model Section
+        const modelLabel = document.createElement('div');
+        modelLabel.className = 'section-title';
+        modelLabel.innerHTML = '<span style="font-size: 14px;">🧠</span> Tweet Rating Model';
+        tabElement.appendChild(modelLabel);
+
+        const modelDesc = document.createElement('div');
+        modelDesc.className = 'section-description';
+        modelDesc.textContent = 'Hint: If you want to rate tweets with images, you need to select an image model.';
+        tabElement.appendChild(modelDesc);
+
+        // Add sort order selector
+        const sortContainer = document.createElement('div');
+        sortContainer.className = 'sort-container';
+
+        const sortLabel = document.createElement('label');
+        sortLabel.textContent = 'Sort models by: ';
+        sortContainer.appendChild(sortLabel);
+
+        const sortSelect = document.createElement('select');
+        sortSelect.id = 'model-sort-order';
+
+        const sortOptions = [
+            { value: 'price-low-to-high', label: 'Price (Low to High)' },
+            { value: 'price-high-to-low', label: 'Price (High to Low)' },
+            { value: 'throughput-high-to-low', label: 'Throughput (High to Low)' },
+            { value: 'throughput-low-to-high', label: 'Throughput (Low to High)' },
+            { value: 'latency-low-to-high', label: 'Latency (Low to High)' },
+            { value: 'latency-high-to-low', label: 'Latency (High to Low)' }
+        ];
+
+        sortOptions.forEach(option => {
+            const optElement = document.createElement('option');
+            optElement.value = option.value;
+            optElement.textContent = option.label;
+            if (option.value === GM_getValue('modelSortOrder', 'throughput-high-to-low')) {
+                optElement.selected = true;
+            }
+            sortSelect.appendChild(optElement);
+        });
+
+        sortSelect.addEventListener('change', function () {
+            GM_setValue('modelSortOrder', this.value);
+            fetchAvailableModels(); // Refresh models with new sort order
+        });
+
+        sortContainer.appendChild(sortSelect);
+        tabElement.appendChild(sortContainer);
+
+        // Create custom model dropdown with built-in search
+        const modelSelectContainer = document.createElement('div');
+        modelSelectContainer.className = 'select-container';
+        modelSelectContainer.id = 'model-select-container';
+
+        // Create the custom select component
+        createCustomSelect(
+            modelSelectContainer,
+            'model-selector',
+            availableModels.map(model => ({
+                value: model.slug || model.id,
+                label: formatModelLabel(model)
+            })),
+            selectedModel,
+            (newValue) => {
+                selectedModel = newValue;
+                GM_setValue('selectedModel', selectedModel);
+
+                showStatus('Rating model updated');
+            },
+            'Search rating models...'
+        );
+
+        tabElement.appendChild(modelSelectContainer);
+
+        // Advanced options for tweet rating model
+        const ratingAdvancedOptions = document.createElement('div');
+        ratingAdvancedOptions.className = 'advanced-options';
+
+        const ratingAdvancedToggle = document.createElement('div');
+        ratingAdvancedToggle.className = 'advanced-toggle';
+
+        const ratingAdvancedTitle = document.createElement('div');
+        ratingAdvancedTitle.className = 'advanced-toggle-title';
+        ratingAdvancedTitle.textContent = 'Advanced Options';
+        ratingAdvancedToggle.appendChild(ratingAdvancedTitle);
+
+        const ratingAdvancedIcon = document.createElement('div');
+        ratingAdvancedIcon.className = 'advanced-toggle-icon';
+        ratingAdvancedIcon.innerHTML = '▼';
+        ratingAdvancedToggle.appendChild(ratingAdvancedIcon);
+
+        ratingAdvancedOptions.appendChild(ratingAdvancedToggle);
+
+        const ratingAdvancedContent = document.createElement('div');
+        ratingAdvancedContent.className = 'advanced-content';
+
+        // Temperature parameter
+        createParameterControl(
+            ratingAdvancedContent,
+            'Temperature',
+            'modelTemperature',
+            'How random the model responses should be (0.0-1.0)',
+            modelTemperature,
+            0, 1, 0.1,
+            (newValue) => {
+                modelTemperature = newValue;
+                GM_setValue('modelTemperature', modelTemperature);
+            }
+        );
+
+        // Top-p parameter
+        createParameterControl(
+            ratingAdvancedContent,
+            'Top-p',
+            'modelTopP',
+            'Nucleus sampling parameter (0.0-1.0)',
+            modelTopP,
+            0, 1, 0.1,
+            (newValue) => {
+                modelTopP = newValue;
+                GM_setValue('modelTopP', modelTopP);
+            }
+        );
+
+
+
+        ratingAdvancedOptions.appendChild(ratingAdvancedContent);
+
+        // Toggle the advanced options when clicked
+        ratingAdvancedToggle.addEventListener('click', () => {
+            ratingAdvancedContent.classList.toggle('expanded');
+            ratingAdvancedIcon.classList.toggle('expanded');
+        });
+
+        tabElement.appendChild(ratingAdvancedOptions);
+
+        // Image Model Section
+        const imageModelLabel = document.createElement('div');
+        imageModelLabel.className = 'section-title';
+        imageModelLabel.innerHTML = '<span style="font-size: 14px;">🖼️</span> Image Processing Model';
+        imageModelLabel.style.marginTop = '25px';
+        tabElement.appendChild(imageModelLabel);
+
+        // Add explanation about image model usage
+        const imageExplanation = document.createElement('div');
+        imageExplanation.className = 'section-description';
+        imageExplanation.innerHTML = 'This model generates <strong>text descriptions</strong> of images, which are then sent to the rating model above. ' +
+            'If you\'ve selected an image-capable model (🖼️) as your main rating model above, you can disable this to process images directly.';
+        tabElement.appendChild(imageExplanation);
+
+        // Add toggle for enabling/disabling image descriptions
+        const imageToggleRow = document.createElement('div');
+        imageToggleRow.className = 'toggle-row';
+
+        const imageToggleLabel = document.createElement('div');
+        imageToggleLabel.className = 'toggle-label';
+        imageToggleLabel.textContent = 'Enable Image Descriptions';
+        imageToggleRow.appendChild(imageToggleLabel);
+
+        const imageToggleSwitch = document.createElement('label');
+        imageToggleSwitch.className = 'toggle-switch';
+
+        const imageToggleInput = document.createElement('input');
+        imageToggleInput.type = 'checkbox';
+        imageToggleInput.checked = enableImageDescriptions;
+        imageToggleInput.addEventListener('change', function () {
+            enableImageDescriptions = this.checked;
+            GM_setValue('enableImageDescriptions', enableImageDescriptions);
+
+            // Show/hide image model options based on toggle
+            document.getElementById('image-model-container').style.display = this.checked ? 'block' : 'none';
+            showStatus('Image descriptions ' + (this.checked ? 'enabled' : 'disabled'));
+        });
+
+        const imageToggleSlider = document.createElement('span');
+        imageToggleSlider.className = 'toggle-slider';
+
+        imageToggleSwitch.appendChild(imageToggleInput);
+        imageToggleSwitch.appendChild(imageToggleSlider);
+        imageToggleRow.appendChild(imageToggleSwitch);
+
+        tabElement.appendChild(imageToggleRow);
+
+        // Image model selection container
+        const imageModelContainer = document.createElement('div');
+        imageModelContainer.id = 'image-model-container';
+        imageModelContainer.style.display = enableImageDescriptions ? 'block' : 'none';
+
+        // Add info about which models can process images
+        const imageModelDesc = document.createElement('div');
+        imageModelDesc.className = 'section-description';
+        imageModelDesc.textContent = 'Select a model with vision capabilities to describe images in tweets.';
+        imageModelContainer.appendChild(imageModelDesc);
+
+        // Create custom image model dropdown with built-in search
+        const imageModelSelectContainer = document.createElement('div');
+        imageModelSelectContainer.className = 'select-container';
+        imageModelSelectContainer.id = 'image-model-select-container';
+
+        // Filter for vision models only
+        const visionModels = availableModels.filter(model => {
+            return model.input_modalities?.includes('image') ||
+                model.architecture?.input_modalities?.includes('image') ||
+                model.architecture?.modality?.includes('image');
+        });
+
+        // Create the custom select component for image models
+        createCustomSelect(
+            imageModelSelectContainer,
+            'image-model-selector',
+            visionModels.map(model => ({
+                value: model.slug || model.id,
+                label: formatModelLabel(model)
+            })),
+            selectedImageModel,
+            (newValue) => {
+                selectedImageModel = newValue;
+                GM_setValue('selectedImageModel', selectedImageModel);
+
+                showStatus('Image model updated');
+            },
+            'Search vision models...'
+        );
+
+        imageModelContainer.appendChild(imageModelSelectContainer);
+
+        // Advanced options for image model
+        const imageAdvancedOptions = document.createElement('div');
+        imageAdvancedOptions.className = 'advanced-options';
+
+        const imageAdvancedToggle = document.createElement('div');
+        imageAdvancedToggle.className = 'advanced-toggle';
+
+        const imageAdvancedTitle = document.createElement('div');
+        imageAdvancedTitle.className = 'advanced-toggle-title';
+        imageAdvancedTitle.textContent = 'Advanced Options';
+        imageAdvancedToggle.appendChild(imageAdvancedTitle);
+
+        const imageAdvancedIcon = document.createElement('div');
+        imageAdvancedIcon.className = 'advanced-toggle-icon';
+        imageAdvancedIcon.innerHTML = '▼';
+        imageAdvancedToggle.appendChild(imageAdvancedIcon);
+
+        imageAdvancedOptions.appendChild(imageAdvancedToggle);
+
+        const imageAdvancedContent = document.createElement('div');
+        imageAdvancedContent.className = 'advanced-content';
+
+        // Image model temperature parameter
+        createParameterControl(
+            imageAdvancedContent,
+            'Temperature',
+            'imageModelTemperature',
+            'Randomness for image descriptions (0.0-1.0)',
+            imageModelTemperature,
+            0, 1, 0.1,
+            (newValue) => {
+                imageModelTemperature = newValue;
+                GM_setValue('imageModelTemperature', imageModelTemperature);
+            }
+        );
+
+        // Image model top-p parameter
+        createParameterControl(
+            imageAdvancedContent,
+            'Top-p',
+            'imageModelTopP',
+            'Nucleus sampling for image model (0.0-1.0)',
+            imageModelTopP,
+            0, 1, 0.1,
+            (newValue) => {
+                imageModelTopP = newValue;
+                GM_setValue('imageModelTopP', imageModelTopP);
+            }
+        );
+
+
+
+        imageAdvancedOptions.appendChild(imageAdvancedContent);
+
+        // Toggle the advanced options when clicked
+        imageAdvancedToggle.addEventListener('click', () => {
+            imageAdvancedContent.classList.toggle('expanded');
+            imageAdvancedIcon.classList.toggle('expanded');
+        });
+
+        imageModelContainer.appendChild(imageAdvancedOptions);
+
+        tabElement.appendChild(imageModelContainer);
+    }
+
+    /**
+     * Creates a custom select dropdown with search functionality
+     * @param {HTMLElement} container - Container to append the custom select to
+     * @param {string} id - ID for the select element
+     * @param {Array<{value: string, label: string}>} options - Options for the dropdown
+     * @param {string} selectedValue - Initially selected value
+     * @param {Function} onChange - Callback when selection changes
+     * @param {string} searchPlaceholder - Placeholder for the search input
+     */
+    function createCustomSelect(container, id, options, selectedValue, onChange, searchPlaceholder) {
+        // Create the custom select div
+        const customSelect = document.createElement('div');
+        customSelect.className = 'custom-select';
+        customSelect.id = id;
+
+        // Create the selected item display
+        const selectSelected = document.createElement('div');
+        selectSelected.className = 'select-selected';
+
+        // Find the selected option's label
+        const selectedOption = options.find(opt => opt.value === selectedValue);
+        selectSelected.textContent = selectedOption ? selectedOption.label : 'Select an option';
+
+        customSelect.appendChild(selectSelected);
+
+        // Create the options container
+        const selectItems = document.createElement('div');
+        selectItems.className = 'select-items';
+
+        // Add search field at top
+        const searchField = document.createElement('div');
+        searchField.className = 'search-field';
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'search-input';
+        searchInput.placeholder = searchPlaceholder || 'Search...';
+
+        searchField.appendChild(searchInput);
+        selectItems.appendChild(searchField);
+
+        // Function to update the options based on search
+        function updateOptions(searchText = '') {
+            // Remove all existing options except search field
+            while (selectItems.childNodes.length > 1) {
+                selectItems.removeChild(selectItems.lastChild);
+            }
+
+            // Filter options based on search text
+            const filteredOptions = options.filter(opt =>
+                opt.label.toLowerCase().includes(searchText.toLowerCase())
+            );
+
+            // Add filtered options to the dropdown
+            filteredOptions.forEach(option => {
+                const optionDiv = document.createElement('div');
+                optionDiv.textContent = option.label;
+                optionDiv.dataset.value = option.value;
+
+                if (option.value === selectedValue) {
+                    optionDiv.className = 'same-as-selected';
+                }
+
+                optionDiv.addEventListener('click', function (e) {
+                    // Prevent event from propagating to document click handler
+                    e.stopPropagation();
+
+                    // Update the selected value
+                    const newValue = this.dataset.value;
+                    selectedValue = newValue;
+
+                    // Update the selected display
+                    selectSelected.textContent = this.textContent;
+
+                    // Update the class for all options
+                    const optionDivs = selectItems.querySelectorAll('div:not(.search-field)');
+                    optionDivs.forEach(div => {
+                        div.classList.remove('same-as-selected');
+                    });
+                    this.classList.add('same-as-selected');
+
+                    // Hide the dropdown
+                    selectItems.style.display = 'none';
+                    selectSelected.classList.remove('select-arrow-active');
+
+                    // Call the onChange callback
+                    onChange(newValue);
+                });
+
+                selectItems.appendChild(optionDiv);
+            });
+
+            // Show a message if no results
+            if (filteredOptions.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.textContent = 'No matches found';
+                noResults.style.opacity = '0.7';
+                noResults.style.fontStyle = 'italic';
+                noResults.style.padding = '10px';
+                noResults.style.textAlign = 'center';
+                selectItems.appendChild(noResults);
+            }
+        }
+
+        // Initialize options
+        updateOptions();
+
+        // Add search input event listener
+        searchInput.addEventListener('input', function () {
+            updateOptions(this.value);
+        });
+
+        // Stop search input click from closing dropdown
+        searchInput.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+
+        // Toggle dropdown on click
+        selectSelected.addEventListener('click', function (e) {
+            e.stopPropagation();
+
+            // Close all other select boxes
+            closeAllSelect(this);
+
+            // Toggle this dropdown
+            const isCurrentlyOpen = selectItems.style.display === 'block';
+            selectItems.style.display = isCurrentlyOpen ? 'none' : 'block';
+
+            // Toggle the arrow class based on open/closed state
+            if (isCurrentlyOpen) {
+                this.classList.remove('select-arrow-active');
+            } else {
+                this.classList.add('select-arrow-active');
+                // Focus search input when opened
+                searchInput.focus();
+            }
+        });
+
+        // Stop dropdown clicks from propagating to document
+        selectItems.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+
+        // Function to close all select boxes except the current one
+        function closeAllSelect(elmnt) {
+            const allSelectItems = document.getElementsByClassName('select-items');
+            const allSelectSelected = document.getElementsByClassName('select-selected');
+
+            for (let i = 0; i < allSelectItems.length; i++) {
+                // Skip the current dropdown
+                if (allSelectItems[i].parentNode === elmnt.parentNode) {
+                    continue;
+                }
+
+                // Close other dropdowns
+                allSelectItems[i].style.display = 'none';
+            }
+
+            // Remove active class from other selects
+            for (let i = 0; i < allSelectSelected.length; i++) {
+                if (allSelectSelected[i] !== elmnt) {
+                    allSelectSelected[i].classList.remove('select-arrow-active');
+                }
+            }
+        }
+
+        // Close all dropdowns when clicking elsewhere
+        document.addEventListener('click', function () {
+            const allSelectItems = document.getElementsByClassName('select-items');
+            const allSelectSelected = document.getElementsByClassName('select-selected');
+
+            // Close all dropdowns
+            for (let i = 0; i < allSelectItems.length; i++) {
+                allSelectItems[i].style.display = 'none';
+            }
+
+            // Remove active class from all selects
+            for (let i = 0; i < allSelectSelected.length; i++) {
+                allSelectSelected[i].classList.remove('select-arrow-active');
+            }
+        });
+
+        customSelect.appendChild(selectItems);
+        container.appendChild(customSelect);
+    }
+
+    /**
+     * Formats a model object as a display label
+     * @param {Object} model - Model object with properties
+     * @returns {string} Formatted label
+     */
+    function formatModelLabel(model) {
+        let label = model.slug || model.id || model.name || '';
+
+        // Add pricing information if available
+        if (model.endpoint && model.endpoint.pricing) {
+            // Show prompt price
+            if (model.endpoint.pricing.prompt !== undefined) {
+                const promptPrice = parseFloat(model.endpoint.pricing.prompt);
+                if (!isNaN(promptPrice)) {
+                    label += ` - $${promptPrice.toFixed(7)}/in`;
+                }
+            }
+
+            // Show completion price if different from prompt price
+            if (model.endpoint.pricing.completion !== undefined &&
+                model.endpoint.pricing.completion !== model.endpoint.pricing.prompt) {
+                const completionPrice = parseFloat(model.endpoint.pricing.completion);
+                if (!isNaN(completionPrice)) {
+                    label += ` $${completionPrice.toFixed(7)}/out`;
+                }
+            }
+        } else if (model.pricing?.prompt) {
+            // Fallback to old pricing format
+            const promptPrice = parseFloat(model.pricing.prompt);
+            if (!isNaN(promptPrice)) {
+                label += ` - $${promptPrice.toFixed(7)}/token`;
+            }
+        }
+
+        // Add vision icon if model supports images
+        if (model.input_modalities?.includes('image') ||
+            model.architecture?.input_modalities?.includes('image') ||
+            model.architecture?.modality?.includes('image')) {
+            label = '🖼️ ' + label;
+        }
+
+        return label;
+    }
+
+    /**
+     * Creates a parameter control with a slider and value display.
+     * @param {HTMLElement} parent - Parent element to attach the control to
+     * @param {string} label - Label for the parameter
+     * @param {string} paramName - Name of the parameter in global scope
+     * @param {string} description - Description of the parameter
+     * @param {number} value - Current value
+     * @param {number} min - Minimum value
+     * @param {number} max - Maximum value
+     * @param {number} step - Step size
+     * @param {Function} onChange - Callback when value changes
+     */
+    function createParameterControl(parent, label, paramName, description, value, min, max, step, onChange) {
+        const row = document.createElement('div');
+        row.className = 'parameter-row';
+
+        const labelEl = document.createElement('div');
+        labelEl.className = 'parameter-label';
+        labelEl.textContent = label;
+        labelEl.title = description;
+        row.appendChild(labelEl);
+
+        const control = document.createElement('div');
+        control.className = 'parameter-control';
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.className = 'parameter-slider';
+        slider.min = min;
+        slider.max = max;
+        slider.step = step;
+        slider.value = value;
+
+        const valueDisplay = document.createElement('div');
+        valueDisplay.className = 'parameter-value';
+        valueDisplay.textContent = value;
+
+        slider.addEventListener('input', () => {
+            const newValue = parseFloat(slider.value);
+            valueDisplay.textContent = newValue.toFixed(1);
+            window[paramName] = newValue; // Update the global variable
+
+            // Call onChange callback if provided
+            if (typeof onChange === 'function') {
+                onChange(newValue);
+            }
+        });
+
+        control.appendChild(slider);
+        control.appendChild(valueDisplay);
+        row.appendChild(control);
+
+        parent.appendChild(row);
     }
 
 })();
