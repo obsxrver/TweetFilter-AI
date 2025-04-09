@@ -9,14 +9,13 @@
 // @grant        GM_setValue
 // @connect      openrouter.ai
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/utils.js
 // @license      MIT
 // ==/UserScript==
 
 // ----- API Functions -----
 
-function GM_POST(request_data, request_timeout) {
-    return new Promise((resolve, reject) => {
+function GM_POST(request_data, request_timeout, apiKey) {
+    return new Promise((resolve) => {
         GM_xmlhttpRequest({
             method: "POST",
             url: "https://openrouter.ai/api/v1/chat/completions", // request_url
@@ -141,7 +140,7 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                 sort: sortType,
                 allow_fallbacks: true
             };
-            GM_POST(requestBody, 30000).then(result => {
+            GM_POST(requestBody, 30000, apiKey).then(result => {
                 pendingRequests--;
                 showStatus(`Rating tweet... (${pendingRequests} pending)`); 
 
@@ -241,7 +240,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
             };
             const imageDescription = await new Promise((resolve) => {
                  // Use GM_POST for the API call
-                 GM_POST(requestBody, 30000) // Pass request body and timeout
+                 GM_POST(requestBody, 30000, apiKey) // Pass request body and timeout
                  .then(result => {
                       // Handle successful response (200-299)
                       if (!result.error && result.response.status >= 200 && result.response.status < 300) {

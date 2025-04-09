@@ -5,7 +5,6 @@
 // @description  DOM manipulation functions for TweetFilter AI
 // @author       Obsxrver(3than)
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/utils.js
 // @license      MIT
 // ==/UserScript==
 /**

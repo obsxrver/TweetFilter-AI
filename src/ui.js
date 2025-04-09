@@ -8,7 +8,6 @@
 // @grant        GM_setValue
 // @grant        GM_addStyle
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/utils.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
