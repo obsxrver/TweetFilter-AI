@@ -15,13 +15,18 @@
 
 // ----- API Functions -----
 
-function GM_POST(request_url, request_headers, request_data, request_timeout) {
+function GM_POST(request_data, request_timeout) {
     return new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
             method: "POST",
-            url: request_url,
-            headers: request_headers,
-            data: request_data,
+            url: "https://openrouter.ai/api/v1/chat/completions", // request_url
+            headers: { // request_headers
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiKey}`,
+                    "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Using the referer from the initial attempt
+                    "X-Title": "Tweet Rating Tool"
+            },
+            data: JSON.stringify(request_data),
             timeout: request_timeout,
             onload: function (response) {
                 if(response.status >= 200 && response.status < 300){
@@ -80,11 +85,8 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                         "type": "text", "text":
                             `
                          You will be given a Tweet, structured like this:
-
                          _______TWEET SCHEMA_______
                          _______BEGIN TWEET_______
-
-
                         [TWEET TweetID]
                         [the text of the tweet being replied to]
                         [MEDIA_DESCRIPTION]:
@@ -116,13 +118,8 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                     }]
                 }];
 
-            // Check if image descriptions are enabled AND we have media URLs
             if (mediaUrls && mediaUrls.length > 0) {
-                
-
                 if (modelSupportsImages(selectedModel)) {
-
-                    // Add each image URL to the message content
                     for (const url of mediaUrls) {
                         messages[0].content.push({
                             "type": "image_url",
@@ -131,8 +128,6 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                     }
                 } 
             } 
-
-            // Prepare the request body with provider options
             const requestBody = {
                 model: selectedModel,
                 messages: messages,
@@ -141,25 +136,14 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                 max_tokens: maxTokens
             };
             const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-            const sortType = sortOrder.split('-')[0]; // Extract sort type (price, throughput, latency)
+            const sortType = sortOrder.split('-')[0]; 
             requestBody.provider = {
                 sort: sortType,
                 allow_fallbacks: true
             };
-            // Use GM_POST for a more concise API call
-            GM_POST(
-                "https://openrouter.ai/api/v1/chat/completions", // request_url
-                { // request_headers
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Using the referer from the initial attempt
-                    "X-Title": "Tweet Rating Tool"
-                },
-                JSON.stringify(requestBody), // request_data
-                30000 // request_timeout
-            ).then(result => {
+            GM_POST(requestBody, 30000).then(result => {
                 pendingRequests--;
-                showStatus(`Rating tweet... (${pendingRequests} pending)`); // Update status after request finishes
+                showStatus(`Rating tweet... (${pendingRequests} pending)`); 
 
                 if (result.error) {
                     const shouldRetry = (result.message === "Request timed out" || (result.response && (result.response.status === 429 || result.response.status >= 500)));
@@ -169,10 +153,7 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                         console.log(`Attempt ${currentAttempt}/${maxAttempts} failed (${result}). Retrying in ${backoffDelay}ms...`);
                         setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
                     } else {
-                        // Final failure after retries or non-retryable error
-                        // Log the full error details
                         console.error('API Request Failed. Details:', result);
-                        // Resolve with the standardized error format
                         resolve({ score: 5, content: `API error: ${result.message || 'Unknown error'}`, error: true });
                     }
                 } else {
@@ -259,49 +240,43 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                 allow_fallbacks: true
             };
             const imageDescription = await new Promise((resolve) => {
-                GM.xmlHttpRequest({
-                    method: "POST",
-                    url: 'https://openrouter.ai/api/v1/chat/completions',
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                    data: JSON.stringify(requestBody),
-                    onload: function (response) {
-                        try {
-                            if (response.status === 200) {
-                                const data = JSON.parse(response.responseText);
-                                if (data && data.choices && data.choices.length > 0 && data.choices[0].message) {
-                                    resolve(data.choices[0].message.content || "[No description available]");
-                                } else {
-                                    console.error("Invalid response structure from image API:", data);
-                                    resolve("[Error: Invalid API response structure]");
-                                }
-                            } else {
-                                console.error("Error fetching image description:", response.status, response.statusText);
-                                resolve(`[Error fetching image description: ${response.status}]`);
-                            }
-                        } catch (error) {
-                            console.error("Exception while processing image API response:", error);
-                            resolve("[Error processing image description]");
-                        }
-                    },
-                    onerror: function (error) {
-                        console.error("Network error while fetching image description:", error);
-                        resolve("[Error: Network problem while fetching image description]");
-                    },
-                    ontimeout: function () {
-                        console.error("Timeout while fetching image description");
-                        resolve("[Error: Timeout while fetching image description]");
-                    }
-                });
+                 // Use GM_POST for the API call
+                 GM_POST(requestBody, 30000) // Pass request body and timeout
+                 .then(result => {
+                      // Handle successful response (200-299)
+                      if (!result.error && result.response.status >= 200 && result.response.status < 300) {
+                          try {
+                              const data = JSON.parse(result.response.responseText);
+                              if (data && data.choices && data.choices.length > 0 && data.choices[0].message) {
+                                  resolve(data.choices[0].message.content || "[No description available]");
+                              } else {
+                                  console.error("Invalid response structure from image API:", data);
+                                  resolve("[Error: Invalid API response structure]");
+                              }
+                          } catch (error) {
+                              console.error("Exception while processing image API response:", error, result.response.responseText);
+                              resolve("[Error processing image description]");
+                          }
+                      } else {
+                          // Handle API errors (non-2xx status) or GM_POST internal errors
+                          console.error("Error fetching image description:", result.message, `Status: ${result.response?.status}`, result.response?.responseText);
+                          resolve(`[Error fetching image description: ${result.message || result.response?.status || 'Unknown Error'}]`);
+                      }
+                 })
+                 .catch(error => {
+                      // Handle network errors or unexpected issues in GM_POST itself
+                      console.error("Network error or unexpected issue while fetching image description:", error);
+                      resolve("[Error: Network problem or unexpected issue while fetching image description]");
+                 });
             });
 
             // Add the description to our aggregate with proper formatting
             imageDescriptions += `[IMAGE ${i + 1}]: ${imageDescription}\n`;
         } catch (error) {
-            console.error(`Error getting description for image:`, error);
-            return "[Error getting description]\n";
+            // Catch synchronous errors within the loop iteration, if any
+            console.error(`Error processing image URL ${urls[i]}:`, error);
+            // Add an error placeholder for this specific image
+            imageDescriptions += `[IMAGE ${i + 1}]: [Error processing image]\n`;
         }
     }
     return imageDescriptions;
