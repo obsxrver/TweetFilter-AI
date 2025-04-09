@@ -1,8 +1,10 @@
 // ==UserScript==
-// @name         AI Tweet Filter for Twitter/X
+// @name         Twitter (X) AI Tweet Filter
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.2
+// @version      Version 1.2.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!// @author       Obsxrver
+// @match        https://twitter.com/*
+// @match        https://x.com/*
 // @match        *://twitter.com/*
 // @match        *://x.com/*
 // @grant        GM_addStyle
@@ -24,18 +26,18 @@
     const tweetIDRatingCache = {}; // ID-based cache for persistent storage
     const PROCESSING_DELAY_MS = 1000; // Delay before processing a tweet (ms)
     const API_CALL_DELAY_MS = 250; // Minimum delay between API calls (ms)
-    let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', '');
+    let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', 'Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.');
     let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter threshold for tweet visibility
     let observedTargetNode = null;
     let lastAPICallTime = 0;
     let pendingRequests = 0;
     let availableModels = []; // List of models fetched from API
-    let selectedModel = GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct');
-    let selectedImageModel = GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct');
+    let selectedModel = GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b');
+    let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b');
     let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
     // Settings variables
-    let enableImageDescriptions = GM_getValue('enableImageDescriptions', true);
+    let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
 
 
     // Model parameters
@@ -43,6 +45,7 @@
     let modelTopP = GM_getValue('modelTopP', 0.9);
     let imageModelTemperature = GM_getValue('imageModelTemperature', 0.5);
     let imageModelTopP = GM_getValue('imageModelTopP', 0.9);
+    let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
 
     /**
      * Helper function to check if a model supports images based on its architecture
@@ -84,862 +87,7 @@
     const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 
     // ----- UI Styling -----
-    GM_addStyle(`/*
-        Modern X-Inspired Styles - Enhanced
-        ---------------------------------
-    */
-
-    /* Main tweet filter container */
-    #tweet-filter-container {
-        position: fixed;
-        top: 70px;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 12px;
-        border-radius: 12px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* Close button styles */
-    .close-button {
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-size: 16px;
-        cursor: pointer;
-        padding: 0;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0.8;
-        transition: opacity 0.2s;
-        border-radius: 50%;
-    }
-
-    .close-button:hover {
-        opacity: 1;
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    /* Hidden state */
-    .hidden {
-        display: none !important;
-    }
-
-    /* Show/hide button */
-    .toggle-button {
-        position: fixed;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 8px 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
-        z-index: 9999;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s ease;
-    }
-    
-    .toggle-button:hover {
-        background-color: rgba(29, 155, 240, 0.2);
-    }
-
-    #filter-toggle {
-        top: 70px;
-    }
-
-    #settings-toggle {
-        top: 120px;
-    }
-
-    #tweet-filter-container label {
-        margin: 0;
-        font-weight: bold;
-    }
-
-    #tweet-filter-slider {
-        cursor: pointer;
-        width: 120px;
-        vertical-align: middle;
-        accent-color: #1d9bf0;
-    }
-
-    #tweet-filter-value {
-        min-width: 20px;
-        text-align: center;
-        font-weight: bold;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 2px 5px;
-        border-radius: 4px;
-    }
-
-    /* Settings UI with Tabs */
-    #settings-container {
-        position: fixed;
-        top: 70px;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 0; /* Remove padding to accommodate sticky header */
-        border-radius: 16px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
-        display: flex;
-        flex-direction: column;
-        width: 380px;
-        max-height: 85vh;
-        overflow: hidden; /* Hide overflow to make the sticky header work properly */
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        line-height: 1.3;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        transform-origin: top right;
-    }
-    
-    #settings-container.hidden {
-        opacity: 0;
-        transform: scale(0.9);
-        pointer-events: none;
-    }
-    
-    /* Header section */
-    .settings-header {
-        padding: 12px 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: sticky;
-        top: 0;
-        background-color: rgba(22, 24, 28, 0.98);
-        z-index: 20;
-        border-radius: 16px 16px 0 0;
-    }
-    
-    .settings-title {
-        font-weight: bold;
-        font-size: 16px;
-    }
-    
-    /* Content area with scrolling */
-    .settings-content {
-        overflow-y: auto;
-        max-height: calc(85vh - 110px); /* Account for header and tabs */
-        padding: 0;
-    }
-    
-    /* Scrollbar styling for settings container */
-    .settings-content::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .settings-content::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-
-    .settings-content::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-
-    .settings-content::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
-    /* Tab Navigation */
-    .tab-navigation {
-        display: flex;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        position: sticky;
-        top: 0;
-        background-color: rgba(22, 24, 28, 0.98);
-        z-index: 10;
-        padding: 10px 15px;
-        gap: 8px;
-    }
-
-    .tab-button {
-        padding: 6px 10px;
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-weight: bold;
-        cursor: pointer;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        flex: 1;
-        text-align: center;
-    }
-
-    .tab-button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .tab-button.active {
-        color: #1d9bf0;
-        background-color: rgba(29, 155, 240, 0.1);
-        border-bottom: 2px solid #1d9bf0;
-    }
-
-    /* Tab Content */
-    .tab-content {
-        display: none;
-        animation: fadeIn 0.3s ease;
-        padding: 15px;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    .tab-content.active {
-        display: block;
-    }
-
-    /* Enhanced dropdowns */
-    .select-container {
-        position: relative;
-        margin-bottom: 15px;
-    }
-    
-    .select-container .search-field {
-        position: sticky;
-        top: 0;
-        background-color: rgba(39, 44, 48, 0.95);
-        padding: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        z-index: 1;
-    }
-    
-    .select-container .search-input {
-        width: 100%;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.9);
-        color: #e7e9ea;
-        font-size: 12px;
-        transition: border-color 0.2s;
-    }
-    
-    .select-container .search-input:focus {
-        border-color: #1d9bf0;
-        outline: none;
-    }
-    
-    .custom-select {
-        position: relative;
-        display: inline-block;
-        width: 100%;
-    }
-    
-    .select-selected {
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        padding: 10px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        cursor: pointer;
-        user-select: none;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 13px;
-        transition: border-color 0.2s;
-    }
-    
-    .select-selected:hover {
-        border-color: rgba(255, 255, 255, 0.4);
-    }
-    
-    .select-selected:after {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border: 2px solid #e7e9ea;
-        border-width: 0 2px 2px 0;
-        display: inline-block;
-        transform: rotate(45deg);
-        margin-left: 10px;
-        transition: transform 0.2s;
-    }
-    
-    .select-selected.select-arrow-active:after {
-        transform: rotate(-135deg);
-    }
-    
-    .select-items {
-        position: absolute;
-        background-color: rgba(39, 44, 48, 0.98);
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 99;
-        max-height: 300px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        margin-top: 5px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        display: none;
-    }
-    
-    .select-items div {
-        color: #e7e9ea;
-        padding: 10px 12px;
-        cursor: pointer;
-        user-select: none;
-        transition: background-color 0.2s;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .select-items div:hover {
-        background-color: rgba(29, 155, 240, 0.1);
-    }
-    
-    .select-items div.same-as-selected {
-        background-color: rgba(29, 155, 240, 0.2);
-    }
-    
-    /* Scrollbar for select items */
-    .select-items::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .select-items::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .select-items::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-    
-    .select-items::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-    
-    /* Form elements */
-    #openrouter-api-key,
-    #user-instructions {
-        width: 100%;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        margin-bottom: 12px;
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        transition: border-color 0.2s;
-    }
-    
-    #openrouter-api-key:focus,
-    #user-instructions:focus {
-        border-color: #1d9bf0;
-        outline: none;
-    }
-
-    #user-instructions {
-        height: 120px;
-        resize: vertical;
-    }
-
-    /* Parameter controls */
-    .parameter-row {
-        display: flex;
-        align-items: center;
-        margin-bottom: 12px;
-        gap: 8px;
-        padding: 6px;
-        border-radius: 8px;
-        transition: background-color 0.2s;
-    }
-    
-    .parameter-row:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .parameter-label {
-        flex: 1;
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-
-    .parameter-control {
-        flex: 1.5;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .parameter-value {
-        min-width: 28px;
-        text-align: center;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 3px 5px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    .parameter-slider {
-        flex: 1;
-        -webkit-appearance: none;
-        height: 4px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.2);
-        outline: none;
-        cursor: pointer;
-    }
-
-    .parameter-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #1d9bf0;
-        cursor: pointer;
-        transition: transform 0.1s;
-    }
-    
-    .parameter-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.2);
-    }
-
-    /* Section styles */
-    .section-title {
-        font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 8px;
-        color: #e7e9ea;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 14px;
-    }
-    
-    .section-title:first-child {
-        margin-top: 0;
-    }
-
-    .section-description {
-        font-size: 12px;
-        margin-bottom: 8px;
-        opacity: 0.8;
-        line-height: 1.4;
-    }
-    
-    /* Advanced options section */
-    .advanced-options {
-        margin-top: 5px;
-        margin-bottom: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 12px;
-        background-color: rgba(255, 255, 255, 0.03);
-        overflow: hidden;
-    }
-    
-    .advanced-toggle {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        margin-bottom: 5px;
-    }
-    
-    .advanced-toggle-title {
-        font-weight: bold;
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-    
-    .advanced-toggle-icon {
-        transition: transform 0.3s;
-    }
-    
-    .advanced-toggle-icon.expanded {
-        transform: rotate(180deg);
-    }
-    
-    .advanced-content {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease-in-out;
-    }
-    
-    .advanced-content.expanded {
-        max-height: 300px;
-    }
-
-    /* Handle list styling */
-    .handle-list {
-        margin-top: 10px;
-        max-height: 120px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 5px;
-    }
-
-    .handle-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 6px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
-        transition: background-color 0.2s;
-    }
-    
-    .handle-item:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .handle-item:last-child {
-        border-bottom: none;
-    }
-
-    .handle-text {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-    }
-
-    .remove-handle {
-        background: none;
-        border: none;
-        color: #ff5c5c;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 0 3px;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-    }
-    
-    .remove-handle:hover {
-        opacity: 1;
-    }
-
-    .add-handle-btn {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 7px 10px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 12px;
-        margin-left: 5px;
-        transition: background-color 0.2s;
-    }
-    
-    .add-handle-btn:hover {
-        background-color: #1a8cd8;
-    }
-
-    /* Button styling */
-    .settings-button {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: background-color 0.2s;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        margin-top: 8px;
-        width: 100%;
-        font-size: 13px;
-    }
-
-    .settings-button:hover {
-        background-color: #1a8cd8;
-    }
-
-    .settings-button.secondary {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    .settings-button.secondary:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .settings-button.danger {
-        background-color: #ff5c5c;
-    }
-
-    .settings-button.danger:hover {
-        background-color: #e53935;
-    }
-    
-    /* For smaller buttons that sit side by side */
-    .button-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-    }
-    
-    .button-row .settings-button {
-        margin-top: 0;
-    }
-    
-    /* Stats display */
-    .stats-container {
-        background-color: rgba(255, 255, 255, 0.05);
-        padding: 10px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-    }
-    
-    .stats-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 5px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .stats-row:last-child {
-        border-bottom: none;
-    }
-    
-    .stats-label {
-        font-size: 12px;
-        opacity: 0.8;
-    }
-    
-    .stats-value {
-        font-weight: bold;
-    }
-
-    /* Rating indicator shown on tweets */ 
-    .score-indicator {
-        position: absolute;
-        top: 10px;
-        right: 10.5%;
-        background-color: rgba(22, 24, 28, 0.9);
-        color: #e7e9ea;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        font-weight: bold;
-        z-index: 100;
-        cursor: pointer;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        min-width: 20px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        transition: transform 0.15s ease;
-    }
-    
-    .score-indicator:hover {
-        transform: scale(1.05);
-    }
-
-    /* Refresh animation */
-    .refreshing {
-        animation: spin 1s infinite linear;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* The description box for ratings */
-    .score-description {
-        display: none;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 16px 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 16px;
-        line-height: 1.5;
-        z-index: 99999999;
-        position: absolute;
-        width: clamp(300px, 30vw, 500px);
-        max-height: 60vh;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        word-wrap: break-word;
-    }
-
-    /* Rating status classes */
-    .cached-rating {
-        background-color: rgba(76, 175, 80, 0.9) !important;
-        color: white !important;
-    }
-
-    .blacklisted-rating {
-        background-color: rgba(255, 193, 7, 0.9) !important;
-        color: black !important;
-    }
-
-    .pending-rating {
-        background-color: rgba(255, 152, 0, 0.9) !important;
-        color: white !important;
-    }
-
-    .error-rating {
-        background-color: rgba(244, 67, 54, 0.9) !important;
-        color: white !important;
-    }
-
-    /* Status indicator at bottom-right */
-    #status-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 15px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-        z-index: 9999;
-        display: none;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-        transform: translateY(100px);
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-
-    #status-indicator.active {
-        display: block;
-        transform: translateY(0);
-    }
-    
-    /* Toggle switch styling */
-    .toggle-switch {
-        position: relative;
-        display: inline-block;
-        width: 36px;
-        height: 20px;
-    }
-    
-    .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-    
-    .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(255, 255, 255, 0.2);
-        transition: .3s;
-        border-radius: 34px;
-    }
-    
-    .toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        left: 2px;
-        bottom: 2px;
-        background-color: white;
-        transition: .3s;
-        border-radius: 50%;
-    }
-    
-    input:checked + .toggle-slider {
-        background-color: #1d9bf0;
-    }
-    
-    input:checked + .toggle-slider:before {
-        transform: translateX(16px);
-    }
-    
-    .toggle-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        margin-bottom: 12px;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        transition: background-color 0.2s;
-    }
-    
-    .toggle-row:hover {
-        background-color: rgba(255, 255, 255, 0.08);
-    }
-    
-    .toggle-label {
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-
-    /* Existing styles */
-    
-    /* Sort container styles */
-    .sort-container {
-        margin: 10px 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .sort-container label {
-        font-size: 14px;
-        color: var(--text-color);
-    }
-    
-    .sort-container select {
-        padding: 5px 10px;
-        border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-size: 14px;
-        cursor: pointer;
-    }
-    
-    .sort-container select:hover {
-        border-color: #1d9bf0;
-    }
-    
-    .sort-container select:focus {
-        outline: none;
-        border-color: #1d9bf0;
-        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
-    }
-    
-    /* Dropdown option styling */
-    .sort-container select option {
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-    }
+    GM_addStyle(`
     `);
 
     // ----- UI Helper Functions -----
@@ -965,7 +113,7 @@
      */
     function saveTweetRatings() {
         GM_setValue('tweetRatings', JSON.stringify(tweetIDRatingCache));
-        console.log(`Saved ${Object.keys(tweetIDRatingCache).length} tweet ratings to storage`);
+        //console.log(`Saved ${Object.keys(tweetIDRatingCache).length} tweet ratings to storage`);
     }
 
     /**
@@ -1212,6 +360,7 @@
                     modelTopP: modelTopP,
                     imageModelTemperature: imageModelTemperature,
                     imageModelTopP: imageModelTopP,
+                    maxTokens: maxTokens,
                     filterThreshold: currentFilterThreshold,
                     userDefinedInstructions: USER_DEFINED_INSTRUCTIONS
                 },
@@ -1299,6 +448,11 @@
                         if (data.settings.imageModelTopP !== undefined) {
                             imageModelTopP = data.settings.imageModelTopP;
                             GM_setValue('imageModelTopP', imageModelTopP);
+                        }
+
+                        if (data.settings.maxTokens !== undefined) {
+                            maxTokens = data.settings.maxTokens;
+                            GM_setValue('maxTokens', maxTokens);
                         }
 
                         if (data.settings.filterThreshold !== undefined) {
@@ -1416,8 +570,9 @@
      * @param {number} min - Minimum value
      * @param {number} max - Maximum value
      * @param {number} step - Step size
+     * @param {Function} [onChange] - Optional callback when value changes
      */
-    function createParameterControl(parent, label, paramName, description, value, min, max, step) {
+    function createParameterControl(parent, label, paramName, description, value, min, max, step, onChange) {
         const row = document.createElement('div');
         row.className = 'parameter-row';
 
@@ -1438,14 +593,39 @@
         slider.step = step;
         slider.value = value;
 
-        const valueDisplay = document.createElement('div');
+        const valueDisplay = document.createElement('input');
+        valueDisplay.type = 'number';
         valueDisplay.className = 'parameter-value';
-        valueDisplay.textContent = value;
+        valueDisplay.value = value;
+        valueDisplay.min = min;
+        valueDisplay.max = max;
+        valueDisplay.step = step;
+        valueDisplay.style.width = '60px';
 
         slider.addEventListener('input', () => {
             const newValue = parseFloat(slider.value);
-            valueDisplay.textContent = newValue.toFixed(1);
+            valueDisplay.value = newValue;
             window[paramName] = newValue; // Update the global variable
+            GM_setValue(paramName, newValue); // Save to storage
+            
+            // Call onChange callback if provided
+            if (typeof onChange === 'function') {
+                onChange(newValue);
+            }
+        });
+
+        valueDisplay.addEventListener('input', () => {
+            const newValue = parseFloat(valueDisplay.value);
+            if (!isNaN(newValue)) {
+                slider.value = newValue;
+                window[paramName] = newValue; // Update the global variable
+                GM_setValue(paramName, newValue); // Save to storage
+                
+                // Call onChange callback if provided
+                if (typeof onChange === 'function') {
+                    onChange(newValue);
+                }
+            }
         });
 
         control.appendChild(slider);
@@ -1675,17 +855,26 @@
     /**
      * Extracts the Twitter handle from a tweet article element.
      * @param {Element} tweetArticle - The tweet article element.
-     * @returns {string} The Twitter handle (without the leading '@').
+     * @returns {array} The user and quoted user handles.
      */
-    function getUserHandle(tweetArticle) {
-        const handleElement = tweetArticle.querySelector(USER_HANDLE_SELECTOR);
+    function getUserHandles(tweetArticle) {
+        const handleElement = tweetArticle.querySelectorAll(USER_HANDLE_SELECTOR);
+        let handles=[];
         if (handleElement) {
+            /*
             const href = handleElement.getAttribute('href');
             if (href && href.startsWith('/')) {
                 return href.slice(1);
             }
+            */
+           handleElement.forEach(element => {
+            const href = element.getAttribute('href');
+            if (href && href.startsWith('/')) {
+                handles.push(href.slice(1));
+            }
+           });
         }
-        return '';
+        return handles;
     }
 
     /**
@@ -1738,11 +927,11 @@
                 }
                 
                 // Log both the original and final URLs for debugging
-                console.log(`[Tweet ${tweetIdForDebug}] Processing media: ${sourceUrl} → ${finalUrl}`);
+                //console.log(`[Tweet ${tweetIdForDebug}] Processing media: ${sourceUrl} → ${finalUrl}`);
                 
                 mediaLinks.add(finalUrl);
             } catch (error) {
-                console.error(`[Tweet ${tweetIdForDebug}] Error processing media URL: ${sourceUrl}`, error);
+                //console.error(`[Tweet ${tweetIdForDebug}] Error processing media URL: ${sourceUrl}`, error);
                 // Fallback: just add the raw URL as is
                 mediaLinks.add(sourceUrl);
             }
@@ -1926,7 +1115,8 @@
      */
     function applyTweetCachedRating(tweetArticle) {
         const tweetId = getTweetID(tweetArticle);
-        const userHandle = getUserHandle(tweetArticle);
+        const handles = getUserHandles(tweetArticle);
+        const userHandle = handles.length > 0 ? handles[0] : '';
         // Blacklisted users are automatically given a score of 10
         if (userHandle && isUserBlacklisted(userHandle)) {
             //console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
@@ -1984,7 +1174,8 @@
                         }
                     ],
                     temperature: imageModelTemperature,
-                    top_p: imageModelTopP
+                    top_p: imageModelTopP,
+                    max_tokens: maxTokens
                 };
                 // Add provider sorting
                 const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
@@ -2071,7 +1262,7 @@
                     setTimeout(() => { attemptRating(currentAttempt); }, API_CALL_DELAY_MS - timeElapsed);
                     return;
                 }
-
+                console.log("max tokens",maxTokens);
                 lastAPICallTime = Date.now();
                 pendingRequests++;
                 showStatus(`Rating tweet... (${pendingRequests} pending)`);
@@ -2106,14 +1297,13 @@
                         _______END TWEET SCHEMA_______
 
                         You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}.
-                        Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.
+                        Ensure that you consider these user-defined instructions in your analysis and scoring:
+                        [USER-DEFINED INSTRUCTIONS]:
+                        ${USER_DEFINED_INSTRUCTIONS}
                         Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
                         SCORE_X where X is a number from 1 (lowest quality) to 10 (highest quality).
                         for example: SCORE_1, SCORE_2, SCORE_3, etc.
                         If one of the above is not present, the program will not be able to parse the response and will return an error.
-                        Ensure that you consider these additionaluser-defined instructions in your analysis and scoring:
-                        [USER-DEFINED INSTRUCTIONS]:
-                        ${USER_DEFINED_INSTRUCTIONS}
                         _______BEGIN TWEET_______
                         ${tweetText}
                         _______END TWEET_______`
@@ -2126,7 +1316,7 @@
                     const supportsImages = modelSupportsImages(selectedModel);
 
                     if (supportsImages) {
-                        console.log(`Adding ${mediaUrls.length} image(s) to the tweet rating request`);
+                        //console.log(`Adding ${mediaUrls.length} image(s) to the tweet rating request`);
 
                         // Convert message content to array format for multimodal input
                         const textContent = messages[0].content[0].text;
@@ -2145,11 +1335,11 @@
                             });
                         }
                     } else {
-                        console.log(`Selected model ${selectedModel} does not support images. Using text-only rating.`);
+                        //console.log(`Selected model ${selectedModel} does not support images. Using text-only rating.`);
                     }
                 } else {
                     if (!mediaUrls || mediaUrls.length === 0) {
-                        console.log(`No media URLs to process for tweet ${tweetId}.`);
+                        //console.log(`No media URLs to process for tweet ${tweetId}.`);
                     }
                 }
 
@@ -2158,9 +1348,10 @@
                     model: selectedModel,
                     messages: messages,
                     temperature: modelTemperature,
-                    top_p: modelTopP
+                    top_p: modelTopP,
+                    max_tokens: maxTokens
                 };
-                console.log(messages);
+                //console.log(messages);
                 // Add provider sorting
                 const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
                 const sortType = sortOrder.split('-')[0]; // Extract sort type (price, throughput, latency)
@@ -2168,7 +1359,7 @@
                     sort: sortType,
                     allow_fallbacks: true
                 };
-                console.log(`Rating tweet ${tweetId} using model: ${selectedModel} with provider sort: ${sortType}`);
+                //console.log(`Rating tweet ${tweetId} using model: ${selectedModel} with provider sort: ${sortType}`);
 
                 GM_xmlhttpRequest({
                     method: "POST",
@@ -2176,7 +1367,7 @@
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${apiKey}`,
-                        "HTTP-Referer": "https://twitter.com",
+                        "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
                         "X-Title": "Tweet Rating Tool"
                     },
                     data: JSON.stringify(requestBody),
@@ -2185,7 +1376,7 @@
                         pendingRequests--;
 
                         // Log the response status and headers for debugging
-                        console.log(`API Response for tweet ${tweetId} - Status: ${response.status}`);
+                        //console.log(`API Response for tweet ${tweetId} - Status: ${response.status}`);
 
                         if (response.status >= 200 && response.status < 300) {
                             try {
@@ -2208,7 +1399,7 @@
 
                                             // Increase delay for future requests
                                             const backoffTime = Math.min(API_CALL_DELAY_MS * 2, 10000);
-                                            console.log(`Increasing delay between requests to ${backoffTime}ms due to rate limiting`);
+                                            //console.log(`Increasing delay between requests to ${backoffTime}ms due to rate limiting`);
                                             API_CALL_DELAY_MS = backoffTime;
                                         }
                                     }
@@ -2231,6 +1422,7 @@
                                     const score = parseInt(scoreMatch[1], 10);
 
                                     // Cache the score
+                                    
                                     tweetIDRatingCache[tweetId] = { tweetContent: tweetText, score: score, description: content };
                                     saveTweetRatings();
                                     resolve({ score: score, content: content, error: false });
@@ -2325,7 +1517,9 @@
 
         try {
             // Get user handle
-            const userHandle = getUserHandle(tweetArticle);
+            const handles = getUserHandles(tweetArticle);
+            const userHandle = handles.length > 0 ? handles[0] : '';
+            const quotedHandle = handles.length > 1 ? handles[1] : '';
             logData.handle = userHandle;
 
             // Check if tweet's author is blacklisted (fast path)
@@ -2373,8 +1567,7 @@
 
             // Remove any media links from the main tweet that also appear in the quoted tweet
             let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-            //redefine allMediaLinks as the union of mainMediaLinks and quotedMediaLinks
-            // Collect media URLs
+            
             if (mainMediaLinks.length > 0 || quotedMediaLinks.length > 0) {
                 logData.mediaUrls = [...mainMediaLinks, ...quotedMediaLinks];
             }
@@ -2399,8 +1592,8 @@
             }
 
             if (quotedText) {
-                fullContext += "\n[QUOTED_TWEET]:\n" + quotedText;
-                fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n" + quotedText;
+                fullContext += "\n[QUOTED_TWEET]:\n Author:@${quotedHandle}:\n" + quotedText;
+                fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n Author:@${quotedHandle}:\n" + quotedText;
 
                 if (quotedMediaLinks.length > 0) {
                     // Add media URLs always for context
@@ -2485,7 +1678,7 @@
             }
 
             // Log all collected information at once
-            logFinalRating(tweetId, userHandle, logData);
+            console.log(`Tweet ${tweetId}:\n${fullContextWithImageDescription} - ${score}Model response: - ${description}`);
 
         } catch (error) {
             logData.status = "Error processing tweet";
@@ -2512,7 +1705,8 @@
     function scheduleTweetProcessing(tweetArticle) {
         const tweetId = getTweetID(tweetArticle);
         // Fast-path: if author is blacklisted, assign score immediately
-        const userHandle = getUserHandle(tweetArticle);
+        const handles = getUserHandles(tweetArticle);
+        const userHandle = handles.length > 0 ? handles[0] : '';
         if (userHandle && isUserBlacklisted(userHandle)) {
             tweetArticle.dataset.sloppinessScore = '10';
             tweetArticle.dataset.blacklisted = 'true';
@@ -2562,7 +1756,8 @@
      * @returns {Promise<string>} - The full context string.
      */
     async function getFullContext(tweetArticle, tweetId, apiKey) {
-        const userHandle = getUserHandle(tweetArticle);
+        const handles = getUserHandles(tweetArticle);
+        const userHandle = handles.length > 0 ? handles[0] : '';
         const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
         const mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
 
@@ -2668,7 +1863,7 @@ ${quotedMediaLinks.join(", ")}
 
                         const apiKey = GM_getValue('openrouter-api-key', '');
 
-                        console.log(firstArticle);
+                        
                         const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
                         threadHist = fullcxt;
                     }
@@ -2760,7 +1955,7 @@ ${quotedMediaLinks.join(", ")}
         // Remove all score description elements
         const descElements = document.querySelectorAll('.score-description');
         descElements.forEach(el => el.remove());
-        console.log(`Cleaned up ${descElements.length} description elements`);
+        //console.log(`Cleaned up ${descElements.length} description elements`);
     }
 
     /**
@@ -2960,7 +2155,7 @@ ${quotedMediaLinks.join(", ")}
 
         // Log media if present
         if (data.mediaUrls && data.mediaUrls.length) {
-            console.log(`Media URLs:`, data.mediaUrls);
+            //console.log(`Media URLs:`, data.mediaUrls);
         }
 
         // Log the full context
@@ -3140,15 +2335,16 @@ ${quotedMediaLinks.join(", ")}
     function resetSettings() {
         if (confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings.')) {
             // Reset global variables to defaults
-            selectedModel = 'mistralai/mistral-small-3.1-24b-instruct';
-            selectedImageModel = 'mistralai/mistral-small-3.1-24b-instruct';
-            enableImageDescriptions = true;
+            selectedModel = 'google/gemini-flash-1.5-8b';
+            selectedImageModel = 'google/gemini-flash-1.5-8b';
+            enableImageDescriptions = false;
             modelTemperature = 0.5;
             modelTopP = 0.9;
             imageModelTemperature = 0.5;
             imageModelTopP = 0.9;
+            maxTokens = 0;
             currentFilterThreshold = 1;
-            USER_DEFINED_INSTRUCTIONS = '';
+            USER_DEFINED_INSTRUCTIONS = 'Read the following tweet carefully and analyze its clarity, insightfulness, creativity, and overall impact.';
 
             // Save reset values to storage
             GM_setValue('selectedModel', selectedModel);
@@ -3158,6 +2354,7 @@ ${quotedMediaLinks.join(", ")}
             GM_setValue('modelTopP', modelTopP);
             GM_setValue('imageModelTemperature', imageModelTemperature);
             GM_setValue('imageModelTopP', imageModelTopP);
+            GM_setValue('maxTokens', maxTokens);
             GM_setValue('filterThreshold', currentFilterThreshold);
             GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
 
@@ -3297,7 +2494,19 @@ ${quotedMediaLinks.join(", ")}
             }
         );
 
-
+        // Max tokens parameter
+        createParameterControl(
+            ratingAdvancedContent,
+            'Max Tokens',
+            'maxTokens',
+            'Maximum number of tokens for the response (0 means no limit)',
+            maxTokens,
+            0, 2000, 100,
+            (newValue) => {
+                maxTokens = newValue;
+                GM_setValue('maxTokens', maxTokens);
+            }
+        );
 
         ratingAdvancedOptions.appendChild(ratingAdvancedContent);
 
@@ -3694,59 +2903,6 @@ ${quotedMediaLinks.join(", ")}
         return label;
     }
 
-    /**
-     * Creates a parameter control with a slider and value display.
-     * @param {HTMLElement} parent - Parent element to attach the control to
-     * @param {string} label - Label for the parameter
-     * @param {string} paramName - Name of the parameter in global scope
-     * @param {string} description - Description of the parameter
-     * @param {number} value - Current value
-     * @param {number} min - Minimum value
-     * @param {number} max - Maximum value
-     * @param {number} step - Step size
-     * @param {Function} onChange - Callback when value changes
-     */
-    function createParameterControl(parent, label, paramName, description, value, min, max, step, onChange) {
-        const row = document.createElement('div');
-        row.className = 'parameter-row';
-
-        const labelEl = document.createElement('div');
-        labelEl.className = 'parameter-label';
-        labelEl.textContent = label;
-        labelEl.title = description;
-        row.appendChild(labelEl);
-
-        const control = document.createElement('div');
-        control.className = 'parameter-control';
-
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.className = 'parameter-slider';
-        slider.min = min;
-        slider.max = max;
-        slider.step = step;
-        slider.value = value;
-
-        const valueDisplay = document.createElement('div');
-        valueDisplay.className = 'parameter-value';
-        valueDisplay.textContent = value;
-
-        slider.addEventListener('input', () => {
-            const newValue = parseFloat(slider.value);
-            valueDisplay.textContent = newValue.toFixed(1);
-            window[paramName] = newValue; // Update the global variable
-
-            // Call onChange callback if provided
-            if (typeof onChange === 'function') {
-                onChange(newValue);
-            }
-        });
-
-        control.appendChild(slider);
-        control.appendChild(valueDisplay);
-        row.appendChild(control);
-
-        parent.appendChild(row);
-    }
+    
 
 })();
