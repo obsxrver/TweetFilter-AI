@@ -269,13 +269,9 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                       resolve("[Error: Network problem or unexpected issue while fetching image description]");
                  });
             });
-
-            // Add the description to our aggregate with proper formatting
             imageDescriptions += `[IMAGE ${i + 1}]: ${imageDescription}\n`;
         } catch (error) {
-            // Catch synchronous errors within the loop iteration, if any
             console.error(`Error processing image URL ${urls[i]}:`, error);
-            // Add an error placeholder for this specific image
             imageDescriptions += `[IMAGE ${i + 1}]: [Error processing image]\n`;
         }
     }
@@ -296,47 +292,32 @@ function fetchAvailableModels() {
         showStatus('Please enter your OpenRouter API key');
         return;
     }
-
     showStatus('Fetching available models...');
-
-    // Get the current sort order from storage or use default
     const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-
     GM_xmlhttpRequest({
         method: "GET",
         url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
         headers: {
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://twitter.com",
+            "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Use a more generic referer if preferred
             "X-Title": "Tweet Rating Tool"
         },
         onload: function (response) {
-            if (response.status >= 200 && response.status < 300) {
                 try {
                     const data = JSON.parse(response.responseText);
                     if (data.data && data.data.models) {
                         availableModels = data.data.models || [];
-                        console.log(`Fetched ${availableModels.length} models from OpenRouter`);
-
-                        // After fetching models, update any UI that depends on them
                         refreshModelsUI();
-                        showStatus(`Loaded ${availableModels.length} models!`);
-                    } else {
-                        console.error('Unexpected data format from OpenRouter API:', data);
-                        showStatus('Error: Unexpected data format from API');
-                    }
+                        showStatus('Models updated!');
+                    } 
                 } catch (error) {
                     console.error('Error parsing model list:', error);
-                    showStatus('Error loading models!');
+                    showStatus('Error parsing models list');
                 }
-            } else {
-                console.error(`Failed to fetch models: ${response.status}`);
-                showStatus('Error fetching models!');
-            }
         },
         onerror: function (error) {
             console.error('Error fetching models:', error);
-            showStatus('Failed to fetch models!');
+            showStatus('Error fetching models!');
         }
     });
 }
