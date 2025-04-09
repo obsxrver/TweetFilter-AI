@@ -26,7 +26,7 @@ Advanced tweet rating and filtering userscript with model selection, enhanced ra
 ## Installation
 
 1. Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/)
-2. Install X/Twitter De-Sloppifier from [GreasyFork](https://greasyfork.org/en/scripts/532182-ai-tweet-filter-for-twitter-x)
+2. Install X/Twitter De-Sloppifier from [GreasyFork](https://greasyfork.org/en/scripts/531971-x-twitter-de-sloppifier)
 3. Get an API key from [OpenRouter](https://openrouter.ai/)
 4. Configure the script with your API key
 
