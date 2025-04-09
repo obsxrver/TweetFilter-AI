@@ -7,6 +7,9 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
+// @grant        GM_getResourceText
+// @resource     menuHTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
@@ -50,71 +53,6 @@ function clearTweetRatings() {
         }
     }
 }
-
-/**
-  * Adds the filtering slider UI to the page.
-  * This will be shown by default.
-  */
-function addSliderUI() {
-    if (document.getElementById('tweet-filter-container')) return;
-
-    // Create toggle button for reopening the slider
-    const toggleBtn = document.createElement('button');
-    toggleBtn.id = 'filter-toggle';
-    toggleBtn.className = 'toggle-button';
-    toggleBtn.textContent = 'Filter Slider';
-    toggleBtn.style.display = 'none'; // Hidden by default since slider is visible
-    toggleBtn.onclick = () => {
-        const container = document.getElementById('tweet-filter-container');
-        if (container) {
-            container.classList.remove('hidden');
-            toggleBtn.style.display = 'none';
-        }
-    };
-    document.body.appendChild(toggleBtn);
-
-    const container = document.createElement('div');
-    container.id = 'tweet-filter-container';
-
-    // Add close button
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'close-button';
-    closeBtn.innerHTML = '×';
-    closeBtn.onclick = () => {
-        container.classList.add('hidden');
-        // Show the toggle button when slider is closed
-        const filterToggle = document.getElementById('filter-toggle');
-        if (filterToggle) {
-            filterToggle.style.display = 'block';
-        }
-    };
-    container.appendChild(closeBtn);
-
-    const label = document.createElement('label');
-    label.setAttribute('for', 'tweet-filter-slider');
-    label.textContent = 'Min Score:';
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.id = 'tweet-filter-slider';
-    slider.min = '1';
-    slider.max = '10';
-    slider.step = '1';
-    slider.value = currentFilterThreshold.toString();
-    const valueDisplay = document.createElement('span');
-    valueDisplay.id = 'tweet-filter-value';
-    valueDisplay.textContent = slider.value;
-    slider.addEventListener('input', (event) => {
-        currentFilterThreshold = parseInt(event.target.value, 10);
-        valueDisplay.textContent = currentFilterThreshold.toString();
-        GM_setValue('filterThreshold', currentFilterThreshold);
-        applyFilteringToAll();
-    });
-    container.appendChild(label);
-    container.appendChild(slider);
-    container.appendChild(valueDisplay);
-    document.body.appendChild(container);
-}
-
 
 /**
  * Adds the main settings UI with tabs for settings and custom instructions.
@@ -252,8 +190,6 @@ function addSettingsUI() {
     fetchAvailableModels();
 }
 
-
-
 /**
  * Exports all settings and cache to a JSON file for backup
  */
@@ -333,8 +269,6 @@ function importSettings() {
                         selectedImageModel = data.settings.selectedImageModel;
                         GM_setValue('selectedImageModel', selectedImageModel);
                     }
-
-
 
                     if (data.settings.enableImageDescriptions !== undefined) {
                         enableImageDescriptions = data.settings.enableImageDescriptions;
@@ -630,7 +564,6 @@ function buildInstructionsTabContent(tabElement) {
 
     tabElement.appendChild(handleList);
 }
-
 
 /**
  * Adds a handle to the blacklist and refreshes the UI.
@@ -1208,8 +1141,6 @@ function buildModelsTabContent(tabElement) {
         }
     );
 
-
-
     imageAdvancedOptions.appendChild(imageAdvancedContent);
 
     // Toggle the advanced options when clicked
@@ -1512,19 +1443,20 @@ function refreshModelsUI() {
         );
     }
 }
+
 /**
-     * Updates or creates the rating indicator element within a tweet article.
-     * Displays different content based on the rating status:
-     * - "pending" : shows ⏳
-     * - "error"   : shows ⚠️
-     * - "rated"   : shows the numeric score
-     * When you hover over the rating box, it shows a description of the rating.
-     *
-     * @param {Element} tweetArticle - The tweet element.
-     * @param {number|null} score - The numeric rating (if available).
-     * @param {string} description - The description of the rating (if available).
-     * @param {string} status - The rating status ('pending', 'rated', or 'error').
-     */
+ * Updates or creates the rating indicator element within a tweet article.
+ * Displays different content based on the rating status:
+ * - "pending" : shows ⏳
+ * - "error"   : shows ⚠️
+ * - "rated"   : shows the numeric score
+ * When you hover over the rating box, it shows a description of the rating.
+ *
+ * @param {Element} tweetArticle - The tweet element.
+ * @param {number|null} score - The numeric rating (if available).
+ * @param {string} description - The description of the rating (if available).
+ * @param {string} status - The rating status ('pending', 'rated', or 'error').
+ */
 function setScoreIndicator(tweetArticle, score, status, description = "") {
     // 1. Create (or get) the score indicator inside tweetArticle
     let indicator = tweetArticle.querySelector('.score-indicator');
@@ -1658,170 +1590,371 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
         }, 100);
     };
 }
+
 /**
-     * Updates or creates the rating indicator element within a tweet article.
-     * Displays different content based on the rating status:
-     * - "pending" : shows ⏳
-     * - "error"   : shows ⚠️
-     * - "rated"   : shows the numeric score
-     * When you hover over the rating box, it shows a description of the rating.
-     *
-     * @param {Element} tweetArticle - The tweet element.
-     * @param {number|null} score - The numeric rating (if available).
-     * @param {string} description - The description of the rating (if available).
-     * @param {string} status - The rating status ('pending', 'rated', or 'error').
-     */
-function setScoreIndicator(tweetArticle, score, status, description = "") {
-    // 1. Create (or get) the score indicator inside tweetArticle
-    let indicator = tweetArticle.querySelector('.score-indicator');
-    if (!indicator) {
-        indicator = document.createElement('div');
-        indicator.className = 'score-indicator';
-        tweetArticle.style.position = 'relative';
-        tweetArticle.appendChild(indicator);
-    }
-
-    // Remove any previous status classes
-    indicator.classList.remove('cached-rating', 'blacklisted-rating', 'pending-rating', 'error-rating');
-
-    // Set the indicator text and add status classes
-    if (status === 'pending') {
-        indicator.classList.add('pending-rating');
-        indicator.textContent = '⏳';
-    } else if (status === 'error') {
-        indicator.classList.add('error-rating');
-        indicator.textContent = '⚠️';
-    } else { // rated
-        if (tweetArticle.dataset.blacklisted === 'true') {
-            indicator.classList.add('blacklisted-rating');
-        } else if (tweetArticle.dataset.cachedRating === 'true') {
-            indicator.classList.add('cached-rating');
-        }
-        indicator.textContent = score;
-    }
-
-    // 2. Create (or get) a globally positioned description box
-    // We'll use a unique ID per indicator (assign one if needed)
-    if (!indicator.dataset.id) {
-        indicator.dataset.id = Math.random().toString(36).substr(2, 9);
-    }
-    const descId = 'desc-' + indicator.dataset.id;
-    let descBox = document.getElementById(descId);
-    if (!descBox) {
-        descBox = document.createElement('div');
-        descBox.className = 'score-description';
-        descBox.id = descId;
-        document.body.appendChild(descBox);
-    }
-
-    // Format the description with better styling if it exists
-    if (description) {
-        // Add formatting to the SCORE line if present
-        description = description.replace(/\{score:\s*(\d+)\}/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
-
-        // Add some spacing between paragraphs
-        description = description.replace(/\n\n/g, '</p><p style="margin-top: 16px;">');
-        description = description.replace(/\n/g, '<br>');
-
-        // Wrap in paragraphs
-        description = `<p>${description}</p>`;
-
-        descBox.innerHTML = description;
-    } else {
-        descBox.textContent = '';
-    }
-
-    // If there's no description, hide the box and exit
-    if (!description) {
-        descBox.style.display = 'none';
-        return;
-    }
-
-    // 3. Set up hover events on the indicator to show/hide the description box.
-    // (Remove any previously attached listeners to avoid duplicates.)
-    indicator.onmouseenter = () => {
-        // Get the position of the indicator in viewport coordinates
-        const rect = indicator.getBoundingClientRect();
-
-        // Calculate available space to the right and below
-        const availableWidth = window.innerWidth - rect.right - 20; // 20px margin
-        const availableHeight = window.innerHeight - rect.top - 20;
-
-        // Set the description box's position
-        descBox.style.position = 'fixed'; // Use fixed instead of absolute for better positioning
-
-        // Position horizontally - prefer right side if space allows
-        if (availableWidth >= 300) {
-            // Position to the right of the indicator
-            descBox.style.left = (rect.right + 10) + 'px';
-            descBox.style.right = 'auto';
-        } else {
-            // Position to the left of the indicator
-            descBox.style.right = (window.innerWidth - rect.left + 10) + 'px';
-            descBox.style.left = 'auto';
-        }
-
-        // Position vertically - aim to center, but adjust if needed
-        const descHeight = Math.min(window.innerHeight * 0.6, 400); // Estimated max height
-        let topPos = rect.top + (rect.height / 2) - (descHeight / 2);
-
-        // Ensure box stays in viewport
-        if (topPos < 10) topPos = 10;
-        if (topPos + descHeight > window.innerHeight - 10) {
-            topPos = window.innerHeight - descHeight - 10;
-        }
-
-        descBox.style.top = topPos + 'px';
-        descBox.style.maxHeight = '60vh'; // Set max height for scrolling
-
-        // Show the box
-        descBox.style.display = 'block';
-    };
-
-    indicator.onmouseleave = (e) => {
-        // Don't hide immediately - check if cursor moved to the description box
-        const rect = descBox.getBoundingClientRect();
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
-
-        // If mouse is moving toward the description box, don't hide
-        if (mouseX >= rect.left - 20 && mouseX <= rect.right + 20 &&
-            mouseY >= rect.top - 20 && mouseY <= rect.bottom + 20) {
-            // Mouse is heading toward the description box, don't hide
-            // Instead, set up mouse events on the description box
-            descBox.onmouseenter = () => {
-                descBox.style.display = 'block';
-            };
-            descBox.onmouseleave = () => {
-                descBox.style.display = 'none';
-            };
-            return;
-        }
-
-        // Otherwise hide
-        setTimeout(() => {
-            descBox.style.display = 'none';
-        }, 100);
-    };
-}
-/**
-     * Cleans up all score description elements from the DOM
-     */
+ * Cleans up all score description elements from the DOM
+ */
 function cleanupDescriptionElements() {
     // Remove all score description elements
     const descElements = document.querySelectorAll('.score-description');
     descElements.forEach(el => el.remove());
     //console.log(`Cleaned up ${descElements.length} description elements`);
 }
+
 function initialiseUI() {
-    addSliderUI();
-    addSettingsUI();
+    // Load HTML from resource
+    const menuHTML = GM_getResourceText('menuHTML');
+    if (!menuHTML) {
+        console.error('Failed to load Menu.html resource!');
+        showStatus('Error: Could not load UI components.');
+        return;
+    }
 
-    const statusIndicator = document.createElement('div');
-    statusIndicator.id = 'status-indicator';
-    const uiContainer = document.createElement('div');
-    uiContainer.id = 'tweetfilter-container';
+    // Create a temporary container to parse the HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = menuHTML;
 
-    document.body.appendChild(uiContainer);
-    uiContainer.appendChild(statusIndicator);
+    // Find and extract the main UI elements
+    const filterToggle = tempDiv.querySelector('#filter-toggle');
+    const settingsToggle = tempDiv.querySelector('#settings-toggle');
+    const tweetFilterContainer = tempDiv.querySelector('#tweet-filter-container');
+    const settingsContainer = tempDiv.querySelector('#settings-container');
+    const statusIndicator = tempDiv.querySelector('#status-indicator');
+    const stylesheet = tempDiv.querySelector('style'); // Get the style tag
+
+    // Append elements to the body
+    if (stylesheet) {
+         // Inject styles using GM_addStyle for better isolation and management
+         GM_addStyle(stylesheet.textContent);
+         console.log('Injected styles from Menu.html');
+    } else {
+        console.warn('No <style> tag found in Menu.html');
+    }
+
+    if (filterToggle) document.body.appendChild(filterToggle);
+    if (settingsToggle) document.body.appendChild(settingsToggle);
+    if (tweetFilterContainer) document.body.appendChild(tweetFilterContainer);
+    if (settingsContainer) document.body.appendChild(settingsContainer);
+    if (statusIndicator) document.body.appendChild(statusIndicator);
+
+    // Clean up temp container
+    tempDiv.remove();
+
+    // Wire up event listeners to the injected elements
+    wireUIEvents();
+
+    // Set initial UI state from saved settings
+    refreshSettingsUI(); // Call this *after* wiring basic events but potentially before fetch completes?
+                         // refreshSettingsUI updates values, refreshModelsUI populates dropdowns (needs fetch result)
+
+    console.log('TweetFilter UI Initialised from HTML resource.');
+}
+
+/**
+ * Wire up event listeners to the UI elements loaded from HTML.
+ */
+function wireUIEvents() {
+    console.log('Wiring UI events...');
+
+    // --- Filter Slider ---
+    const filterContainer = document.getElementById('tweet-filter-container');
+    const filterToggle = document.getElementById('filter-toggle');
+    const filterSlider = document.getElementById('tweet-filter-slider');
+    const filterValueDisplay = document.getElementById('tweet-filter-value');
+    const filterCloseBtn = filterContainer?.querySelector('.close-button');
+
+    if (filterToggle) {
+        filterToggle.onclick = () => {
+            if (filterContainer) {
+                filterContainer.classList.remove('hidden');
+                filterToggle.style.display = 'none';
+            }
+        };
+    }
+
+    if (filterCloseBtn) {
+        filterCloseBtn.onclick = () => {
+            filterContainer.classList.add('hidden');
+            if (filterToggle) {
+                filterToggle.style.display = 'block';
+            }
+        };
+    }
+
+    if (filterSlider && filterValueDisplay) {
+        filterSlider.addEventListener('input', (event) => {
+            currentFilterThreshold = parseInt(event.target.value, 10);
+            filterValueDisplay.textContent = currentFilterThreshold.toString();
+            GM_setValue('filterThreshold', currentFilterThreshold);
+            applyFilteringToAll();
+        });
+        // Set initial value
+        filterSlider.value = currentFilterThreshold.toString();
+        filterValueDisplay.textContent = currentFilterThreshold.toString();
+    }
+
+    // --- Settings Panel ---
+    const settingsContainer = document.getElementById('settings-container');
+    const settingsToggle = document.getElementById('settings-toggle');
+    const settingsCloseBtn = settingsContainer?.querySelector('.settings-header .close-button');
+    const tabNav = settingsContainer?.querySelector('.tab-navigation');
+    const content = settingsContainer?.querySelector('.settings-content');
+
+    if (settingsToggle) {
+        settingsToggle.onclick = () => {
+            if (settingsContainer.classList.contains('hidden')) {
+                settingsContainer.classList.remove('hidden');
+                settingsToggle.innerHTML = '<span style="font-size: 14px;">✕</span> Close';
+            } else {
+                settingsContainer.classList.add('hidden');
+                settingsToggle.innerHTML = '<span style="font-size: 14px;">⚙️</span> Settings';
+            }
+        };
+    }
+
+    if (settingsCloseBtn) {
+        settingsCloseBtn.onclick = () => {
+            settingsContainer.classList.add('hidden');
+            if (settingsToggle) {
+                settingsToggle.innerHTML = '<span style="font-size: 14px;">⚙️</span> Settings';
+            }
+        };
+    }
+
+    // --- Tab Navigation ---
+    const tabs = content?.querySelectorAll('.tab-content');
+    const buttons = tabNav?.querySelectorAll('.tab-button');
+    const generalTabBtn = tabNav?.querySelector('button:nth-child(1)');
+    const modelsTabBtn = tabNav?.querySelector('button:nth-child(2)');
+    const instructionsTabBtn = tabNav?.querySelector('button:nth-child(3)');
+
+    function switchTab(tabName) {
+        const generalTab = document.getElementById('general-tab');
+        const modelsTab = document.getElementById('models-tab');
+        const instructionsTab = document.getElementById('instructions-tab');
+
+        tabs?.forEach(tab => tab.classList.remove('active'));
+        buttons?.forEach(btn => btn.classList.remove('active'));
+
+        if (tabName === 'general' && generalTab && generalTabBtn) {
+            generalTab.classList.add('active');
+            generalTabBtn.classList.add('active');
+        } else if (tabName === 'models' && modelsTab && modelsTabBtn) {
+            modelsTab.classList.add('active');
+            modelsTabBtn.classList.add('active');
+        } else if (tabName === 'instructions' && instructionsTab && instructionsTabBtn) {
+            instructionsTab.classList.add('active');
+            instructionsTabBtn.classList.add('active');
+        }
+    }
+
+    generalTabBtn?.addEventListener('click', () => switchTab('general'));
+    modelsTabBtn?.addEventListener('click', () => switchTab('models'));
+    instructionsTabBtn?.addEventListener('click', () => switchTab('instructions'));
+
+    // --- General Tab ---
+    const apiKeyInput = document.getElementById('openrouter-api-key');
+    const saveApiKeyBtn = document.querySelector('#general-tab .settings-button[data-id="save-apikey"]'); // More specific selector
+    const clearCacheBtn = document.getElementById('clear-cache'); // Assuming you add this ID to the button in HTML
+    const exportBtn = document.querySelector('#general-tab .button-row button:nth-child(1)');
+    const importBtn = document.querySelector('#general-tab .button-row button:nth-child(2)');
+    const resetBtn = document.querySelector('#general-tab .settings-button.danger:not(#clear-cache)'); // Assuming only one other danger button
+
+    if (saveApiKeyBtn) {
+         saveApiKeyBtn.addEventListener('click', () => {
+             const apiKey = apiKeyInput.value.trim();
+            if (apiKey) {
+                GM_setValue('openrouter-api-key', apiKey);
+                showStatus('API key saved successfully!');
+                fetchAvailableModels(); // Refresh model list
+            } else {
+                showStatus('Please enter a valid API key');
+            }
+         });
+     } else {
+         console.warn("Save API Key button not found");
+     }
+
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', () => {
+            clearTweetRatings();
+             // Update stats display manually if needed or rely on refreshSettingsUI
+            const cachedCount = document.getElementById('cached-ratings-count');
+            const whitelistedCount = document.getElementById('whitelisted-handles-count');
+            if (cachedCount) cachedCount.textContent = Object.keys(tweetIDRatingCache).length;
+            if (whitelistedCount) whitelistedCount.textContent = blacklistedHandles.length;
+        });
+    } else {
+        console.warn("Clear Cache button not found (expected ID 'clear-cache')");
+    }
+
+    exportBtn?.addEventListener('click', exportSettings);
+    importBtn?.addEventListener('click', importSettings);
+    resetBtn?.addEventListener('click', resetSettings);
+
+    // --- Models Tab ---
+    const modelSortSelect = document.getElementById('model-sort-order');
+    const modelSelectContainer = document.getElementById('model-select-container');
+    const imageModelSelectContainer = document.getElementById('image-model-select-container');
+    const imageToggleInput = document.querySelector('#models-tab .toggle-switch input[type="checkbox"]');
+    const imageModelOptionsContainer = document.getElementById('image-model-container');
+
+    if (modelSortSelect) {
+        modelSortSelect.value = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+        modelSortSelect.addEventListener('change', function () {
+            GM_setValue('modelSortOrder', this.value);
+            fetchAvailableModels(); // Refresh models with new sort order
+        });
+    }
+
+     // Wire parameter controls (sliders/inputs) - Find them by structure/order/unique parent
+    function wireParameterControl(tabId, paramName, initialValue, min, max, step, onChange) {
+        const paramRow = document.querySelector(`#${tabId}-tab .parameter-label[title*='${paramName}']`)?.closest('.parameter-row');
+        if (!paramRow) {
+             console.warn(`Parameter row for ${paramName} in ${tabId} not found`);
+             return;
+        }
+        const slider = paramRow.querySelector('.parameter-slider');
+        const valueInput = paramRow.querySelector('.parameter-value');
+
+        if (!slider || !valueInput) {
+            console.warn(`Slider or value input for ${paramName} in ${tabId} not found`);
+            return;
+        }
+
+        // Set initial values and attributes
+        slider.min = min;
+        slider.max = max;
+        slider.step = step;
+        slider.value = initialValue;
+        valueInput.min = min;
+        valueInput.max = max;
+        valueInput.step = step;
+        valueInput.value = initialValue;
+
+        slider.addEventListener('input', () => {
+            const newValue = parseFloat(slider.value);
+            valueInput.value = newValue;
+            window[paramName] = newValue;
+            GM_setValue(paramName, newValue);
+            if (typeof onChange === 'function') onChange(newValue);
+        });
+
+        valueInput.addEventListener('input', () => {
+            const newValue = parseFloat(valueInput.value);
+            if (!isNaN(newValue)) {
+                 const clampedValue = Math.max(min, Math.min(max, newValue)); // Clamp value
+                 if (clampedValue !== newValue) {
+                     valueInput.value = clampedValue; // Update input if clamped
+                 }
+                 slider.value = clampedValue;
+                 window[paramName] = clampedValue;
+                 GM_setValue(paramName, clampedValue);
+                 if (typeof onChange === 'function') onChange(clampedValue);
+             }
+        });
+     }
+
+    // Wire rating model params
+    wireParameterControl('models', 'modelTemperature', modelTemperature, 0, 1, 0.1);
+    wireParameterControl('models', 'modelTopP', modelTopP, 0, 1, 0.1);
+    wireParameterControl('models', 'maxTokens', maxTokens, 0, 2000, 100);
+
+    // Wire image model params
+    wireParameterControl('models', 'imageModelTemperature', imageModelTemperature, 0, 1, 0.1);
+    wireParameterControl('models', 'imageModelTopP', imageModelTopP, 0, 1, 0.1);
+
+    // Wire advanced option toggles
+    const advancedToggles = document.querySelectorAll('.advanced-toggle');
+    advancedToggles.forEach(toggle => {
+        const content = toggle.nextElementSibling; // Assumes content is immediate sibling
+        const icon = toggle.querySelector('.advanced-toggle-icon');
+        if (content && icon) {
+            // Check initial expanded state from HTML if needed, e.g. content.classList.contains('expanded')
+            toggle.addEventListener('click', () => {
+                content.classList.toggle('expanded');
+                icon.classList.toggle('expanded');
+                // Adjust max-height dynamically based on content or use CSS transition
+                if (content.classList.contains('expanded')) {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                } else {
+                    content.style.maxHeight = '0';
+                }
+            });
+             // Set initial max-height if expanded
+             if (content.classList.contains('expanded')) {
+                 content.style.maxHeight = content.scrollHeight + 'px';
+             }
+         }
+     });
+
+    if (imageToggleInput) {
+        imageToggleInput.checked = enableImageDescriptions;
+        imageToggleInput.addEventListener('change', function () {
+            enableImageDescriptions = this.checked;
+            GM_setValue('enableImageDescriptions', enableImageDescriptions);
+            if (imageModelOptionsContainer) {
+                imageModelOptionsContainer.style.display = this.checked ? 'block' : 'none';
+            }
+            showStatus('Image descriptions ' + (this.checked ? 'enabled' : 'disabled'));
+        });
+        // Set initial display state
+        if (imageModelOptionsContainer) {
+            imageModelOptionsContainer.style.display = enableImageDescriptions ? 'block' : 'none';
+        }
+    }
+
+    // Populate model dropdowns (needs availableModels to be fetched first)
+    // We'll call refreshModelsUI later after fetch completes.
+
+    // --- Instructions Tab ---
+    const instructionsTextarea = document.getElementById('user-instructions');
+    const saveInstructionsBtn = document.querySelector('#instructions-tab .settings-button');
+    const handleInput = document.getElementById('handle-input');
+    const addHandleBtn = document.querySelector('#instructions-tab .add-handle-btn');
+    const handleList = document.getElementById('handle-list');
+
+    if (instructionsTextarea) {
+        instructionsTextarea.value = USER_DEFINED_INSTRUCTIONS;
+    }
+
+    if (saveInstructionsBtn) {
+        saveInstructionsBtn.addEventListener('click', () => {
+            USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
+            GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
+            showStatus('Scoring instructions saved! New tweets will use these instructions.');
+            if (confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
+                clearTweetRatings();
+            }
+        });
+    }
+
+    if (addHandleBtn && handleInput) {
+        addHandleBtn.addEventListener('click', () => {
+            addHandleToBlacklist(handleInput.value);
+            handleInput.value = '';
+        });
+    }
+
+    // Handle list item removal (Event Delegation)
+    if (handleList) {
+        handleList.addEventListener('click', (event) => {
+            if (event.target.classList.contains('remove-handle')) {
+                 // Find the parent handle item and get the handle text
+                 const handleItem = event.target.closest('.handle-item');
+                 const handleTextElement = handleItem?.querySelector('.handle-text');
+                 if (handleTextElement) {
+                     const handle = handleTextElement.textContent.substring(1); // Remove '@'
+                     removeHandleFromBlacklist(handle);
+                 }
+            }
+        });
+        // Initial population
+        refreshHandleList(handleList);
+    }
+
+    // --- Initial data fetch ---
+    fetchAvailableModels(); // Fetch models which will trigger refreshModelsUI
+
+    console.log('UI events wired.');
 }

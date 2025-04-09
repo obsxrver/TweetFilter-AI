@@ -12,6 +12,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceText
 // @connect      openrouter.ai
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
