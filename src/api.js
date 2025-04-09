@@ -18,6 +18,7 @@
 function GM_POST(request_url, request_headers, request_data, request_timeout) {
     return new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
+            method: "POST",
             url: request_url,
             headers: request_headers,
             data: request_data,
@@ -161,19 +162,11 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                 showStatus(`Rating tweet... (${pendingRequests} pending)`); // Update status after request finishes
 
                 if (result.error) {
-                    // Handle errors (network, timeout, non-2xx status)
-                    // console.error removed for brevity, error info is in 'result'
-
-                    // Check for retry conditions (timeout, 429, 5xx)
                     const shouldRetry = (result.message === "Request timed out" || (result.response && (result.response.status === 429 || result.response.status >= 500)));
 
                     if (shouldRetry && currentAttempt < maxAttempts) {
                         const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                        // Simplified retry log message
                         console.log(`Attempt ${currentAttempt}/${maxAttempts} failed (${result}). Retrying in ${backoffDelay}ms...`);
-
-                        // Removed specific rate limit handling logic
-
                         setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
                     } else {
                         // Final failure after retries or non-retryable error
@@ -190,22 +183,15 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
 
                         if (!content) {
                             console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
-                             if (data.error) {
-                                 console.error(`Error from OpenRouter: ${data.error.message || JSON.stringify(data.error)}`);
-                                 // Handle rate limiting errors found *within* a 2xx response's body (less common but possible)
-                                 if (data.error.type === 'rate_limit_exceeded' || data.error.message?.includes('rate limit') || data.error.message?.includes('quota')) {
-                                     showStatus('Rate limit message in response. Waiting before retry...');
-                                     const backoffTime = Math.min(API_CALL_DELAY_MS * 2, 10000);
-                                     API_CALL_DELAY_MS = backoffTime;
-                                     // Retry based on original logic.
+                            
                                      if (currentAttempt < maxAttempts) {
                                         const backoffDelay = Math.pow(2, currentAttempt) * 1000;
                                         console.log(`Retrying request for tweet ${tweetId} in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts}) due to empty content/error in response`);
                                         setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
                                         return; // Exit early, retry is scheduled
                                      }
-                                 }
-                            }
+                                 
+                            
                             // If not retrying, resolve with error
                             resolve({ score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true });
                             return;
