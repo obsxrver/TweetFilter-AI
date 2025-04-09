@@ -147,7 +147,15 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                 allow_fallbacks: true
             };
             //console.log(`Rating tweet ${tweetId} using model: ${selectedModel} with provider sort: ${sortType}`);
-
+            //post a request to "https://openrouter.ai/api/v1/chat/completions" 
+            //with headers:
+            //"Content-Type": "application/json",
+            //"Authorization": `Bearer ${apiKey}`,
+            //"HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
+            //"X-Title": "Tweet Rating Tool"
+            //and data: JSON.stringify(requestBody)
+            //and timeout: 30000
+            
             GM_xmlhttpRequest({
                 method: "POST",
                 url: "https://openrouter.ai/api/v1/chat/completions",

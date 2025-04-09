@@ -105,8 +105,7 @@
                 setScoreIndicator(tweetArticle, 10, 'rated', "Blacklisted user");
                 filterSingleTweet(tweetArticle);
 
-                // Log final information
-                logFinalRating(tweetId, userHandle, logData);
+                
                 return;
             }
 
@@ -115,8 +114,6 @@
                 logData.status = "Using cached rating";
                 logData.score = parseInt(tweetArticle.dataset.sloppinessScore, 10);
 
-                // Log final information
-                logFinalRating(tweetId, userHandle, logData);
                 return;
             }
 
@@ -256,8 +253,7 @@
             logData.error = error.toString();
             logData.isError = true;
 
-            // Log the error information
-            logFinalRating(tweetId, logData.handle || "unknown", logData);
+            
 
             if (!tweetArticle.dataset.sloppinessScore) {
                 tweetArticle.dataset.sloppinessScore = '5';
