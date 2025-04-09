@@ -38,6 +38,7 @@ function GM_POST(request_url, request_headers, request_data, request_timeout) {
 
         })
     });
+    
 }
 /**
      * Rates a tweet using the OpenRouter API with automatic retry functionality.
@@ -73,7 +74,7 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
 
             let messages = [
                 {
-                    "role": "user",
+                    "role": "developer",
                     "content": [{
                         "type": "text", "text":
                             `
@@ -116,20 +117,9 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
 
             // Check if image descriptions are enabled AND we have media URLs
             if (mediaUrls && mediaUrls.length > 0) {
-                // Check if the selected model supports images
-                const supportsImages = modelSupportsImages(selectedModel);
+                
 
-                if (supportsImages) {
-                    //console.log(`Adding ${mediaUrls.length} image(s) to the tweet rating request`);
-
-                    // Convert message content to array format for multimodal input
-                    const textContent = messages[0].content[0].text;
-                    messages[0].content = [
-                        {
-                            "type": "text",
-                            "text": textContent
-                        }
-                    ];
+                if (modelSupportsImages(selectedModel)) {
 
                     // Add each image URL to the message content
                     for (const url of mediaUrls) {
@@ -138,14 +128,8 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                             "image_url": { "url": url }
                         });
                     }
-                } else {
-                    //console.log(`Selected model ${selectedModel} does not support images. Using text-only rating.`);
-                }
-            } else {
-                if (!mediaUrls || mediaUrls.length === 0) {
-                    //console.log(`No media URLs to process for tweet ${tweetId}.`);
-                }
-            }
+                } 
+            } 
 
             // Prepare the request body with provider options
             const requestBody = {
@@ -155,134 +139,91 @@ function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt 
                 top_p: modelTopP,
                 max_tokens: maxTokens
             };
-            //console.log(messages);
-            // Add provider sorting
             const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
             const sortType = sortOrder.split('-')[0]; // Extract sort type (price, throughput, latency)
             requestBody.provider = {
                 sort: sortType,
                 allow_fallbacks: true
             };
-            //console.log(`Rating tweet ${tweetId} using model: ${selectedModel} with provider sort: ${sortType}`);
-            //post a request to "https://openrouter.ai/api/v1/chat/completions" 
-            //with headers:
-            //"Content-Type": "application/json",
-            //"Authorization": `Bearer ${apiKey}`,
-            //"HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
-            //"X-Title": "Tweet Rating Tool"
-            //and data: JSON.stringify(requestBody)
-            //and timeout: 30000
-            
-            GM_xmlhttpRequest({
-                method: "POST",
-                url: "https://openrouter.ai/api/v1/chat/completions",
-                headers: {
+            // Use GM_POST for a more concise API call
+            GM_POST(
+                "https://openrouter.ai/api/v1/chat/completions", // request_url
+                { // request_headers
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
+                    "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Using the referer from the initial attempt
                     "X-Title": "Tweet Rating Tool"
                 },
-                data: JSON.stringify(requestBody),
-                timeout: 30000, // 30 seconds timeout
-                onload: function (response) {
-                    pendingRequests--;
+                JSON.stringify(requestBody), // request_data
+                30000 // request_timeout
+            ).then(result => {
+                pendingRequests--;
+                showStatus(`Rating tweet... (${pendingRequests} pending)`); // Update status after request finishes
 
-                    // Log the response status and headers for debugging
-                    //console.log(`API Response for tweet ${tweetId} - Status: ${response.status}`);
+                if (result.error) {
+                    // Handle errors (network, timeout, non-2xx status)
+                    // console.error removed for brevity, error info is in 'result'
 
-                    if (response.status >= 200 && response.status < 300) {
-                        try {
-                            const data = JSON.parse(response.responseText);
-                            const content = data.choices?.[0]?.message?.content;
+                    // Check for retry conditions (timeout, 429, 5xx)
+                    const shouldRetry = (result.message === "Request timed out" || (result.response && (result.response.status === 429 || result.response.status >= 500)));
 
-                            // Check if we have a proper response
-                            if (!content) {
-                                console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
+                    if (shouldRetry && currentAttempt < maxAttempts) {
+                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
+                        // Simplified retry log message
+                        console.log(`Attempt ${currentAttempt}/${maxAttempts} failed (${result}). Retrying in ${backoffDelay}ms...`);
 
-                                // Check for specific errors in the response
-                                if (data.error) {
-                                    console.error(`Error from OpenRouter: ${data.error.message || JSON.stringify(data.error)}`);
+                        // Removed specific rate limit handling logic
 
-                                    // Handle rate limiting errors
-                                    if (data.error.type === 'rate_limit_exceeded' ||
-                                        data.error.message?.includes('rate limit') ||
-                                        data.error.message?.includes('quota')) {
-                                        showStatus('Rate limit exceeded. Waiting before retry...');
-
-                                        // Increase delay for future requests
-                                        const backoffTime = Math.min(API_CALL_DELAY_MS * 2, 10000);
-                                        //console.log(`Increasing delay between requests to ${backoffTime}ms due to rate limiting`);
-                                        API_CALL_DELAY_MS = backoffTime;
-                                    }
-                                }
-
-                                // Retry with exponential backoff if not at max attempts
-                                if (currentAttempt < maxAttempts) {
-                                    const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                                    console.log(`Retrying request for tweet ${tweetId} in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
-                                    setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
-                                    return;
-                                }
-
-                                resolve({ score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true });
-                                return;
-                            }
-
-                            // Extract score
-                            const scoreMatch = content.match(/\SCORE_(\d+)/);
-                            if (scoreMatch) {
-                                const score = parseInt(scoreMatch[1], 10);
-
-                                // Cache the score
-
-                                tweetIDRatingCache[tweetId] = { tweetContent: tweetText, score: score, description: content };
-                                saveTweetRatings();
-                                resolve({ score: score, content: content, error: false });
-                                return;
-                            } else {
-                                console.error(`No rating score found in response for tweet ${tweetId}. Content:`, content);
-                                resolve({ score: 5, content: "No rating score found in response", error: true });
-                                return;
-                            }
-                        } catch (error) {
-                            console.error(`Error parsing response for tweet ${tweetId}:`, error, response.responseText);
-                            resolve({ score: 5, content: "Error parsing response", error: true });
-                            return;
-                        }
+                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
                     } else {
-                        console.error(`API error for tweet ${tweetId}: ${response.status}`, response.responseText);
+                        // Final failure after retries or non-retryable error
+                        // Log the full error details
+                        console.error('API Request Failed. Details:', result);
+                        // Resolve with the standardized error format
+                        resolve({ score: 5, content: `API error: ${result.message || 'Unknown error'}`, error: true });
+                    }
+                } else {
+                    // Handle successful response (status 200-299)
+                    try {
+                        const data = JSON.parse(result.response.responseText);
+                        const content = data.choices?.[0]?.message?.content;
 
-                        // If we got a 429 (too many requests) or 500+ (server error), add exponential backoff
-                        if ((response.status === 429 || response.status >= 500) && currentAttempt < maxAttempts) {
-                            const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                            console.log(`Rate limited or server error. Retrying in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
-                            setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
+                        if (!content) {
+                            console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
+                             if (data.error) {
+                                 console.error(`Error from OpenRouter: ${data.error.message || JSON.stringify(data.error)}`);
+                                 // Handle rate limiting errors found *within* a 2xx response's body (less common but possible)
+                                 if (data.error.type === 'rate_limit_exceeded' || data.error.message?.includes('rate limit') || data.error.message?.includes('quota')) {
+                                     showStatus('Rate limit message in response. Waiting before retry...');
+                                     const backoffTime = Math.min(API_CALL_DELAY_MS * 2, 10000);
+                                     API_CALL_DELAY_MS = backoffTime;
+                                     // Retry based on original logic.
+                                     if (currentAttempt < maxAttempts) {
+                                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
+                                        console.log(`Retrying request for tweet ${tweetId} in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts}) due to empty content/error in response`);
+                                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
+                                        return; // Exit early, retry is scheduled
+                                     }
+                                 }
+                            }
+                            // If not retrying, resolve with error
+                            resolve({ score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true });
                             return;
                         }
 
-                        resolve({ score: 5, content: `API error: ${response.status}`, error: true });
-                    }
-                },
-                onerror: function (error) {
-                    pendingRequests--;
-                    console.error(`Network error for tweet ${tweetId}:`, error);
-                    if (currentAttempt < maxAttempts) {
-                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                        console.log(`Network error. Retrying in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
-                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
-                    } else {
-                        resolve({ score: 5, content: "Error making request", error: true });
-                    }
-                },
-                ontimeout: function () {
-                    pendingRequests--;
-                    console.error(`Request timeout for tweet ${tweetId}`);
-                    if (currentAttempt < maxAttempts) {
-                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                        console.log(`Request timed out. Retrying in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts})`);
-                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
-                    } else {
-                        resolve({ score: 5, content: "Request timed out", error: true });
+                        const scoreMatch = content.match(/\SCORE_(\d+)/);
+                        if (scoreMatch) {
+                            const score = parseInt(scoreMatch[1], 10);
+                            tweetIDRatingCache[tweetId] = { tweetContent: tweetText, score: score, description: content };
+                            saveTweetRatings();
+                            resolve({ score: score, content: content, error: false });
+                        } else {
+                            console.error(`No rating score found in response for tweet ${tweetId}. Content:`, content);
+                            resolve({ score: 5, content: "No rating score found in response", error: true });
+                        }
+                    } catch (error) {
+                        console.error(`Error parsing response for tweet ${tweetId}:`, error, result.response.responseText);
+                        resolve({ score: 5, content: "Error parsing response", error: true });
                     }
                 }
             });
