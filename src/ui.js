@@ -1799,3 +1799,15 @@ function cleanupDescriptionElements() {
     descElements.forEach(el => el.remove());
     //console.log(`Cleaned up ${descElements.length} description elements`);
 }
+function initialiseUI() {
+    addSliderUI();
+    addSettingsUI();
+
+    const statusIndicator = document.createElement('div');
+    statusIndicator.id = 'status-indicator';
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'tweetfilter-container';
+
+    document.body.appendChild(uiContainer);
+    uiContainer.appendChild(statusIndicator);
+}
