@@ -1,4 +1,27 @@
-
+// ==UserScript==
+// @name         TweetFilter AI - DOM Scraper Module
+// @namespace    http://tampermonkey.net/
+// @version      Version 1.3r
+// @description  DOM manipulation functions for TweetFilter AI
+// @author       Obsxrver(3than)
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/utils.js
+// @license      MIT
+// ==/UserScript==
+/**
+     * Extracts and returns trimmed text content from the given element(s).
+     * @param {Node|NodeList} elements - A DOM element or a NodeList.
+     * @returns {string} The trimmed text content.
+     */
+function getElementText(elements) {
+    if (!elements) return '';
+    const elementList = elements instanceof NodeList ? Array.from(elements) : [elements];
+    for (const element of elementList) {
+        const text = element?.textContent?.trim();
+        if (text) return text;
+    }
+    return '';
+}
 /**
  * Extracts the tweet ID from a tweet article element.
  * @param {Element} tweetArticle - The tweet article element.

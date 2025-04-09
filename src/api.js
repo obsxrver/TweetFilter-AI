@@ -1,3 +1,20 @@
+// ==UserScript==
+// @name         TweetFilter AI - API Module
+// @namespace    http://tampermonkey.net/
+// @version      Version 1.3r
+// @description  API communication functions for TweetFilter AI
+// @author       Obsxrver(3than)
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @connect      openrouter.ai
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/utils.js
+// @license      MIT
+// ==/UserScript==
+
+// ----- API Functions -----
+
 function GM_POST(request_url, request_headers, request_data, request_timeout) {
     return new Promise((resolve, reject) => {
         GM_xmlhttpRequest({

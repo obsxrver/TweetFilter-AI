@@ -1,4 +1,19 @@
-
+// ==UserScript==
+// @name         TweetFilter AI - UI Module
+// @namespace    http://tampermonkey.net/
+// @version      Version 1.3r
+// @description  User interface functions for TweetFilter AI
+// @author       Obsxrver(3than)
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_addStyle
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/utils.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
+// @license      MIT
+// ==/UserScript==
 
 /**
  * Displays a temporary status message on the screen.

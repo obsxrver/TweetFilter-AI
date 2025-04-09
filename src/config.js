@@ -1,3 +1,11 @@
+// ==UserScript==
+// @name         TweetFilter AI - Config Module
+// @namespace    http://tampermonkey.net/
+// @version      Version 1.3r
+// @description  Configuration module for TweetFilter AI
+// @author       Obsxrver(3than)
+// @license      MIT
+// ==/UserScript==
 
 // ----- Global Variables & Caches -----
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
