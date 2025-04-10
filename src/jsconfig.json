@@ -1,0 +1,8 @@
+{
+    "compilerOptions": {
+        "checkJs": true,
+        "maxNodeModuleJsDepth": 1,
+        "allowJs": true
+    },
+    "include": ["src/**/*"]
+}

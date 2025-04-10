@@ -12,60 +12,148 @@
 // @license      MIT
 // ==/UserScript==
 
-// ----- API Functions -----
+/**
+ * @typedef {Object} CompletionResponse
+ * @property {string} id - Response ID from OpenRouter
+ * @property {string} model - Model used for completion
+ * @property {Array<{
+ *   message: {
+ *     role: string,
+ *     content: string
+ *   },
+ *   finish_reason: string,
+ *   index: number
+ * }>} choices - Array of completion choices
+ * @property {Object} usage - Token usage statistics
+ * @property {number} usage.prompt_tokens - Number of tokens in prompt
+ * @property {number} usage.completion_tokens - Number of tokens in completion
+ * @property {number} usage.total_tokens - Total tokens used
+ */
 
-function GM_POST(request_data, request_timeout, apiKey) {
+/**
+ * @typedef {Object} CompletionRequest
+ * @property {string} model - Model ID to use
+ * @property {Array<{role: string, content: Array<{type: string, text?: string, image_url?: {url: string}}>}>} messages - Messages for completion
+ * @property {number} temperature - Temperature for sampling
+ * @property {number} top_p - Top P for sampling
+ * @property {number} max_tokens - Maximum tokens to generate
+ * @property {Object} provider - Provider settings
+ * @property {string} provider.sort - Sort order for models
+ * @property {boolean} provider.allow_fallbacks - Whether to allow fallback models
+ */
+
+/**
+ * @typedef {Object} CompletionResult
+ * @property {boolean} error - Whether an error occurred
+ * @property {string} message - Error or success message
+ * @property {CompletionResponse|null} data - The completion response data if successful
+ */
+
+/**
+ * Gets a completion from OpenRouter API
+ * 
+ * @param {CompletionRequest} request - The completion request
+ * @param {string} apiKey - OpenRouter API key
+ * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @returns {Promise<CompletionResult>} The completion result
+ */
+async function getCompletion(request, apiKey, timeout = 30000) {
     return new Promise((resolve) => {
         GM_xmlhttpRequest({
             method: "POST",
-            url: "https://openrouter.ai/api/v1/chat/completions", // request_url
-            headers: { // request_headers
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Using the referer from the initial attempt
-                    "X-Title": "Tweet Rating Tool"
+            url: "https://openrouter.ai/api/v1/chat/completions",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`,
+                "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
+                "X-Title": "Tweet Rating Tool"
             },
-            data: JSON.stringify(request_data),
-            timeout: request_timeout,
-            onload: function (response) {
-                if(response.status >= 200 && response.status < 300){
-                    resolve({error: false, message: "Request successful", response: response});
-                }else{
-                    resolve({error: true, message: "Request failed", response: response});
+            data: JSON.stringify(request),
+            timeout: timeout,
+            onload: function(response) {
+                if (response.status >= 200 && response.status < 300) {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        resolve({
+                            error: false,
+                            message: "Request successful",
+                            data: data
+                        });
+                    } catch (error) {
+                        resolve({
+                            error: true,
+                            message: `Failed to parse response: ${error.message}`,
+                            data: null
+                        });
+                    }
+                } else {
+                    resolve({
+                        error: true,
+                        message: `Request failed with status ${response.status}: ${response.responseText}`,
+                        data: null
+                    });
                 }
             },
-            onerror: function (error) {
-                resolve({error: true, message: error, response: null});
+            onerror: function(error) {
+                resolve({
+                    error: true,
+                    message: `Request error: ${error.toString()}`,
+                    data: null
+                });
             },
-            ontimeout: function () {
-                resolve({error: true, message: "Request timed out", response: null});
+            ontimeout: function() {
+                resolve({
+                    error: true,
+                    message: `Request timed out after ${timeout}ms`,
+                    data: null
+                });
             }
-
-        })
+        });
     });
-    
 }
+const safetySettings = [
+  {
+    category: "HARM_CATEGORY_HARASSMENT",
+    threshold: "BLOCK_LOW_AND_ABOVE",
+  },
+  {
+    category: "HARM_CATEGORY_HATE_SPEECH",
+    threshold: "BLOCK_LOW_AND_ABOVE",
+  },
+  {
+    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    threshold: "BLOCK_NONE",
+  },
+  {
+    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+    threshold: "BLOCK_NONE",
+  },
+  {
+    category: "HARM_CATEGORY_CIVIC_INTEGRITY",
+    threshold: "BLOCK_NONE",
+  },
+];
 /**
-     * Rates a tweet using the OpenRouter API with automatic retry functionality.
-     * The function retries up to 3 times in case of failures.
-     * @param {string} tweetText - The text content of the tweet.
-     * @param {string} tweetId - The unique tweet ID.
-     * @param {string} apiKey - The API key for authentication.
-     * @param {number} [attempt=1] - The current attempt number.
-     * @param {number} [maxAttempts=3] - The maximum number of retry attempts.
-     * @returns {Promise<{score: number, error: boolean}>} The rating score and error flag.
-     */
-async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt = 1, maxAttempts = 3) {
-    let result = {error: true, content: "", score: 5};
-    let messages = [
-        {
-            "role": "developer",
-            "content": [{
-                "type": "text", "text":
-                    `
-                 You will be given a Tweet, structured like this:
-                 _______TWEET SCHEMA_______
-                 _______BEGIN TWEET_______
+ * Rates a tweet using the OpenRouter API with automatic retry functionality.
+ * 
+ * @param {string} tweetText - The text content of the tweet
+ * @param {string} tweetId - The unique tweet ID
+ * @param {string} apiKey - The API key for authentication
+ * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
+ * @param {number} [maxRetries=3] - Maximum number of retry attempts
+ * @returns {Promise<{score: number, content: string, error: boolean}>} The rating result
+ */
+async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
+    const request = {
+        model: selectedModel,
+        messages: [{
+            role: "developer",
+            content: [{
+                type: "text",
+                text: `
+                You will be given a Tweet, structured like this:
+                _______TWEET SCHEMA_______
+                _______BEGIN TWEET_______
                 [TWEET TweetID]
                 [the text of the tweet being replied to]
                 [MEDIA_DESCRIPTION]:
@@ -83,7 +171,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, at
                 _______END TWEET_______
                 _______END TWEET SCHEMA_______
 
-                You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}.
+                You are an expert critic of tweets. You are to review and provide a rating for the tweet with tweet ID ${tweetId}.
                 Ensure that you consider these user-defined instructions in your analysis and scoring:
                 [USER-DEFINED INSTRUCTIONS]:
                 ${USER_DEFINED_INSTRUCTIONS}
@@ -95,180 +183,146 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, at
                 ${tweetText}
                 _______END TWEET_______`
             }]
-        }];
-
-    if (mediaUrls && mediaUrls.length > 0) {
-        if (modelSupportsImages(selectedModel)) {
-            for (const url of mediaUrls) {
-                messages[0].content.push({
-                    "type": "image_url",
-                    "image_url": { "url": url }
-                });
-            }
-        } 
-    } 
-    const requestBody = {
-        model: selectedModel,
-        messages: messages,
-        temperature: modelTemperature,
-        top_p: modelTopP,
-        max_tokens: maxTokens
+        }],
+        config: {
+            safetySettings: safetySettings,
+        }
     };
+
+    // Add image URLs if present and supported
+    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
+        for (const url of mediaUrls) {
+            request.messages[0].content.push({
+                type: "image_url",
+                image_url: { url }
+            });
+        }
+    }
+
+    // Add model parameters
+    request.temperature = modelTemperature;
+    request.top_p = modelTopP;
+    request.max_tokens = maxTokens;
+    
+    // Add provider settings
     const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-    const sortType = sortOrder.split('-')[0]; 
-    requestBody.provider = {
-        sort: sortType,
+    request.provider = {
+        sort: sortOrder.split('-')[0],
         allow_fallbacks: true
     };
-    async function attemptRating(requestBody) {
-        // Rate limit: wait if needed between API calls
+
+    // Implement retry logic with exponential backoff
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        attempt++;
+        
+        // Rate limiting
         const now = Date.now();
         const timeElapsed = now - lastAPICallTime;
-        
         if (timeElapsed < API_CALL_DELAY_MS) {
             await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
         }
-        
-        lastAPICallTime = Date.now();
+        lastAPICallTime = now;
+
+        // Update status
         pendingRequests++;
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
-        GM_POST(requestBody, 30000, apiKey).then(result => {
-            pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`); 
 
-            if (result.error) {
-                const shouldRetry = (result.message === "Request timed out" || (result.response && (result.response.status === 429 || result.response.status >= 500)));
+        // Make API request
+        const result = await getCompletion(request, apiKey);
+        pendingRequests--;
+        showStatus(`Rating tweet... (${pendingRequests} pending)`);
 
-                if (shouldRetry && attempt < maxAttempts) {
-                    const backoffDelay = Math.pow(2, attempt) * 1000;
-                    console.log(`Attempt ${attempt}/${maxAttempts} failed (${result}). Retrying in ${backoffDelay}ms...`);
-                    setTimeout(() => { attemptRating(attempt + 1); }, backoffDelay);
-                } else {
-                    console.error('API Request Failed. Details:', result);
-                    result = { score: 5, content: `API error: ${result.message || 'Unknown error'}`, error: true };
-                }
-            } else {
-                // Handle successful response (status 200-299)
-                try {
-                    const data = JSON.parse(result.response.responseText);
-                    const content = data.choices?.[0]?.message?.content;
-                    
-                    if (!content) {
-                        console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
-                             
-                        result = { score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true };
-                        return;
-                    }
-
-                    const scoreMatch = content.match(/\SCORE_(\d+)/);
-                    if (scoreMatch) {
-                        const score = parseInt(scoreMatch[1], 10);
-                        tweetIDRatingCache[tweetId] = { tweetContent: tweetText, score: score, description: content };
-                        saveTweetRatings();
-                        result = { score: score, content: content, error: false };
-                    } else {
-                        console.error(`No rating score found in response for tweet ${tweetId}. Content:`, content);
-                        result = { score: 5, content: "No rating score found in response", error: true };
-                    }
-                } catch (error) {
-                    console.error(`Error parsing response for tweet ${tweetId}:`, error, result.response.responseText);
-                    result = { score: 5, content: "Error parsing response", error: true };
-                }
+        if (!result.error && result.data?.choices?.[0]?.message?.content) {
+            const content = result.data.choices[0].message.content;
+            const scoreMatch = content.match(/\SCORE_(\d+)/);
+            
+            if (scoreMatch) {
+                const score = parseInt(scoreMatch[1], 10);
+                tweetIDRatingCache[tweetId] = { 
+                    tweetContent: tweetText, 
+                    score: score, 
+                    description: content 
+                };
+                saveTweetRatings();
+                return { score, content, error: false };
             }
-        });
-    };
+        }
 
-    // Make attempts up to MAX_RETRIES
-    let currentAttempt = 0;
-    while (result.error && currentAttempt < MAX_RETRIES) {
-        currentAttempt++;
-        result = await attemptRating(requestBody);
-    }
-
-    return result;
-}
-
-async function getImageDescription(urls, apiKey, tweetId, userHandle) {
-    if (!urls || urls.length === 0) return '';
-
-    // Check if image descriptions are disabled
-    if (!enableImageDescriptions) {
-        return '[Image descriptions disabled]';
-    }
-
-    let imageDescriptions = ""
-    // Add image URLs to the request
-    for (let i = 0; i < urls.length; i++) {
-        try {
-            const requestBody = {
-                model: selectedImageModel,
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            {
-                                type: "text",
-                                text: "Describe what you see in this image in a concise way, focusing on the main elements and any text visible. Keep the description under 100 words."
-                            },
-                            {
-                                type: "image_url",
-                                image_url: urls[i]
-                            }
-                        ]
-                    }
-                ],
-                temperature: imageModelTemperature,
-                top_p: imageModelTopP,
-                max_tokens: maxTokens
-            };
-            // Add provider sorting
-            const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-            const sortType = sortOrder.split('-')[0]; // Extract sort type (price, throughput, latency)
-            requestBody.provider = {
-                sort: sortType,
-                allow_fallbacks: true
-            };
-            const imageDescription = await new Promise((resolve) => {
-                 // Use GM_POST for the API call
-                 GM_POST(requestBody, 30000, apiKey) // Pass request body and timeout
-                 .then(result => {
-                      // Handle successful response (200-299)
-                      if (!result.error && result.response.status >= 200 && result.response.status < 300) {
-                          try {
-                              const data = JSON.parse(result.response.responseText);
-                              if (data && data.choices && data.choices.length > 0 && data.choices[0].message) {
-                                  resolve(data.choices[0].message.content || "[No description available]");
-                              } else {
-                                  console.error("Invalid response structure from image API:", data);
-                                  resolve("[Error: Invalid API response structure]");
-                              }
-                          } catch (error) {
-                              console.error("Exception while processing image API response:", error, result.response.responseText);
-                              resolve("[Error processing image description]");
-                          }
-                      } else {
-                          // Handle API errors (non-2xx status) or GM_POST internal errors
-                          console.error("Error fetching image description:", result.message, `Status: ${result.response?.status}`, result.response?.responseText);
-                          resolve(`[Error fetching image description: ${result.message || result.response?.status || 'Unknown Error'}]`);
-                      }
-                 })
-                 .catch(error => {
-                      // Handle network errors or unexpected issues in GM_POST itself
-                      console.error("Network error or unexpected issue while fetching image description:", error);
-                      resolve("[Error: Network problem or unexpected issue while fetching image description]");
-                 });
+        // Handle retries
+        if (attempt < maxRetries) {
+            const backoffDelay = Math.pow(backOffDelay, 2) * 1000;
+            console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
+            console.log('Response:', {
+                error: result.error,
+                message: result.message,
+                data: result.data,
+                content: result.data?.choices?.[0]?.message?.content
             });
-            imageDescriptions += `[IMAGE ${i + 1}]: ${imageDescription}\n`;
-        } catch (error) {
-            console.error(`Error processing image URL ${urls[i]}:`, error);
-            imageDescriptions += `[IMAGE ${i + 1}]: [Error processing image]\n`;
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
         }
     }
-    return imageDescriptions;
+    
+    return { 
+        score: 5, 
+        content: "Failed to get valid rating after multiple attempts", 
+        error: true 
+    };
 }
 
+/**
+ * Gets descriptions for images using the OpenRouter API
+ * 
+ * @param {string[]} urls - Array of image URLs to get descriptions for
+ * @param {string} apiKey - The API key for authentication
+ * @param {string} tweetId - The unique tweet ID
+ * @param {string} userHandle - The Twitter user handle
+ * @returns {Promise<string>} Combined image descriptions
+ */
+async function getImageDescription(urls, apiKey, tweetId, userHandle) {
+    if (!urls?.length || !enableImageDescriptions) {
+        return !enableImageDescriptions ? '[Image descriptions disabled]' : '';
+    }
 
+    let descriptions = [];
+    for (const url of urls) {
+        const request = {
+            model: selectedImageModel,
+            messages: [{
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: "Describe what you see in this image in a concise way, focusing on the main elements and any text visible. Keep the description under 100 words."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: { url }
+                    }
+                ]
+            }],
+            temperature: imageModelTemperature,
+            top_p: imageModelTopP,
+            max_tokens: maxTokens,
+            provider: {
+                sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
+                allow_fallbacks: true
+            },
+            config: {
+                safetySettings: safetySettings,
+            }
+        };
 
+        const result = await getCompletion(request, apiKey);
+        if (!result.error && result.data?.choices?.[0]?.message?.content) {
+            descriptions.push(result.data.choices[0].message.content);
+        } else {
+            descriptions.push('[Error getting image description]');
+        }
+    }
+
+    return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
+}
 
 /**
  * Fetches the list of available models from the OpenRouter API.
@@ -292,17 +346,17 @@ function fetchAvailableModels() {
             "X-Title": "Tweet Rating Tool"
         },
         onload: function (response) {
-                try {
-                    const data = JSON.parse(response.responseText);
-                    if (data.data && data.data.models) {
-                        availableModels = data.data.models || [];
-                        refreshModelsUI();
-                        showStatus('Models updated!');
-                    } 
-                } catch (error) {
-                    console.error('Error parsing model list:', error);
-                    showStatus('Error parsing models list');
+            try {
+                const data = JSON.parse(response.responseText);
+                if (data.data && data.data.models) {
+                    availableModels = data.data.models || [];
+                    refreshModelsUI();
+                    showStatus('Models updated!');
                 }
+            } catch (error) {
+                console.error('Error parsing model list:', error);
+                showStatus('Error parsing models list');
+            }
         },
         onerror: function (error) {
             console.error('Error fetching models:', error);
