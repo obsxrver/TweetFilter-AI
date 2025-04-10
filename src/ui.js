@@ -1,4 +1,4 @@
-// ==UserScript==
+// ==Module==
 // @name         TweetFilter AI - UI Module
 // @namespace    http://tampermonkey.net/
 // @version      Version 1.2.3r2
@@ -14,7 +14,7 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
 // @license      MIT
-// ==/UserScript==
+// ==/Module==
 
 /**
  * Displays a temporary status message on the screen.
