@@ -63,7 +63,7 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
  * Injects the UI elements from the HTML resource into the page.
  */
 function injectUI() {
-    
+    let menuHTML = GM_getValue('menuHTML');
     if (!menuHTML) {
         console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');

@@ -17,8 +17,8 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r4
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r4
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js?v=1.2.3r4
-// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3r4
 // @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
+// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3r4
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
@@ -29,11 +29,10 @@
     
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
-
+    let menuhtml = GM_getResourceText("MENU_HTML");
+    GM_setValue('menuHTML', menuhtml);
     //GM_addStyle(css);
 
-    
-    console.log("menu html", GM_getResourceText('MENU_HTML'));
     // ----- Initialization -----
     
     /**
