@@ -2689,8 +2689,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // Get user handle
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
-        const quotedHandle = handles.length > 1 ? handles[1] : '';
-        const allMediaLinks = extractMediaLinks(tweetArticle);
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
             tweetArticle.dataset.sloppinessScore = '10';
@@ -2707,10 +2705,24 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         }
        
         const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
+        //Get the media URLS from the entire fullContextWithImageDescription, and pass that to the rating engine
+        //This allows us to get the media links from the thread history as well
+        const mediaURLs = [];
+        // Extract regular media URLs
+        const mediaMatches = fullContextWithImageDescription.match(/\[MEDIA_URLS\]:\s*\n(.*?)(?:\n|$)/);
+        if (mediaMatches && mediaMatches[1]) {
+            mediaURLs.push(...mediaMatches[1].split(', '));
+        }
+        // Extract quoted tweet media URLs
+        const quotedMediaMatches = fullContextWithImageDescription.match(/\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n(.*?)(?:\n|$)/);
+        if (quotedMediaMatches && quotedMediaMatches[1]) {
+            mediaURLs.push(...quotedMediaMatches[1].split(', '));
+        }
+
         // --- API Call or Fallback ---
         if (apiKey && fullContextWithImageDescription) {
             try {
-                const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, allMediaLinks);
+                const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs);
                 score = rating.score;
                 description = rating.content;
                 tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
@@ -2733,6 +2745,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         filterSingleTweet(tweetArticle);
         
         // Log all collected information at once
+        console.log(mediaURLs);
         console.log(`Tweet ${tweetId}:
 ${fullContextWithImageDescription} - ${score} Model response: - ${description}`);
 
@@ -2812,6 +2825,10 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     const quotedHandle = handles.length > 1 ? handles[1] : '';
     // --- Extract Main Tweet Content ---
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+    
+    // Allow a small delay for images to load
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
     let allMediaLinks = extractMediaLinks(tweetArticle);
 
         // --- Extract Quoted Tweet Content (if any) ---
@@ -2819,8 +2836,11 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
         let quotedMediaLinks = [];
         const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
         if (quoteContainer) {
-            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
+            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
+            // Short delay to ensure quoted tweet images are loaded
+            await new Promise(resolve => setTimeout(resolve, 300));
             quotedMediaLinks = extractMediaLinks(quoteContainer);
+            console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
         }
         // Remove any media links from the main tweet that also appear in the quoted tweet
         let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
@@ -2840,9 +2860,10 @@ ${mainMediaLinksDescription}`;
             fullContextWithImageDescription += `
 [MEDIA_URLS]:
 ${mainMediaLinks.join(", ")}`;
+            
         }
         // --- Quoted Tweet Handling ---
-        if (quotedText) {
+        if (quotedText||quotedMediaLinks.length > 0) {
             fullContextWithImageDescription += `
 [QUOTED_TWEET]:
  Author:@${quotedHandle}:
@@ -2854,15 +2875,16 @@ ${quotedText}`;
                     fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaLinksDescription}`;
-                } else {
-                    // Just add the URLs when descriptions are disabled
-                    fullContextWithImageDescription += `
+                }
+                // Just add the URLs when descriptions are disabled
+                fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
 ${quotedMediaLinks.join(", ")}`;
-                }
+                
             }
         }
-
+        
+        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
         // --- Conversation Thread Handling ---
         const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
         if (conversation && conversation.dataset.threadHist) {
@@ -2871,9 +2893,22 @@ ${quotedMediaLinks.join(", ")}`;
                 fullContextWithImageDescription = conversation.dataset.threadHist + `
 [REPLY]
 ` + fullContextWithImageDescription;
+                
             }
         }
+        
+        // Store the full context both for this tweet and for use in thread history
         tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+        if (tweetIDRatingCache[tweetId]) {
+            tweetIDRatingCache[tweetId].tweetContent = fullContextWithImageDescription;
+        } else {
+            tweetIDRatingCache[tweetId] = {
+                score: 0,
+                description: "",
+                tweetContent: fullContextWithImageDescription
+            };
+        }
+        
         return fullContextWithImageDescription;
     
 }
@@ -2912,13 +2947,11 @@ async function handleThreads() {
             if (firstArticle) {
                 conversation.dataset.threadHist = 'pending';
                 const tweetId = getTweetID(firstArticle);
-                if (tweetIDRatingCache[tweetId]) {
-                    threadHist = tweetIDRatingCache[tweetId].tweetContent;
-                } else {
-                    const apiKey = GM_getValue('openrouter-api-key', '');
-                    const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
-                    threadHist = fullcxt;
-                }
+                
+                const apiKey = GM_getValue('openrouter-api-key', '');
+                const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
+                threadHist = fullcxt;
+                
                 conversation.dataset.threadHist = threadHist;
                 //this lets us know if we are still on the main post of the conversation or if we are on a reply to the main post. Will disapear every time we dive deeper
                 conversation.firstChild.dataset.canary = "true";
@@ -2930,14 +2963,16 @@ async function handleThreads() {
         else if (conversation.dataset.threadHist != "pending" && conversation.firstChild.dataset.canary == undefined) {
             conversation.firstChild.dataset.canary = "pending";
             const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
-            const tweetId = getTweetID(nextArticle);
-            if (tweetIDRatingCache[tweetId]) {
-                threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
-            } else {
-                const apiKey = GM_getValue('openrouter-api-key', '');
-                await new Promise(resolve => setTimeout(resolve, 500));
-                const newContext = await getFullContext(nextArticle, tweetId, apiKey);
-                threadHist = threadHist + "\n[REPLY]\n" + newContext;
+            if (nextArticle) {
+                const tweetId = getTweetID(nextArticle);
+                if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].tweetContent) {
+                    threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
+                } else {
+                    const apiKey = GM_getValue('openrouter-api-key', '');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    const newContext = await getFullContext(nextArticle, tweetId, apiKey);
+                    threadHist = threadHist + "\n[REPLY]\n" + newContext;
+                }
                 conversation.dataset.threadHist = threadHist;
             }
         }
@@ -2947,7 +2982,7 @@ async function handleThreads() {
 
     // ----- ui.js -----
 // --- Constants ---
-const VERSION = '1.3'; // Update version here
+const VERSION = '1.3.1'; // Update version here
 
 // --- Utility Functions ---
 
