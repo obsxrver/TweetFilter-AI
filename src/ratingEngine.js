@@ -106,72 +106,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (applyTweetCachedRating(tweetArticle)) {
             return;
         }
-        /**
-        // --- Extract Main Tweet Content ---
-        const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-        let allMediaLinks = extractMediaLinks(tweetArticle);
-
-        // --- Extract Quoted Tweet Content (if any) ---
-        let quotedText = "";
-        let quotedMediaLinks = [];
-        const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-        if (quoteContainer) {
-            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
-            quotedMediaLinks = extractMediaLinks(quoteContainer);
-        }
-        // Remove any media links from the main tweet that also appear in the quoted tweet
-        let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-        let fullContextWithImageDescription = `[TWEET ${tweetId}]
- Author:@${userHandle}:
-` + mainText;
-
-        if (mainMediaLinks.length > 0) {
-            // Process main tweet images only if image descriptions are enabled
-            if (enableImageDescriptions) {
-                let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-                fullContextWithImageDescription += `
-[MEDIA_DESCRIPTION]:
-${mainMediaLinksDescription}`;
-            }
-            // Just add the URLs when descriptions are disabled
-            fullContextWithImageDescription += `
-[MEDIA_URLS]:
-${mainMediaLinks.join(", ")}`;
-        }
-        // --- Quoted Tweet Handling ---
-        if (quotedText) {
-            fullContextWithImageDescription += `
-[QUOTED_TWEET]:
- Author:@${quotedHandle}:
-${quotedText}`;
-            if (quotedMediaLinks.length > 0) {
-                // Process quoted tweet images only if image descriptions are enabled
-                if (enableImageDescriptions) {
-                    let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-                    fullContextWithImageDescription += `
-[QUOTED_TWEET_MEDIA_DESCRIPTION]:
-${quotedMediaLinksDescription}`;
-                } else {
-                    // Just add the URLs when descriptions are disabled
-                    fullContextWithImageDescription += `
-[QUOTED_TWEET_MEDIA_URLS]:
-${quotedMediaLinks.join(", ")}`;
-                }
-            }
-        }
-
-        // --- Conversation Thread Handling ---
-        const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-        if (conversation && conversation.dataset.threadHist) {
-            // If this tweet is not the original tweet, prepend the thread history.
-            if (!isOriginalTweet(tweetArticle)) {
-                fullContextWithImageDescription = conversation.dataset.threadHist + `
-[REPLY]
-` + fullContextWithImageDescription;
-            }
-        }
-        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-        */
+       
         const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
         // --- API Call or Fallback ---
         if (apiKey && fullContextWithImageDescription) {

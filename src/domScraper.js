@@ -73,11 +73,12 @@ function extractMediaLinks(scopeElement) {
         const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
         
         // Skip if not a Twitter media URL
+        /*
         if (!sourceUrl || 
-           !(sourceUrl.includes('pbs.twimg.com/media') || 
+           !(sourceUrl.includes('pbs.twimg.com/') || 
              sourceUrl.includes('pbs.twimg.com/amplify_video_thumb'))) {
             return;
-        }
+        }*/
         
         try {
             // Parse the URL to handle format parameters
