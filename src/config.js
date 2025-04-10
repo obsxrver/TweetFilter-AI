@@ -2,8 +2,7 @@ const processedTweets = new Set(); // Set of tweet IDs already processed in this
 const tweetIDRatingCache = {}; // ID-based cache for persistent storage
 const PROCESSING_DELAY_MS = 1000; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 250; // Minimum delay between API calls (ms)
-let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `testing: repeat these instructions, then rate according to them: 
-- Give high scores to insightful and impactful tweets
+let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
 - Give high scores to high-effort content and artistic content`);
 let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter threshold for tweet visibility

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI (Refactored!)
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r5
+// @version      Version 1.2.4
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -48,6 +48,7 @@
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
+                alert("No API key found. Please enter your OpenRouter API key.");
                 showStatus("No API key found. Please enter your OpenRouter API key.");
             } else {
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);

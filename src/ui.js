@@ -236,7 +236,12 @@ function initializeEventListeners(uiContainer) {
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
+    let previousAPIKey = GM_getValue('openrouter-api-key', '').length>0?true:false;
     if (apiKey) {
+        if (!previousAPIKey){
+            resetSettings(true);
+            //jank hack to get the UI defaults to load correctly
+        }
         GM_setValue('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
         fetchAvailableModels(); // Refresh model list
@@ -970,8 +975,8 @@ function importSettings() {
 /**
  * Resets all configurable settings to their default values.
  */
-function resetSettings() {
-    if (confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
+function resetSettings(noconfirm=false) {
+    if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
             selectedModel: 'google/gemini-flash-1.5-8b',
