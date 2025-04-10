@@ -1,12 +1,3 @@
-// ==UserScript==
-// @name         TweetFilter AI - DOM Scraper Module
-// @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r4
-// @description  DOM manipulation functions for TweetFilter AI
-// @author       Obsxrver(3than)
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r4
-// @license      MIT
-// ==/UserScript==
 /**
      * Extracts and returns trimmed text content from the given element(s).
      * @param {Node|NodeList} elements - A DOM element or a NodeList.

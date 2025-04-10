@@ -1,17 +1,3 @@
-// ==UserScript==
-// @name         TweetFilter AI - API Module
-// @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r4
-// @description  API communication functions for TweetFilter AI
-// @author       Obsxrver(3than)
-// @grant        GM_xmlhttpRequest
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @connect      openrouter.ai
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r4
-// @license      MIT
-// ==/UserScript==
-
 /**
  * @typedef {Object} CompletionResponse
  * @property {string} id - Response ID from OpenRouter

@@ -1,20 +1,3 @@
-// ==UserScript==
-// @name         TweetFilter AI - UI Module
-// @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r4
-// @description  User interface functions for TweetFilter AI
-// @author       Obsxrver(3than)
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_addStyle
-// @grant        GM_getResourceText
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r4
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r4
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r4
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r4
-// @license      MIT
-// ==/UserScript==
-
 // --- Constants ---
 const VERSION = '1.2.3r4'; // Update version here
 
@@ -359,7 +342,7 @@ function handleParameterChange(target, paramName) {
 
     // Update both slider and input
     if (slider && valueInput) {
-        slider.value = newValue;
+            slider.value = newValue;
         valueInput.value = newValue;
     }
 
@@ -484,7 +467,7 @@ function refreshSettingsUI() {
     }
 
     // Refresh dynamically populated lists/dropdowns
-    refreshHandleList(document.getElementById('handle-list'));
+        refreshHandleList(document.getElementById('handle-list'));
     refreshModelsUI(); // Refreshes model dropdowns
 
     // Update cache stats
@@ -553,16 +536,16 @@ function refreshModelsUI() {
     // Update main model selector
     if (modelSelectContainer) {
         modelSelectContainer.innerHTML = ''; // Clear current
-        createCustomSelect(
-            modelSelectContainer,
+    createCustomSelect(
+        modelSelectContainer,
             'model-selector', // ID for the custom select element
             models.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
             selectedModel, // Current selected value
             (newValue) => { // onChange callback
-                selectedModel = newValue;
-                GM_setValue('selectedModel', selectedModel);
-                showStatus('Rating model updated');
-            },
+            selectedModel = newValue;
+            GM_setValue('selectedModel', selectedModel);
+            showStatus('Rating model updated');
+        },
             'Search rating models...' // Placeholder
         );
     }
@@ -576,16 +559,16 @@ function refreshModelsUI() {
         );
 
         imageModelSelectContainer.innerHTML = ''; // Clear current
-        createCustomSelect(
-            imageModelSelectContainer,
+    createCustomSelect(
+        imageModelSelectContainer,
             'image-model-selector', // ID for the custom select element
             visionModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
             selectedImageModel, // Current selected value
             (newValue) => { // onChange callback
-                selectedImageModel = newValue;
-                GM_setValue('selectedImageModel', selectedImageModel);
-                showStatus('Image model updated');
-            },
+            selectedImageModel = newValue;
+            GM_setValue('selectedImageModel', selectedImageModel);
+            showStatus('Image model updated');
+        },
             'Search vision models...' // Placeholder
         );
     }
@@ -698,7 +681,7 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
                 // Update classes for all items
                 selectItems.querySelectorAll('div[data-value]').forEach(div => {
                     div.classList.toggle('same-as-selected', div.dataset.value === currentSelectedValue);
-                });
+            });
 
                 onChange(currentSelectedValue);
             });
@@ -774,16 +757,16 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
 
     switch (status) {
         case 'pending':
-            indicator.classList.add('pending-rating');
-            indicator.textContent = '⏳';
+        indicator.classList.add('pending-rating');
+        indicator.textContent = '⏳';
             break;
         case 'error':
-            indicator.classList.add('error-rating');
-            indicator.textContent = '⚠️';
+        indicator.classList.add('error-rating');
+        indicator.textContent = '⚠️';
             break;
         case 'cached':
-             indicator.classList.add('cached-rating');
-             indicator.textContent = score;
+            indicator.classList.add('cached-rating');
+        indicator.textContent = score;
              break;
         case 'blacklisted':
              indicator.classList.add('blacklisted-rating');
@@ -825,9 +808,9 @@ function getScoreTooltip() {
 function formatTooltipDescription(description) {
     if (!description) return '';
     // Basic formatting, can be expanded
-    description = description.replace(/\{score:\s*(\d+)\}/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+        description = description.replace(/\{score:\s*(\d+)\}/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
     description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
-    description = description.replace(/\n/g, '<br>');
+        description = description.replace(/\n/g, '<br>');
     return `<p>${description}</p>`;
 }
 
@@ -841,7 +824,7 @@ function handleIndicatorMouseEnter(event) {
     tooltip.innerHTML = formatTooltipDescription(description);
 
     // Position the tooltip
-    const rect = indicator.getBoundingClientRect();
+        const rect = indicator.getBoundingClientRect();
     const tooltipWidth = tooltip.offsetWidth; // Get width after setting content
     const tooltipHeight = tooltip.offsetHeight;
     const margin = 10;
@@ -869,11 +852,11 @@ function handleIndicatorMouseEnter(event) {
 function handleIndicatorMouseLeave() {
     const tooltip = getScoreTooltip();
     // Hide with a slight delay to allow moving cursor to the tooltip
-    setTimeout(() => {
+        setTimeout(() => {
         if (tooltip && tooltip.style.display !== 'none' && !tooltip.matches(':hover')) {
            tooltip.style.display = 'none';
         }
-    }, 100);
+        }, 100);
 }
 
 /** Cleans up the global score tooltip element. */
@@ -1029,8 +1012,8 @@ function addHandleToBlacklist(handle) {
     handle = handle.trim().replace(/^@/, ''); // Clean handle
     if (handle === '' || blacklistedHandles.includes(handle)) {
         showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
-        return;
-    }
+            return;
+        }
     blacklistedHandles.push(handle);
     GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
     refreshHandleList(document.getElementById('handle-list'));
@@ -1050,7 +1033,7 @@ function removeHandleFromBlacklist(handle) {
         refreshHandleList(document.getElementById('handle-list'));
         updateCacheStatsUI();
         showStatus(`Removed @${handle} from auto-rate list.`);
-    } else {
+                } else {
         console.warn(`Attempted to remove non-existent handle: ${handle}`);
     }
 }
