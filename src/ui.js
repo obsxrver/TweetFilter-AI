@@ -1,5 +1,5 @@
 // --- Constants ---
-const VERSION = '1.2.3r4'; // Update version here
+const VERSION = '1.3'; // Update version here
 
 // --- Utility Functions ---
 
@@ -46,7 +46,14 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
  * Injects the UI elements from the HTML resource into the page.
  */
 function injectUI() {
-    let menuHTML = GM_getValue('menuHTML');
+    //combined userscript has a const named MENU. If it exists, use it.
+    let menuHTML;
+    if(MENU){
+        menuHTML = MENU;
+    }else{
+        menuHTML = GM_getValue('menuHTML');
+    }
+    
     if (!menuHTML) {
         console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
