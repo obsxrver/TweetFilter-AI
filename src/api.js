@@ -176,11 +176,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         provider: {
             sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
             allow_fallbacks: true
-        },
-        config: {
-            safetySettings: safetySettings,
         }
     };
+    if (selectedModel.includes('gemini')){
+        request.config = {
+            safetySettings: safetySettings,
+        }
+    }
 
     // Add image URLs if present and supported
     if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
@@ -301,12 +303,13 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
             provider: {
                 sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
                 allow_fallbacks: true
-            },
-            config: {
-                safetySettings: safetySettings,
             }
         };
-
+        if (selectedImageModel.includes('gemini')){
+            request.config = {
+                safetySettings: safetySettings,
+            }
+        }
         const result = await getCompletion(request, apiKey);
         if (!result.error && result.data?.choices?.[0]?.message?.content) {
             descriptions.push(result.data.choices[0].message.content);
