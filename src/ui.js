@@ -8,7 +8,6 @@
 // @grant        GM_setValue
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
-// @resource     menuHTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
@@ -1603,7 +1602,7 @@ function cleanupDescriptionElements() {
 
 function initialiseUI() {
     // Load HTML from resource
-    const menuHTML = GM_getResourceText('menuHTML');
+    const menuHTML = GM_getResourceText('MENUHTML');
     if (!menuHTML) {
         console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
