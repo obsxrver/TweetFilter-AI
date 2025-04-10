@@ -182,6 +182,7 @@ ${quotedMediaLinks.join(", ")}`;
         // --- API Call or Fallback ---
         if (apiKey && fullContextWithImageDescription) {
             try {
+                const allMediaLinks = extractMediaLinks(tweetArticle);
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, allMediaLinks);
                 score = rating.score;
                 description = rating.content;
