@@ -16,6 +16,7 @@ let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
+let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
 
