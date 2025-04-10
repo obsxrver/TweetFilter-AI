@@ -38,7 +38,7 @@ let imageModelTemperature = GM_getValue('imageModelTemperature', 0.5);
 let imageModelTopP = GM_getValue('imageModelTopP', 0.9);
 let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
 let imageModelMaxTokens = GM_getValue('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
-
+//let menuHTML= "";
 
 // ----- DOM Selectors (for tweet elements) -----
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
@@ -50,7 +50,6 @@ const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twi
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 // ----- Dom Elements -----
-let menuHTML = "";
 /**
  * Helper function to check if a model supports images based on its architecture
  * @param {string} modelId - The model ID to check

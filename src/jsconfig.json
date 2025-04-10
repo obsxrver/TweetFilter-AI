@@ -1,8 +1,13 @@
 {
+    "include": ["src/**/*"],
+    "exclude": ["node_modules"],
     "compilerOptions": {
-        "checkJs": true,
-        "maxNodeModuleJsDepth": 1,
-        "allowJs": true
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"]
+        }
     },
-    "include": ["src/**/*"]
+    "checkJs": true,
+    "maxNodeModuleJsDepth": 1,
+    "allowJs": true
 }

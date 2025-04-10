@@ -12,7 +12,6 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r3
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r3
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r3
-// @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3
 // @license      MIT
 // ==/UserScript==
 
@@ -64,7 +63,7 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
  * Injects the UI elements from the HTML resource into the page.
  */
 function injectUI() {
-    const menuHTML = GM_getResourceText('MENUHTML');
+    
     if (!menuHTML) {
         console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
