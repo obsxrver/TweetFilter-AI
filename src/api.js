@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @connect      openrouter.ai
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r3
 // @license      MIT
 // ==/UserScript==
 

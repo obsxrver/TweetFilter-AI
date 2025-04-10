@@ -1,23 +1,23 @@
 // ==UserScript==
 // @name         TweetFilter AI - UI Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.0
+// @version      Version 1.2.3r3
 // @description  User interface functions for TweetFilter AI
 // @author       Obsxrver(3than)
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r3
+// @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3
 // @license      MIT
 // ==/UserScript==
 
 // --- Constants ---
-const VERSION = '1.3.0'; // Update version here
+const VERSION = '1.2.3r3'; // Update version here
 
 // --- Utility Functions ---
 

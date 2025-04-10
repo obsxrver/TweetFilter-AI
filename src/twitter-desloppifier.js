@@ -12,13 +12,13 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceText
 // @connect      openrouter.ai
-// @resource     MENUHTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3r2
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r2
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r2    
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r2
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r2
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js?v=1.2.3r2
-// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3r2
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r3 
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js?v=1.2.3r3
+// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3r3
+// @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3r3
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
