@@ -34,7 +34,7 @@ function applyTweetCachedRating(tweetArticle) {
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
         tweetArticle.dataset.ratingDescription = 'Whtielisted user';
-        setScoreIndicator(tweetArticle, 10, 'rated');
+        setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is whitelisted");
         filterSingleTweet(tweetArticle);
         return true;
     }
@@ -47,7 +47,7 @@ function applyTweetCachedRating(tweetArticle) {
         tweetArticle.dataset.cachedRating = 'true';
         tweetArticle.dataset.ratingStatus = 'cached';
         tweetArticle.dataset.ratingDescription = desc;
-        setScoreIndicator(tweetArticle, score, 'rated', desc);
+        setScoreIndicator(tweetArticle, score, 'cached', desc);
         filterSingleTweet(tweetArticle);
         return true;
     }
@@ -96,9 +96,9 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (userHandle && isUserBlacklisted(userHandle)) {
             tweetArticle.dataset.sloppinessScore = '10';
             tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'cached';
+            tweetArticle.dataset.ratingStatus = 'blacklisted';
             tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            setScoreIndicator(tweetArticle, 10, 'rated', "User is blacklisted");
+            setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is blacklisted");
             filterSingleTweet(tweetArticle);
             return;
         }
@@ -228,7 +228,7 @@ function scheduleTweetProcessing(tweetArticle) {
         tweetArticle.dataset.ratingStatus = 'rated';
 
         tweetArticle.dataset.ratingDescription = "Whitelisted user";
-        setScoreIndicator(tweetArticle, 10, 'rated');
+        setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is whitelisted");
         filterSingleTweet(tweetArticle);
         return;
     }

@@ -30,6 +30,8 @@
     //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");
     GM_setValue('menuHTML', menuhtml);
+    let firstRun = GM_getValue('firstRun', true);
+    
     //GM_addStyle(css);
 
     // ----- Initialization -----
@@ -44,7 +46,10 @@
             observedTargetNode = target;
             console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
             initialiseUI();
-            
+            if (firstRun){
+                resetSettings(true);
+                GM_setValue('firstRun', false);
+            }
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
