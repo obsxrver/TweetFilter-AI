@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3
+// @version      Version 1.3.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -1990,6 +1990,7 @@ let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
+let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
 
