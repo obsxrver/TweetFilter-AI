@@ -1,6 +1,6 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const tweetIDRatingCache = {}; // ID-based cache for persistent storage
-const PROCESSING_DELAY_MS = 1000; // Delay before processing a tweet (ms)
+const PROCESSING_DELAY_MS = 500; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 250; // Minimum delay between API calls (ms)
 let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
@@ -36,7 +36,7 @@ const USER_NAME_SELECTOR = 'div[data-testid="User-Name"] span > span';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
-const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]';
+const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 // ----- Dom Elements -----
 /**

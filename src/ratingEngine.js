@@ -142,6 +142,7 @@ ${fullContextWithImageDescription} - ${score} Model response: - ${description}`)
             tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
             tweetArticle.dataset.ratingDescription = "error processing tweet";
+            console.error(`Error processing tweet ${tweetId}: ${error}`);
             setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
             filterSingleTweet(tweetArticle);
         }

@@ -52,7 +52,7 @@ function getUserHandles(tweetArticle) {
         }
        });
     }
-    return handles;
+    return handles.length>0?handles:[''];
 }
 
 
