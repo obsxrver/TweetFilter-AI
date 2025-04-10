@@ -71,7 +71,7 @@ function getUserHandles(tweetArticle) {
  * @param {string} tweetIdForDebug - The tweet ID (for logging).
  * @returns {string[]} An array of media URLs.
  */
-function extractMediaLinks(scopeElement, tweetIdForDebug) {
+function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
     
     const mediaLinks = new Set();

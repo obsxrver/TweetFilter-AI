@@ -93,49 +93,29 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
     let score = 5; // Default score if rating fails
     let description = "";
 
-    // Create a single data object to collect all information during processing
-    const logData = {
-        status: "Started processing",
-        tweetId: tweetId
-    };
-
     try {
         // Get user handle
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
         const quotedHandle = handles.length > 1 ? handles[1] : '';
-        logData.handle = userHandle;
-
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
-            logData.status = "Blacklisted user - auto-score 10/10";
-            logData.score = 10;
-
             tweetArticle.dataset.sloppinessScore = '10';
             tweetArticle.dataset.blacklisted = 'true';
             tweetArticle.dataset.ratingStatus = 'rated';
             tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            setScoreIndicator(tweetArticle, 10, 'rated', "Blacklisted user");
+            setScoreIndicator(tweetArticle, 10, 'rated', "User is blacklisted");
             filterSingleTweet(tweetArticle);
-
-            
             return;
         }
-
         // Check if a cached rating exists
         if (applyTweetCachedRating(tweetArticle)) {
-            logData.status = "Using cached rating";
-            logData.score = parseInt(tweetArticle.dataset.sloppinessScore, 10);
-
             return;
         }
-
-        // Status is already set to pending in scheduleTweetProcessing
-        logData.status = "Processing tweet";
-
+        /**
         // --- Extract Main Tweet Content ---
         const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-        let allMediaLinks = extractMediaLinks(tweetArticle, tweetId);
+        let allMediaLinks = extractMediaLinks(tweetArticle);
 
         // --- Extract Quoted Tweet Content (if any) ---
         let quotedText = "";
@@ -143,56 +123,45 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
         if (quoteContainer) {
             quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
-            quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
+            quotedMediaLinks = extractMediaLinks(quoteContainer);
         }
-
         // Remove any media links from the main tweet that also appear in the quoted tweet
         let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-        
-        if (mainMediaLinks.length > 0 || quotedMediaLinks.length > 0) {
-            logData.mediaUrls = [...mainMediaLinks, ...quotedMediaLinks];
-        }
-
-        // --- Build the full context ---
-        let fullContext = `[TWEET ${tweetId}]\n Author:@${userHandle}:\n` + mainText;
-        let fullContextWithImageDescription = fullContext;
+        let fullContextWithImageDescription = `[TWEET ${tweetId}]
+ Author:@${userHandle}:
+` + mainText;
 
         if (mainMediaLinks.length > 0) {
-            // Add media URLs always for context
-            fullContext += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
-
             // Process main tweet images only if image descriptions are enabled
             if (enableImageDescriptions) {
                 let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-                fullContextWithImageDescription += "\n[MEDIA_DESCRIPTION]:\n" + mainMediaLinksDescription;
-                logData.imageDescription = mainMediaLinksDescription;
-            } else {
-                // Just add the URLs when descriptions are disabled
-                fullContextWithImageDescription += "\n[MEDIA_URLS]:\n" + mainMediaLinks.join(", ");
+                fullContextWithImageDescription += `
+[MEDIA_DESCRIPTION]:
+${mainMediaLinksDescription}`;
             }
+            // Just add the URLs when descriptions are disabled
+            fullContextWithImageDescription += `
+[MEDIA_URLS]:
+${mainMediaLinks.join(", ")}`;
         }
-
+        // --- Quoted Tweet Handling ---
         if (quotedText) {
-            fullContext += "\n[QUOTED_TWEET]:\n Author:@${quotedHandle}:\n" + quotedText;
-            fullContextWithImageDescription += "\n[QUOTED_TWEET]:\n Author:@${quotedHandle}:\n" + quotedText;
-
+            fullContextWithImageDescription += `
+[QUOTED_TWEET]:
+ Author:@${quotedHandle}:
+${quotedText}`;
             if (quotedMediaLinks.length > 0) {
-                // Add media URLs always for context
-                fullContext += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
-
                 // Process quoted tweet images only if image descriptions are enabled
                 if (enableImageDescriptions) {
                     let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-                    fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_DESCRIPTION]:\n" + quotedMediaLinksDescription;
-
-                    if (logData.imageDescription) {
-                        logData.imageDescription += "\n\nQUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
-                    } else {
-                        logData.imageDescription = "QUOTED TWEET IMAGES:\n" + quotedMediaLinksDescription;
-                    }
+                    fullContextWithImageDescription += `
+[QUOTED_TWEET_MEDIA_DESCRIPTION]:
+${quotedMediaLinksDescription}`;
                 } else {
                     // Just add the URLs when descriptions are disabled
-                    fullContextWithImageDescription += "\n[QUOTED_TWEET_MEDIA_URLS]:\n" + quotedMediaLinks.join(", ");
+                    fullContextWithImageDescription += `
+[QUOTED_TWEET_MEDIA_URLS]:
+${quotedMediaLinks.join(", ")}`;
                 }
             }
         }
@@ -202,36 +171,27 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (conversation && conversation.dataset.threadHist) {
             // If this tweet is not the original tweet, prepend the thread history.
             if (!isOriginalTweet(tweetArticle)) {
-                fullContextWithImageDescription = conversation.dataset.threadHist + "\n[REPLY]\n" + fullContextWithImageDescription;
-                logData.isReply = true;
+                fullContextWithImageDescription = conversation.dataset.threadHist + `
+[REPLY]
+` + fullContextWithImageDescription;
             }
         }
-
-        logData.fullContext = fullContextWithImageDescription;
         tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-
+        */
+        const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
         // --- API Call or Fallback ---
-        if (apiKey && fullContext) {
+        if (apiKey && fullContextWithImageDescription) {
             try {
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, allMediaLinks);
                 score = rating.score;
                 description = rating.content;
                 tweetArticle.dataset.ratingStatus = rating.error ? 'error' : 'rated';
                 tweetArticle.dataset.ratingDescription = description || "not available";
+                tweetArticle.dataset.sloppinessScore = score.toString();
+                setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
+                filterSingleTweet(tweetArticle);
 
-                logData.status = rating.error ? "Rating error" : "Rating complete";
-                logData.score = score;
-                logData.modelResponse = description;
-                logData.isError = rating.error;
-
-                if (rating.error) {
-                    logData.error = rating.content;
-                }
             } catch (apiError) {
-                logData.status = "API error";
-                logData.error = apiError.toString();
-                logData.isError = true;
-
                 score = Math.floor(Math.random() * 10) + 1; // Fallback to a random score
                 tweetArticle.dataset.ratingStatus = 'error';
             }
@@ -239,35 +199,16 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             // If there's no API key or textual content (e.g., only media), use a fallback random score.
             score = Math.floor(Math.random() * 10) + 1;
             tweetArticle.dataset.ratingStatus = 'rated';
-
-            if (!apiKey) {
-                logData.status = "No API key - using random score";
-            } else if (!fullContext) {
-                logData.status = "No textual content - using random score";
-            }
-
-            logData.score = score;
         }
 
         tweetArticle.dataset.sloppinessScore = score.toString();
-        setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
         filterSingleTweet(tweetArticle);
 
-        // Update final status
-        if (!logData.status.includes("complete")) {
-            logData.status = "Rating process complete";
-        }
-
         // Log all collected information at once
-        console.log(`Tweet ${tweetId}:\n${fullContextWithImageDescription} - ${score}Model response: - ${description}`);
+        console.log(`Tweet ${tweetId}:
+${fullContextWithImageDescription} - ${score} Model response: - ${description}`);
 
     } catch (error) {
-        logData.status = "Error processing tweet";
-        logData.error = error.toString();
-        logData.isError = true;
-
-        
-
         if (!tweetArticle.dataset.sloppinessScore) {
             tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
@@ -339,65 +280,73 @@ function scheduleTweetProcessing(tweetArticle) {
 async function getFullContext(tweetArticle, tweetId, apiKey) {
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
+    const quotedHandle = handles.length > 1 ? handles[1] : '';
+    // --- Extract Main Tweet Content ---
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-    const mainMediaLinks = extractMediaLinks(tweetArticle, tweetId);
+    let allMediaLinks = extractMediaLinks(tweetArticle);
 
-    // Build the base formatted context string
-    let fullContext = `[TWEET]:
-@${userHandle}
-${mainText}
-`;
-
-    // Handle media content
-    if (mainMediaLinks.length > 0) {
-        if (enableImageDescriptions) {
-            // Get descriptions for images if enabled
-            const mainMediaDescriptions = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-            fullContext += `[MEDIA_DESCRIPTION]:
-${mainMediaDescriptions}
-`;
-        } else {
-            // Just include the URLs if descriptions are disabled
-            fullContext += `[MEDIA_URLS]:
-${mainMediaLinks.join(", ")}
-`;
+        // --- Extract Quoted Tweet Content (if any) ---
+        let quotedText = "";
+        let quotedMediaLinks = [];
+        const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+        if (quoteContainer) {
+            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
+            quotedMediaLinks = extractMediaLinks(quoteContainer);
         }
-    }
+        // Remove any media links from the main tweet that also appear in the quoted tweet
+        let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+        let fullContextWithImageDescription = `[TWEET ${tweetId}]
+ Author:@${userHandle}:
+` + mainText;
 
-    // Retrieve quoted tweet content (if any)
-    let quotedText = "";
-    let quotedMediaLinks = [];
-    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-
-    if (quoteContainer) {
-        quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR));
-        quotedMediaLinks = extractMediaLinks(quoteContainer, tweetId);
-
-        // Add quoted tweet content if present
+        if (mainMediaLinks.length > 0) {
+            // Process main tweet images only if image descriptions are enabled
+            if (enableImageDescriptions) {
+                let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                fullContextWithImageDescription += `
+[MEDIA_DESCRIPTION]:
+${mainMediaLinksDescription}`;
+            }
+            // Just add the URLs when descriptions are disabled
+            fullContextWithImageDescription += `
+[MEDIA_URLS]:
+${mainMediaLinks.join(", ")}`;
+        }
+        // --- Quoted Tweet Handling ---
         if (quotedText) {
-            fullContext += `[QUOTED_TWEET]:
-${quotedText}
-`;
-
-            // Handle quoted tweet media
+            fullContextWithImageDescription += `
+[QUOTED_TWEET]:
+ Author:@${quotedHandle}:
+${quotedText}`;
             if (quotedMediaLinks.length > 0) {
+                // Process quoted tweet images only if image descriptions are enabled
                 if (enableImageDescriptions) {
-                    // Get descriptions for quoted tweet images if enabled
-                    const quotedMediaDescriptions = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-                    fullContext += `[QUOTED_TWEET_MEDIA_DESCRIPTION]:
-${quotedMediaDescriptions}
-`;
+                    let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
+                    fullContextWithImageDescription += `
+[QUOTED_TWEET_MEDIA_DESCRIPTION]:
+${quotedMediaLinksDescription}`;
                 } else {
-                    // Just include the URLs if descriptions are disabled
-                    fullContext += `[QUOTED_TWEET_MEDIA_URLS]:
-${quotedMediaLinks.join(", ")}
-`;
+                    // Just add the URLs when descriptions are disabled
+                    fullContextWithImageDescription += `
+[QUOTED_TWEET_MEDIA_URLS]:
+${quotedMediaLinks.join(", ")}`;
                 }
             }
         }
-    }
 
-    return fullContext;
+        // --- Conversation Thread Handling ---
+        const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+        if (conversation && conversation.dataset.threadHist) {
+            // If this tweet is not the original tweet, prepend the thread history.
+            if (!isOriginalTweet(tweetArticle)) {
+                fullContextWithImageDescription = conversation.dataset.threadHist + `
+[REPLY]
+` + fullContextWithImageDescription;
+            }
+        }
+        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+        return fullContextWithImageDescription;
+    
 }
 
 
@@ -437,14 +386,7 @@ async function handleThreads() {
                 if (tweetIDRatingCache[tweetId]) {
                     threadHist = tweetIDRatingCache[tweetId].tweetContent;
                 } else {
-
-
-
-                    //janky, but we're assuming that since threadHist is undefined, we just opened the thread and therefore the first article is the head.
-
                     const apiKey = GM_getValue('openrouter-api-key', '');
-
-                    
                     const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
                     threadHist = fullcxt;
                 }
@@ -473,4 +415,3 @@ async function handleThreads() {
     }
 }
 
-    

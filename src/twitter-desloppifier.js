@@ -12,12 +12,12 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceText
 // @connect      openrouter.ai
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js
+// @resource     MENUHTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css
 // @run-at       document-idle
 // @license      MIT
