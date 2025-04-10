@@ -133,7 +133,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     const request = {
         model: selectedModel,
         messages: [{
-            role: "developer",
+            role: "user",
             content: [{
                 type: "text",
                 text: `
