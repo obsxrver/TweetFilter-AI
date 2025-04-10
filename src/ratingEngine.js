@@ -32,7 +32,7 @@ function applyTweetCachedRating(tweetArticle) {
         //console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
         tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
-        tweetArticle.dataset.ratingStatus = 'rated';
+        tweetArticle.dataset.ratingStatus = 'blacklisted';
         tweetArticle.dataset.ratingDescription = 'Whtielisted user';
         setScoreIndicator(tweetArticle, 10, 'rated');
         filterSingleTweet(tweetArticle);
@@ -45,7 +45,7 @@ function applyTweetCachedRating(tweetArticle) {
         //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
         tweetArticle.dataset.sloppinessScore = score.toString();
         tweetArticle.dataset.cachedRating = 'true';
-        tweetArticle.dataset.ratingStatus = 'rated';
+        tweetArticle.dataset.ratingStatus = 'cached';
         tweetArticle.dataset.ratingDescription = desc;
         setScoreIndicator(tweetArticle, score, 'rated', desc);
         filterSingleTweet(tweetArticle);
@@ -76,6 +76,13 @@ function isUserBlacklisted(handle) {
 
 async function delayedProcessTweet(tweetArticle, tweetId) {
     const apiKey = GM_getValue('openrouter-api-key', '');
+    if (!apiKey) {
+        tweetArticle.dataset.ratingStatus = 'error';
+        tweetArticle.dataset.ratingDescription = "No API key";
+        setScoreIndicator(tweetArticle, 5, 'error', "No API key");
+        filterSingleTweet(tweetArticle);
+        return;
+    }
     let score = 5; // Default score if rating fails
     let description = "";
 
@@ -89,7 +96,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (userHandle && isUserBlacklisted(userHandle)) {
             tweetArticle.dataset.sloppinessScore = '10';
             tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'rated';
+            tweetArticle.dataset.ratingStatus = 'cached';
             tweetArticle.dataset.ratingDescription = "Blacklisted user";
             setScoreIndicator(tweetArticle, 10, 'rated', "User is blacklisted");
             filterSingleTweet(tweetArticle);

@@ -744,7 +744,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
         indicator.className = 'score-indicator';
         tweetArticle.style.position = 'relative'; // Ensure parent is positioned
         tweetArticle.appendChild(indicator);
-
+        
         // Add hover listeners only once when creating the indicator
         indicator.addEventListener('mouseenter', handleIndicatorMouseEnter);
         indicator.addEventListener('mouseleave', handleIndicatorMouseLeave);

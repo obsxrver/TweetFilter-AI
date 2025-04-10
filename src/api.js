@@ -232,6 +232,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
             if (scoreMatch) {
                 const score = parseInt(scoreMatch[1], 10);
+                
                 tweetIDRatingCache[tweetId] = {
                     tweetContent: tweetText,
                     score: score,
@@ -244,7 +245,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
         // Handle retries
         if (attempt < maxRetries) {
-            const backoffDelay = Math.pow(backOffDelay, 2) * 1000;
+            const backoffDelay = Math.pow(attempt, 2) * 1000;
             console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
             console.log('Response:', {
                 error: result.error,
