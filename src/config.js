@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI - Config Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r2
+// @version      Version 1.2.3r4
 // @description  Configuration module for TweetFilter AI
 // @author       Obsxrver(3than)
 // @license      MIT

@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         TweetFilter AI - Rating Engine Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r2
+// @version      Version 1.2.3r4
 // @description  Tweet rating logic for TweetFilter AI
 // @author       Obsxrver(3than)
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r3
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r3
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r3
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r4
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r4
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r4
 // @license      MIT
 // ==/UserScript==
 
