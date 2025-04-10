@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI - API Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3r
+// @version      Version 1.2.3r2
 // @description  API communication functions for TweetFilter AI
 // @author       Obsxrver(3than)
 // @grant        GM_xmlhttpRequest
@@ -55,147 +55,137 @@ function GM_POST(request_data, request_timeout, apiKey) {
      * @param {number} [maxAttempts=3] - The maximum number of retry attempts.
      * @returns {Promise<{score: number, error: boolean}>} The rating score and error flag.
      */
-function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt = 1, maxAttempts = 3) {
-    return new Promise((resolve, reject) => {
-        /**
-         * Attempts the API call. On failure (or certain HTTP errors), retries if under maxAttempts.
-         * On success, parses the response and resolves with the score.
-         * On final failure, resolves with a default score (5) and an error flag.
-         * @param {number} currentAttempt - The current attempt number.
-         */
+async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, attempt = 1, maxAttempts = 3) {
+    let result = {error: true, content: "", score: 5};
+    let messages = [
+        {
+            "role": "developer",
+            "content": [{
+                "type": "text", "text":
+                    `
+                 You will be given a Tweet, structured like this:
+                 _______TWEET SCHEMA_______
+                 _______BEGIN TWEET_______
+                [TWEET TweetID]
+                [the text of the tweet being replied to]
+                [MEDIA_DESCRIPTION]:
+                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                [REPLY] (if the author is replying to another tweet)
+                [TWEET TweetID]: (the tweet which you are to review)
+                @[the author of the tweet]
+                [the text of the tweet]
+                [MEDIA_DESCRIPTION]:
+                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                [QUOTED_TWEET]: (if the author is quoting another tweet)
+                [the text of the quoted tweet]
+                [QUOTED_TWEET_MEDIA_DESCRIPTION]:
+                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+                _______END TWEET_______
+                _______END TWEET SCHEMA_______
 
-        function attemptRating(currentAttempt) {
-            // Rate limit: wait if needed between API calls
-            const now = Date.now();
-            const timeElapsed = now - lastAPICallTime;
-            if (timeElapsed < API_CALL_DELAY_MS) {
-                setTimeout(() => { attemptRating(currentAttempt); }, API_CALL_DELAY_MS - timeElapsed);
-                return;
+                You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}.
+                Ensure that you consider these user-defined instructions in your analysis and scoring:
+                [USER-DEFINED INSTRUCTIONS]:
+                ${USER_DEFINED_INSTRUCTIONS}
+                Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
+                SCORE_X where X is a number from 1 (lowest quality) to 10 (highest quality).
+                for example: SCORE_1, SCORE_2, SCORE_3, etc.
+                If one of the above is not present, the program will not be able to parse the response and will return an error.
+                _______BEGIN TWEET_______
+                ${tweetText}
+                _______END TWEET_______`
+            }]
+        }];
+
+    if (mediaUrls && mediaUrls.length > 0) {
+        if (modelSupportsImages(selectedModel)) {
+            for (const url of mediaUrls) {
+                messages[0].content.push({
+                    "type": "image_url",
+                    "image_url": { "url": url }
+                });
             }
-            console.log("max tokens", maxTokens);
-            lastAPICallTime = Date.now();
-            pendingRequests++;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
-
-            let messages = [
-                {
-                    "role": "developer",
-                    "content": [{
-                        "type": "text", "text":
-                            `
-                         You will be given a Tweet, structured like this:
-                         _______TWEET SCHEMA_______
-                         _______BEGIN TWEET_______
-                        [TWEET TweetID]
-                        [the text of the tweet being replied to]
-                        [MEDIA_DESCRIPTION]:
-                        [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                        [REPLY] (if the author is replying to another tweet)
-                        [TWEET TweetID]: (the tweet which you are to review)
-                        @[the author of the tweet]
-                        [the text of the tweet]
-                        [MEDIA_DESCRIPTION]:
-                        [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                        [QUOTED_TWEET]: (if the author is quoting another tweet)
-                        [the text of the quoted tweet]
-                        [QUOTED_TWEET_MEDIA_DESCRIPTION]:
-                        [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                        _______END TWEET_______
-                        _______END TWEET SCHEMA_______
-
-                        You are an expert critic of tweets. You are to review and provide a rating for the tweet wtih tweet ID ${tweetId}.
-                        Ensure that you consider these user-defined instructions in your analysis and scoring:
-                        [USER-DEFINED INSTRUCTIONS]:
-                        ${USER_DEFINED_INSTRUCTIONS}
-                        Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
-                        SCORE_X where X is a number from 1 (lowest quality) to 10 (highest quality).
-                        for example: SCORE_1, SCORE_2, SCORE_3, etc.
-                        If one of the above is not present, the program will not be able to parse the response and will return an error.
-                        _______BEGIN TWEET_______
-                        ${tweetText}
-                        _______END TWEET_______`
-                    }]
-                }];
-
-            if (mediaUrls && mediaUrls.length > 0) {
-                if (modelSupportsImages(selectedModel)) {
-                    for (const url of mediaUrls) {
-                        messages[0].content.push({
-                            "type": "image_url",
-                            "image_url": { "url": url }
-                        });
-                    }
-                } 
-            } 
-            const requestBody = {
-                model: selectedModel,
-                messages: messages,
-                temperature: modelTemperature,
-                top_p: modelTopP,
-                max_tokens: maxTokens
-            };
-            const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-            const sortType = sortOrder.split('-')[0]; 
-            requestBody.provider = {
-                sort: sortType,
-                allow_fallbacks: true
-            };
-            GM_POST(requestBody, 30000, apiKey).then(result => {
-                pendingRequests--;
-                showStatus(`Rating tweet... (${pendingRequests} pending)`); 
-
-                if (result.error) {
-                    const shouldRetry = (result.message === "Request timed out" || (result.response && (result.response.status === 429 || result.response.status >= 500)));
-
-                    if (shouldRetry && currentAttempt < maxAttempts) {
-                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                        console.log(`Attempt ${currentAttempt}/${maxAttempts} failed (${result}). Retrying in ${backoffDelay}ms...`);
-                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
-                    } else {
-                        console.error('API Request Failed. Details:', result);
-                        resolve({ score: 5, content: `API error: ${result.message || 'Unknown error'}`, error: true });
-                    }
-                } else {
-                    // Handle successful response (status 200-299)
-                    try {
-                        const data = JSON.parse(result.response.responseText);
-                        const content = data.choices?.[0]?.message?.content;
-
-                        if (!content) {
-                            console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
-                            
-                                     if (currentAttempt < maxAttempts) {
-                                        const backoffDelay = Math.pow(2, currentAttempt) * 1000;
-                                        console.log(`Retrying request for tweet ${tweetId} in ${backoffDelay}ms (attempt ${currentAttempt + 1}/${maxAttempts}) due to empty content/error in response`);
-                                        setTimeout(() => { attemptRating(currentAttempt + 1); }, backoffDelay);
-                                        return; // Exit early, retry is scheduled
-                                     }
-                                 
-                            
-                            // If not retrying, resolve with error
-                            resolve({ score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true });
-                            return;
-                        }
-
-                        const scoreMatch = content.match(/\SCORE_(\d+)/);
-                        if (scoreMatch) {
-                            const score = parseInt(scoreMatch[1], 10);
-                            tweetIDRatingCache[tweetId] = { tweetContent: tweetText, score: score, description: content };
-                            saveTweetRatings();
-                            resolve({ score: score, content: content, error: false });
-                        } else {
-                            console.error(`No rating score found in response for tweet ${tweetId}. Content:`, content);
-                            resolve({ score: 5, content: "No rating score found in response", error: true });
-                        }
-                    } catch (error) {
-                        console.error(`Error parsing response for tweet ${tweetId}:`, error, result.response.responseText);
-                        resolve({ score: 5, content: "Error parsing response", error: true });
-                    }
-                }
-            });
+        } 
+    } 
+    const requestBody = {
+        model: selectedModel,
+        messages: messages,
+        temperature: modelTemperature,
+        top_p: modelTopP,
+        max_tokens: maxTokens
+    };
+    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+    const sortType = sortOrder.split('-')[0]; 
+    requestBody.provider = {
+        sort: sortType,
+        allow_fallbacks: true
+    };
+    async function attemptRating(requestBody) {
+        // Rate limit: wait if needed between API calls
+        const now = Date.now();
+        const timeElapsed = now - lastAPICallTime;
+        
+        if (timeElapsed < API_CALL_DELAY_MS) {
+            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
         }
-        attemptRating(attempt);
-    });
+        
+        lastAPICallTime = Date.now();
+        pendingRequests++;
+        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+        GM_POST(requestBody, 30000, apiKey).then(result => {
+            pendingRequests--;
+            showStatus(`Rating tweet... (${pendingRequests} pending)`); 
+
+            if (result.error) {
+                const shouldRetry = (result.message === "Request timed out" || (result.response && (result.response.status === 429 || result.response.status >= 500)));
+
+                if (shouldRetry && attempt < maxAttempts) {
+                    const backoffDelay = Math.pow(2, attempt) * 1000;
+                    console.log(`Attempt ${attempt}/${maxAttempts} failed (${result}). Retrying in ${backoffDelay}ms...`);
+                    setTimeout(() => { attemptRating(attempt + 1); }, backoffDelay);
+                } else {
+                    console.error('API Request Failed. Details:', result);
+                    result = { score: 5, content: `API error: ${result.message || 'Unknown error'}`, error: true };
+                }
+            } else {
+                // Handle successful response (status 200-299)
+                try {
+                    const data = JSON.parse(result.response.responseText);
+                    const content = data.choices?.[0]?.message?.content;
+                    
+                    if (!content) {
+                        console.error(`No content in OpenRouter response from ${selectedModel} for tweet ${tweetId}. Response:`, data);
+                             
+                        result = { score: 5, content: "No content in OpenRouter response. Please check for rate limits or token quotas.", error: true };
+                        return;
+                    }
+
+                    const scoreMatch = content.match(/\SCORE_(\d+)/);
+                    if (scoreMatch) {
+                        const score = parseInt(scoreMatch[1], 10);
+                        tweetIDRatingCache[tweetId] = { tweetContent: tweetText, score: score, description: content };
+                        saveTweetRatings();
+                        result = { score: score, content: content, error: false };
+                    } else {
+                        console.error(`No rating score found in response for tweet ${tweetId}. Content:`, content);
+                        result = { score: 5, content: "No rating score found in response", error: true };
+                    }
+                } catch (error) {
+                    console.error(`Error parsing response for tweet ${tweetId}:`, error, result.response.responseText);
+                    result = { score: 5, content: "Error parsing response", error: true };
+                }
+            }
+        });
+    };
+
+    // Make attempts up to MAX_RETRIES
+    let currentAttempt = 0;
+    while (result.error && currentAttempt < MAX_RETRIES) {
+        currentAttempt++;
+        result = await attemptRating(requestBody);
+    }
+
+    return result;
 }
 
 async function getImageDescription(urls, apiKey, tweetId, userHandle) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI (Refactored!)
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.2.3r
+// @version      Version 1.2.3r2
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -12,13 +12,13 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceText
 // @connect      openrouter.ai
-// @resource     MENUHTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3.1r
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3.1r
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3.1r    
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3.1r
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3.1r
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js?v=1.2.3.1r
-// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3.1r
+// @resource     MENUHTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3r2
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js?v=1.2.3r2
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js?v=1.2.3r2    
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js?v=1.2.3r2
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r2
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js?v=1.2.3r2
+// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3r2
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==

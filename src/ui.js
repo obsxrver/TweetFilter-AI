@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI - UI Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3r
+// @version      Version 1.2.3r2
 // @description  User interface functions for TweetFilter AI
 // @author       Obsxrver(3than)
 // @grant        GM_getValue

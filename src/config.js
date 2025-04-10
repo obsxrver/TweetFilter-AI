@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI - Config Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3r
+// @version      Version 1.2.3r2
 // @description  Configuration module for TweetFilter AI
 // @author       Obsxrver(3than)
 // @license      MIT
@@ -20,6 +20,7 @@ let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter thresh
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
+const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
 let selectedModel = GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b');
 let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b');

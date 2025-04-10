@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI - Rating Engine Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3r
+// @version      Version 1.2.3r2
 // @description  Tweet rating logic for TweetFilter AI
 // @author       Obsxrver(3than)
 // @grant        GM_getValue
@@ -98,6 +98,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
         const quotedHandle = handles.length > 1 ? handles[1] : '';
+        const allMediaLinks = extractMediaLinks(tweetArticle);
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
             tweetArticle.dataset.sloppinessScore = '10';
@@ -182,7 +183,6 @@ ${quotedMediaLinks.join(", ")}`;
         // --- API Call or Fallback ---
         if (apiKey && fullContextWithImageDescription) {
             try {
-                const allMediaLinks = extractMediaLinks(tweetArticle);
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, allMediaLinks);
                 score = rating.score;
                 description = rating.content;
@@ -204,7 +204,7 @@ ${quotedMediaLinks.join(", ")}`;
 
         tweetArticle.dataset.sloppinessScore = score.toString();
         filterSingleTweet(tweetArticle);
-
+        
         // Log all collected information at once
         console.log(`Tweet ${tweetId}:
 ${fullContextWithImageDescription} - ${score} Model response: - ${description}`);

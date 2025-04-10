@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI - DOM Scraper Module
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3r
+// @version      Version 1.2.3r2
 // @description  DOM manipulation functions for TweetFilter AI
 // @author       Obsxrver(3than)
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
