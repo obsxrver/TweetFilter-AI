@@ -1,0 +1,1018 @@
+
+<style>
+/*
+        Modern X-Inspired Styles - Enhanced
+        ---------------------------------
+    */
+
+    /* Main tweet filter container */
+    #tweet-filter-container {
+        position: fixed;
+        top: 70px;
+        right: 15px;
+        background-color: rgba(22, 24, 28, 0.95);
+        color: #e7e9ea;
+        padding: 10px 12px;
+        border-radius: 12px;
+        z-index: 9999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Close button styles */
+    .close-button {
+        background: none;
+        border: none;
+        color: #e7e9ea;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 0;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+        border-radius: 50%;
+    }
+
+    .close-button:hover {
+        opacity: 1;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Hidden state */
+    .hidden {
+        display: none !important;
+    }
+
+    /* Show/hide button */
+    .toggle-button {
+        position: fixed;
+        right: 15px;
+        background-color: rgba(22, 24, 28, 0.95);
+        color: #e7e9ea;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        z-index: 9999;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    
+    .toggle-button:hover {
+        background-color: rgba(29, 155, 240, 0.2);
+    }
+
+    #filter-toggle {
+        top: 70px;
+    }
+
+    #settings-toggle {
+        top: 120px;
+    }
+
+    #tweet-filter-container label {
+        margin: 0;
+        font-weight: bold;
+    }
+
+    #tweet-filter-slider {
+        cursor: pointer;
+        width: 120px;
+        vertical-align: middle;
+        accent-color: #1d9bf0;
+    }
+
+    #tweet-filter-value {
+        min-width: 20px;
+        text-align: center;
+        font-weight: bold;
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 2px 5px;
+        border-radius: 4px;
+    }
+
+    /* Settings UI with Tabs */
+    #settings-container {
+        position: fixed;
+        top: 70px;
+        right: 15px;
+        background-color: rgba(22, 24, 28, 0.95);
+        color: #e7e9ea;
+        padding: 0; /* Remove padding to accommodate sticky header */
+        border-radius: 16px;
+        z-index: 9999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        width: 380px;
+        max-height: 85vh;
+        overflow: hidden; /* Hide overflow to make the sticky header work properly */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        line-height: 1.3;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform-origin: top right;
+    }
+    
+    #settings-container.hidden {
+        opacity: 0;
+        transform: scale(0.9);
+        pointer-events: none;
+    }
+    
+    /* Header section */
+    .settings-header {
+        padding: 12px 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        background-color: rgba(22, 24, 28, 0.98);
+        z-index: 20;
+        border-radius: 16px 16px 0 0;
+    }
+    
+    .settings-title {
+        font-weight: bold;
+        font-size: 16px;
+    }
+    
+    /* Content area with scrolling */
+    .settings-content {
+        overflow-y: auto;
+        max-height: calc(85vh - 110px); /* Account for header and tabs */
+        padding: 0;
+    }
+    
+    /* Scrollbar styling for settings container */
+    .settings-content::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .settings-content::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+
+    .settings-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+
+    .settings-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Tab Navigation */
+    .tab-navigation {
+        display: flex;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: sticky;
+        top: 0;
+        background-color: rgba(22, 24, 28, 0.98);
+        z-index: 10;
+        padding: 10px 15px;
+        gap: 8px;
+    }
+
+    .tab-button {
+        padding: 6px 10px;
+        background: none;
+        border: none;
+        color: #e7e9ea;
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        flex: 1;
+        text-align: center;
+    }
+
+    .tab-button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .tab-button.active {
+        color: #1d9bf0;
+        background-color: rgba(29, 155, 240, 0.1);
+        border-bottom: 2px solid #1d9bf0;
+    }
+
+    /* Tab Content */
+    .tab-content {
+        display: none;
+        animation: fadeIn 0.3s ease;
+        padding: 15px;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    /* Enhanced dropdowns */
+    .select-container {
+        position: relative;
+        margin-bottom: 15px;
+    }
+    
+    .select-container .search-field {
+        position: sticky;
+        top: 0;
+        background-color: rgba(39, 44, 48, 0.95);
+        padding: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 1;
+    }
+    
+    .select-container .search-input {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.9);
+        color: #e7e9ea;
+        font-size: 12px;
+        transition: border-color 0.2s;
+    }
+    
+    .select-container .search-input:focus {
+        border-color: #1d9bf0;
+        outline: none;
+    }
+    
+    .custom-select {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
+    
+    .select-selected {
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        transition: border-color 0.2s;
+    }
+    
+    .select-selected:hover {
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .select-selected:after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border: 2px solid #e7e9ea;
+        border-width: 0 2px 2px 0;
+        display: inline-block;
+        transform: rotate(45deg);
+        margin-left: 10px;
+        transition: transform 0.2s;
+    }
+    
+    .select-selected.select-arrow-active:after {
+        transform: rotate(-135deg);
+    }
+    
+    .select-items {
+        position: absolute;
+        background-color: rgba(39, 44, 48, 0.98);
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 99;
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        margin-top: 5px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        display: none;
+    }
+    
+    .select-items div {
+        color: #e7e9ea;
+        padding: 10px 12px;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .select-items div:hover {
+        background-color: rgba(29, 155, 240, 0.1);
+    }
+    
+    .select-items div.same-as-selected {
+        background-color: rgba(29, 155, 240, 0.2);
+    }
+    
+    /* Scrollbar for select items */
+    .select-items::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .select-items::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .select-items::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+    
+    .select-items::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Form elements */
+    #openrouter-api-key,
+    #user-instructions {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 12px;
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 13px;
+        transition: border-color 0.2s;
+    }
+    
+    #openrouter-api-key:focus,
+    #user-instructions:focus {
+        border-color: #1d9bf0;
+        outline: none;
+    }
+
+    #user-instructions {
+        height: 120px;
+        resize: vertical;
+    }
+
+    /* Parameter controls */
+    .parameter-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 8px;
+        padding: 6px;
+        border-radius: 8px;
+        transition: background-color 0.2s;
+    }
+    
+    .parameter-row:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .parameter-label {
+        flex: 1;
+        font-size: 13px;
+        color: #e7e9ea;
+    }
+
+    .parameter-control {
+        flex: 1.5;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .parameter-value {
+        min-width: 28px;
+        text-align: center;
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 3px 5px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .parameter-slider {
+        flex: 1;
+        -webkit-appearance: none;
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.2);
+        outline: none;
+        cursor: pointer;
+    }
+
+    .parameter-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #1d9bf0;
+        cursor: pointer;
+        transition: transform 0.1s;
+    }
+    
+    .parameter-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+    }
+
+    /* Section styles */
+    .section-title {
+        font-weight: bold;
+        margin-top: 20px;
+        margin-bottom: 8px;
+        color: #e7e9ea;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+    }
+    
+    .section-title:first-child {
+        margin-top: 0;
+    }
+
+    .section-description {
+        font-size: 12px;
+        margin-bottom: 8px;
+        opacity: 0.8;
+        line-height: 1.4;
+    }
+    
+    /* Advanced options section */
+    .advanced-options {
+        margin-top: 5px;
+        margin-bottom: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 12px;
+        background-color: rgba(255, 255, 255, 0.03);
+        overflow: hidden;
+    }
+    
+    .advanced-toggle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        margin-bottom: 5px;
+    }
+    
+    .advanced-toggle-title {
+        font-weight: bold;
+        font-size: 13px;
+        color: #e7e9ea;
+    }
+    
+    .advanced-toggle-icon {
+        transition: transform 0.3s;
+    }
+    
+    .advanced-toggle-icon.expanded {
+        transform: rotate(180deg);
+    }
+    
+    .advanced-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-in-out;
+    }
+    
+    .advanced-content.expanded {
+        max-height: 300px;
+    }
+
+    /* Handle list styling */
+    .handle-list {
+        margin-top: 10px;
+        max-height: 120px;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 5px;
+    }
+
+    .handle-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .handle-item:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .handle-item:last-child {
+        border-bottom: none;
+    }
+
+    .handle-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 12px;
+    }
+
+    .remove-handle {
+        background: none;
+        border: none;
+        color: #ff5c5c;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 0 3px;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    
+    .remove-handle:hover {
+        opacity: 1;
+    }
+
+    .add-handle-btn {
+        background-color: #1d9bf0;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 10px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 12px;
+        margin-left: 5px;
+        transition: background-color 0.2s;
+    }
+    
+    .add-handle-btn:hover {
+        background-color: #1a8cd8;
+    }
+
+    /* Button styling */
+    .settings-button {
+        background-color: #1d9bf0;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.2s;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        margin-top: 8px;
+        width: 100%;
+        font-size: 13px;
+    }
+
+    .settings-button:hover {
+        background-color: #1a8cd8;
+    }
+
+    .settings-button.secondary {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .settings-button.secondary:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .settings-button.danger {
+        background-color: #ff5c5c;
+    }
+
+    .settings-button.danger:hover {
+        background-color: #e53935;
+    }
+    
+    /* For smaller buttons that sit side by side */
+    .button-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    
+    .button-row .settings-button {
+        margin-top: 0;
+    }
+    
+    /* Stats display */
+    .stats-container {
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .stats-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .stats-row:last-child {
+        border-bottom: none;
+    }
+    
+    .stats-label {
+        font-size: 12px;
+        opacity: 0.8;
+    }
+    
+    .stats-value {
+        font-weight: bold;
+    }
+
+    /* Rating indicator shown on tweets */ 
+    .score-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10.5%;
+        background-color: rgba(22, 24, 28, 0.9);
+        color: #e7e9ea;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 100;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        min-width: 20px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        transition: transform 0.15s ease;
+    }
+    
+    .score-indicator:hover {
+        transform: scale(1.05);
+    }
+
+    /* Refresh animation */
+    .refreshing {
+        animation: spin 1s infinite linear;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* The description box for ratings */
+    .score-description {
+        display: none;
+        background-color: rgba(22, 24, 28, 0.95);
+        color: #e7e9ea;
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.5;
+        z-index: 99999999;
+        position: absolute;
+        width: clamp(300px, 30vw, 500px);
+        max-height: 60vh;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        word-wrap: break-word;
+    }
+
+    /* Rating status classes */
+    .cached-rating {
+        background-color: rgba(76, 175, 80, 0.9) !important;
+        color: white !important;
+    }
+
+    .blacklisted-rating {
+        background-color: rgba(255, 193, 7, 0.9) !important;
+        color: black !important;
+    }
+
+    .pending-rating {
+        background-color: rgba(255, 152, 0, 0.9) !important;
+        color: white !important;
+    }
+
+    .error-rating {
+        background-color: rgba(244, 67, 54, 0.9) !important;
+        color: white !important;
+    }
+
+    /* Status indicator at bottom-right */
+    #status-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: rgba(22, 24, 28, 0.95);
+        color: #e7e9ea;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 12px;
+        z-index: 9999;
+        display: none;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+        transform: translateY(100px);
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    #status-indicator.active {
+        display: block;
+        transform: translateY(0);
+    }
+    
+    /* Toggle switch styling */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.2);
+        transition: .3s;
+        border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+        background-color: #1d9bf0;
+    }
+    
+    input:checked + .toggle-slider:before {
+        transform: translateX(16px);
+    }
+    
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        margin-bottom: 12px;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        transition: background-color 0.2s;
+    }
+    
+    .toggle-row:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+    
+    .toggle-label {
+        font-size: 13px;
+        color: #e7e9ea;
+    }
+
+    /* Existing styles */
+    
+    /* Sort container styles */
+    .sort-container {
+        margin: 10px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .sort-container label {
+        font-size: 14px;
+        color: var(--text-color);
+    }
+    
+    .sort-container select {
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-size: 14px;
+        cursor: pointer;
+    }
+    
+    .sort-container select:hover {
+        border-color: #1d9bf0;
+    }
+    
+    .sort-container select:focus {
+        outline: none;
+        border-color: #1d9bf0;
+        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
+    }
+    
+    /* Dropdown option styling */
+    .sort-container select option {
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+    }
+</style>
+<div id="tweetfilter-root-container">
+    <button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button>
+    <div id="tweet-filter-container">
+        <button class="close-button" data-action="close-filter">×</button>
+        <label for="tweet-filter-slider">SlopScore:</label>
+        <input type="range" id="tweet-filter-slider" min="1" max="10" step="1">
+        <span id="tweet-filter-value">5</span>
+    </div>
+
+    <button id="settings-toggle" class="toggle-button">
+        <span style="font-size: 14px;">⚙️</span> Settings
+    </button>
+    <div id="settings-container" class="hidden">
+        <div class="settings-header">
+            <div class="settings-title">Twitter De-Sloppifier</div>
+            <button class="close-button" data-action="close-settings">×</button>
+        </div>
+        <div class="settings-content">
+            <div class="tab-navigation">
+                <button class="tab-button active" data-tab="general">General</button>
+                <button class="tab-button" data-tab="models">Models</button>
+                <button class="tab-button" data-tab="instructions">Instructions</button>
+            </div>
+            <div id="general-tab" class="tab-content active">
+                <div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/" target="_blank">Get one here</a></div>
+                <input id="openrouter-api-key" placeholder="Enter your OpenRouter API key">
+                <button class="settings-button" data-action="save-api-key">Save API Key</button>
+                <div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div>
+                <div class="stats-container">
+                    <div class="stats-row">
+                        <div class="stats-label">Cached Tweet Ratings</div>
+                        <div class="stats-value" id="cached-ratings-count">0</div>
+                    </div>
+                    <div class="stats-row">
+                        <div class="stats-label">Whitelisted Handles</div>
+                        <div class="stats-value" id="whitelisted-handles-count">0</div>
+                    </div>
+                </div>
+                <button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button>
+                <div class="section-title" style="margin-top: 20px;">
+                    <span style="font-size: 14px;">💾</span> Backup &amp; Restore
+                </div>
+                <div class="section-description">
+                    Export your settings and cached ratings to a file for backup, or import previously saved settings.
+                </div>
+                <div class="button-row">
+                    <button class="settings-button secondary" data-action="export-settings">Export Settings</button>
+                    <button class="settings-button secondary" data-action="import-settings">Import Settings</button>
+                </div>
+                <button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button>
+                <div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div>
+            </div>
+            <div id="models-tab" class="tab-content">
+                <div class="section-title">
+                    <span style="font-size: 14px;">🧠</span> Tweet Rating Model
+                </div>
+                <div class="section-description">
+                    Hint: If you want to rate tweets with images, you need to select an image model.
+                </div>
+                <div class="sort-container">
+                    <label for="model-sort-order">Sort models by: </label>
+                    <select id="model-sort-order" data-setting="modelSortOrder">
+                        <option value="price-low-to-high">Price (Low to High)</option>
+                        <option value="price-high-to-low">Price (High to Low)</option>
+                        <option value="throughput-high-to-low">Throughput (High to Low)</option>
+                        <option value="throughput-low-to-high">Throughput (Low to High)</option>
+                        <option value="latency-low-to-high">Latency (Low to High)</option>
+                        <option value="latency-high-to-low">Latency (High to Low)</option>
+                    </select>
+                </div>
+                <div class="select-container" id="model-select-container">
+                </div>
+                <div class="advanced-options" id="rating-advanced-options">
+                    <div class="advanced-toggle" data-toggle="rating-advanced-content">
+                        <div class="advanced-toggle-title">Advanced Options</div>
+                        <div class="advanced-toggle-icon">▼</div>
+                    </div>
+                    <div class="advanced-content" id="rating-advanced-content">
+                        <div class="parameter-row" data-param-name="modelTemperature">
+                            <div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div>
+                            <div class="parameter-control">
+                                <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
+                                <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                            </div>
+                        </div>
+                        <div class="parameter-row" data-param-name="modelTopP">
+                            <div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div>
+                            <div class="parameter-control">
+                                <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
+                                <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                            </div>
+                        </div>
+                        <div class="parameter-row" data-param-name="maxTokens">
+                            <div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div>
+                            <div class="parameter-control">
+                                <input type="range" class="parameter-slider" min="0" max="2000" step="100">
+                                <input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div>
+                <div class="section-description">This model generates <strong>text descriptions</strong> of images, which are then sent to the rating model above. If you've selected an image-capable model (🖼️) as your main rating model above, you can disable this to process images directly.</div>
+                <div class="toggle-row">
+                    <div class="toggle-label">Enable Image Descriptions</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" data-setting="enableImageDescriptions">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div id="image-model-container" style="display: none;">
+                    <div class="section-description">Select a model with vision capabilities to describe images in tweets.</div>
+                    <div class="select-container" id="image-model-select-container">
+                    </div>
+                    <div class="advanced-options" id="image-advanced-options">
+                        <div class="advanced-toggle" data-toggle="image-advanced-content">
+                            <div class="advanced-toggle-title">Advanced Options</div>
+                            <div class="advanced-toggle-icon">▼</div>
+                        </div>
+                        <div class="advanced-content" id="image-advanced-content">
+                            <div class="parameter-row" data-param-name="imageModelTemperature">
+                                <div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div>
+                                <div class="parameter-control">
+                                    <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
+                                    <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                                </div>
+                            </div>
+                            <div class="parameter-row" data-param-name="imageModelTopP">
+                                <div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div>
+                                <div class="parameter-control">
+                                    <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
+                                    <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="instructions-tab" class="tab-content">
+                <div class="section-title">Custom Tweet Rating Instructions</div>
+                <div class="section-description">Add custom instructions for how the model should score tweets:</div>
+                <textarea id="user-instructions" placeholder="Examples:
+                - Give high scores to tweets about technology
+                - Penalize clickbait-style tweets
+                - Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea>
+                <button class="settings-button" data-action="save-instructions">Save Instructions</button>
+                <div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div>
+                <div class="section-description">Add Twitter handles to automatically rate as 10/10:</div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <input id="handle-input" type="text" placeholder="Twitter handle (without @)">
+                    <button class="add-handle-btn" data-action="add-handle">Add</button>
+                </div>
+                <div class="handle-list" id="handle-list">
+                </div>
+            </div>
+        </div>
+        <div id="status-indicator" class=""></div>
+    </div>
+</div>
