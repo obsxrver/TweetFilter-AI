@@ -18,12 +18,11 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js?v=1.2.3r4
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js?v=1.2.3r4
 // @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css?v=1.2.3r4
-// @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html?v=1.2.3r4
+// @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
 
-const menuHTML = GM_getResourceText('MENU_HTML');
 (function () {
     'use strict';
     console.log("X/Twitter Tweet De-Sloppification Activated (v1.2.3r - Enhanced)");
@@ -34,7 +33,7 @@ const menuHTML = GM_getResourceText('MENU_HTML');
     //GM_addStyle(css);
 
     
-    console.log(menuHTML);
+    console.log("menu html", GM_getResourceText('MENU_HTML'));
     // ----- Initialization -----
     
     /**
