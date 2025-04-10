@@ -22,7 +22,6 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-
 (function () {
     'use strict';
     console.log("X/Twitter Tweet De-Sloppification Activated (v1.2.3r - Enhanced)");

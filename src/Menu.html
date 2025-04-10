@@ -882,7 +882,7 @@
             </div>
             <div id="general-tab" class="tab-content active">
                 <div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key</div>
-                <input type="password" id="openrouter-api-key" placeholder="Enter your OpenRouter API key" data-setting="apiKey">
+                <input type="password" id="openrouter-api-key" placeholder="Enter your OpenRouter API key" data-setting="openrouter-api-key">
                 <button class="settings-button" data-action="save-api-key">Save API Key</button>
                 <div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div>
                 <div class="stats-container">
@@ -998,7 +998,10 @@
             <div id="instructions-tab" class="tab-content">
                 <div class="section-title">Custom Tweet Rating Instructions</div>
                 <div class="section-description">Add custom instructions for how the model should score tweets:</div>
-                <textarea id="user-instructions" placeholder="Examples:\n- Give high scores to tweets about technology\n- Penalize clickbait-style tweets\n- Rate educational content higher" data-setting="userDefinedInstructions"></textarea>
+                <textarea id="user-instructions" placeholder="Examples:
+                - Give high scores to tweets about technology
+                - Penalize clickbait-style tweets
+                - Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea>
                 <button class="settings-button" data-action="save-instructions">Save Instructions</button>
                 <div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div>
                 <div class="section-description">Add Twitter handles to automatically rate as 10/10:</div>

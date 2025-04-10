@@ -437,7 +437,6 @@ function refreshSettingsUI() {
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
         const value = GM_getValue(settingName, window[settingName]); // Get saved or default value
-
         if (input.type === 'checkbox') {
             input.checked = value;
             // Trigger change handler for side effects (like hiding/showing image model section)
