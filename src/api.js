@@ -1,4 +1,4 @@
-// ==Module==
+// ==UserScript==
 // @name         TweetFilter AI - API Module
 // @namespace    http://tampermonkey.net/
 // @version      Version 1.2.3r2
@@ -10,7 +10,7 @@
 // @connect      openrouter.ai
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
 // @license      MIT
-// ==/Module==
+// ==/UserScript==
 
 // ----- API Functions -----
 

@@ -1,4 +1,4 @@
-// ==Module==
+// ==UserScript==
 // @name         TweetFilter AI - Rating Engine Module
 // @namespace    http://tampermonkey.net/
 // @version      Version 1.2.3r2
@@ -10,7 +10,7 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @license      MIT
-// ==/Module==
+// ==/UserScript==
 
 /**
  * Applies filtering to a single tweet by hiding it if its score is below the threshold.
