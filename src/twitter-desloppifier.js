@@ -28,9 +28,10 @@
     console.log("X/Twitter Tweet De-Sloppification Activated (v1.2.3r - Enhanced)");
     
     // Load CSS stylesheet
-    const css = GM_getResourceText('STYLESHEET');
-    GM_addStyle(css);
-    
+    //const css = GM_getResourceText('STYLESHEET');
+
+    //GM_addStyle(css);
+    menuHTML = GM_getResourceText('MENUHTML');
     // ----- Initialization -----
     
     /**

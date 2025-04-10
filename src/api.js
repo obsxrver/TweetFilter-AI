@@ -70,7 +70,7 @@ async function getCompletion(request, apiKey, timeout = 30000) {
             },
             data: JSON.stringify(request),
             timeout: timeout,
-            onload: function(response) {
+            onload: function (response) {
                 if (response.status >= 200 && response.status < 300) {
                     try {
                         const data = JSON.parse(response.responseText);
@@ -94,14 +94,14 @@ async function getCompletion(request, apiKey, timeout = 30000) {
                     });
                 }
             },
-            onerror: function(error) {
+            onerror: function (error) {
                 resolve({
                     error: true,
                     message: `Request error: ${error.toString()}`,
                     data: null
                 });
             },
-            ontimeout: function() {
+            ontimeout: function () {
                 resolve({
                     error: true,
                     message: `Request timed out after ${timeout}ms`,
@@ -112,26 +112,26 @@ async function getCompletion(request, apiKey, timeout = 30000) {
     });
 }
 const safetySettings = [
-  {
-    category: "HARM_CATEGORY_HARASSMENT",
-    threshold: "BLOCK_LOW_AND_ABOVE",
-  },
-  {
-    category: "HARM_CATEGORY_HATE_SPEECH",
-    threshold: "BLOCK_LOW_AND_ABOVE",
-  },
-  {
-    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-    threshold: "BLOCK_NONE",
-  },
-  {
-    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-    threshold: "BLOCK_NONE",
-  },
-  {
-    category: "HARM_CATEGORY_CIVIC_INTEGRITY",
-    threshold: "BLOCK_NONE",
-  },
+    {
+        category: "HARM_CATEGORY_HARASSMENT",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_HATE_SPEECH",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_CIVIC_INTEGRITY",
+        threshold: "BLOCK_NONE",
+    },
 ];
 /**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
@@ -184,6 +184,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 _______END TWEET_______`
             }]
         }],
+        temperature: modelTemperature,
+        top_p: modelTopP,
+        max_tokens: maxTokens,
+        provider: {
+            sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
+            allow_fallbacks: true
+        },
         config: {
             safetySettings: safetySettings,
         }
@@ -203,7 +210,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     request.temperature = modelTemperature;
     request.top_p = modelTopP;
     request.max_tokens = maxTokens;
-    
+
     // Add provider settings
     const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
     request.provider = {
@@ -215,7 +222,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     let attempt = 0;
     while (attempt < maxRetries) {
         attempt++;
-        
+
         // Rate limiting
         const now = Date.now();
         const timeElapsed = now - lastAPICallTime;
@@ -236,13 +243,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         if (!result.error && result.data?.choices?.[0]?.message?.content) {
             const content = result.data.choices[0].message.content;
             const scoreMatch = content.match(/\SCORE_(\d+)/);
-            
+
             if (scoreMatch) {
                 const score = parseInt(scoreMatch[1], 10);
-                tweetIDRatingCache[tweetId] = { 
-                    tweetContent: tweetText, 
-                    score: score, 
-                    description: content 
+                tweetIDRatingCache[tweetId] = {
+                    tweetContent: tweetText,
+                    score: score,
+                    description: content
                 };
                 saveTweetRatings();
                 return { score, content, error: false };
@@ -262,11 +269,11 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             await new Promise(resolve => setTimeout(resolve, backoffDelay));
         }
     }
-    
-    return { 
-        score: 5, 
-        content: "Failed to get valid rating after multiple attempts", 
-        error: true 
+
+    return {
+        score: 5,
+        content: "Failed to get valid rating after multiple attempts",
+        error: true
     };
 }
 
