@@ -59,7 +59,6 @@ function getUserHandles(tweetArticle) {
 /**
  * Extracts and returns an array of media URLs from the tweet element.
  * @param {Element} scopeElement - The tweet element.
- * @param {string} tweetIdForDebug - The tweet ID (for logging).
  * @returns {string[]} An array of media URLs.
  */
 function extractMediaLinks(scopeElement) {
@@ -68,17 +67,28 @@ function extractMediaLinks(scopeElement) {
     const mediaLinks = new Set();
     
     // Find all images and videos in the tweet
-    scopeElement.querySelectorAll(`${MEDIA_IMG_SELECTOR}, ${MEDIA_VIDEO_SELECTOR}`).forEach(mediaEl => {
+    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
+    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    
+    // First try the standard selectors
+    let mediaElements = scopeElement.querySelectorAll(`${imgSelector}, ${videoSelector}`);
+    
+    // If no media found and this is a quoted tweet, try more aggressive selectors
+    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
+        // Try to find any image within the quoted tweet
+        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
+    }
+    
+    mediaElements.forEach(mediaEl => {
         // Get the source URL (src for images, poster for videos)
         const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
         
-        // Skip if not a Twitter media URL
-        /*
+        // Skip if not a Twitter media URL or if undefined or if it's a profile image
         if (!sourceUrl || 
-           !(sourceUrl.includes('pbs.twimg.com/') || 
-             sourceUrl.includes('pbs.twimg.com/amplify_video_thumb'))) {
+           !(sourceUrl.includes('pbs.twimg.com/')) ||
+           sourceUrl.includes('profile_images')) {
             return;
-        }*/
+        }
         
         try {
             // Parse the URL to handle format parameters
@@ -95,12 +105,8 @@ function extractMediaLinks(scopeElement) {
                 finalUrl = sourceUrl.replace(`name=${name}`, 'name=orig');
             }
             
-            // Log both the original and final URLs for debugging
-            //console.log(`[Tweet ${tweetIdForDebug}] Processing media: ${sourceUrl} → ${finalUrl}`);
-            
             mediaLinks.add(finalUrl);
         } catch (error) {
-            //console.error(`[Tweet ${tweetIdForDebug}] Error processing media URL: ${sourceUrl}`, error);
             // Fallback: just add the raw URL as is
             mediaLinks.add(sourceUrl);
         }

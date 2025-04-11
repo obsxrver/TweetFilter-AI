@@ -994,7 +994,7 @@ function resetSettings(noconfirm=false) {
             imageModelTemperature: 0.5,
             imageModelTopP: 0.9,
             maxTokens: 0,
-            filterThreshold: 1,
+            filterThreshold: 5,
             userDefinedInstructions: 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.',
             modelSortOrder: 'throughput-high-to-low'
         };

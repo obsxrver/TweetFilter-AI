@@ -24,7 +24,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3 - Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.1 - Enhanced)");
     
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -66,8 +66,7 @@
             observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
-            // Periodically ensure all tweets have been processed
-            setInterval(ensureAllTweetsRated, 3000);
+            ensureAllTweetsRated();
             window.addEventListener('beforeunload', () => {
                 saveTweetRatings();
                 observer.disconnect();

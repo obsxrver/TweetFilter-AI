@@ -51,8 +51,8 @@ async function getCompletion(request, apiKey, timeout = 30000) {
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
-                "X-Title": "Tweet Rating Tool"
+                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
+                "X-Title": "TweetFilter-AI"
             },
             data: JSON.stringify(request),
             timeout: timeout,
@@ -60,6 +60,13 @@ async function getCompletion(request, apiKey, timeout = 30000) {
                 if (response.status >= 200 && response.status < 300) {
                     try {
                         const data = JSON.parse(response.responseText);
+                        if (data.content==="") {
+                            resolve({
+                                error: true,
+                                message: `No content returned${data.choices[0].native_finish_reason=="SAFETY"?" (SAFETY FILTER)":""}`,
+                                data: data
+                            });
+                        }
                         resolve({
                             error: false,
                             message: "Request successful",
@@ -133,61 +140,38 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     const request = {
         model: selectedModel,
         messages: [{
-            role: "user",
+            role: "system",
             content: [{
                 type: "text",
                 text: `
-                You will be given a Tweet, structured like this:
-                _______TWEET SCHEMA_______
-                _______BEGIN TWEET_______
-                [TWEET TweetID]
-                [the text of the tweet being replied to]
-                [MEDIA_DESCRIPTION]:
-                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                [REPLY] (if the author is replying to another tweet)
-                [TWEET TweetID]: (the tweet which you are to review)
-                @[the author of the tweet]
-                [the text of the tweet]
-                [MEDIA_DESCRIPTION]:
-                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                [QUOTED_TWEET]: (if the author is quoting another tweet)
-                [the text of the quoted tweet]
-                [QUOTED_TWEET_MEDIA_DESCRIPTION]:
-                [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
-                _______END TWEET_______
-                _______END TWEET SCHEMA_______
-
-                You are an expert critic of tweets. You are to review and provide a rating for the tweet with tweet ID ${tweetId}.
-                Ensure that you consider these user-defined instructions in your analysis and scoring:
-                [USER-DEFINED INSTRUCTIONS]:
-                ${USER_DEFINED_INSTRUCTIONS}
-                Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
-                SCORE_X where X is a number from 1 (lowest quality) to 10 (highest quality).
-                for example: SCORE_1, SCORE_2, SCORE_3, etc.
-                If one of the above is not present, the program will not be able to parse the response and will return an error.
+                ${SYSTEM_PROMPT}`
+            },]
+        },
+        {
+            role: "user",
+            content: [{
+                type: "text",
+                text:
+                    `provide your reasoning, and a rating (eg. SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.) for the tweet with tweet ID ${tweetId}.
+        [USER-DEFINED INSTRUCTIONS]:
+        ${USER_DEFINED_INSTRUCTIONS}
                 _______BEGIN TWEET_______
                 ${tweetText}
                 _______END TWEET_______`
             }]
-        }],
-        temperature: modelTemperature,
-        top_p: modelTopP,
-        max_tokens: maxTokens,
-        provider: {
-            sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
-            allow_fallbacks: true
-        }
+        }]
     };
-    if (selectedModel.includes('gemini')){
+
+    if (selectedModel.includes('gemini')) {
         request.config = {
             safetySettings: safetySettings,
-        }
+        };
     }
 
     // Add image URLs if present and supported
     if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
         for (const url of mediaUrls) {
-            request.messages[0].content.push({
+            request.messages[1].content.push({
                 type: "image_url",
                 image_url: { url }
             });
@@ -234,7 +218,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
             if (scoreMatch) {
                 const score = parseInt(scoreMatch[1], 10);
-                
+
                 tweetIDRatingCache[tweetId] = {
                     tweetContent: tweetText,
                     score: score,
@@ -305,7 +289,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                 allow_fallbacks: true
             }
         };
-        if (selectedImageModel.includes('gemini')){
+        if (selectedImageModel.includes('gemini')) {
             request.config = {
                 safetySettings: safetySettings,
             }
