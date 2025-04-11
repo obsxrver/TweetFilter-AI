@@ -11,8 +11,8 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
-let selectedModel = GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b');
-let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b');
+let selectedModel = GM_getValue('selectedModel', 'google/gemini-2.0-flash-lite-001');
+let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-2.0-flash-lite-001');
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');

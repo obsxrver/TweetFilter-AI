@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.1
+// @version      Version 1.3.2
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -24,7 +24,7 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.1 - Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.2 - Enhanced)");
     
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -53,7 +53,7 @@
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
-                apiKey = prompt("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
+                apiKey = alert("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
                 if (apiKey) {
                     GM_setValue('openrouter-api-key', apiKey);
                 }

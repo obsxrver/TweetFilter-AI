@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.1
+// @version      Version 1.3.2
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -960,8 +960,8 @@
                         <div class="parameter-row" data-param-name="modelTemperature">
                             <div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div>
                             <div class="parameter-control">
-                                <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                                <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
+                                <input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;">
                             </div>
                         </div>
                         <div class="parameter-row" data-param-name="modelTopP">
@@ -1002,8 +1002,8 @@
                             <div class="parameter-row" data-param-name="imageModelTemperature">
                                 <div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div>
                                 <div class="parameter-control">
-                                    <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
-                                    <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                                    <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
+                                    <input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;">
                                 </div>
                             </div>
                             <div class="parameter-row" data-param-name="imageModelTopP">
@@ -1906,7 +1906,7 @@
     // ----- twitter-desloppifier.js -----
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3 - Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.2 - Enhanced)");
     
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -1935,7 +1935,7 @@
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
-                apiKey = prompt("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
+                apiKey = alert("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
                 if (apiKey) {
                     GM_setValue('openrouter-api-key', apiKey);
                 }
@@ -1984,8 +1984,8 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
-let selectedModel = GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b');
-let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b');
+let selectedModel = GM_getValue('selectedModel', 'google/gemini-2.0-flash-lite-001');
+let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-2.0-flash-lite-001');
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -2628,11 +2628,14 @@ function filterSingleTweet(tweetArticle) {
     // If the tweet is still pending a rating, keep it visible
     const currentFilterThreshold=GM_getValue('filterThreshold', 1);
     if (tweetArticle.dataset.ratingStatus === 'pending') {
-        tweetArticle.style.display = '';
+        //tweetArticle.style.display = '';
+        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display= '';
     } else if (isNaN(score) || score < currentFilterThreshold) {
-        tweetArticle.style.display = 'none';
+        //tweetArticle.style.display = 'none';
+        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display= 'none';
     } else {
-        tweetArticle.style.display = '';
+        //tweetArticle.style.display = '';
+        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display= '';
     }
 }
 
@@ -2676,11 +2679,27 @@ function applyTweetCachedRating(tweetArticle) {
 // ----- UI Helper Functions -----
 
 /**
- * Saves the tweet ratings (by tweet ID) to persistent storage.
+ * Saves the tweet ratings (by tweet ID) to persistent storage and updates the UI.
  */
 function saveTweetRatings() {
     GM_setValue('tweetRatings', JSON.stringify(tweetIDRatingCache));
-    //console.log(`Saved ${Object.keys(tweetIDRatingCache).length} tweet ratings to storage`);
+    
+    // Dynamically update the UI cache stats counter
+    // Only try to update if the element exists (the settings panel is open)
+    const cachedCountEl = document.getElementById('cached-ratings-count');
+    if (cachedCountEl) {
+        cachedCountEl.textContent = Object.keys(tweetIDRatingCache).length;
+    }
+    
+    // Also update the cache stats in the settings panel
+    try {
+        // Use the UI function if it's available
+        if (typeof updateCacheStatsUI === 'function') {
+            updateCacheStatsUI();
+        }
+    } catch (e) {
+        console.error('Error updating cache stats UI:', e);
+    }
 }
 /**
  * Checks if a given user handle is in the blacklist.
@@ -3163,7 +3182,7 @@ async function handleThreads() {
 
     // ----- ui.js -----
 // --- Constants ---
-const VERSION = '1.3.1'; // Update version here
+const VERSION = '1.3.2'; // Update version here
 
 // --- Utility Functions ---
 
@@ -3416,6 +3435,8 @@ function saveApiKey() {
         GM_setValue('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
         fetchAvailableModels(); // Refresh model list
+        //refresh the website
+        location.reload();
     } else {
         showStatus('Please enter a valid API key');
     }
@@ -4150,8 +4171,8 @@ function resetSettings(noconfirm=false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
-            selectedModel: 'google/gemini-flash-1.5-8b',
-            selectedImageModel: 'google/gemini-flash-1.5-8b',
+            selectedModel: 'google/gemini-2.0-flash-lite-001',
+            selectedImageModel: 'google/gemini-2.0-flash-lite-001',
             enableImageDescriptions: false,
             modelTemperature: 0.5,
             modelTopP: 0.9,
@@ -4225,6 +4246,102 @@ function initialiseUI() {
     initializeEventListeners(uiContainer);
     refreshSettingsUI(); // Set initial state from saved settings
     fetchAvailableModels(); // Fetch models async
+    
+    // Initialize the floating cache stats badge
+    updateFloatingCacheStats();
+    
+    // Set up a periodic refresh of the cache stats to catch any updates
+    setInterval(updateFloatingCacheStats, 10000); // Update every 10 seconds
 }
+
+/**
+ * Creates or updates a floating badge showing the current cache statistics
+ * This provides real-time feedback when tweets are rated and cached,
+ * even when the settings panel is not open.
+ */
+function updateFloatingCacheStats() {
+    let statsBadge = document.getElementById('tweet-filter-stats-badge');
+    
+    if (!statsBadge) {
+        statsBadge = document.createElement('div');
+        statsBadge.id = 'tweet-filter-stats-badge';
+        statsBadge.className = 'tweet-filter-stats-badge';
+        statsBadge.style.cssText = `
+            position: fixed;
+            bottom: 50px;
+            right: 20px;
+            background-color: rgba(29, 155, 240, 0.9);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            z-index: 9999;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: opacity 0.3s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        `;
+        
+        // Add tooltip functionality
+        statsBadge.title = 'Click to open settings';
+        
+        // Add click event to open settings
+        statsBadge.addEventListener('click', () => {
+            const settingsToggle = document.querySelector('.settings-toggle');
+            if (settingsToggle) {
+                settingsToggle.click();
+            }
+        });
+        
+        document.body.appendChild(statsBadge);
+        
+        // Auto-hide after 5 seconds of inactivity
+        let fadeTimeout;
+        const resetFadeTimeout = () => {
+            clearTimeout(fadeTimeout);
+            statsBadge.style.opacity = '1';
+            fadeTimeout = setTimeout(() => {
+                statsBadge.style.opacity = '0.3';
+            }, 5000);
+        };
+        
+        statsBadge.addEventListener('mouseenter', () => {
+            statsBadge.style.opacity = '1';
+            clearTimeout(fadeTimeout);
+        });
+        
+        statsBadge.addEventListener('mouseleave', resetFadeTimeout);
+        
+        resetFadeTimeout();
+    }
+    
+    // Update the content
+    const cachedCount = Object.keys(tweetIDRatingCache).length;
+    const wlCount = blacklistedHandles.length;
+    
+    statsBadge.innerHTML = `
+        <span style="margin-right: 5px;">🧠</span>
+        <span>${cachedCount} rated</span>
+        ${wlCount > 0 ? `<span style="margin-left: 5px;"> | ${wlCount} whitelisted</span>` : ''}
+    `;
+    
+    // Make it visible and reset the timeout
+    statsBadge.style.opacity = '1';
+    clearTimeout(statsBadge.fadeTimeout);
+    statsBadge.fadeTimeout = setTimeout(() => {
+        statsBadge.style.opacity = '0.3';
+    }, 5000);
+}
+
+// Extend the updateCacheStatsUI function to also update the floating stats badge
+const originalUpdateCacheStatsUI = updateCacheStatsUI;
+updateCacheStatsUI = function() {
+    // Call the original function
+    originalUpdateCacheStatsUI.apply(this, arguments);
+    
+    // Update the floating badge
+    updateFloatingCacheStats();
+};
 
 })();
