@@ -10,11 +10,14 @@ function filterSingleTweet(tweetArticle) {
     // If the tweet is still pending a rating, keep it visible
     const currentFilterThreshold=GM_getValue('filterThreshold', 1);
     if (tweetArticle.dataset.ratingStatus === 'pending') {
-        tweetArticle.style.display = '';
+        //tweetArticle.style.display = '';
+        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display= '';
     } else if (isNaN(score) || score < currentFilterThreshold) {
-        tweetArticle.style.display = 'none';
+        //tweetArticle.style.display = 'none';
+        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display= 'none';
     } else {
-        tweetArticle.style.display = '';
+        //tweetArticle.style.display = '';
+        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display= '';
     }
 }
 
@@ -58,11 +61,27 @@ function applyTweetCachedRating(tweetArticle) {
 // ----- UI Helper Functions -----
 
 /**
- * Saves the tweet ratings (by tweet ID) to persistent storage.
+ * Saves the tweet ratings (by tweet ID) to persistent storage and updates the UI.
  */
 function saveTweetRatings() {
     GM_setValue('tweetRatings', JSON.stringify(tweetIDRatingCache));
-    //console.log(`Saved ${Object.keys(tweetIDRatingCache).length} tweet ratings to storage`);
+    
+    // Dynamically update the UI cache stats counter
+    // Only try to update if the element exists (the settings panel is open)
+    const cachedCountEl = document.getElementById('cached-ratings-count');
+    if (cachedCountEl) {
+        cachedCountEl.textContent = Object.keys(tweetIDRatingCache).length;
+    }
+    
+    // Also update the cache stats in the settings panel
+    try {
+        // Use the UI function if it's available
+        if (typeof updateCacheStatsUI === 'function') {
+            updateCacheStatsUI();
+        }
+    } catch (e) {
+        console.error('Error updating cache stats UI:', e);
+    }
 }
 /**
  * Checks if a given user handle is in the blacklist.

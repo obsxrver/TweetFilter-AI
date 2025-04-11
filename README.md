@@ -1,5 +1,5 @@
 # X/Twitter De-Sloppifier
-## Version 1.3
+## Version 1.3.2
 Advanced tweet rating and filtering userscript with model selection, enhanced rating indicators, API retry functionalities, and handle management.
 
 
