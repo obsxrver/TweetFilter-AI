@@ -53,7 +53,7 @@
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
-                apiKey = prompt("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
+                apiKey = alert("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
                 if (apiKey) {
                     GM_setValue('openrouter-api-key', apiKey);
                 }

@@ -252,6 +252,8 @@ function saveApiKey() {
         GM_setValue('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
         fetchAvailableModels(); // Refresh model list
+        //refresh the website
+        location.reload();
     } else {
         showStatus('Please enter a valid API key');
     }
@@ -986,8 +988,8 @@ function resetSettings(noconfirm=false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
-            selectedModel: 'google/gemini-flash-1.5-8b',
-            selectedImageModel: 'google/gemini-flash-1.5-8b',
+            selectedModel: 'google/gemini-2.0-flash-lite-001',
+            selectedImageModel: 'google/gemini-2.0-flash-lite-001',
             enableImageDescriptions: false,
             modelTemperature: 0.5,
             modelTopP: 0.9,

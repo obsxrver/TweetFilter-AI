@@ -1906,7 +1906,7 @@
     // ----- twitter-desloppifier.js -----
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3 - Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.1 - Enhanced)");
     
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -1935,7 +1935,7 @@
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
             if (!apiKey) {
-                apiKey = prompt("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
+                apiKey = alert("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
                 if (apiKey) {
                     GM_setValue('openrouter-api-key', apiKey);
                 }
@@ -1984,8 +1984,8 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
-let selectedModel = GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b');
-let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b');
+let selectedModel = GM_getValue('selectedModel', 'google/gemini-2.0-flash-lite-001');
+let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-2.0-flash-lite-001');
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -3416,6 +3416,8 @@ function saveApiKey() {
         GM_setValue('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
         fetchAvailableModels(); // Refresh model list
+        //refresh the website
+        location.reload();
     } else {
         showStatus('Please enter a valid API key');
     }
@@ -4150,8 +4152,8 @@ function resetSettings(noconfirm=false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
-            selectedModel: 'google/gemini-flash-1.5-8b',
-            selectedImageModel: 'google/gemini-flash-1.5-8b',
+            selectedModel: 'google/gemini-2.0-flash-lite-001',
+            selectedImageModel: 'google/gemini-2.0-flash-lite-001',
             enableImageDescriptions: false,
             modelTemperature: 0.5,
             modelTopP: 0.9,
