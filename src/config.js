@@ -16,11 +16,42 @@ let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-flash-
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
+let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
 
 
 // Model parameters
+const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.
+You will be given a Tweet, structured like this:
+_______TWEET SCHEMA_______
+_______BEGIN TWEET_______
+[TWEET {TweetID}]
+{the text of the tweet being replied to}
+[MEDIA_DESCRIPTION]:
+[IMAGE 1]: {description}, [IMAGE 2]: {description}, etc.
+[REPLY] (if the author is replying to another tweet)
+[TWEET {TweetID}]: (the tweet which you are to review)
+@{the author of the tweet}
+{the text of the tweet}
+[MEDIA_DESCRIPTION]:
+[IMAGE 1]: {description}, [IMAGE 2]: {description}, etc.
+[QUOTED_TWEET]: (if the author is quoting another tweet)
+{the text of the quoted tweet}
+[QUOTED_TWEET_MEDIA_DESCRIPTION]:
+[IMAGE 1]: {description}, [IMAGE 2]: {description}, etc.
+_______END TWEET_______
+_______END TWEET SCHEMA_______
+
+You are to review and provide a rating for the tweet with the specified tweet ID.
+Ensure that you consider the user-defined instructions in your analysis and scoring, specified by:
+[USER-DEFINED INSTRUCTIONS]:
+
+Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
+SCORE_X where X is a number from 0 (lowest quality) to 10 (highest quality).
+for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
+If one of the above is not present, the program will not be able to parse the response and will return an error.
+`
 let modelTemperature = GM_getValue('modelTemperature', 0.5);
 let modelTopP = GM_getValue('modelTopP', 0.9);
 let imageModelTemperature = GM_getValue('imageModelTemperature', 0.5);
