@@ -1,6 +1,6 @@
 # X/Twitter De-Sloppifier
-## Version 1.3.2
-Advanced tweet rating and filtering userscript with model selection, enhanced rating indicators, API retry functionalities, and handle management.
+## Version 1.3.3
+Advanced tweet rating and filtering userscript with model selection, enhanced rating indicators, thread hierarchy mapping, and handle management.
 
 
 ## Features
@@ -9,6 +9,9 @@ Advanced tweet rating and filtering userscript with model selection, enhanced ra
 - **Filtering System**: Hide low-quality tweets based on your chosen threshold
 - **Model Selection**: Choose from multiple AI models for tweet rating
 - **Image Processing**: Dedicated image model for analyzing tweet images
+- **Real-Time Response Streaming**: Stream responses from the AI in real time
+- **Thread Context**: Improved thread hierarchy detection for better context awareness
+- **Media Collection**: Automatically collects all media from threads for comprehensive analysis
 - **Handle Management**: Auto-rate specific accounts as 10/10
 - **Custom Instructions**: Define your own criteria for how tweets should be rated
 - **Dark Theme UI**: Sleek interface matching X's design language
@@ -67,10 +70,20 @@ The userscript analyzes tweets using AI to determine their quality based on:
 
 1. **Text Content**: Evaluates writing quality, information value, and relevance
 2. **Media Analysis**: Uses vision-capable models to understand images in tweets
-3. **Context Recognition**: Considers conversations and quoted tweets for better rating
-4. **Custom Criteria**: Applies your personalized rating instructions
+3. **Thread Context**: Maps entire conversation threads to provide full context for replies
+4. **Media Collection**: Gathers media from the entire thread for comprehensive analysis
+5. **Context Recognition**: Considers conversations and quoted tweets for better rating
+6. **Custom Criteria**: Applies your personalized rating instructions
 
 Each tweet receives a score from 1-10, which is displayed in the top-right corner. Low-scoring tweets can be automatically hidden based on your threshold setting.
+
+### Advanced Thread Handling
+
+The latest version includes significant improvements to thread context awareness:
+- **Thread Hierarchy Mapping**: Automatically detects parent-child relationships in conversations
+- **Complete Media Context**: Collects and analyzes all media from a thread when rating replies
+- **Reply Structure Detection**: Uses DOM analysis to determine accurate reply relationships
+- **Performance Optimizations**: Thread mapping is throttled and batched to prevent UI freezing
 
 ## Prerequisites
 

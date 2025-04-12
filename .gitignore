@@ -2,3 +2,5 @@
 openrouter_docs.md
 twitter-desloppifier-lite.js
 jsconfig.json
+.cursor/
+.cursor/mcp.json

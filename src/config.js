@@ -1,7 +1,7 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const tweetIDRatingCache = {}; // ID-based cache for persistent storage
-const PROCESSING_DELAY_MS = 500; // Delay before processing a tweet (ms)
-const API_CALL_DELAY_MS = 250; // Minimum delay between API calls (ms)
+const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
+const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
 let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
 - Give high scores to high-effort content and artistic content`);
@@ -19,6 +19,7 @@ let storedRatings = GM_getValue('tweetRatings', '{}');
 let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
+let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
 
 
 // Model parameters
