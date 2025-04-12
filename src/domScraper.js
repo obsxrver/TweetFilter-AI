@@ -36,23 +36,55 @@ function getTweetID(tweetArticle) {
  * @returns {array} The user and quoted user handles.
  */
 function getUserHandles(tweetArticle) {
-    const handleElement = tweetArticle.querySelectorAll(USER_HANDLE_SELECTOR);
-    let handles=[];
+    let handles = [];
+    
+    // Extract the main author's handle - take only the first one
+    const handleElement = tweetArticle.querySelector(USER_HANDLE_SELECTOR);
     if (handleElement) {
-        /*
         const href = handleElement.getAttribute('href');
-        if (href && href.startsWith('/')) {
-            return href.slice(1);
-        }
-        */
-       handleElement.forEach(element => {
-        const href = element.getAttribute('href');
         if (href && href.startsWith('/')) {
             handles.push(href.slice(1));
         }
-       });
     }
-    return handles.length>0?handles:[''];
+    
+    // If we have the main author's handle, try to get the quoted author
+    if (handles.length > 0) {
+        const quoteContainer = tweetArticle.querySelector('div[role="link"][tabindex="0"]');
+        if (quoteContainer) {
+            // Look for a div with data-testid="UserAvatar-Container-username"
+            const userAvatarDiv = quoteContainer.querySelector('div[data-testid^="UserAvatar-Container-"]');
+            if (userAvatarDiv) {
+                const testId = userAvatarDiv.getAttribute('data-testid');
+                console.log("Found UserAvatar container with ID:", testId);
+                // Extract username from the data-testid attribute (part after the last dash)
+                const lastDashIndex = testId.lastIndexOf('-');
+                if (lastDashIndex >= 0 && lastDashIndex < testId.length - 1) {
+                    const quotedHandle = testId.substring(lastDashIndex + 1);
+                    console.log("Extracted quoted handle:", quotedHandle);
+                    if (quotedHandle && quotedHandle !== handles[0]) {
+                        handles.push(quotedHandle);
+                    }
+                }
+            } else {
+                console.log("No UserAvatar container found in quote, trying fallback method");
+                
+                // Fallback: try to extract handle from status link
+                const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
+                if (quotedLink) {
+                    const href = quotedLink.getAttribute('href');
+                    // Extract username from URL structure /username/status/id
+                    const match = href.match(/^\/([^/]+)\/status\/\d+/);
+                    if (match && match[1] && match[1] !== handles[0]) {
+                        console.log("Extracted quoted handle from link:", match[1]);
+                        handles.push(match[1]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Return non-empty array or [''] if no handles found
+    return handles.length > 0 ? handles : [''];
 }
 
 
@@ -145,6 +177,7 @@ function isOriginalTweet(tweetArticle) {
  * @param {MutationRecord[]} mutationsList - List of observed mutations.
  */
 function handleMutations(mutationsList) {
+    let tweetsAdded = false;
 
     for (const mutation of mutationsList) {
         handleThreads();
@@ -155,10 +188,14 @@ function handleMutations(mutationsList) {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
                             scheduleTweetProcessing(node);
+                            tweetsAdded = true;
                         }
                         else if (node.querySelectorAll) {
                             const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                            tweetsInside.forEach(scheduleTweetProcessing);
+                            if (tweetsInside.length > 0) {
+                                tweetsInside.forEach(scheduleTweetProcessing);
+                                tweetsAdded = true;
+                            }
                         }
                     }
                 });
@@ -189,5 +226,13 @@ function handleMutations(mutationsList) {
                 });
             }
         }
+    }
+    
+    // If any tweets were added, ensure filtering is applied
+    if (tweetsAdded) {
+        // Apply a small delay to allow processing to start first
+        setTimeout(() => {
+            applyFilteringToAll();
+        }, 100);
     }
 }
