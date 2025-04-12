@@ -55,18 +55,16 @@ function getUserHandles(tweetArticle) {
             const userAvatarDiv = quoteContainer.querySelector('div[data-testid^="UserAvatar-Container-"]');
             if (userAvatarDiv) {
                 const testId = userAvatarDiv.getAttribute('data-testid');
-                console.log("Found UserAvatar container with ID:", testId);
+                
                 // Extract username from the data-testid attribute (part after the last dash)
                 const lastDashIndex = testId.lastIndexOf('-');
                 if (lastDashIndex >= 0 && lastDashIndex < testId.length - 1) {
                     const quotedHandle = testId.substring(lastDashIndex + 1);
-                    console.log("Extracted quoted handle:", quotedHandle);
+                    
                     if (quotedHandle && quotedHandle !== handles[0]) {
                         handles.push(quotedHandle);
                     }
                 }
-            } else {
-                console.log("No UserAvatar container found in quote, trying fallback method");
                 
                 // Fallback: try to extract handle from status link
                 const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
@@ -75,7 +73,6 @@ function getUserHandles(tweetArticle) {
                     // Extract username from URL structure /username/status/id
                     const match = href.match(/^\/([^/]+)\/status\/\d+/);
                     if (match && match[1] && match[1] !== handles[0]) {
-                        console.log("Extracted quoted handle from link:", match[1]);
                         handles.push(match[1]);
                     }
                 }
