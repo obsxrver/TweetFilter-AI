@@ -2326,18 +2326,61 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             // Get the ReadableStream from the response
             const reader = response.response.getReader();
             
+            // Setup timeout to prevent hanging indefinitely
+            let streamTimeout = null;
+            const resetStreamTimeout = () => {
+                if (streamTimeout) clearTimeout(streamTimeout);
+                streamTimeout = setTimeout(() => {
+                    console.log("Stream timed out after inactivity");
+                    if (!streamComplete) {
+                        streamComplete = true;
+                        // Call onComplete with whatever we have so far
+                        onComplete({
+                            content: content,
+                            fullResponse: fullResponse,
+                            data: responseObj,
+                            timedOut: true
+                        });
+                    }
+                }, 10000); // 10 second timeout without activity
+            };
+            
+            // Flag to track if we've completed
+            let streamComplete = false;
+            
             // Process the stream
             const processStream = async () => {
                 try {
-                    while (true) {
+                    resetStreamTimeout(); // Initial timeout
+                    let isDone = false;
+                    let emptyChunksCount = 0;
+                    
+                    while (!isDone && !streamComplete) {
                         const { done, value } = await reader.read();
                         
                         if (done) {
+                            isDone = true;
                             break;
                         }
                         
                         // Convert the chunk to text
                         const chunk = new TextDecoder().decode(value);
+                        
+                        // Reset timeout on activity
+                        resetStreamTimeout();
+                        
+                        // Check for empty chunks - may indicate end of stream
+                        if (chunk.trim() === '') {
+                            emptyChunksCount++;
+                            // After receiving 3 consecutive empty chunks, consider the stream done
+                            if (emptyChunksCount >= 3) {
+                                isDone = true;
+                                break;
+                            }
+                            continue;
+                        }
+                        
+                        emptyChunksCount = 0; // Reset the counter if we got content
                         fullResponse += chunk;
                         
                         // Split by lines - server-sent events format
@@ -2348,7 +2391,8 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                 
                                 // Check for the end of the stream
                                 if (data === "[DONE]") {
-                                    continue;
+                                    isDone = true;
+                                    break;
                                 }
                                 
                                 try {
@@ -2374,24 +2418,45 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         }
                     }
                     
-                    // When done, call the complete callback
-                    onComplete({
-                        content: content,
-                        fullResponse: fullResponse,
-                        data: responseObj
-                    });
+                    // When done, call the complete callback if not already completed
+                    if (!streamComplete) {
+                        streamComplete = true;
+                        if (streamTimeout) clearTimeout(streamTimeout);
+                        
+                        onComplete({
+                            content: content,
+                            fullResponse: fullResponse,
+                            data: responseObj
+                        });
+                    }
                     
                 } catch (error) {
                     console.error("Stream processing error:", error);
-                    onError({
-                        error: true,
-                        message: `Stream processing error: ${error.toString()}`,
-                        data: null
-                    });
+                    // Make sure we clean up and call onError
+                    if (streamTimeout) clearTimeout(streamTimeout);
+                    if (!streamComplete) {
+                        streamComplete = true;
+                        onError({
+                            error: true,
+                            message: `Stream processing error: ${error.toString()}`,
+                            data: null
+                        });
+                    }
                 }
             };
             
-            processStream();
+            processStream().catch(error => {
+                console.error("Unhandled stream error:", error);
+                if (streamTimeout) clearTimeout(streamTimeout);
+                if (!streamComplete) {
+                    streamComplete = true;
+                    onError({
+                        error: true,
+                        message: `Unhandled stream error: ${error.toString()}`,
+                        data: null
+                    });
+                }
+            });
         },
         onerror: function(error) {
             onError({
@@ -2453,9 +2518,10 @@ const safetySettings = [
  * @param {string} apiKey - The API key for authentication
  * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
  * @param {number} [maxRetries=3] - Maximum number of retry attempts
- * @returns {Promise<{score: number, content: string, error: boolean}>} The rating result
+ * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
+    // Create the request body
     const request = {
         model: selectedModel,
         messages: [{
@@ -2512,265 +2578,271 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     // Check if streaming is enabled
     const useStreaming = GM_getValue('enableStreaming', false);
     
-    if (useStreaming) {
-        // Use streaming API
-        return new Promise((resolve) => {
-            // Update status
-            pendingRequests++;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+    // Implement retry logic
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        attempt++;
+
+        // Rate limiting
+        const now = Date.now();
+        const timeElapsed = now - lastAPICallTime;
+        if (timeElapsed < API_CALL_DELAY_MS) {
+            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
+        }
+        lastAPICallTime = now;
+
+        // Update status
+        pendingRequests++;
+        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+        
+        try {
+            let result;
             
-            // Rate limiting
-            const now = Date.now();
-            const timeElapsed = now - lastAPICallTime;
-            if (timeElapsed < API_CALL_DELAY_MS) {
-                setTimeout(() => {
-                    lastAPICallTime = Date.now();
-                    processStreamingRequest();
-                }, API_CALL_DELAY_MS - timeElapsed);
+            // Call appropriate rating function based on streaming setting
+            if (useStreaming) {
+                result = await rateTweetStreaming(request, apiKey, tweetId, tweetText);
             } else {
-                lastAPICallTime = now;
-                processStreamingRequest();
+                result = await rateTweet(request, apiKey);
             }
             
-            function processStreamingRequest() {
-                // Find the tweet article element for this tweet ID
-                const tweetArticle = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
-                    .find(article => getTweetID(article) === tweetId);
-                
-                let aggregatedContent = "";
-                
-                getCompletionStreaming(
-                    request,
-                    apiKey,
-                    // onChunk callback - update the tweet's rating indicator in real-time
-                    (chunkData) => {
-                        aggregatedContent += chunkData.chunk;
-                        
-                        if (tweetArticle) {
-                            // Look for a score in the accumulated content so far
-                            const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
-                            let currentScore = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
-                            
-                            // Store references and current state
-                            const indicator = tweetArticle.querySelector('.score-indicator');
-                            const tooltip = indicator?.scoreTooltip;
-                            
-                            // Update the indicator with current partial content
-                            tweetArticle.dataset.streamingContent = aggregatedContent;
-                            tweetArticle.dataset.ratingStatus = 'streaming';
-                            tweetArticle.dataset.ratingDescription = aggregatedContent;
-                            
-                            // Don't cache the streaming result until we have a score
-                            // This prevents the "Cannot read properties of undefined (reading 'toString')" error
-                            if (currentScore !== null) {
-                                // Only initialize cache if we have a score
-                                if (!tweetIDRatingCache[tweetId]) {
-                                    tweetIDRatingCache[tweetId] = {
-                                        tweetContent: tweetText,
-                                        score: currentScore,
-                                        description: aggregatedContent,
-                                        streaming: true  // Mark as streaming/incomplete
-                                    };
-                                } else {
-                                    // Update existing cache entry if it exists
-                                    tweetIDRatingCache[tweetId].description = aggregatedContent;
-                                    tweetIDRatingCache[tweetId].score = currentScore;
-                                    tweetIDRatingCache[tweetId].streaming = true;
-                                }
-                                
-                                tweetArticle.dataset.sloppinessScore = currentScore.toString();
-                                
-                                // Save to storage periodically (once per second max)
-                                if (!window.lastCacheSaveTime || Date.now() - window.lastCacheSaveTime > 1000) {
-                                    saveTweetRatings();
-                                    window.lastCacheSaveTime = Date.now();
-                                }
-                            }
-                            
-                            // Only update the tooltip directly
-                            if (tooltip) {
-                                // Update tooltip content
-                                tooltip.innerHTML = formatTooltipDescription(aggregatedContent);
-                                tooltip.classList.add('streaming-tooltip');
-                                
-                                // Auto-scroll to the bottom of the tooltip to show new content
-                                if (tooltip.style.display === 'block') {
-                                    // Check if scroll is at or near the bottom before auto-scrolling
-                                    const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
-                                    
-                                    // Only auto-scroll if user was already at the bottom
-                                    if (isAtBottom) {
-                                        tooltip.scrollTop = tooltip.scrollHeight;
-                                    }
-                                }
-                            }
-                            
-                            if (currentScore !== null) {
-                                // Update the score display but not the tooltip
-                                if (indicator) {
-                                    // Use setScoreIndicator to ensure classes are properly set
-                                    // Set streaming status to keep the streaming styling/animation
-                                    tweetArticle.dataset.sloppinessScore = currentScore.toString();
-                                    setScoreIndicator(tweetArticle, currentScore, 'streaming', aggregatedContent);
-                                    filterSingleTweet(tweetArticle);
-                                }
-                            } else if (indicator) {
-                                // Just update the streaming indicator without changing the tooltip
-                                setScoreIndicator(tweetArticle, null, 'streaming', aggregatedContent);
-                            }
-                        }
-                    },
-                    // onComplete callback - finalize the rating
-                    (finalData) => {
-                        pendingRequests--;
-                        showStatus(`Rating tweet... (${pendingRequests} pending)`);
-                        
-                        const content = finalData.content;
-                        const scoreMatch = content.match(/SCORE_(\d+)/);
-                        
-                        if (scoreMatch) {
-                            const score = parseInt(scoreMatch[1], 10);
-                            
-                            // Cache the final result
-                            tweetIDRatingCache[tweetId] = {
-                                tweetContent: tweetText,
-                                score: score,
-                                description: content,
-                                streaming: false,  // Mark as complete
-                                // Store timestamp to prevent immediate re-processing
-                                timestamp: Date.now()
-                            };
-                            saveTweetRatings();
-                            
-                            // Finalize the UI update
-                            if (tweetArticle) {
-                                tweetArticle.dataset.ratingStatus = 'rated';
-                                tweetArticle.dataset.ratingDescription = content;
-                                tweetArticle.dataset.sloppinessScore = score.toString();
-                                
-                                // Remove streaming class from tooltip
-                                const indicator = tweetArticle.querySelector('.score-indicator');
-                                if (indicator && indicator.scoreTooltip) {
-                                    indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                                }
-                                
-                                // Use setScoreIndicator to properly set the classes
-                                setScoreIndicator(tweetArticle, score, 'rated', content);
-                                filterSingleTweet(tweetArticle);
-                            }
-                            
-                            resolve({ score, content, error: false });
-                        } else {
-                            // No score found in the complete response
-                            const errorMsg = "Failed to parse score from streaming response";
-                            console.error(errorMsg, content);
-                            
-                            if (tweetArticle) {
-                                tweetArticle.dataset.ratingStatus = 'error';
-                                tweetArticle.dataset.ratingDescription = errorMsg;
-                                tweetArticle.dataset.sloppinessScore = '5';
-                                setScoreIndicator(tweetArticle, 5, 'error', errorMsg);
-                                filterSingleTweet(tweetArticle);
-                            }
-                            
-                            resolve({
-                                score: 5,
-                                content: errorMsg,
-                                error: true
-                            });
-                        }
-                    },
-                    // onError callback
-                    (errorData) => {
-                        pendingRequests--;
-                        showStatus(`Rating tweet... (${pendingRequests} pending)`);
-                        console.error("Streaming error:", errorData.message);
-                        
-                        if (tweetArticle) {
-                            tweetArticle.dataset.ratingStatus = 'error';
-                            tweetArticle.dataset.ratingDescription = errorData.message;
-                            tweetArticle.dataset.sloppinessScore = '5';
-                            
-                            // Remove streaming class from tooltip
-                            const indicator = tweetArticle.querySelector('.score-indicator');
-                            if (indicator && indicator.scoreTooltip) {
-                                indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                            }
-                            
-                            setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
-                            filterSingleTweet(tweetArticle);
-                        }
-                        
-                        resolve({
-                            score: 5,
-                            content: errorData.message,
-                            error: true
-                        });
-                    }
-                );
-            }
-        });
-    } else {
-        // Use non-streaming API (original implementation)
-        // Implement retry logic with exponential backoff
-        let attempt = 0;
-        while (attempt < maxRetries) {
-            attempt++;
-
-            // Rate limiting
-            const now = Date.now();
-            const timeElapsed = now - lastAPICallTime;
-            if (timeElapsed < API_CALL_DELAY_MS) {
-                await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
-            }
-            lastAPICallTime = now;
-
-            // Update status
-            pendingRequests++;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
-
-            // Make API request
-            const result = await getCompletion(request, apiKey);
             pendingRequests--;
             showStatus(`Rating tweet... (${pendingRequests} pending)`);
-
-            if (!result.error && result.data?.choices?.[0]?.message?.content) {
-                const content = result.data.choices[0].message.content;
-                const scoreMatch = content.match(/SCORE_(\d+)/);
-
+            
+            // Parse the result for score
+            if (!result.error && result.content) {
+                const scoreMatch = result.content.match(/SCORE_(\d+)/);
+                
                 if (scoreMatch) {
                     const score = parseInt(scoreMatch[1], 10);
-
-                    tweetIDRatingCache[tweetId] = {
-                        tweetContent: tweetText,
-                        score: score,
-                        description: content
+                    
+                    return {
+                        score,
+                        content: result.content,
+                        error: false,
+                        cached: false,
+                        data: result.data
                     };
-                    saveTweetRatings();
-                    return { score, content, error: false, cached: false };
                 }
             }
-
-            // Handle retries
+            
+            // If we get here, we couldn't find a score in the response
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
-                console.log('Response:', {
-                    error: result.error,
-                    message: result.message,
-                    data: result.data,
-                    content: result.data?.choices?.[0]?.message?.content
-                });
+                console.log('Response:', result);
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            }
+        } catch (error) {
+            pendingRequests--;
+            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            console.error(`API error during attempt ${attempt}:`, error);
+            
+            if (attempt < maxRetries) {
+                const backoffDelay = Math.pow(attempt, 2) * 1000;
+                console.log(`Error in attempt ${attempt}/${maxRetries}. Retrying in ${backoffDelay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         }
+    }
+    
+    // If we get here, all retries failed
+    return {
+        score: 5,
+        content: "Failed to get valid rating after multiple attempts",
+        error: true,
+        data: null
+    };
+}
 
+/**
+ * Performs a non-streaming tweet rating request
+ * 
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
+ */
+async function rateTweet(request, apiKey) {
+    const result = await getCompletion(request, apiKey);
+    
+    if (!result.error && result.data?.choices?.[0]?.message?.content) {
+        const content = result.data.choices[0].message.content;
         return {
-            score: 5,
-            content: "Failed to get valid rating after multiple attempts",
-            error: true
+            content,
+            error: false,
+            data: result.data
+        };
+    } else {
+        return {
+            content: result.message || "Error getting response",
+            error: true,
+            data: result.data
         };
     }
+}
+
+/**
+ * Performs a streaming tweet rating request with real-time UI updates
+ * 
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @param {string} tweetId - The tweet ID
+ * @param {string} tweetText - The text content of the tweet
+ * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
+ */
+async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
+    return new Promise((resolve, reject) => {
+        // Find the tweet article element for this tweet ID
+        const tweetArticle = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
+            .find(article => getTweetID(article) === tweetId);
+        
+        let aggregatedContent = "";
+        let finalData = null;
+        
+        getCompletionStreaming(
+            request,
+            apiKey,
+            // onChunk callback - update the tweet's rating indicator in real-time
+            (chunkData) => {
+                aggregatedContent += chunkData.chunk;
+                
+                if (tweetArticle) {
+                    // Look for a score in the accumulated content so far
+                    const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
+                    let currentScore = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+                    
+                    // Store references and current state
+                    const indicator = tweetArticle.querySelector('.score-indicator');
+                    const tooltip = indicator?.scoreTooltip;
+                    
+                    // Update the indicator with current partial content
+                    tweetArticle.dataset.streamingContent = aggregatedContent;
+                    tweetArticle.dataset.ratingStatus = 'streaming';
+                    tweetArticle.dataset.ratingDescription = aggregatedContent;
+                    
+                    // Don't cache the streaming result until we have a score
+                    if (currentScore !== null) {
+                        // Only initialize cache if we have a score
+                        if (!tweetIDRatingCache[tweetId]) {
+                            tweetIDRatingCache[tweetId] = {
+                                tweetContent: tweetText,
+                                score: currentScore,
+                                description: aggregatedContent,
+                                streaming: true  // Mark as streaming/incomplete
+                            };
+                        } else {
+                            // Update existing cache entry if it exists
+                            tweetIDRatingCache[tweetId].description = aggregatedContent;
+                            tweetIDRatingCache[tweetId].score = currentScore;
+                            tweetIDRatingCache[tweetId].streaming = true;
+                        }
+                        
+                        tweetArticle.dataset.sloppinessScore = currentScore.toString();
+                        
+                        // Save to storage periodically (once per second max)
+                        if (!window.lastCacheSaveTime || Date.now() - window.lastCacheSaveTime > 1000) {
+                            saveTweetRatings();
+                            window.lastCacheSaveTime = Date.now();
+                        }
+                    }
+                    
+                    // Only update the tooltip directly
+                    if (tooltip) {
+                        // Update tooltip content
+                        tooltip.innerHTML = formatTooltipDescription(aggregatedContent);
+                        tooltip.classList.add('streaming-tooltip');
+                        
+                        // Auto-scroll to the bottom of the tooltip to show new content
+                        if (tooltip.style.display === 'block') {
+                            // Check if scroll is at or near the bottom before auto-scrolling
+                            const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+                            
+                            // Only auto-scroll if user was already at the bottom
+                            if (isAtBottom) {
+                                tooltip.scrollTop = tooltip.scrollHeight;
+                            }
+                        }
+                    }
+                    
+                    if (currentScore !== null) {
+                        // Update the score display but not the tooltip
+                        if (indicator) {
+                            // Use setScoreIndicator to ensure classes are properly set
+                            // Set streaming status to keep the streaming styling/animation
+                            tweetArticle.dataset.sloppinessScore = currentScore.toString();
+                            setScoreIndicator(tweetArticle, currentScore, 'streaming', aggregatedContent);
+                            //filterSingleTweet(tweetArticle);
+                        }
+                    } else if (indicator) {
+                        // Just update the streaming indicator without changing the tooltip
+                        setScoreIndicator(tweetArticle, null, 'streaming', aggregatedContent);
+                    }
+                }
+            },
+            // onComplete callback - finalize the rating
+            (finalResult) => {
+                finalData = finalResult.data;
+                
+                // When streaming completes, update the cache with the final result
+                if (tweetArticle) {
+                    // Check for a score in the final content
+                    const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
+                    if (scoreMatch) {
+                        const score = parseInt(scoreMatch[1], 10);
+                        
+                        // Update cache with final result (non-streaming)
+                        tweetIDRatingCache[tweetId] = {
+                            tweetContent: tweetText,
+                            score: score,
+                            description: aggregatedContent,
+                            streaming: false,  // Mark as complete
+                            timestamp: Date.now()
+                        };
+                        saveTweetRatings();
+                        
+                        // Finalize UI update
+                        tweetArticle.dataset.ratingStatus = 'rated';
+                        tweetArticle.dataset.ratingDescription = aggregatedContent;
+                        tweetArticle.dataset.sloppinessScore = score.toString();
+                        
+                        // Remove streaming class from tooltip
+                        const indicator = tweetArticle.querySelector('.score-indicator');
+                        if (indicator && indicator.scoreTooltip) {
+                            indicator.scoreTooltip.classList.remove('streaming-tooltip');
+                        }
+                        
+                        // Set final indicator state
+                        setScoreIndicator(tweetArticle, score, 'rated', aggregatedContent);
+                        // The caller will handle filterSingleTweet
+                    }
+                }
+                
+                resolve({
+                    content: aggregatedContent,
+                    error: false,
+                    data: finalData
+                });
+            },
+            // onError callback
+            (errorData) => {
+                // Update UI on error
+                if (tweetArticle) {
+                    tweetArticle.dataset.ratingStatus = 'error';
+                    tweetArticle.dataset.ratingDescription = errorData.message;
+                    tweetArticle.dataset.sloppinessScore = '5';
+                    
+                    // Remove streaming class from tooltip
+                    const indicator = tweetArticle.querySelector('.score-indicator');
+                    if (indicator && indicator.scoreTooltip) {
+                        indicator.scoreTooltip.classList.remove('streaming-tooltip');
+                    }
+                    
+                    setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
+                }
+                
+                reject(new Error(errorData.message));
+            }
+        );
+    });
 }
 
 /**
