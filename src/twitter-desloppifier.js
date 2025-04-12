@@ -64,6 +64,10 @@
             }
             // Process all currently visible tweets
             observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+            
+            // Apply filtering based on current threshold
+            applyFilteringToAll();
+            
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
             ensureAllTweetsRated();

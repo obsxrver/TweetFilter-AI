@@ -424,18 +424,15 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                             if (currentScore !== null) {
                                 // Update the score display but not the tooltip
                                 if (indicator) {
-                                    indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating');
-                                    indicator.classList.add('streaming-rating');
-                                    indicator.textContent = currentScore;
-                                    
-                                    // Don't call setScoreIndicator as it would overwrite the tooltip
+                                    // Use setScoreIndicator to ensure classes are properly set
+                                    // Set streaming status to keep the streaming styling/animation
                                     tweetArticle.dataset.sloppinessScore = currentScore.toString();
+                                    setScoreIndicator(tweetArticle, currentScore, 'streaming', aggregatedContent);
+                                    filterSingleTweet(tweetArticle);
                                 }
                             } else if (indicator) {
                                 // Just update the streaming indicator without changing the tooltip
-                                indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating');
-                                indicator.classList.add('streaming-rating');
-                                indicator.textContent = '🔄';
+                                setScoreIndicator(tweetArticle, null, 'streaming', aggregatedContent);
                             }
                         }
                     },
@@ -467,17 +464,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                                 tweetArticle.dataset.ratingDescription = content;
                                 tweetArticle.dataset.sloppinessScore = score.toString();
                                 
-                                // Remove streaming class from tooltip and indicator
+                                // Remove streaming class from tooltip
                                 const indicator = tweetArticle.querySelector('.score-indicator');
-                                if (indicator) {
-                                    indicator.classList.remove('streaming-rating');
-                                    indicator.classList.add('rated-rating');
-                                    
-                                    if (indicator.scoreTooltip) {
-                                        indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                                    }
+                                if (indicator && indicator.scoreTooltip) {
+                                    indicator.scoreTooltip.classList.remove('streaming-tooltip');
                                 }
                                 
+                                // Use setScoreIndicator to properly set the classes
                                 setScoreIndicator(tweetArticle, score, 'rated', content);
                                 filterSingleTweet(tweetArticle);
                             }
@@ -514,15 +507,10 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                             tweetArticle.dataset.ratingDescription = errorData.message;
                             tweetArticle.dataset.sloppinessScore = '5';
                             
-                            // Remove streaming class from tooltip and indicator
+                            // Remove streaming class from tooltip
                             const indicator = tweetArticle.querySelector('.score-indicator');
-                            if (indicator) {
-                                indicator.classList.remove('streaming-rating');
-                                indicator.classList.add('error-rating');
-                                
-                                if (indicator.scoreTooltip) {
-                                    indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                                }
+                            if (indicator && indicator.scoreTooltip) {
+                                indicator.scoreTooltip.classList.remove('streaming-tooltip');
                             }
                             
                             setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
@@ -575,7 +563,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                         description: content
                     };
                     saveTweetRatings();
-                    return { score, content, error: false };
+                    return { score, content, error: false, cached: false };
                 }
             }
 

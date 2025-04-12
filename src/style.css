@@ -784,6 +784,11 @@
         background-color: rgba(76, 175, 80, 0.9) !important;
         color: white !important;
     }
+    
+    .rated-rating {
+        background-color: rgba(33, 33, 33, 0.9) !important;
+        color: white !important;
+    }
 
     .blacklisted-rating {
         background-color: rgba(255, 193, 7, 0.9) !important;

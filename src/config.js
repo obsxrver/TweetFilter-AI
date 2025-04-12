@@ -92,7 +92,18 @@ function modelSupportsImages(modelId) {
 }
 
 try {
-    Object.assign(tweetIDRatingCache, JSON.parse(storedRatings));
+    // Load ratings from storage
+    const parsedRatings = JSON.parse(storedRatings);
+    
+    // Mark all ratings from storage as "fromStorage: true" so they'll be 
+    // properly recognized as cached when loaded
+    Object.entries(parsedRatings).forEach(([tweetId, ratingData]) => {
+        tweetIDRatingCache[tweetId] = {
+            ...ratingData,
+            fromStorage: true  // Mark as loaded from storage
+        };
+    });
+    
     console.log(`Loaded ${Object.keys(tweetIDRatingCache).length} cached tweet ratings`);
 } catch (e) {
     console.error('Error loading stored ratings:', e);
