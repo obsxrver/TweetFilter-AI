@@ -1973,8 +1973,8 @@
     // ----- config.js -----
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const tweetIDRatingCache = {}; // ID-based cache for persistent storage
-const PROCESSING_DELAY_MS = 500; // Delay before processing a tweet (ms)
-const API_CALL_DELAY_MS = 250; // Minimum delay between API calls (ms)
+const PROCESSING_DELAY_MS = 250; // Delay before processing a tweet (ms)
+const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
 let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
 - Give high scores to high-effort content and artistic content`);
@@ -4004,7 +4004,7 @@ function getScoreTooltip() {
 function formatTooltipDescription(description) {
     if (!description) return '';
     // Basic formatting, can be expanded
-        description = description.replace(/\{score:\s*(\d+)\}/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+        description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
     description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
         description = description.replace(/\n/g, '<br>');
     return `<p>${description}</p>`;

@@ -821,7 +821,7 @@ function getScoreTooltip() {
 function formatTooltipDescription(description) {
     if (!description) return '';
     // Basic formatting, can be expanded
-        description = description.replace(/\{score:\s*(\d+)\}/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+        description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
     description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
         description = description.replace(/\n/g, '<br>');
     return `<p>${description}</p>`;
