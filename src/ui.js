@@ -748,7 +748,7 @@ function closeAllSelectBoxes(exceptThisOne = null) {
  * Updates or creates the rating indicator on a tweet article.
  * @param {Element} tweetArticle - The tweet article element.
  * @param {number|null} score - The numeric rating (null if pending/error).
- * @param {string} status - 'pending', 'rated', 'error', 'cached', 'blacklisted'.
+ * @param {string} status - 'pending', 'rated', 'error', 'cached', 'blacklisted', 'streaming'.
  * @param {string} [description] - Optional description for hover tooltip.
  */
 function setScoreIndicator(tweetArticle, score, status, description = "") {
@@ -759,32 +759,59 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
         tweetArticle.style.position = 'relative'; // Ensure parent is positioned
         tweetArticle.appendChild(indicator);
         
-        // Add hover listeners only once when creating the indicator
+        // Create a unique tooltip for this indicator
+        const tooltip = document.createElement('div');
+        tooltip.className = 'score-description';
+        tooltip.style.display = 'none';
+        document.body.appendChild(tooltip); // Append to body instead of indicator
+        
+        // Store the tooltip reference
+        indicator.scoreTooltip = tooltip;
+        
+        // Add hover listeners
         indicator.addEventListener('mouseenter', handleIndicatorMouseEnter);
         indicator.addEventListener('mouseleave', handleIndicatorMouseLeave);
+        
+        // Also add hover listeners to the tooltip
+        tooltip.addEventListener('mouseenter', () => {
+            tooltip.style.display = 'block';
+        });
+        tooltip.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
     }
 
     // Update status class and text content
-    indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating'); // Clear previous
+    indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating', 'streaming-rating'); // Clear previous
     indicator.dataset.description = description || ''; // Store description
+    
+    // Update the tooltip content
+    const tooltip = indicator.scoreTooltip;
+    if (tooltip) {
+        tooltip.innerHTML = formatTooltipDescription(description);
+    }
 
     switch (status) {
         case 'pending':
-        indicator.classList.add('pending-rating');
-        indicator.textContent = '⏳';
+            indicator.classList.add('pending-rating');
+            indicator.textContent = '⏳';
+            break;
+        case 'streaming':
+            indicator.classList.add('streaming-rating');
+            indicator.textContent = score || '🔄';
             break;
         case 'error':
-        indicator.classList.add('error-rating');
-        indicator.textContent = '⚠️';
+            indicator.classList.add('error-rating');
+            indicator.textContent = '⚠️';
             break;
         case 'cached':
             indicator.classList.add('cached-rating');
-        indicator.textContent = score;
-             break;
+            indicator.textContent = score;
+            break;
         case 'blacklisted':
-             indicator.classList.add('blacklisted-rating');
-             indicator.textContent = score; // Typically 10 for blacklisted
-             break;
+            indicator.classList.add('blacklisted-rating');
+            indicator.textContent = score; // Typically 10 for blacklisted
+            break;
         case 'rated': // Default/normal rated
         default:
             indicator.classList.add('rated-rating'); // Add a general rated class
@@ -793,52 +820,54 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
     }
 }
 
-/** Global tooltip element */
-let scoreTooltip = null;
-
-/** Creates or gets the shared tooltip element. */
+/** 
+ * This function is no longer needed as each indicator has its own tooltip 
+ * It's kept for backward compatibility but is not used 
+ */
 function getScoreTooltip() {
-    if (!scoreTooltip) {
-        scoreTooltip = document.createElement('div');
-        scoreTooltip.className = 'score-description'; // Use the class from HTML/CSS
-        scoreTooltip.style.display = 'none'; // Initially hidden
-        scoreTooltip.style.position = 'fixed'; // Use fixed positioning
-        scoreTooltip.style.zIndex = '99999999';
-        document.body.appendChild(scoreTooltip);
-
-        // Keep tooltip visible when hovering over it
-        scoreTooltip.addEventListener('mouseenter', () => {
-            scoreTooltip.style.display = 'block';
-        });
-        scoreTooltip.addEventListener('mouseleave', () => {
-            scoreTooltip.style.display = 'none';
-        });
-    }
-    return scoreTooltip;
+    console.warn('getScoreTooltip is deprecated as each indicator now has its own tooltip');
+    return null;
 }
 
 /** Formats description text for the tooltip. */
 function formatTooltipDescription(description) {
     if (!description) return '';
     // Basic formatting, can be expanded
-        description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+    description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
     description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
-        description = description.replace(/\n/g, '<br>');
+    description = description.replace(/\n/g, '<br>');
     return `<p>${description}</p>`;
 }
 
 /** Handles mouse enter event for score indicators. */
 function handleIndicatorMouseEnter(event) {
-    const indicator = event.target;
-    const description = indicator.dataset.description;
-    if (!description) return;
-
-    const tooltip = getScoreTooltip();
-    tooltip.innerHTML = formatTooltipDescription(description);
-
+    const indicator = event.currentTarget;
+    const tooltip = indicator.scoreTooltip;
+    if (!tooltip) return;
+    
+    // Get the tweet article
+    const tweetArticle = indicator.closest('article[data-testid="tweet"]');
+    const tweetId = tweetArticle ? getTweetID(tweetArticle) : null;
+    
     // Position the tooltip
-        const rect = indicator.getBoundingClientRect();
-    const tooltipWidth = tooltip.offsetWidth; // Get width after setting content
+    tooltip.style.position = 'fixed';
+    tooltip.style.display = 'block';
+    tooltip.style.zIndex = '99999999';
+    
+    // Check if we have cached streaming content for this tweet
+    if (tweetId && tweetIDRatingCache[tweetId]?.description) {
+        tooltip.innerHTML = formatTooltipDescription(tweetIDRatingCache[tweetId].description);
+        
+        // Add streaming class if status is streaming
+        if (tweetArticle?.dataset.ratingStatus === 'streaming' || tweetIDRatingCache[tweetId].streaming === true) {
+            tooltip.classList.add('streaming-tooltip');
+        } else {
+            tooltip.classList.remove('streaming-tooltip');
+        }
+    }
+    
+    const rect = indicator.getBoundingClientRect();
+    const tooltipWidth = tooltip.offsetWidth;
     const tooltipHeight = tooltip.offsetHeight;
     const margin = 10;
 
@@ -858,26 +887,51 @@ function handleIndicatorMouseEnter(event) {
 
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
-    tooltip.style.display = 'block';
+    
+    // Store the current scroll position to check if user has manually scrolled
+    tooltip.lastScrollTop = tooltip.scrollTop;
+    
+    // If this is a streaming tooltip, scroll to the bottom to show latest content only if:
+    // 1. It's a fresh display (not previously scrolled by user)
+    // 2. User was already at the bottom when new content arrived
+    if (tooltip.classList.contains('streaming-tooltip')) {
+        // Check if tooltip was already visible and user had scrolled up
+        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+        const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
+                               (Date.now() - tooltip.lastDisplayTime) > 1000;
+        
+        if (isInitialDisplay || isAtBottom) {
+            // Use setTimeout to ensure this happens after the tooltip is displayed
+            setTimeout(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+            }, 10);
+        }
+    }
+    
+    // Track when we displayed the tooltip
+    tooltip.lastDisplayTime = Date.now();
 }
 
 /** Handles mouse leave event for score indicators. */
-function handleIndicatorMouseLeave() {
-    const tooltip = getScoreTooltip();
-    // Hide with a slight delay to allow moving cursor to the tooltip
-        setTimeout(() => {
-        if (tooltip && tooltip.style.display !== 'none' && !tooltip.matches(':hover')) {
-           tooltip.style.display = 'none';
+function handleIndicatorMouseLeave(event) {
+    const indicator = event.currentTarget;
+    const tooltip = indicator.scoreTooltip;
+    if (!tooltip) return;
+    
+    // Only hide if we're not moving to the tooltip itself
+    setTimeout(() => {
+        if (tooltip && !tooltip.matches(':hover')) {
+            tooltip.style.display = 'none';
         }
-        }, 100);
+    }, 100);
 }
 
 /** Cleans up the global score tooltip element. */
 function cleanupDescriptionElements() {
-    if (scoreTooltip) {
-        scoreTooltip.remove();
-        scoreTooltip = null;
-    }
+    // Now we need to remove any tooltips that might be in the DOM
+    document.querySelectorAll('.score-description').forEach(tooltip => {
+        tooltip.remove();
+    });
 }
 
 // --- Settings Import/Export (Simplified) ---
@@ -892,6 +946,7 @@ function exportSettings() {
             selectedModel: GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b'),
             selectedImageModel: GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
+            enableStreaming: GM_getValue('enableStreaming', true),
             modelTemperature: GM_getValue('modelTemperature', 0.5),
             modelTopP: GM_getValue('modelTopP', 0.9),
             imageModelTemperature: GM_getValue('imageModelTemperature', 0.5),
@@ -991,6 +1046,7 @@ function resetSettings(noconfirm=false) {
             selectedModel: 'google/gemini-2.0-flash-lite-001',
             selectedImageModel: 'google/gemini-2.0-flash-lite-001',
             enableImageDescriptions: false,
+            enableStreaming: true,
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,

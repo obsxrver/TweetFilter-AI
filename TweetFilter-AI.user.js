@@ -978,6 +978,14 @@
                                 <input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;">
                             </div>
                         </div>
+                        
+                        <div class="toggle-row">
+                            <div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-setting="enableStreaming">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div>
@@ -1737,12 +1745,88 @@
         font-size: 16px;
         line-height: 1.5;
         z-index: 99999999;
-        position: absolute;
+        position: fixed;
         width: clamp(300px, 30vw, 500px);
         max-height: 60vh;
         overflow-y: auto;
         border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
+    }
+    
+    /* Ensure the tooltip scrolls to the bottom during streaming */
+    .score-description.streaming-tooltip {
+        scroll-behavior: smooth;
+        border-left: 3px solid #1d9bf0;
+        background-color: rgba(25, 30, 35, 0.98);
+    }
+    
+    /* Add a small badge to indicate streaming status */
+    .score-description.streaming-tooltip::before {
+        content: 'Live';
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #1d9bf0;
+        color: white;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    
+    /* Add scrollbars to tooltip for better UX */
+    .score-description::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .score-description::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+    
+    .score-description::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+    
+    .score-description::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Add animated cursor to the streaming tooltip content */
+    .score-description.streaming-tooltip p::after {
+        content: '|';
+        display: inline-block;
+        color: #1d9bf0;
+        animation: blink 0.7s infinite;
+        font-weight: bold;
+        margin-left: 2px;
+    }
+    
+    @keyframes blink {
+        0%, 100% { opacity: 0; }
+        50% { opacity: 1; }
+    }
+    
+    .streaming-rating {
+        background-color: rgba(33, 150, 243, 0.9) !important;
+        color: white !important;
+        animation: pulse 1.5s infinite alternate; /* Add pulsing animation for live updates */
+        position: relative;
+    }
+    
+    /* Add a small dot to indicate streaming in progress */
+    .streaming-rating::after {
+        content: '';
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 6px;
+        height: 6px;
+        background-color: #1d9bf0;
+        border-radius: 50%;
+        animation: blink 0.7s infinite;
+        box-shadow: 0 0 4px #1d9bf0;
     }
 
     /* Rating status classes */
@@ -1759,6 +1843,11 @@
     .pending-rating {
         background-color: rgba(255, 152, 0, 0.9) !important;
         color: white !important;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 0.8; }
+        100% { opacity: 1; }
     }
 
     .error-rating {
@@ -1973,7 +2062,7 @@
     // ----- config.js -----
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const tweetIDRatingCache = {}; // ID-based cache for persistent storage
-const PROCESSING_DELAY_MS = 250; // Delay before processing a tweet (ms)
+const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
 let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
@@ -1992,6 +2081,7 @@ let storedRatings = GM_getValue('tweetRatings', '{}');
 let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
+let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
 
 
 // Model parameters
@@ -2178,6 +2268,141 @@ async function getCompletion(request, apiKey, timeout = 30000) {
         });
     });
 }
+
+/**
+ * Gets a streaming completion from OpenRouter API
+ * 
+ * @param {CompletionRequest} request - The completion request
+ * @param {string} apiKey - OpenRouter API key
+ * @param {Function} onChunk - Callback for each chunk of streamed response
+ * @param {Function} onComplete - Callback when streaming is complete
+ * @param {Function} onError - Callback when an error occurs
+ * @param {number} [timeout=30000] - Request timeout in milliseconds
+ */
+function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 30000) {
+    // Add stream parameter to request
+    const streamingRequest = {
+        ...request,
+        stream: true
+    };
+    
+    let fullResponse = "";
+    let content = "";
+    let responseObj = null;
+    
+    GM_xmlhttpRequest({
+        method: "POST",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
+            "X-Title": "TweetFilter-AI"
+        },
+        data: JSON.stringify(streamingRequest),
+        timeout: timeout,
+        responseType: "stream",
+        onloadstart: function(response) {
+            // Get the ReadableStream from the response
+            const reader = response.response.getReader();
+            
+            // Process the stream
+            const processStream = async () => {
+                try {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) {
+                            break;
+                        }
+                        
+                        // Convert the chunk to text
+                        const chunk = new TextDecoder().decode(value);
+                        fullResponse += chunk;
+                        
+                        // Split by lines - server-sent events format
+                        const lines = chunk.split("\n");
+                        for (const line of lines) {
+                            if (line.startsWith("data: ")) {
+                                const data = line.substring(6);
+                                
+                                // Check for the end of the stream
+                                if (data === "[DONE]") {
+                                    continue;
+                                }
+                                
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    responseObj = parsed;
+                                    
+                                    // Extract the content
+                                    if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta) {
+                                        const delta = parsed.choices[0].delta.content || "";
+                                        content += delta;
+                                        
+                                        // Call the chunk callback
+                                        onChunk({
+                                            chunk: delta,
+                                            content: content,
+                                            data: parsed
+                                        });
+                                    }
+                                } catch (e) {
+                                    console.error("Error parsing SSE data:", e, data);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // When done, call the complete callback
+                    onComplete({
+                        content: content,
+                        fullResponse: fullResponse,
+                        data: responseObj
+                    });
+                    
+                } catch (error) {
+                    console.error("Stream processing error:", error);
+                    onError({
+                        error: true,
+                        message: `Stream processing error: ${error.toString()}`,
+                        data: null
+                    });
+                }
+            };
+            
+            processStream();
+        },
+        onerror: function(error) {
+            onError({
+                error: true,
+                message: `Request error: ${error.toString()}`,
+                data: null
+            });
+        },
+        ontimeout: function() {
+            onError({
+                error: true,
+                message: `Request timed out after ${timeout}ms`,
+                data: null
+            });
+        }
+    });
+}
+
+/** 
+ * Formats description text for the tooltip.
+ * Copy of the function from ui.js to ensure it's available for streaming.
+ */
+function formatTooltipDescription(description) {
+    if (!description) return '';
+    // Basic formatting, can be expanded
+    description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+    description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
+    description = description.replace(/\n/g, '<br>');
+    return `<p>${description}</p>`;
+}
+
 const safetySettings = [
     {
         category: "HARM_CATEGORY_HARASSMENT",
@@ -2264,64 +2489,280 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         allow_fallbacks: true
     };
 
-    // Implement retry logic with exponential backoff
-    let attempt = 0;
-    while (attempt < maxRetries) {
-        attempt++;
+    // Check if streaming is enabled
+    const useStreaming = GM_getValue('enableStreaming', false);
+    
+    if (useStreaming) {
+        // Use streaming API
+        return new Promise((resolve) => {
+            // Update status
+            pendingRequests++;
+            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            
+            // Rate limiting
+            const now = Date.now();
+            const timeElapsed = now - lastAPICallTime;
+            if (timeElapsed < API_CALL_DELAY_MS) {
+                setTimeout(() => {
+                    lastAPICallTime = Date.now();
+                    processStreamingRequest();
+                }, API_CALL_DELAY_MS - timeElapsed);
+            } else {
+                lastAPICallTime = now;
+                processStreamingRequest();
+            }
+            
+            function processStreamingRequest() {
+                // Find the tweet article element for this tweet ID
+                const tweetArticle = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
+                    .find(article => getTweetID(article) === tweetId);
+                
+                let aggregatedContent = "";
+                
+                getCompletionStreaming(
+                    request,
+                    apiKey,
+                    // onChunk callback - update the tweet's rating indicator in real-time
+                    (chunkData) => {
+                        aggregatedContent += chunkData.chunk;
+                        
+                        if (tweetArticle) {
+                            // Look for a score in the accumulated content so far
+                            const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
+                            let currentScore = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+                            
+                            // Store references and current state
+                            const indicator = tweetArticle.querySelector('.score-indicator');
+                            const tooltip = indicator?.scoreTooltip;
+                            
+                            // Update the indicator with current partial content
+                            tweetArticle.dataset.streamingContent = aggregatedContent;
+                            tweetArticle.dataset.ratingStatus = 'streaming';
+                            tweetArticle.dataset.ratingDescription = aggregatedContent;
+                            
+                            // Don't cache the streaming result until we have a score
+                            // This prevents the "Cannot read properties of undefined (reading 'toString')" error
+                            if (currentScore !== null) {
+                                // Only initialize cache if we have a score
+                                if (!tweetIDRatingCache[tweetId]) {
+                                    tweetIDRatingCache[tweetId] = {
+                                        tweetContent: tweetText,
+                                        score: currentScore,
+                                        description: aggregatedContent,
+                                        streaming: true  // Mark as streaming/incomplete
+                                    };
+                                } else {
+                                    // Update existing cache entry if it exists
+                                    tweetIDRatingCache[tweetId].description = aggregatedContent;
+                                    tweetIDRatingCache[tweetId].score = currentScore;
+                                    tweetIDRatingCache[tweetId].streaming = true;
+                                }
+                                
+                                tweetArticle.dataset.sloppinessScore = currentScore.toString();
+                                
+                                // Save to storage periodically (once per second max)
+                                if (!window.lastCacheSaveTime || Date.now() - window.lastCacheSaveTime > 1000) {
+                                    saveTweetRatings();
+                                    window.lastCacheSaveTime = Date.now();
+                                }
+                            }
+                            
+                            // Only update the tooltip directly
+                            if (tooltip) {
+                                // Update tooltip content
+                                tooltip.innerHTML = formatTooltipDescription(aggregatedContent);
+                                tooltip.classList.add('streaming-tooltip');
+                                
+                                // Auto-scroll to the bottom of the tooltip to show new content
+                                if (tooltip.style.display === 'block') {
+                                    // Check if scroll is at or near the bottom before auto-scrolling
+                                    const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+                                    
+                                    // Only auto-scroll if user was already at the bottom
+                                    if (isAtBottom) {
+                                        tooltip.scrollTop = tooltip.scrollHeight;
+                                    }
+                                }
+                            }
+                            
+                            if (currentScore !== null) {
+                                // Update the score display but not the tooltip
+                                if (indicator) {
+                                    indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating');
+                                    indicator.classList.add('streaming-rating');
+                                    indicator.textContent = currentScore;
+                                    
+                                    // Don't call setScoreIndicator as it would overwrite the tooltip
+                                    tweetArticle.dataset.sloppinessScore = currentScore.toString();
+                                }
+                            } else if (indicator) {
+                                // Just update the streaming indicator without changing the tooltip
+                                indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating');
+                                indicator.classList.add('streaming-rating');
+                                indicator.textContent = '🔄';
+                            }
+                        }
+                    },
+                    // onComplete callback - finalize the rating
+                    (finalData) => {
+                        pendingRequests--;
+                        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+                        
+                        const content = finalData.content;
+                        const scoreMatch = content.match(/SCORE_(\d+)/);
+                        
+                        if (scoreMatch) {
+                            const score = parseInt(scoreMatch[1], 10);
+                            
+                            // Cache the final result
+                            tweetIDRatingCache[tweetId] = {
+                                tweetContent: tweetText,
+                                score: score,
+                                description: content,
+                                streaming: false,  // Mark as complete
+                                // Store timestamp to prevent immediate re-processing
+                                timestamp: Date.now()
+                            };
+                            saveTweetRatings();
+                            
+                            // Finalize the UI update
+                            if (tweetArticle) {
+                                tweetArticle.dataset.ratingStatus = 'rated';
+                                tweetArticle.dataset.ratingDescription = content;
+                                tweetArticle.dataset.sloppinessScore = score.toString();
+                                
+                                // Remove streaming class from tooltip and indicator
+                                const indicator = tweetArticle.querySelector('.score-indicator');
+                                if (indicator) {
+                                    indicator.classList.remove('streaming-rating');
+                                    indicator.classList.add('rated-rating');
+                                    
+                                    if (indicator.scoreTooltip) {
+                                        indicator.scoreTooltip.classList.remove('streaming-tooltip');
+                                    }
+                                }
+                                
+                                setScoreIndicator(tweetArticle, score, 'rated', content);
+                                filterSingleTweet(tweetArticle);
+                            }
+                            
+                            resolve({ score, content, error: false });
+                        } else {
+                            // No score found in the complete response
+                            const errorMsg = "Failed to parse score from streaming response";
+                            console.error(errorMsg, content);
+                            
+                            if (tweetArticle) {
+                                tweetArticle.dataset.ratingStatus = 'error';
+                                tweetArticle.dataset.ratingDescription = errorMsg;
+                                tweetArticle.dataset.sloppinessScore = '5';
+                                setScoreIndicator(tweetArticle, 5, 'error', errorMsg);
+                                filterSingleTweet(tweetArticle);
+                            }
+                            
+                            resolve({
+                                score: 5,
+                                content: errorMsg,
+                                error: true
+                            });
+                        }
+                    },
+                    // onError callback
+                    (errorData) => {
+                        pendingRequests--;
+                        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+                        console.error("Streaming error:", errorData.message);
+                        
+                        if (tweetArticle) {
+                            tweetArticle.dataset.ratingStatus = 'error';
+                            tweetArticle.dataset.ratingDescription = errorData.message;
+                            tweetArticle.dataset.sloppinessScore = '5';
+                            
+                            // Remove streaming class from tooltip and indicator
+                            const indicator = tweetArticle.querySelector('.score-indicator');
+                            if (indicator) {
+                                indicator.classList.remove('streaming-rating');
+                                indicator.classList.add('error-rating');
+                                
+                                if (indicator.scoreTooltip) {
+                                    indicator.scoreTooltip.classList.remove('streaming-tooltip');
+                                }
+                            }
+                            
+                            setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
+                            filterSingleTweet(tweetArticle);
+                        }
+                        
+                        resolve({
+                            score: 5,
+                            content: errorData.message,
+                            error: true
+                        });
+                    }
+                );
+            }
+        });
+    } else {
+        // Use non-streaming API (original implementation)
+        // Implement retry logic with exponential backoff
+        let attempt = 0;
+        while (attempt < maxRetries) {
+            attempt++;
 
-        // Rate limiting
-        const now = Date.now();
-        const timeElapsed = now - lastAPICallTime;
-        if (timeElapsed < API_CALL_DELAY_MS) {
-            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
-        }
-        lastAPICallTime = now;
+            // Rate limiting
+            const now = Date.now();
+            const timeElapsed = now - lastAPICallTime;
+            if (timeElapsed < API_CALL_DELAY_MS) {
+                await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
+            }
+            lastAPICallTime = now;
 
-        // Update status
-        pendingRequests++;
-        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            // Update status
+            pendingRequests++;
+            showStatus(`Rating tweet... (${pendingRequests} pending)`);
 
-        // Make API request
-        const result = await getCompletion(request, apiKey);
-        pendingRequests--;
-        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            // Make API request
+            const result = await getCompletion(request, apiKey);
+            pendingRequests--;
+            showStatus(`Rating tweet... (${pendingRequests} pending)`);
 
-        if (!result.error && result.data?.choices?.[0]?.message?.content) {
-            const content = result.data.choices[0].message.content;
-            const scoreMatch = content.match(/\SCORE_(\d+)/);
+            if (!result.error && result.data?.choices?.[0]?.message?.content) {
+                const content = result.data.choices[0].message.content;
+                const scoreMatch = content.match(/SCORE_(\d+)/);
 
-            if (scoreMatch) {
-                const score = parseInt(scoreMatch[1], 10);
+                if (scoreMatch) {
+                    const score = parseInt(scoreMatch[1], 10);
 
-                tweetIDRatingCache[tweetId] = {
-                    tweetContent: tweetText,
-                    score: score,
-                    description: content
-                };
-                saveTweetRatings();
-                return { score, content, error: false };
+                    tweetIDRatingCache[tweetId] = {
+                        tweetContent: tweetText,
+                        score: score,
+                        description: content
+                    };
+                    saveTweetRatings();
+                    return { score, content, error: false };
+                }
+            }
+
+            // Handle retries
+            if (attempt < maxRetries) {
+                const backoffDelay = Math.pow(attempt, 2) * 1000;
+                console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
+                console.log('Response:', {
+                    error: result.error,
+                    message: result.message,
+                    data: result.data,
+                    content: result.data?.choices?.[0]?.message?.content
+                });
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         }
 
-        // Handle retries
-        if (attempt < maxRetries) {
-            const backoffDelay = Math.pow(attempt, 2) * 1000;
-            console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
-            console.log('Response:', {
-                error: result.error,
-                message: result.message,
-                data: result.data,
-                content: result.data?.choices?.[0]?.message?.content
-            });
-            await new Promise(resolve => setTimeout(resolve, backoffDelay));
-        }
+        return {
+            score: 5,
+            content: "Failed to get valid rating after multiple attempts",
+            error: true
+        };
     }
-
-    return {
-        score: 5,
-        content: "Failed to get valid rating after multiple attempts",
-        error: true
-    };
 }
 
 /**
@@ -2662,16 +3103,39 @@ function applyTweetCachedRating(tweetArticle) {
     }
     // Check ID-based cache
     if (tweetIDRatingCache[tweetId]) {
-        const score = tweetIDRatingCache[tweetId].score;
-        const desc = tweetIDRatingCache[tweetId].description;
-        //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
-        tweetArticle.dataset.sloppinessScore = score.toString();
-        tweetArticle.dataset.cachedRating = 'true';
-        tweetArticle.dataset.ratingStatus = 'cached';
-        tweetArticle.dataset.ratingDescription = desc;
-        setScoreIndicator(tweetArticle, score, 'cached', desc);
-        filterSingleTweet(tweetArticle);
-        return true;
+        // Skip incomplete streaming entries that don't have a score yet
+        if (tweetIDRatingCache[tweetId].streaming === true && 
+            (tweetIDRatingCache[tweetId].score === undefined || tweetIDRatingCache[tweetId].score === null)) {
+            return false;
+        }
+        
+        // Ensure the score exists before applying it
+        if (tweetIDRatingCache[tweetId].score !== undefined && tweetIDRatingCache[tweetId].score !== null) {
+            const score = tweetIDRatingCache[tweetId].score;
+            const desc = tweetIDRatingCache[tweetId].description;
+            //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
+            tweetArticle.dataset.sloppinessScore = score.toString();
+            tweetArticle.dataset.cachedRating = 'true';
+            
+            // If it's a streaming entry that's not complete, mark as streaming instead of cached
+            if (tweetIDRatingCache[tweetId].streaming === true) {
+                tweetArticle.dataset.ratingStatus = 'streaming';
+                setScoreIndicator(tweetArticle, score, 'streaming', desc);
+            } else {
+                tweetArticle.dataset.ratingStatus = 'cached';
+                setScoreIndicator(tweetArticle, score, 'cached', desc);
+            }
+            
+            tweetArticle.dataset.ratingDescription = desc;
+            filterSingleTweet(tweetArticle);
+            return true;
+        } else {
+            // Invalid cache entry - missing score
+            console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
+            delete tweetIDRatingCache[tweetId];  // Remove invalid entry
+            saveTweetRatings();
+            return false;
+        }
     }
 
     return false;
@@ -2760,16 +3224,38 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             processingSuccessful = true;
             return;
         }
-        // Check if a cached rating exists
-        if (applyTweetCachedRating(tweetArticle)) {
-            // Verify the indicator exists after applying cached rating
-            if (!tweetArticle.querySelector('.score-indicator')) {
-                console.error(`Missing indicator after applying cached rating to tweet ${tweetId}`);
-                processingSuccessful = false;
+        
+        // Check if a cached rating is available, but only use it if it has a valid score
+        // and is not an incomplete streaming entry
+        if (tweetIDRatingCache[tweetId]) {
+            const cacheEntry = tweetIDRatingCache[tweetId];
+            const isValidCacheEntry = 
+                cacheEntry.score !== undefined && 
+                cacheEntry.score !== null &&
+                !(cacheEntry.streaming === true && cacheEntry.score === undefined);
+                
+            if (isValidCacheEntry) {
+                const cacheApplied = applyTweetCachedRating(tweetArticle);
+                if (cacheApplied) {
+                    // Verify the indicator exists after applying cached rating
+                    if (!tweetArticle.querySelector('.score-indicator')) {
+                        console.error(`Missing indicator after applying cached rating to tweet ${tweetId}`);
+                        processingSuccessful = false;
+                    } else {
+                        processingSuccessful = true;
+                    }
+                    return;
+                }
+            } else if (cacheEntry.streaming === true) {
+                // This is a streaming entry that's still in progress
+                // Don't delete it, but don't use it either
+                console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
             } else {
-                processingSuccessful = true;
+                // Invalid cache entry, delete it
+                console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cacheEntry);
+                delete tweetIDRatingCache[tweetId];
+                saveTweetRatings();
             }
-            return;
         }
        
         const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
@@ -2820,11 +3306,13 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     tweetIDRatingCache[tweetId].score = score;
                     tweetIDRatingCache[tweetId].description = description;
                     tweetIDRatingCache[tweetId].tweetContent = fullContextWithImageDescription;
+                    tweetIDRatingCache[tweetId].streaming = false; // Mark as complete
                 } else {
                     tweetIDRatingCache[tweetId] = {
                         score: score,
                         description: description,
-                        tweetContent: fullContextWithImageDescription
+                        tweetContent: fullContextWithImageDescription,
+                        streaming: false // Mark as complete
                     };
                 }
                 
@@ -2851,6 +3339,12 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             tweetArticle.dataset.ratingStatus = 'error';
             tweetArticle.dataset.ratingDescription = "No content";
             processingSuccessful = true;
+        }
+        
+        // Always ensure a valid score is set
+        if (score === undefined || score === null) {
+            console.warn(`Invalid score for tweet ${tweetId}, using default score 5`);
+            score = 5;
         }
 
         tweetArticle.dataset.sloppinessScore = score.toString();
@@ -2933,10 +3427,17 @@ function scheduleTweetProcessing(tweetArticle) {
         return;
     }
     
-    // If a cached rating is available, use it immediately
+    // Check for a cached rating, but be careful with streaming cache entries
     if (tweetIDRatingCache[tweetId]) {
-        applyTweetCachedRating(tweetArticle);
-        return;
+        // Only apply cached rating if it has a valid score and isn't an incomplete streaming entry
+        const isIncompleteStreaming = 
+            tweetIDRatingCache[tweetId].streaming === true && 
+            (tweetIDRatingCache[tweetId].score === undefined || tweetIDRatingCache[tweetId].score === null);
+            
+        if (!isIncompleteStreaming) {
+            const wasApplied = applyTweetCachedRating(tweetArticle);
+            if (wasApplied) return;
+        }
     }
     
     // Skip if already processed in this session
@@ -3000,79 +3501,115 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
     
     // Allow a small delay for images to load
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 10));
     
     let allMediaLinks = extractMediaLinks(tweetArticle);
 
-        // --- Extract Quoted Tweet Content (if any) ---
-        let quotedText = "";
-        let quotedMediaLinks = [];
-        const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-        if (quoteContainer) {
-            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-            // Short delay to ensure quoted tweet images are loaded
-            await new Promise(resolve => setTimeout(resolve, 300));
-            quotedMediaLinks = extractMediaLinks(quoteContainer);
-            console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
+    // --- Extract Quoted Tweet Content (if any) ---
+    let quotedText = "";
+    let quotedMediaLinks = [];
+    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+    if (quoteContainer) {
+        quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
+        // Short delay to ensure quoted tweet images are loaded
+        await new Promise(resolve => setTimeout(resolve, 20));
+        quotedMediaLinks = extractMediaLinks(quoteContainer);
+        console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
+    }
+    
+    // Get thread media URLs from cache if available
+    const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') || 
+                          document.querySelector('div[aria-label^="Timeline: Conversation"]') ||
+                          document.querySelector('main[role="main"] div[aria-label^="Timeline:"]');
+    
+    let threadMediaUrls = [];
+    if (conversation && conversation.dataset.threadMapping && tweetIDRatingCache[tweetId]?.threadContext?.threadMediaUrls) {
+        // Get thread media URLs from cache if available
+        threadMediaUrls = tweetIDRatingCache[tweetId].threadContext.threadMediaUrls || [];
+    } else if (conversation && conversation.dataset.threadMediaUrls) {
+        // Or get them from the dataset if available
+        try {
+            const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
+            threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
+        } catch (e) {
+            console.error("Error parsing thread media URLs:", e);
         }
-        // Remove any media links from the main tweet that also appear in the quoted tweet
-        let mainMediaLinks = allMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-        let fullContextWithImageDescription = `[TWEET ${tweetId}]
+    }
+    
+    // Combine all media URLs: current tweet + quoted tweet + thread context
+    let allAvailableMediaLinks = [...allMediaLinks];
+    
+    // Remove any media links from the main tweet that also appear in the quoted tweet
+    let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+    
+    // Start building the context
+    let fullContextWithImageDescription = `[TWEET ${tweetId}]
  Author:@${userHandle}:
 ` + mainText;
 
-        if (mainMediaLinks.length > 0) {
-            // Process main tweet images only if image descriptions are enabled
-            if (enableImageDescriptions=GM_getValue('enableImageDescriptions', false)) {
-                let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-                fullContextWithImageDescription += `
+    // Add media from the current tweet
+    if (mainMediaLinks.length > 0) {
+        // Process main tweet images only if image descriptions are enabled
+        if (enableImageDescriptions=GM_getValue('enableImageDescriptions', false)) {
+            let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+            fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
 ${mainMediaLinksDescription}`;
-            }
-            // Just add the URLs when descriptions are disabled
-            fullContextWithImageDescription += `
+        }
+        // Just add the URLs when descriptions are disabled
+        fullContextWithImageDescription += `
 [MEDIA_URLS]:
 ${mainMediaLinks.join(", ")}`;
+    }
+    
+    // Add thread media URLs if this is a reply and we have previous media
+    if (!isOriginalTweet(tweetArticle) && threadMediaUrls.length > 0) {
+        // Filter out duplicates
+        const uniqueThreadMediaUrls = threadMediaUrls.filter(url => 
+            !mainMediaLinks.includes(url) && !quotedMediaLinks.includes(url));
             
-        }
-        // --- Quoted Tweet Handling ---
-        if (quotedText||quotedMediaLinks.length > 0) {
+        if (uniqueThreadMediaUrls.length > 0) {
             fullContextWithImageDescription += `
+[THREAD_MEDIA_URLS]:
+${uniqueThreadMediaUrls.join(", ")}`;
+        }
+    }
+        
+    // --- Quoted Tweet Handling ---
+    if (quotedText || quotedMediaLinks.length > 0) {
+        fullContextWithImageDescription += `
 [QUOTED_TWEET]:
  Author:@${quotedHandle}:
 ${quotedText}`;
-            if (quotedMediaLinks.length > 0) {
-                // Process quoted tweet images only if image descriptions are enabled
-                if (enableImageDescriptions) {
-                    let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-                    fullContextWithImageDescription += `
+        if (quotedMediaLinks.length > 0) {
+            // Process quoted tweet images only if image descriptions are enabled
+            if (enableImageDescriptions) {
+                let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
+                fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaLinksDescription}`;
-                }
-                // Just add the URLs when descriptions are disabled
-                fullContextWithImageDescription += `
+            }
+            // Just add the URLs when descriptions are disabled
+            fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
 ${quotedMediaLinks.join(", ")}`;
-                
-            }
         }
-        
-        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-        // --- Conversation Thread Handling ---
-        const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-        if (conversation && conversation.dataset.threadHist) {
-            // If this tweet is not the original tweet, prepend the thread history.
-            if (!isOriginalTweet(tweetArticle)) {
-                fullContextWithImageDescription = conversation.dataset.threadHist + `
+    }
+    
+    tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+    
+    // --- Conversation Thread Handling ---
+    if (conversation && conversation.dataset.threadHist) {
+        // If this tweet is not the original tweet, prepend the thread history.
+        if (!isOriginalTweet(tweetArticle)) {
+            fullContextWithImageDescription = conversation.dataset.threadHist + `
 [REPLY]
 ` + fullContextWithImageDescription;
-                
-            }
         }
-        
-        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-        return fullContextWithImageDescription;
+    }
     
+    tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+    return fullContextWithImageDescription;
 }
 
 
@@ -3132,35 +3669,71 @@ function ensureAllTweetsRated() {
 }
 
 async function handleThreads() {
-    let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-    if (conversation) {
+    try {
+        // Find the conversation timeline using the selectors from the original code
+        let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+        if (!conversation) {
+            conversation = document.querySelector('div[aria-label^="Timeline: Conversation"]');
+            if (!conversation) {
+                conversation = document.querySelector('main[role="main"] div[aria-label^="Timeline:"]');
+            }
+        }
+        if (!conversation) return;
 
-        if (conversation.dataset.threadHist == undefined) {
+        // Maintain compatibility with the existing implementation by checking dataset attributes
+        if (conversation.dataset.threadHist === "pending") {
+            return; // Don't interrupt pending operations
+        }
+        
+        // Add protection to avoid re-processing if we already mapped this thread recently
+        // This helps avoid processing loops on page refresh
+        if (conversation.dataset.threadMappedAt) {
+            const lastMappedTime = parseInt(conversation.dataset.threadMappedAt, 10);
+            const now = Date.now();
+            // If we've mapped this thread in the last 5 seconds, skip
+            if (now - lastMappedTime < 5000) {
+                return;
+            }
+        }
 
+        // Extract the root tweet ID from the URL for improved thread mapping
+        const match = location.pathname.match(/status\/(\d+)/);
+        const localRootTweetId = match ? match[1] : null;
+        
+        // Initialize thread history
+        if (conversation.dataset.threadHist === undefined) {
+            // Original behavior - initialize thread history
             threadHist = "";
             const firstArticle = document.querySelector('article[data-testid="tweet"]');
             if (firstArticle) {
                 conversation.dataset.threadHist = 'pending';
                 const tweetId = getTweetID(firstArticle);
                 
+                // Get the full context of the root tweet
                 const apiKey = GM_getValue('openrouter-api-key', '');
                 const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
                 threadHist = fullcxt;
                 
                 conversation.dataset.threadHist = threadHist;
-                //this lets us know if we are still on the main post of the conversation or if we are on a reply to the main post. Will disapear every time we dive deeper
                 conversation.firstChild.dataset.canary = "true";
                 
                 // Schedule processing for the original tweet
                 if (!processedTweets.has(tweetId)) {
                     scheduleTweetProcessing(firstArticle);
                 }
+                
+                // Use improved thread detection to map the structure, but with delay
+                // This helps to avoid racing with the page load
+                if (localRootTweetId) {
+                    setTimeout(() => {
+                        mapThreadStructure(conversation, localRootTweetId);
+                    }, 500);
+                }
+                
+                return;
             }
-        }
-        else if (conversation.dataset.threadHist == "pending") {
-            return;
-        }
-        else if (conversation.dataset.threadHist != "pending" && conversation.firstChild.dataset.canary == undefined) {
+        } else if (conversation.dataset.threadHist !== "pending" && conversation.firstChild.dataset.canary === undefined) {
+            // Original behavior for deep-diving into replies
             conversation.firstChild.dataset.canary = "pending";
             const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
             if (nextArticle) {
@@ -3169,13 +3742,258 @@ async function handleThreads() {
                     threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
                 } else {
                     const apiKey = GM_getValue('openrouter-api-key', '');
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     const newContext = await getFullContext(nextArticle, tweetId, apiKey);
                     threadHist = threadHist + "\n[REPLY]\n" + newContext;
                 }
                 conversation.dataset.threadHist = threadHist;
             }
+            
+            // With delay to avoid competing with page load
+            if (localRootTweetId) {
+                setTimeout(() => {
+                    mapThreadStructure(conversation, localRootTweetId);
+                }, 500);
+            }
+        } else if (localRootTweetId && !conversation.dataset.threadMapping) {
+            // Only run thread detection if we haven't already mapped this thread
+            // This prevents redundant processing
+            setTimeout(() => {
+                mapThreadStructure(conversation, localRootTweetId);
+            }, 500);
         }
+    } catch (error) {
+        console.error("Error in handleThreads:", error);
+    }
+}
+
+// Helper function for the improved thread structure detection
+async function mapThreadStructure(conversation, localRootTweetId) {
+    // Add a timestamp to prevent re-processing too frequently
+    conversation.dataset.threadMappedAt = Date.now().toString();
+    
+    try {
+        // Use a timeout promise to prevent hanging
+        const timeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Thread mapping timed out')), 5000)
+        );
+        
+        // The actual mapping function
+        const mapping = async () => {
+            // Process all visible tweets using the cellInnerDiv structure for improved mapping
+            let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
+            if (!cellDivs.length) {
+                console.log("No cell divs found, thread mapping aborted");
+                return;
+            }
+            
+            let tweetCells = [];
+            let processedCount = 0;
+            
+            // First pass: collect all tweet data
+            for (let idx = 0; idx < cellDivs.length; idx++) {
+                const cell = cellDivs[idx];
+                const article = cell.querySelector('article[data-testid="tweet"]');
+                if (!article) continue;
+                
+                // Extract tweet metadata with proper error handling
+                try {
+                    let tweetId = getTweetID(article);
+                    if (!tweetId) {
+                        let tweetLink = article.querySelector('a[href*="/status/"]');
+                        if (tweetLink) {
+                            let match = tweetLink.href.match(/status\/(\d+)/);
+                            if (match) tweetId = match[1];
+                        }
+                    }
+                    
+                    // Skip if we still can't get a tweet ID
+                    if (!tweetId) continue;
+                    
+                    // Extract username using existing functions if available
+                    const handles = getUserHandles(article);
+                    let username = handles.length > 0 ? handles[0] : null;
+                    
+                    // Skip if we can't get a username
+                    if (!username) continue;
+                    
+                    // Extract tweet text
+                    let tweetTextSpan = article.querySelector('[data-testid="tweetText"]');
+                    let text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
+                    
+                    // Extract media links from this tweet
+                    let mediaLinks = extractMediaLinks(article);
+                    
+                    // Extract quoted tweet media if any
+                    let quotedMediaLinks = [];
+                    const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
+                    if (quoteContainer) {
+                        quotedMediaLinks = extractMediaLinks(quoteContainer);
+                    }
+                    
+                    // Detect reply structure based on DOM
+                    let prevCell = cellDivs[idx-1] || null;
+                    let isReplyToRoot = false;
+                    if (prevCell && prevCell.childElementCount === 1) {
+                        let onlyChild = prevCell.children[0];
+                        if (onlyChild && onlyChild.children.length === 0 && onlyChild.innerHTML.trim() === '') {
+                            isReplyToRoot = true;
+                        }
+                    }
+                    
+                    tweetCells.push({
+                        tweetNode: article,
+                        username,
+                        tweetId,
+                        text,
+                        mediaLinks,
+                        quotedMediaLinks,
+                        cellIndex: idx,
+                        isReplyToRoot,
+                        cellDiv: cell,
+                        index: processedCount++
+                    });
+                    
+                    // Schedule processing for this tweet if not already processed
+                    if (!processedTweets.has(tweetId)) {
+                        scheduleTweetProcessing(article);
+                    }
+                } catch (err) {
+                    console.error("Error processing tweet in mapThreadStructure:", err);
+                    // Continue with next tweet
+                    continue;
+                }
+            }
+            
+            // Build reply structure only if we have tweets to process
+            if (tweetCells.length === 0) {
+                console.log("No valid tweets found, thread mapping aborted");
+                return;
+            }
+            
+            // Second pass: build the reply structure with the right relationship chain
+            for (let i = 0; i < tweetCells.length; ++i) {
+                let tw = tweetCells[i];
+                if (tw.tweetId === localRootTweetId) {
+                    tw.replyTo = null;
+                    tw.isRoot = true;
+                } else if (tw.isReplyToRoot) {
+                    let root = tweetCells.find(tk => tk.tweetId === localRootTweetId);
+                    tw.replyTo = root ? root.username : null;
+                    tw.replyToId = root ? root.tweetId : null;
+                    tw.isRoot = false;
+                } else if (i > 0) {
+                    tw.replyTo = tweetCells[i - 1].username;
+                    tw.replyToId = tweetCells[i - 1].tweetId;
+                    tw.isRoot = false;
+                }
+            }
+            
+            // Create thread mapping with media URLs for context generation
+            const replyDocs = tweetCells.map(tw => ({
+                from: tw.username,
+                tweetId: tw.tweetId,
+                to: tw.replyTo,
+                toId: tw.replyToId,
+                isRoot: tw.isRoot === true,
+                text: tw.text,
+                mediaLinks: tw.mediaLinks || [],
+                quotedMediaLinks: tw.quotedMediaLinks || []
+            }));
+            
+            // Store the thread mapping in a dataset attribute for debugging
+            // But keep it small to avoid memory issues
+            conversation.dataset.threadMapping = JSON.stringify(replyDocs);
+            
+            // Build thread history with full context including media links
+            let completeThreadHistory = "";
+            
+            // Start with the root post
+            const rootTweet = replyDocs.find(t => t.isRoot === true);
+            if (rootTweet && rootTweet.tweetId) {
+                const rootTweetElement = tweetCells.find(t => t.tweetId === rootTweet.tweetId)?.tweetNode;
+                if (rootTweetElement) {
+                    const apiKey = GM_getValue('openrouter-api-key', '');
+                    const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
+                    if (rootContext) {
+                        completeThreadHistory = rootContext;
+                        // Store the thread history in dataset for getFullContext to use
+                        conversation.dataset.threadHist = completeThreadHistory;
+                        
+                        // Also store the comprehensive media URLs from the entire thread
+                        const allMediaUrls = [];
+                        replyDocs.forEach(doc => {
+                            if (doc.mediaLinks && doc.mediaLinks.length) {
+                                allMediaUrls.push(...doc.mediaLinks);
+                            }
+                            if (doc.quotedMediaLinks && doc.quotedMediaLinks.length) {
+                                allMediaUrls.push(...doc.quotedMediaLinks);
+                            }
+                        });
+                        
+                        if (allMediaUrls.length > 0) {
+                            conversation.dataset.threadMediaUrls = JSON.stringify(allMediaUrls);
+                        }
+                        
+                        // Log debug information
+                        console.log('[Thread Media URLs]', allMediaUrls);
+                    }
+                }
+            }
+            
+            // Log thread structure for debugging
+            console.log('[Thread Mapping]', replyDocs);
+            
+            // Third pass: Update the cache with thread context
+            // but with a limit on how many we process at once
+            const batchSize = 10;
+            for (let i = 0; i < replyDocs.length; i += batchSize) {
+                const batch = replyDocs.slice(i, i + batchSize);
+                batch.forEach(doc => {
+                    if (doc.tweetId && tweetIDRatingCache[doc.tweetId]) {
+                        tweetIDRatingCache[doc.tweetId].threadContext = {
+                            replyTo: doc.to,
+                            replyToId: doc.toId,
+                            isRoot: doc.isRoot,
+                            threadMediaUrls: doc.isRoot ? [] : getAllPreviousMediaUrls(doc.tweetId, replyDocs)
+                        };
+                    }
+                });
+                
+                // Yield to main thread every batch to avoid locking UI
+                if (i + batchSize < replyDocs.length) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+        };
+        
+        // Helper function to get all media URLs from tweets that came before the current one in the thread
+        function getAllPreviousMediaUrls(tweetId, replyDocs) {
+            const allMediaUrls = [];
+            const index = replyDocs.findIndex(doc => doc.tweetId === tweetId);
+            
+            if (index > 0) {
+                // Get all media URLs from tweets before this one in the thread
+                for (let i = 0; i < index; i++) {
+                    if (replyDocs[i].mediaLinks && replyDocs[i].mediaLinks.length) {
+                        allMediaUrls.push(...replyDocs[i].mediaLinks);
+                    }
+                    if (replyDocs[i].quotedMediaLinks && replyDocs[i].quotedMediaLinks.length) {
+                        allMediaUrls.push(...replyDocs[i].quotedMediaLinks);
+                    }
+                }
+            }
+            
+            return allMediaUrls;
+        }
+        
+        // Race the mapping against the timeout
+        await Promise.race([mapping(), timeout]);
+        
+    } catch (error) {
+        console.error("Error in mapThreadStructure:", error);
+        // Clear the mapped timestamp so we can try again later
+        delete conversation.dataset.threadMappedAt;
     }
 }
 
@@ -3931,7 +4749,7 @@ function closeAllSelectBoxes(exceptThisOne = null) {
  * Updates or creates the rating indicator on a tweet article.
  * @param {Element} tweetArticle - The tweet article element.
  * @param {number|null} score - The numeric rating (null if pending/error).
- * @param {string} status - 'pending', 'rated', 'error', 'cached', 'blacklisted'.
+ * @param {string} status - 'pending', 'rated', 'error', 'cached', 'blacklisted', 'streaming'.
  * @param {string} [description] - Optional description for hover tooltip.
  */
 function setScoreIndicator(tweetArticle, score, status, description = "") {
@@ -3942,32 +4760,59 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
         tweetArticle.style.position = 'relative'; // Ensure parent is positioned
         tweetArticle.appendChild(indicator);
         
-        // Add hover listeners only once when creating the indicator
+        // Create a unique tooltip for this indicator
+        const tooltip = document.createElement('div');
+        tooltip.className = 'score-description';
+        tooltip.style.display = 'none';
+        document.body.appendChild(tooltip); // Append to body instead of indicator
+        
+        // Store the tooltip reference
+        indicator.scoreTooltip = tooltip;
+        
+        // Add hover listeners
         indicator.addEventListener('mouseenter', handleIndicatorMouseEnter);
         indicator.addEventListener('mouseleave', handleIndicatorMouseLeave);
+        
+        // Also add hover listeners to the tooltip
+        tooltip.addEventListener('mouseenter', () => {
+            tooltip.style.display = 'block';
+        });
+        tooltip.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
     }
 
     // Update status class and text content
-    indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating'); // Clear previous
+    indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating', 'streaming-rating'); // Clear previous
     indicator.dataset.description = description || ''; // Store description
+    
+    // Update the tooltip content
+    const tooltip = indicator.scoreTooltip;
+    if (tooltip) {
+        tooltip.innerHTML = formatTooltipDescription(description);
+    }
 
     switch (status) {
         case 'pending':
-        indicator.classList.add('pending-rating');
-        indicator.textContent = '⏳';
+            indicator.classList.add('pending-rating');
+            indicator.textContent = '⏳';
+            break;
+        case 'streaming':
+            indicator.classList.add('streaming-rating');
+            indicator.textContent = score || '🔄';
             break;
         case 'error':
-        indicator.classList.add('error-rating');
-        indicator.textContent = '⚠️';
+            indicator.classList.add('error-rating');
+            indicator.textContent = '⚠️';
             break;
         case 'cached':
             indicator.classList.add('cached-rating');
-        indicator.textContent = score;
-             break;
+            indicator.textContent = score;
+            break;
         case 'blacklisted':
-             indicator.classList.add('blacklisted-rating');
-             indicator.textContent = score; // Typically 10 for blacklisted
-             break;
+            indicator.classList.add('blacklisted-rating');
+            indicator.textContent = score; // Typically 10 for blacklisted
+            break;
         case 'rated': // Default/normal rated
         default:
             indicator.classList.add('rated-rating'); // Add a general rated class
@@ -3976,52 +4821,54 @@ function setScoreIndicator(tweetArticle, score, status, description = "") {
     }
 }
 
-/** Global tooltip element */
-let scoreTooltip = null;
-
-/** Creates or gets the shared tooltip element. */
+/** 
+ * This function is no longer needed as each indicator has its own tooltip 
+ * It's kept for backward compatibility but is not used 
+ */
 function getScoreTooltip() {
-    if (!scoreTooltip) {
-        scoreTooltip = document.createElement('div');
-        scoreTooltip.className = 'score-description'; // Use the class from HTML/CSS
-        scoreTooltip.style.display = 'none'; // Initially hidden
-        scoreTooltip.style.position = 'fixed'; // Use fixed positioning
-        scoreTooltip.style.zIndex = '99999999';
-        document.body.appendChild(scoreTooltip);
-
-        // Keep tooltip visible when hovering over it
-        scoreTooltip.addEventListener('mouseenter', () => {
-            scoreTooltip.style.display = 'block';
-        });
-        scoreTooltip.addEventListener('mouseleave', () => {
-            scoreTooltip.style.display = 'none';
-        });
-    }
-    return scoreTooltip;
+    console.warn('getScoreTooltip is deprecated as each indicator now has its own tooltip');
+    return null;
 }
 
 /** Formats description text for the tooltip. */
 function formatTooltipDescription(description) {
     if (!description) return '';
     // Basic formatting, can be expanded
-        description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
+    description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
     description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
-        description = description.replace(/\n/g, '<br>');
+    description = description.replace(/\n/g, '<br>');
     return `<p>${description}</p>`;
 }
 
 /** Handles mouse enter event for score indicators. */
 function handleIndicatorMouseEnter(event) {
-    const indicator = event.target;
-    const description = indicator.dataset.description;
-    if (!description) return;
-
-    const tooltip = getScoreTooltip();
-    tooltip.innerHTML = formatTooltipDescription(description);
-
+    const indicator = event.currentTarget;
+    const tooltip = indicator.scoreTooltip;
+    if (!tooltip) return;
+    
+    // Get the tweet article
+    const tweetArticle = indicator.closest('article[data-testid="tweet"]');
+    const tweetId = tweetArticle ? getTweetID(tweetArticle) : null;
+    
     // Position the tooltip
-        const rect = indicator.getBoundingClientRect();
-    const tooltipWidth = tooltip.offsetWidth; // Get width after setting content
+    tooltip.style.position = 'fixed';
+    tooltip.style.display = 'block';
+    tooltip.style.zIndex = '99999999';
+    
+    // Check if we have cached streaming content for this tweet
+    if (tweetId && tweetIDRatingCache[tweetId]?.description) {
+        tooltip.innerHTML = formatTooltipDescription(tweetIDRatingCache[tweetId].description);
+        
+        // Add streaming class if status is streaming
+        if (tweetArticle?.dataset.ratingStatus === 'streaming' || tweetIDRatingCache[tweetId].streaming === true) {
+            tooltip.classList.add('streaming-tooltip');
+        } else {
+            tooltip.classList.remove('streaming-tooltip');
+        }
+    }
+    
+    const rect = indicator.getBoundingClientRect();
+    const tooltipWidth = tooltip.offsetWidth;
     const tooltipHeight = tooltip.offsetHeight;
     const margin = 10;
 
@@ -4041,26 +4888,51 @@ function handleIndicatorMouseEnter(event) {
 
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
-    tooltip.style.display = 'block';
+    
+    // Store the current scroll position to check if user has manually scrolled
+    tooltip.lastScrollTop = tooltip.scrollTop;
+    
+    // If this is a streaming tooltip, scroll to the bottom to show latest content only if:
+    // 1. It's a fresh display (not previously scrolled by user)
+    // 2. User was already at the bottom when new content arrived
+    if (tooltip.classList.contains('streaming-tooltip')) {
+        // Check if tooltip was already visible and user had scrolled up
+        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+        const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
+                               (Date.now() - tooltip.lastDisplayTime) > 1000;
+        
+        if (isInitialDisplay || isAtBottom) {
+            // Use setTimeout to ensure this happens after the tooltip is displayed
+            setTimeout(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+            }, 10);
+        }
+    }
+    
+    // Track when we displayed the tooltip
+    tooltip.lastDisplayTime = Date.now();
 }
 
 /** Handles mouse leave event for score indicators. */
-function handleIndicatorMouseLeave() {
-    const tooltip = getScoreTooltip();
-    // Hide with a slight delay to allow moving cursor to the tooltip
-        setTimeout(() => {
-        if (tooltip && tooltip.style.display !== 'none' && !tooltip.matches(':hover')) {
-           tooltip.style.display = 'none';
+function handleIndicatorMouseLeave(event) {
+    const indicator = event.currentTarget;
+    const tooltip = indicator.scoreTooltip;
+    if (!tooltip) return;
+    
+    // Only hide if we're not moving to the tooltip itself
+    setTimeout(() => {
+        if (tooltip && !tooltip.matches(':hover')) {
+            tooltip.style.display = 'none';
         }
-        }, 100);
+    }, 100);
 }
 
 /** Cleans up the global score tooltip element. */
 function cleanupDescriptionElements() {
-    if (scoreTooltip) {
-        scoreTooltip.remove();
-        scoreTooltip = null;
-    }
+    // Now we need to remove any tooltips that might be in the DOM
+    document.querySelectorAll('.score-description').forEach(tooltip => {
+        tooltip.remove();
+    });
 }
 
 // --- Settings Import/Export (Simplified) ---
@@ -4075,6 +4947,7 @@ function exportSettings() {
             selectedModel: GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b'),
             selectedImageModel: GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
+            enableStreaming: GM_getValue('enableStreaming', true),
             modelTemperature: GM_getValue('modelTemperature', 0.5),
             modelTopP: GM_getValue('modelTopP', 0.9),
             imageModelTemperature: GM_getValue('imageModelTemperature', 0.5),
@@ -4174,6 +5047,7 @@ function resetSettings(noconfirm=false) {
             selectedModel: 'google/gemini-2.0-flash-lite-001',
             selectedImageModel: 'google/gemini-2.0-flash-lite-001',
             enableImageDescriptions: false,
+            enableStreaming: true,
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,

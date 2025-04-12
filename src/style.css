@@ -695,12 +695,88 @@
         font-size: 16px;
         line-height: 1.5;
         z-index: 99999999;
-        position: absolute;
+        position: fixed;
         width: clamp(300px, 30vw, 500px);
         max-height: 60vh;
         overflow-y: auto;
         border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
+    }
+    
+    /* Ensure the tooltip scrolls to the bottom during streaming */
+    .score-description.streaming-tooltip {
+        scroll-behavior: smooth;
+        border-left: 3px solid #1d9bf0;
+        background-color: rgba(25, 30, 35, 0.98);
+    }
+    
+    /* Add a small badge to indicate streaming status */
+    .score-description.streaming-tooltip::before {
+        content: 'Live';
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #1d9bf0;
+        color: white;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    
+    /* Add scrollbars to tooltip for better UX */
+    .score-description::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .score-description::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+    }
+    
+    .score-description::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+    
+    .score-description::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Add animated cursor to the streaming tooltip content */
+    .score-description.streaming-tooltip p::after {
+        content: '|';
+        display: inline-block;
+        color: #1d9bf0;
+        animation: blink 0.7s infinite;
+        font-weight: bold;
+        margin-left: 2px;
+    }
+    
+    @keyframes blink {
+        0%, 100% { opacity: 0; }
+        50% { opacity: 1; }
+    }
+    
+    .streaming-rating {
+        background-color: rgba(33, 150, 243, 0.9) !important;
+        color: white !important;
+        animation: pulse 1.5s infinite alternate; /* Add pulsing animation for live updates */
+        position: relative;
+    }
+    
+    /* Add a small dot to indicate streaming in progress */
+    .streaming-rating::after {
+        content: '';
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 6px;
+        height: 6px;
+        background-color: #1d9bf0;
+        border-radius: 50%;
+        animation: blink 0.7s infinite;
+        box-shadow: 0 0 4px #1d9bf0;
     }
 
     /* Rating status classes */
@@ -717,6 +793,11 @@
     .pending-rating {
         background-color: rgba(255, 152, 0, 0.9) !important;
         color: white !important;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 0.8; }
+        100% { opacity: 1; }
     }
 
     .error-rating {
