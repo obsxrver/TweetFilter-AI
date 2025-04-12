@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.2
+// @version      Version 1.3.3
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -1995,7 +1995,7 @@
     // ----- twitter-desloppifier.js -----
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.2 - Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.3 - Enhanced)");
     
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -3505,17 +3505,17 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     
     let allMediaLinks = extractMediaLinks(tweetArticle);
 
-    // --- Extract Quoted Tweet Content (if any) ---
-    let quotedText = "";
-    let quotedMediaLinks = [];
-    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-    if (quoteContainer) {
-        quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-        // Short delay to ensure quoted tweet images are loaded
-        await new Promise(resolve => setTimeout(resolve, 20));
-        quotedMediaLinks = extractMediaLinks(quoteContainer);
-        console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
-    }
+        // --- Extract Quoted Tweet Content (if any) ---
+        let quotedText = "";
+        let quotedMediaLinks = [];
+        const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+        if (quoteContainer) {
+            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
+            // Short delay to ensure quoted tweet images are loaded
+            await new Promise(resolve => setTimeout(resolve, 20));
+            quotedMediaLinks = extractMediaLinks(quoteContainer);
+            console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
+        }
     
     // Get thread media URLs from cache if available
     const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') || 
@@ -3539,25 +3539,25 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     // Combine all media URLs: current tweet + quoted tweet + thread context
     let allAvailableMediaLinks = [...allMediaLinks];
     
-    // Remove any media links from the main tweet that also appear in the quoted tweet
+        // Remove any media links from the main tweet that also appear in the quoted tweet
     let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
     
     // Start building the context
-    let fullContextWithImageDescription = `[TWEET ${tweetId}]
+        let fullContextWithImageDescription = `[TWEET ${tweetId}]
  Author:@${userHandle}:
 ` + mainText;
 
     // Add media from the current tweet
-    if (mainMediaLinks.length > 0) {
-        // Process main tweet images only if image descriptions are enabled
-        if (enableImageDescriptions=GM_getValue('enableImageDescriptions', false)) {
-            let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-            fullContextWithImageDescription += `
+        if (mainMediaLinks.length > 0) {
+            // Process main tweet images only if image descriptions are enabled
+            if (enableImageDescriptions=GM_getValue('enableImageDescriptions', false)) {
+                let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
 ${mainMediaLinksDescription}`;
-        }
-        // Just add the URLs when descriptions are disabled
-        fullContextWithImageDescription += `
+            }
+            // Just add the URLs when descriptions are disabled
+            fullContextWithImageDescription += `
 [MEDIA_URLS]:
 ${mainMediaLinks.join(", ")}`;
     }
@@ -3575,41 +3575,41 @@ ${uniqueThreadMediaUrls.join(", ")}`;
         }
     }
         
-    // --- Quoted Tweet Handling ---
+        // --- Quoted Tweet Handling ---
     if (quotedText || quotedMediaLinks.length > 0) {
-        fullContextWithImageDescription += `
+            fullContextWithImageDescription += `
 [QUOTED_TWEET]:
  Author:@${quotedHandle}:
 ${quotedText}`;
-        if (quotedMediaLinks.length > 0) {
-            // Process quoted tweet images only if image descriptions are enabled
-            if (enableImageDescriptions) {
-                let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-                fullContextWithImageDescription += `
+            if (quotedMediaLinks.length > 0) {
+                // Process quoted tweet images only if image descriptions are enabled
+                if (enableImageDescriptions) {
+                    let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
+                    fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaLinksDescription}`;
-            }
-            // Just add the URLs when descriptions are disabled
-            fullContextWithImageDescription += `
+                }
+                // Just add the URLs when descriptions are disabled
+                fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
 ${quotedMediaLinks.join(", ")}`;
         }
-    }
+        }
+        
+        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
     
-    tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-    
-    // --- Conversation Thread Handling ---
-    if (conversation && conversation.dataset.threadHist) {
-        // If this tweet is not the original tweet, prepend the thread history.
-        if (!isOriginalTweet(tweetArticle)) {
-            fullContextWithImageDescription = conversation.dataset.threadHist + `
+        // --- Conversation Thread Handling ---
+        if (conversation && conversation.dataset.threadHist) {
+            // If this tweet is not the original tweet, prepend the thread history.
+            if (!isOriginalTweet(tweetArticle)) {
+                fullContextWithImageDescription = conversation.dataset.threadHist + `
 [REPLY]
 ` + fullContextWithImageDescription;
         }
-    }
-    
-    tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-    return fullContextWithImageDescription;
+        }
+        
+        tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+        return fullContextWithImageDescription;
 }
 
 
@@ -3671,7 +3671,7 @@ function ensureAllTweetsRated() {
 async function handleThreads() {
     try {
         // Find the conversation timeline using the selectors from the original code
-        let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+    let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
         if (!conversation) {
             conversation = document.querySelector('div[aria-label^="Timeline: Conversation"]');
             if (!conversation) {
@@ -3730,8 +3730,8 @@ async function handleThreads() {
                     }, 500);
                 }
                 
-                return;
-            }
+            return;
+        }
         } else if (conversation.dataset.threadHist !== "pending" && conversation.firstChild.dataset.canary === undefined) {
             // Original behavior for deep-diving into replies
             conversation.firstChild.dataset.canary = "pending";
@@ -4000,7 +4000,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
 
     // ----- ui.js -----
 // --- Constants ---
-const VERSION = '1.3.2'; // Update version here
+const VERSION = '1.3.3'; // Update version here
 
 // --- Utility Functions ---
 

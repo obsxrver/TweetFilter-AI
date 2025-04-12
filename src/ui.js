@@ -1,5 +1,5 @@
 // --- Constants ---
-const VERSION = '1.3.2'; // Update version here
+const VERSION = '1.3.3'; // Update version here
 
 // --- Utility Functions ---
 
