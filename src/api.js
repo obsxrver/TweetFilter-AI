@@ -440,7 +440,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     };
                 }
             }
-            
             // If we get here, we couldn't find a score in the response
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;

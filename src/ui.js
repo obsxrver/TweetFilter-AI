@@ -262,10 +262,19 @@ function saveApiKey() {
 /** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
     if (confirm('Are you sure you want to clear all cached tweet ratings?')) {
+        // Clear tweet ratings cache
         Object.keys(tweetIDRatingCache).forEach(key => delete tweetIDRatingCache[key]);
         GM_setValue('tweetRatings', '{}');
-        showStatus('All cached ratings cleared!');
-        console.log('Cleared all tweet ratings');
+        
+        // Clear thread relationships cache
+        if (window.threadRelationships) {
+            window.threadRelationships = {};
+            GM_setValue('threadRelationships', '{}');
+            console.log('Cleared thread relationships cache');
+        }
+        
+        showStatus('All cached ratings and thread relationships cleared!');
+        console.log('Cleared all tweet ratings and thread relationships');
 
         updateCacheStatsUI();
 
@@ -279,6 +288,15 @@ function clearTweetRatingsAndRefreshUI() {
                 scheduleTweetProcessing(tweet);
             });
         }
+        
+        // Reset thread mapping on any conversation containers
+        document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
+            delete conversation.dataset.threadMapping;
+            delete conversation.dataset.threadMappedAt;
+            delete conversation.dataset.threadMappingInProgress;
+            delete conversation.dataset.threadHist;
+            delete conversation.dataset.threadMediaUrls;
+        });
     }
 }
 
