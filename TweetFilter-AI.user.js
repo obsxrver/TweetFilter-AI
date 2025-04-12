@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.3
+// @version      Version 1.3.3.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -3181,8 +3181,8 @@ function applyTweetCachedRating(tweetArticle) {
                 
                 // Set status based on source
                 if (isFromStorage) {
-                    tweetArticle.dataset.ratingStatus = 'cached';
-                    setScoreIndicator(tweetArticle, score, 'cached', desc);
+                tweetArticle.dataset.ratingStatus = 'cached';
+                setScoreIndicator(tweetArticle, score, 'cached', desc);
                     console.log(`Set CACHED status for tweet ${tweetId}, score ${score}`);
                 } else {
                     tweetArticle.dataset.ratingStatus = 'rated';
@@ -3614,13 +3614,13 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     
     let allMediaLinks = extractMediaLinks(tweetArticle);
 
-    // --- Extract Quoted Tweet Content (if any) ---
-    let quotedText = "";
-    let quotedMediaLinks = [];
+        // --- Extract Quoted Tweet Content (if any) ---
+        let quotedText = "";
+        let quotedMediaLinks = [];
     let quotedTweetId = null;
     
-    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-    if (quoteContainer) {
+        const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+        if (quoteContainer) {
         // Try to get the quoted tweet ID from the link
         const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
         if (quotedLink) {
@@ -3632,12 +3632,12 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             }
         }
         
-        quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-        // Short delay to ensure quoted tweet images are loaded
-        await new Promise(resolve => setTimeout(resolve, 20));
-        quotedMediaLinks = extractMediaLinks(quoteContainer);
-        console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
-    }
+            quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
+            // Short delay to ensure quoted tweet images are loaded
+            await new Promise(resolve => setTimeout(resolve, 20));
+            quotedMediaLinks = extractMediaLinks(quoteContainer);
+            console.log(`Quoted media links for tweet ${tweetId}:`, quotedMediaLinks);
+        }
     
     // Get thread media URLs from cache if available
     const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') || 
@@ -3715,7 +3715,7 @@ ${quotedMediaLinksDescription}`;
                 fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
 ${quotedMediaLinks.join(", ")}`;
-        }
+            }
         }
         
         tweetArticle.dataset.fullContext = fullContextWithImageDescription;
@@ -3727,7 +3727,7 @@ ${quotedMediaLinks.join(", ")}`;
                 fullContextWithImageDescription = conversation.dataset.threadHist + `
 [REPLY]
 ` + fullContextWithImageDescription;
-        }
+            }
         }
         
         tweetArticle.dataset.fullContext = fullContextWithImageDescription;
@@ -4120,7 +4120,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
 
     // ----- ui.js -----
 // --- Constants ---
-const VERSION = '1.3.3'; // Update version here
+const VERSION = '1.3.3.1'; // Update version here
 
 // --- Utility Functions ---
 
