@@ -90,6 +90,20 @@ function modelSupportsImages(modelId) {
     return model.input_modalities &&
         model.input_modalities.includes('image');
 }
+function isReasoningModel(modelId){
+    if (!availableModels || availableModels.length === 0) {
+        return false; // If we don't have model info, assume it doesn't support images
+    }
+
+    const model = availableModels.find(m => m.slug === modelId);
+    if (!model) {
+        return false; // Model not found in available models list
+    }
+
+    // Check if model supports images based on its architecture
+    return model.supported_parameters &&
+        model.supported_parameters.includes('include_reasoning');
+}
 
 try {
     // Load ratings from storage

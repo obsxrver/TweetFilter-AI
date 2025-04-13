@@ -1,5 +1,5 @@
 # X/Twitter De-Sloppifier
-## Version 1.3.3.1
+## Version 1.3.4
 Advanced tweet rating and filtering userscript with model selection, enhanced rating indicators, thread hierarchy mapping, and handle management.
 
 
@@ -9,7 +9,7 @@ Advanced tweet rating and filtering userscript with model selection, enhanced ra
 - **Filtering System**: Hide low-quality tweets based on your chosen threshold
 - **Model Selection**: Choose from multiple AI models for tweet rating
 - **Image Processing**: Dedicated image model for analyzing tweet images
-- **Real-Time Response Streaming**: Stream responses from the AI in real time
+- **Real-Time Response Streaming (WITH reasoning traces)**: Stream responses from the AI in real time
 - **Thread Context**: Improved thread hierarchy detection for better context awareness
 - **Media Collection**: Automatically collects all media from threads for comprehensive analysis
 - **Handle Management**: Auto-rate specific accounts as 10/10
