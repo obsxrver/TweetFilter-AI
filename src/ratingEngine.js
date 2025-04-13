@@ -263,10 +263,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 const isCached = tweetIDRatingCache[tweetId] &&
                     !tweetIDRatingCache[tweetId].streaming &&
                     tweetIDRatingCache[tweetId].score !== undefined;
-
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs);
-
-                
                 score = rating.score;
                 description = rating.content;
 
@@ -325,7 +322,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 }
 
             } catch (apiError) {
-                console.error(`API error for tweet ${tweetId}: ${apiError}`);
                 score = 10; // Fallback to a random score
                 tweetArticle.dataset.ratingStatus = 'error';
                 tweetArticle.dataset.ratingDescription = "API error";
@@ -348,7 +344,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
 
         // Always ensure a valid score is set
         if (score === undefined || score === null) {
-            console.warn(`Invalid score for tweet ${tweetId}, using default score 5`);
             score = 5;
         }
 
@@ -365,7 +360,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
             // Final verification of indicator
             if (!tweetArticle.querySelector('.score-indicator')) {
-                console.error(`Final indicator check failed for tweet ${tweetId}`);
                 processingSuccessful = false;
             }
         } catch (e) {
@@ -395,7 +389,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // If processing was not successful, remove from processedTweets
         // to allow future retry attempts
         if (!processingSuccessful) {
-            console.warn(`Removing tweet ${tweetId} from processedTweets to allow retry`);
             processedTweets.delete(tweetId);
         }
     }
@@ -409,7 +402,6 @@ function scheduleTweetProcessing(tweetArticle) {
     // First, ensure the tweet has a valid ID
     const tweetId = getTweetID(tweetArticle);
     if (!tweetId) {
-        console.error("Cannot schedule tweet without valid ID", tweetArticle);
         return;
     }
 
@@ -1090,10 +1082,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 }
             }
             
-            console.groupCollapsed('Thread Mapping');
-            console.log('Thread structure:', replyDocs);
-            console.log('Persistent relationships:', threadRelationships);
-            console.groupEnd();
             
             // Fourth pass: Update the cache with thread context
             // but with a limit on how many we process at once
@@ -1155,7 +1143,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         await Promise.race([mapping(), timeout]);
         
     } catch (error) {
-        console.error("Error in mapThreadStructure:", error);
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;

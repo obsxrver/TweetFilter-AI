@@ -215,7 +215,6 @@ function handleMutations(mutationsList) {
                                 const descBox = document.getElementById(descId);
                                 if (descBox) {
                                     descBox.remove();
-                                    //console.debug(`Removed description box ${descId} for tweet that was removed from the DOM`);
                                 }
                             }
                         });
