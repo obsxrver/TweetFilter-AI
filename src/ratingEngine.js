@@ -55,9 +55,13 @@ function applyTweetCachedRating(tweetArticle) {
         if (tweetIDRatingCache[tweetId].score !== undefined && tweetIDRatingCache[tweetId].score !== null) {
             const score = tweetIDRatingCache[tweetId].score;
             const desc = tweetIDRatingCache[tweetId].description;
+            const reasoning = tweetIDRatingCache[tweetId].reasoning || "";
             //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
+            if (reasoning) {
+                tweetArticle.dataset.ratingReasoning = reasoning;
+            }
 
             // If it's a streaming entry that's not complete, mark as streaming instead of cached
             if (tweetIDRatingCache[tweetId].streaming === true) {
@@ -178,7 +182,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             }
             filterSingleTweet(tweetArticle);
             processingSuccessful = true;
-            return;
+            
         }
 
         // Check for a cached rating, but only use it if it has a valid score
@@ -277,7 +281,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 tweetArticle.dataset.ratingDescription = description || "not available";
                 tweetArticle.dataset.sloppinessScore = score.toString();
 
-
+                if (!isUserBlacklisted(userHandle)){
                 try {
                     setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
                     // Verify the indicator exists
@@ -292,6 +296,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 }
 
                 filterSingleTweet(tweetArticle);
+            }
                 processingSuccessful = !rating.error;
                 // Store the full context after rating is complete
                 if (!rating.error) {

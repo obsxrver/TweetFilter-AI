@@ -124,6 +124,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     
     let fullResponse = "";
     let content = "";
+    let reasoning = ""; // Add a variable to track reasoning content
     let responseObj = null;
     
     GM_xmlhttpRequest({
@@ -153,6 +154,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         // Call onComplete with whatever we have so far
                         onComplete({
                             content: content,
+                            reasoning: reasoning, // Include reasoning in onComplete
                             fullResponse: fullResponse,
                             data: responseObj,
                             timedOut: true
@@ -215,15 +217,26 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                     const parsed = JSON.parse(data);
                                     responseObj = parsed;
                                     
-                                    // Extract the content
-                                    if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta) {
-                                        const delta = parsed.choices[0].delta.content || "";
-                                        content += delta;
+                                    // Extract the content and reasoning
+                                    if (parsed.choices && parsed.choices[0]) {
+                                        // Check for delta content
+                                        if (parsed.choices[0].delta && parsed.choices[0].delta.content !== undefined) {
+                                            const delta = parsed.choices[0].delta.content || "";
+                                            content += delta;
+                                        }
+                                        
+                                        // Check for reasoning in delta
+                                        if (parsed.choices[0].delta && parsed.choices[0].delta.reasoning !== undefined) {
+                                            const reasoningDelta = parsed.choices[0].delta.reasoning || "";
+                                            reasoning += reasoningDelta;
+                                        }
                                         
                                         // Call the chunk callback
                                         onChunk({
-                                            chunk: delta,
+                                            chunk: parsed.choices[0].delta?.content || "",
+                                            reasoningChunk: parsed.choices[0].delta?.reasoning || "",
                                             content: content,
+                                            reasoning: reasoning,
                                             data: parsed
                                         });
                                     }
@@ -241,6 +254,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         
                         onComplete({
                             content: content,
+                            reasoning: reasoning, // Include reasoning in onComplete
                             fullResponse: fullResponse,
                             data: responseObj
                         });
@@ -295,13 +309,32 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
  * Formats description text for the tooltip.
  * Copy of the function from ui.js to ensure it's available for streaming.
  */
-function formatTooltipDescription(description) {
-    if (!description) return '';
+function formatTooltipDescription(description, reasoning = "") {
+    if (!description) return { description: '', reasoning: '' };
+    
+    // Add markdown-style formatting
+    description = description.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); // Bold
+    description = description.replace(/\*([^*]+)\*/g, '<em>$1</em>'); // Italic
+    
     // Basic formatting, can be expanded
     description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
-    description = description.replace(/\n\n/g, '</p><p style="margin-top: 10px;">'); // Smaller margin
+    description = description.replace(/\n\n/g, '<br><br>'); // Keep in single paragraph
     description = description.replace(/\n/g, '<br>');
-    return `<p>${description}</p>`;
+    
+    // Format reasoning trace with markdown support if provided
+    let formattedReasoning = '';
+    if (reasoning && reasoning.trim()) {
+        formattedReasoning = reasoning
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic
+            .replace(/\n\n/g, '<br><br>') // Keep in single paragraph
+            .replace(/\n/g, '<br>');
+    }
+    
+    return {
+        description: description,
+        reasoning: formattedReasoning
+    };
 }
 
 const safetySettings = [
@@ -378,7 +411,9 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             });
         }
     }
-
+    if(isReasoningModel(selectedModel)){
+        request.include_reasoning = true;
+    }
     // Add model parameters
     request.temperature = modelTemperature;
     request.top_p = modelTopP;
@@ -388,7 +423,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
     request.provider = {
         sort: sortOrder.split('-')[0],
-        allow_fallbacks: true
+        allow_fallbacks: false,
     };
 
     // Check if streaming is enabled
@@ -434,6 +469,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     return {
                         score,
                         content: result.content,
+                        reasoning: result.reasoning,
                         error: false,
                         cached: false,
                         data: result.data
@@ -474,21 +510,25 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
  * 
  * @param {Object} request - The formatted request body
  * @param {string} apiKey - API key for authentication
- * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
 async function rateTweet(request, apiKey) {
     const result = await getCompletion(request, apiKey);
     
-    if (!result.error && result.data?.choices?.[0]?.message?.content) {
-        const content = result.data.choices[0].message.content;
+    if (!result.error && result.data?.choices?.[0]?.message) {
+        const content = result.data.choices[0].message.content || "";
+        const reasoning = result.data.choices[0].message.reasoning || "";
+        
         return {
             content,
+            reasoning,
             error: false,
             data: result.data
         };
     } else {
         return {
             content: result.message || "Error getting response",
+            reasoning: "",
             error: true,
             data: result.data
         };
@@ -511,6 +551,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
             .find(article => getTweetID(article) === tweetId);
         
         let aggregatedContent = "";
+        let aggregatedReasoning = ""; // Track reasoning traces
         let finalData = null;
         
         getCompletionStreaming(
@@ -518,7 +559,11 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
             apiKey,
             // onChunk callback - update the tweet's rating indicator in real-time
             (chunkData) => {
-                aggregatedContent += chunkData.chunk;
+                console.log('chunkData', chunkData);
+                
+                // Use the content and reasoning directly from chunkData instead of aggregating manually
+                aggregatedContent = chunkData.content || "Rating in progress...";
+                aggregatedReasoning = chunkData.reasoning || "";
                 
                 if (tweetArticle) {
                     // Look for a score in the accumulated content so far
@@ -533,6 +578,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     tweetArticle.dataset.streamingContent = aggregatedContent;
                     tweetArticle.dataset.ratingStatus = 'streaming';
                     tweetArticle.dataset.ratingDescription = aggregatedContent;
+                    if (aggregatedReasoning) {
+                        tweetArticle.dataset.ratingReasoning = aggregatedReasoning;
+                    }
                     
                     // Don't cache the streaming result until we have a score
                     if (currentScore !== null) {
@@ -542,11 +590,13 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                                 tweetContent: tweetText,
                                 score: currentScore,
                                 description: aggregatedContent,
+                                reasoning: aggregatedReasoning,
                                 streaming: true  // Mark as streaming/incomplete
                             };
                         } else {
                             // Update existing cache entry if it exists
                             tweetIDRatingCache[tweetId].description = aggregatedContent;
+                            tweetIDRatingCache[tweetId].reasoning = aggregatedReasoning;
                             tweetIDRatingCache[tweetId].score = currentScore;
                             tweetIDRatingCache[tweetId].streaming = true;
                         }
@@ -560,36 +610,83 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         }
                     }
                     
-                    // Only update the tooltip directly
+                    // Update the tooltip content with both description and reasoning
                     if (tooltip) {
-                        // Update tooltip content
-                        tooltip.innerHTML = formatTooltipDescription(aggregatedContent);
+                        // Use the helper function from ui.js to update tooltip content
+                        updateTooltipContent(tooltip, aggregatedContent, aggregatedReasoning);
+                        console.log(aggregatedReasoning);
+                        console.log(aggregatedContent);
                         tooltip.classList.add('streaming-tooltip');
-                        
-                        // Auto-scroll to the bottom of the tooltip to show new content
-                        if (tooltip.style.display === 'block') {
-                            // Check if scroll is at or near the bottom before auto-scrolling
-                            const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
-                            
-                            // Only auto-scroll if user was already at the bottom
-                            if (isAtBottom) {
-                                tooltip.scrollTop = tooltip.scrollHeight;
-                            }
-                        }
                     }
                     
-                    if (currentScore !== null) {
-                        // Update the score display but not the tooltip
+                    if (currentScore !== null && aggregatedReasoning !== "" && aggregatedContent !== "") {
+                        // Update the score indicator but preserve tooltip state
                         if (indicator) {
-                            // Use setScoreIndicator to ensure classes are properly set
-                            // Set streaming status to keep the streaming styling/animation
+                            // Store the current score
                             tweetArticle.dataset.sloppinessScore = currentScore.toString();
-                            setScoreIndicator(tweetArticle, currentScore, 'streaming', aggregatedContent);
-                            //filterSingleTweet(tweetArticle);
+                            
+                            // Update just the score number and class
+                            indicator.textContent = currentScore;
+                            indicator.className = 'score-indicator streaming-rating';
+                            
+                            // Get the tooltip and update only the content
+                            const tooltip = indicator.scoreTooltip;
+                            if (tooltip) {
+                                // Update tooltip content directly without recreating it
+                                const descriptionElement = tooltip.querySelector('.description-text');
+                                const reasoningElement = tooltip.querySelector('.reasoning-text');
+                                
+                                // Format the text
+                                const formatted = formatTooltipDescription(aggregatedContent, aggregatedReasoning);
+                                
+                                if (descriptionElement) {
+                                    descriptionElement.innerHTML = formatted.description;
+                                }
+                                
+                                if (reasoningElement) {
+                                    reasoningElement.innerHTML = formatted.reasoning;
+                                }
+                                
+                                // Preserve expanded state - only show/hide dropdown if reasoning exists
+                                const dropdown = tooltip.querySelector('.reasoning-dropdown');
+                                if (dropdown && !formatted.reasoning) {
+                                    dropdown.style.display = 'none';
+                                } else if (dropdown && formatted.reasoning && dropdown.style.display === 'none') {
+                                    dropdown.style.display = 'block';
+                                }
+                            }
                         }
-                    } else if (indicator) {
-                        // Just update the streaming indicator without changing the tooltip
-                        setScoreIndicator(tweetArticle, null, 'streaming', aggregatedContent);
+                    } else if (indicator && (aggregatedReasoning !== "" || aggregatedContent !== "")) {
+                        // Handle case where score isn't available yet but reasoning is
+                        indicator.className = 'score-indicator streaming-rating';
+                        indicator.textContent = '🔄';
+                        
+                        // Update tooltip content directly
+                        const tooltip = indicator.scoreTooltip;
+                        if (tooltip) {
+                            const descriptionElement = tooltip.querySelector('.description-text');
+                            const reasoningElement = tooltip.querySelector('.reasoning-text');
+                            
+                            // Format the text - ensure we have at least a placeholder for content
+                            const contentToShow = aggregatedContent || "Rating in progress...";
+                            const formatted = formatTooltipDescription(contentToShow, aggregatedReasoning);
+                            
+                            if (descriptionElement) {
+                                descriptionElement.innerHTML = formatted.description;
+                            }
+                            
+                            if (reasoningElement) {
+                                reasoningElement.innerHTML = formatted.reasoning;
+                            }
+                            
+                            // Only show/hide dropdown if reasoning exists
+                            const dropdown = tooltip.querySelector('.reasoning-dropdown');
+                            if (dropdown && !formatted.reasoning) {
+                                dropdown.style.display = 'none';
+                            } else if (dropdown && formatted.reasoning && dropdown.style.display === 'none') {
+                                dropdown.style.display = 'block';
+                            }
+                        }
                     }
                 }
             },
@@ -601,14 +698,19 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 if (tweetArticle) {
                     // Check for a score in the final content
                     const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
-                    if (scoreMatch) {
-                        const score = parseInt(scoreMatch[1], 10);
+                    
+                    // Also check if we already found a score during streaming
+                    const existingScore = tweetIDRatingCache[tweetId]?.score;
+                    
+                    if (scoreMatch || existingScore) {
+                        const score = scoreMatch ? parseInt(scoreMatch[1], 10) : existingScore;
                         
                         // Update cache with final result (non-streaming)
                         tweetIDRatingCache[tweetId] = {
                             tweetContent: tweetText,
                             score: score,
                             description: aggregatedContent,
+                            reasoning: finalResult.reasoning || aggregatedReasoning, // Store reasoning
                             streaming: false,  // Mark as complete
                             timestamp: Date.now()
                         };
@@ -617,22 +719,70 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         // Finalize UI update
                         tweetArticle.dataset.ratingStatus = 'rated';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
+                        tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
                         tweetArticle.dataset.sloppinessScore = score.toString();
                         
                         // Remove streaming class from tooltip
                         const indicator = tweetArticle.querySelector('.score-indicator');
                         if (indicator && indicator.scoreTooltip) {
+                            // Update the final tooltip content
+                            updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                             indicator.scoreTooltip.classList.remove('streaming-tooltip');
+                            
+                            // Set final indicator state - ensure we're not recreating the tooltip
+                            indicator.className = 'score-indicator rated-rating';
+                            indicator.textContent = score;
+                        } else {
+                            // If no indicator exists yet, create one with setScoreIndicator
+                            setScoreIndicator(tweetArticle, score, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                         }
                         
-                        // Set final indicator state
-                        setScoreIndicator(tweetArticle, score, 'rated', aggregatedContent);
-                        // The caller will handle filterSingleTweet
+                        console.log(`Rating complete for tweet ${tweetId} with score ${score}`);
+                    } else {
+                        // If no score was found anywhere, log a warning and set a default score
+                        console.warn(`No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                        
+                        // Set a default score of 5
+                        const defaultScore = 5;
+                        
+                        // Update cache with default score
+                        tweetIDRatingCache[tweetId] = {
+                            tweetContent: tweetText,
+                            score: defaultScore,
+                            description: aggregatedContent + " [No explicit score detected, using default score of 5]",
+                            reasoning: finalResult.reasoning || aggregatedReasoning,
+                            streaming: false,
+                            timestamp: Date.now()
+                        };
+                        saveTweetRatings();
+                        
+                        // Update UI with default score
+                        tweetArticle.dataset.ratingStatus = 'rated';
+                        tweetArticle.dataset.ratingDescription = aggregatedContent;
+                        tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
+                        tweetArticle.dataset.sloppinessScore = defaultScore.toString();
+                        
+                        // Set indicator with default score
+                        const indicator = tweetArticle.querySelector('.score-indicator');
+                        if (indicator) {
+                            indicator.className = 'score-indicator rated-rating';
+                            indicator.textContent = defaultScore;
+                            
+                            if (indicator.scoreTooltip) {
+                                updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
+                                indicator.scoreTooltip.classList.remove('streaming-tooltip');
+                            }
+                        } else {
+                            setScoreIndicator(tweetArticle, defaultScore, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
+                        }
                     }
+                } else {
+                    console.warn(`Tweet article not found for ID ${tweetId} when completing rating`);
                 }
                 
                 resolve({
                     content: aggregatedContent,
+                    reasoning: finalResult.reasoning || aggregatedReasoning,
                     error: false,
                     data: finalData
                 });
