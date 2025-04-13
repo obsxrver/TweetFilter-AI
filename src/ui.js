@@ -1,4 +1,3 @@
-
 const VERSION = '1.3.4'; // Update version here
 
 // --- Utility Functions ---
@@ -771,6 +770,7 @@ function closeAllSelectBoxes(exceptThisOne = null) {
  * @param {string} [reasoning] - Optional reasoning trace.
  */
 function setScoreIndicator(tweetArticle, score, status, description = "", reasoning = "") {
+    const tweetId = getTweetID(tweetArticle);
     let indicator = tweetArticle.querySelector('.score-indicator');
     if (!indicator) {
         indicator = document.createElement('div');
@@ -782,6 +782,9 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         const tooltip = document.createElement('div');
         tooltip.className = 'score-description';
         tooltip.style.display = 'none';
+        
+        // Store the tweet ID in the tooltip's dataset for cleanup
+        tooltip.dataset.tweetId = tweetId;
         
         // Create the fixed structure for the tooltip
         // Create the reasoning dropdown structure upfront
@@ -800,7 +803,8 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
         
         // Add event listener properly
-        reasoningToggle.addEventListener('click', function() {
+        reasoningToggle.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent bubbling to tooltip click handler
             const dropdown = this.closest('.reasoning-dropdown');
             dropdown.classList.toggle('expanded');
             
@@ -844,9 +848,16 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         // Store the tooltip reference
         indicator.scoreTooltip = tooltip;
         
-        // Add hover listeners
+        // Add mouse hover listeners
         indicator.addEventListener('mouseenter', handleIndicatorMouseEnter);
         indicator.addEventListener('mouseleave', handleIndicatorMouseLeave);
+        
+        // Add click/tap handler for toggling tooltip
+        indicator.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent opening the tweet
+            e.preventDefault();
+            toggleTooltipVisibility(this);
+        });
         
         // Also add hover listeners to the tooltip
         tooltip.addEventListener('mouseenter', () => {
@@ -855,16 +866,31 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         tooltip.addEventListener('mouseleave', () => {
             tooltip.style.display = 'none';
         });
+        
+        // Add click handler to close tooltip when clicking outside
+        tooltip.addEventListener('click', (e) => {
+            // Only if not clicking reasoning toggle
+            if (!e.target.closest('.reasoning-toggle')) {
+                tooltip.style.display = 'none';
+            }
+        });
+        
+        // Apply mobile positioning if needed
+        if (isMobileDevice()) {
+            indicator.classList.add('mobile-indicator');
+        }
     }
 
     // Update status class and text content
     indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating', 'streaming-rating'); // Clear previous
     indicator.dataset.description = description || ''; // Store description
     indicator.dataset.reasoning = reasoning || ''; // Store reasoning
+    indicator.dataset.tweetId = tweetId; // Store tweet ID in indicator
     
     // Update the tooltip content
     const tooltip = indicator.scoreTooltip;
     if (tooltip) {
+        tooltip.dataset.tweetId = tweetId; // Ensure the tooltip also has the tweet ID
         updateTooltipContent(tooltip, description, reasoning);
     }
 
@@ -895,6 +921,159 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
             indicator.textContent = score;
             break;
     }
+}
+
+/**
+ * Toggles the visibility of a tooltip associated with an indicator
+ * @param {HTMLElement} indicator - The indicator element
+ */
+function toggleTooltipVisibility(indicator) {
+    const tooltip = indicator.scoreTooltip;
+    if (!tooltip) return;
+    
+    if (tooltip.style.display === 'block') {
+        tooltip.style.display = 'none';
+    } else {
+        positionTooltip(indicator, tooltip);
+        tooltip.style.display = 'block';
+    }
+}
+
+/**
+ * Positions the tooltip relative to the indicator
+ * @param {HTMLElement} indicator - The indicator element
+ * @param {HTMLElement} tooltip - The tooltip element
+ */
+function positionTooltip(indicator, tooltip) {
+    if (!indicator || !tooltip) return;
+    
+    const rect = indicator.getBoundingClientRect();
+    const margin = 10;
+    const isMobile = isMobileDevice();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const safeArea = viewportHeight - margin; // Safe area to stay within
+    
+    // Reset any previous height constraints to measure true dimensions
+    tooltip.style.maxHeight = '';
+    tooltip.style.overflowY = '';
+    
+    // Force layout recalculation to get true dimensions
+    tooltip.style.display = 'block';
+    tooltip.style.visibility = 'hidden';
+    
+    const tooltipWidth = tooltip.offsetWidth;
+    const tooltipHeight = tooltip.offsetHeight;
+    
+    let left, top;
+    
+    if (isMobile) {
+        // Center tooltip horizontally on mobile
+        left = Math.max(0, (viewportWidth - tooltipWidth) / 2);
+        
+        // Always apply a max-height on mobile to ensure scrollability
+        const maxTooltipHeight = viewportHeight * 0.8; // 80% of viewport
+        
+        // If tooltip is taller than allowed, constrain it and enable scrolling
+        if (tooltipHeight > maxTooltipHeight) {
+            tooltip.style.maxHeight = `${maxTooltipHeight}px`;
+            tooltip.style.overflowY = 'scroll';
+        }
+        
+        // Position at the bottom part of the screen
+        top = (viewportHeight - tooltip.offsetHeight) / 2;
+        
+        // Ensure it's always fully visible
+        if (top < margin) {
+            top = margin;
+        }
+        if (top + tooltip.offsetHeight > safeArea) {
+            top = safeArea - tooltip.offsetHeight;
+        }
+    } else {
+        // Desktop positioning - to the right of indicator
+        left = rect.right + margin;
+        top = rect.top + (rect.height / 2) - (tooltipHeight / 2);
+        
+        // Check horizontal overflow
+        if (left + tooltipWidth > viewportWidth - margin) {
+            // Try positioning to the left of indicator
+            left = rect.left - tooltipWidth - margin;
+            
+            // If that doesn't work either, center horizontally
+            if (left < margin) {
+                left = Math.max(margin, (viewportWidth - tooltipWidth) / 2);
+                // And position below or above the indicator
+                if (rect.bottom + tooltipHeight + margin <= safeArea) {
+                    top = rect.bottom + margin;
+                } else if (rect.top - tooltipHeight - margin >= margin) {
+                    top = rect.top - tooltipHeight - margin;
+                } else {
+                    // If doesn't fit above or below, center vertically
+                    top = margin;
+                    // Apply max height and scrolling
+                    tooltip.style.maxHeight = `${safeArea - (margin * 2)}px`;
+                    tooltip.style.overflowY = 'scroll';
+                }
+            }
+        }
+        
+        // Final vertical adjustment and scrolling if needed
+        if (top < margin) {
+            top = margin;
+        }
+        if (top + tooltipHeight > safeArea) {
+            // If tooltip is too tall for the viewport, enable scrolling
+            if (tooltipHeight > safeArea - margin) {
+                top = margin;
+                tooltip.style.maxHeight = `${safeArea - (margin * 2)}px`;
+                tooltip.style.overflowY = 'scroll';
+            } else {
+                // Otherwise just move it up
+                top = safeArea - tooltipHeight;
+            }
+        }
+    }
+    
+    // Apply the position
+    tooltip.style.position = 'fixed';
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+    tooltip.style.zIndex = '99999999';
+    tooltip.style.visibility = 'visible';
+    
+    // Force scrollbars on WebKit browsers if needed
+    if (tooltip.style.overflowY === 'scroll') {
+        tooltip.style.WebkitOverflowScrolling = 'touch';
+    }
+    
+    // Store the current scroll position to check if user has manually scrolled
+    tooltip.lastScrollTop = tooltip.scrollTop;
+    
+    // Update scroll position for streaming tooltips
+    if (tooltip.classList.contains('streaming-tooltip')) {
+        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+        const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
+                               (Date.now() - tooltip.lastDisplayTime) > 1000;
+        
+        if (isInitialDisplay || isAtBottom) {
+            setTimeout(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+            }, 10);
+        }
+    }
+    
+    // Track when we displayed the tooltip
+    tooltip.lastDisplayTime = Date.now();
+}
+
+/**
+ * Detects if the user is on a mobile device
+ * @returns {boolean} true if mobile device detected
+ */
+function isMobileDevice() {
+    return (window.innerWidth <= 600 || 
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 }
 
 /** 
@@ -977,6 +1156,9 @@ function updateTooltipContent(tooltip, description, reasoning) {
 
 /** Handles mouse enter event for score indicators. */
 function handleIndicatorMouseEnter(event) {
+    // Only use hover behavior on non-mobile
+    if (isMobileDevice()) return;
+    
     const indicator = event.currentTarget;
     const tooltip = indicator.scoreTooltip;
     if (!tooltip) return;
@@ -986,9 +1168,8 @@ function handleIndicatorMouseEnter(event) {
     const tweetId = tweetArticle ? getTweetID(tweetArticle) : null;
     
     // Position the tooltip
-    tooltip.style.position = 'fixed';
+    positionTooltip(indicator, tooltip);
     tooltip.style.display = 'block';
-    tooltip.style.zIndex = '99999999';
     
     // Check if we have cached streaming content for this tweet
     if (tweetId && tweetIDRatingCache[tweetId]?.description) {
@@ -1019,55 +1200,13 @@ function handleIndicatorMouseEnter(event) {
             tooltip.classList.remove('streaming-tooltip');
         }
     }
-    
-    const rect = indicator.getBoundingClientRect();
-    const tooltipWidth = tooltip.offsetWidth;
-    const tooltipHeight = tooltip.offsetHeight;
-    const margin = 10;
-
-    let left = rect.right + margin;
-    let top = rect.top + (rect.height / 2) - (tooltipHeight / 2);
-
-    // Adjust if going off-screen
-    if (left + tooltipWidth > window.innerWidth - margin) {
-        left = rect.left - tooltipWidth - margin;
-    }
-    if (top < margin) {
-        top = margin;
-    }
-    if (top + tooltipHeight > window.innerHeight - margin) {
-        top = window.innerHeight - tooltipHeight - margin;
-    }
-
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
-    
-    // Store the current scroll position to check if user has manually scrolled
-    tooltip.lastScrollTop = tooltip.scrollTop;
-    
-    // If this is a streaming tooltip, scroll to the bottom to show latest content only if:
-    // 1. It's a fresh display (not previously scrolled by user)
-    // 2. User was already at the bottom when new content arrived
-    if (tooltip.classList.contains('streaming-tooltip')) {
-        // Check if tooltip was already visible and user had scrolled up
-        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
-        const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
-                               (Date.now() - tooltip.lastDisplayTime) > 1000;
-        
-        if (isInitialDisplay || isAtBottom) {
-            // Use setTimeout to ensure this happens after the tooltip is displayed
-            setTimeout(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-            }, 10);
-        }
-    }
-    
-    // Track when we displayed the tooltip
-    tooltip.lastDisplayTime = Date.now();
 }
 
 /** Handles mouse leave event for score indicators. */
 function handleIndicatorMouseLeave(event) {
+    // Only use hover behavior on non-mobile
+    if (isMobileDevice()) return;
+    
     const indicator = event.currentTarget;
     const tooltip = indicator.scoreTooltip;
     if (!tooltip) return;
@@ -1082,9 +1221,39 @@ function handleIndicatorMouseLeave(event) {
 
 /** Cleans up the global score tooltip element. */
 function cleanupDescriptionElements() {
-    // Now we need to remove any tooltips that might be in the DOM
+    // Remove all tooltips that might be in the DOM
     document.querySelectorAll('.score-description').forEach(tooltip => {
         tooltip.remove();
+    });
+}
+
+/**
+ * Performs a cleanup of orphaned tooltips that no longer have a visible tweet
+ * and cancels any streaming requests for those tweets
+ */
+function cleanupOrphanedTooltips() {
+    // Get all currently visible tweet IDs
+    const visibleTweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
+        .map(article => getTweetID(article));
+    
+    // Get all tooltips
+    const tooltips = document.querySelectorAll('.score-description');
+    
+    tooltips.forEach(tooltip => {
+        const tooltipTweetId = tooltip.dataset.tweetId;
+        
+        // If tooltip has no tweet ID or its tweet is no longer visible, remove it
+        if (!tooltipTweetId || !visibleTweets.includes(tooltipTweetId)) {
+            // If there's an active streaming request for this tweet, cancel it
+            if (window.activeStreamingRequests && window.activeStreamingRequests[tooltipTweetId]) {
+                console.log(`Canceling streaming request for tweet ${tooltipTweetId} as it's no longer visible`);
+                window.activeStreamingRequests[tooltipTweetId].abort();
+                delete window.activeStreamingRequests[tooltipTweetId];
+            }
+            
+            // Remove the tooltip
+            tooltip.remove();
+        }
     });
 }
 
@@ -1270,6 +1439,43 @@ function initialiseUI() {
     const uiContainer = injectUI();
     if (!uiContainer) return; // Stop if injection failed
 
+    // Add mobile-specific styles with the rest of our CSS
+    GM_addStyle(`
+        .score-indicator.mobile-indicator {
+            position: absolute !important;
+            bottom: 3% !important;
+            right: 10px !important;
+            top: auto !important;
+        }
+        
+        .score-description {
+            box-sizing: border-box !important;
+        }
+        
+        @media (max-width: 600px) {
+            .score-indicator {
+                position: absolute !important;
+                bottom: 3% !important;
+                right: 10px !important;
+                top: auto !important;
+            }
+            
+            .score-description {
+                max-width: 100% !important;
+                width: 96vw !important;
+                left: 2vw !important;
+                right: 2vw !important;
+                margin: 0 auto !important;
+                box-sizing: border-box !important;
+                max-height: 80vh !important;
+                overflow-y: scroll !important;
+                -webkit-overflow-scrolling: touch !important;
+                overscroll-behavior: contain !important;
+                transform: translateZ(0) !important; /* Force GPU acceleration */
+            }
+        }
+    `);
+
     initializeEventListeners(uiContainer);
     refreshSettingsUI(); // Set initial state from saved settings
     fetchAvailableModels(); // Fetch models async
@@ -1279,6 +1485,14 @@ function initialiseUI() {
     
     // Set up a periodic refresh of the cache stats to catch any updates
     setInterval(updateFloatingCacheStats, 10000); // Update every 10 seconds
+    
+    // Set up periodic cleanup of orphaned tooltips
+    setInterval(cleanupOrphanedTooltips, 5000); // Check every 5 seconds
+    
+    // Initialize tracking object for streaming requests if it doesn't exist
+    if (!window.activeStreamingRequests) {
+        window.activeStreamingRequests = {};
+    }
 }
 
 /**

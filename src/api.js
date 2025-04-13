@@ -114,8 +114,10 @@ async function getCompletion(request, apiKey, timeout = 30000) {
  * @param {Function} onComplete - Callback when streaming is complete
  * @param {Function} onError - Callback when an error occurs
  * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @param {string} [tweetId=null] - Optional tweet ID to associate with this request
+ * @returns {Object} The request object with an abort method
  */
-function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 30000) {
+function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 30000, tweetId = null) {
     // Add stream parameter to request
     const streamingRequest = {
         ...request,
@@ -126,8 +128,9 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     let content = "";
     let reasoning = ""; // Add a variable to track reasoning content
     let responseObj = null;
+    let streamComplete = false;
     
-    GM_xmlhttpRequest({
+    const reqObj = GM_xmlhttpRequest({
         method: "POST",
         url: "https://openrouter.ai/api/v1/chat/completions",
         headers: {
@@ -162,9 +165,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                 }, 10000); // 10 second timeout without activity
             };
-            
-            // Flag to track if we've completed
-            let streamComplete = false;
             
             // Process the stream
             const processStream = async () => {
@@ -252,6 +252,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         streamComplete = true;
                         if (streamTimeout) clearTimeout(streamTimeout);
                         
+                        // Remove from active requests tracking
+                        if (tweetId && window.activeStreamingRequests) {
+                            delete window.activeStreamingRequests[tweetId];
+                        }
+                        
                         onComplete({
                             content: content,
                             reasoning: reasoning, // Include reasoning in onComplete
@@ -266,6 +271,12 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
                         streamComplete = true;
+                        
+                        // Remove from active requests tracking
+                        if (tweetId && window.activeStreamingRequests) {
+                            delete window.activeStreamingRequests[tweetId];
+                        }
+                        
                         onError({
                             error: true,
                             message: `Stream processing error: ${error.toString()}`,
@@ -280,6 +291,12 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
+                    
+                    // Remove from active requests tracking
+                    if (tweetId && window.activeStreamingRequests) {
+                        delete window.activeStreamingRequests[tweetId];
+                    }
+                    
                     onError({
                         error: true,
                         message: `Unhandled stream error: ${error.toString()}`,
@@ -289,6 +306,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         },
         onerror: function(error) {
+            // Remove from active requests tracking
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            
             onError({
                 error: true,
                 message: `Request error: ${error.toString()}`,
@@ -296,6 +318,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         },
         ontimeout: function() {
+            // Remove from active requests tracking
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            
             onError({
                 error: true,
                 message: `Request timed out after ${timeout}ms`,
@@ -303,6 +330,30 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         }
     });
+    
+    // Create an object with an abort method that can be called to cancel the request
+    const streamingRequestObj = {
+        abort: function() {
+            streamComplete = true; // Set flag to prevent further processing
+            try {
+                reqObj.abort(); // Attempt to abort the XHR request
+            } catch (e) {
+                console.error("Error aborting request:", e);
+            }
+            
+            // Remove from active requests tracking
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+        }
+    };
+    
+    // Track this request if we have a tweet ID
+    if (tweetId && window.activeStreamingRequests) {
+        window.activeStreamingRequests[tweetId] = streamingRequestObj;
+    }
+    
+    return streamingRequestObj;
 }
 
 /** 
@@ -386,12 +437,12 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             content: [{
                 type: "text",
                 text:
-                    `provide your reasoning, and a rating (eg. SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.) for the tweet with tweet ID ${tweetId}.
-        [USER-DEFINED INSTRUCTIONS]:
+                    `provide your reasoning, and a rating according to the the following instructions for the tweet with tweet ID ${tweetId}.
         ${USER_DEFINED_INSTRUCTIONS}
                 _______BEGIN TWEET_______
                 ${tweetText}
-                _______END TWEET_______`
+                _______END TWEET_______
+                Make sure your response ends with SCORE_0, SCORE_1, SCORE_2, SCORE_3, SCORE_4, SCORE_5, SCORE_6, SCORE_7, SCORE_8, SCORE_9, or SCORE_10.`
             }]
         }]
     };
@@ -411,9 +462,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             });
         }
     }
-    if(isReasoningModel(selectedModel)){
-        request.include_reasoning = true;
-    }
     // Add model parameters
     request.temperature = modelTemperature;
     request.top_p = modelTopP;
@@ -423,9 +471,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
     request.provider = {
         sort: sortOrder.split('-')[0],
-        allow_fallbacks: false,
-    };
-
+        allow_fallbacks: true,
+    };  
     // Check if streaming is enabled
     const useStreaming = GM_getValue('enableStreaming', false);
     
@@ -479,8 +526,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             // If we get here, we couldn't find a score in the response
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
-                console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
-                console.log('Response:', result);
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         } catch (error) {
@@ -490,7 +535,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
-                console.log(`Error in attempt ${attempt}/${maxRetries}. Retrying in ${backoffDelay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         }
@@ -554,12 +598,23 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
         let aggregatedReasoning = ""; // Track reasoning traces
         let finalData = null;
         
+        // Initialize active streaming requests object if it doesn't exist
+        if (!window.activeStreamingRequests) {
+            window.activeStreamingRequests = {};
+        }
+        
+        // Cancel any existing request for this tweet
+        if (window.activeStreamingRequests[tweetId]) {
+            console.log(`Canceling previous streaming request for tweet ${tweetId}`);
+            window.activeStreamingRequests[tweetId].abort();
+            delete window.activeStreamingRequests[tweetId];
+        }
+        
         getCompletionStreaming(
             request,
             apiKey,
             // onChunk callback - update the tweet's rating indicator in real-time
             (chunkData) => {
-                console.log('chunkData', chunkData);
                 
                 // Use the content and reasoning directly from chunkData instead of aggregating manually
                 aggregatedContent = chunkData.content || "Rating in progress...";
@@ -582,40 +637,12 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingReasoning = aggregatedReasoning;
                     }
                     
-                    // Don't cache the streaming result until we have a score
-                    if (currentScore !== null) {
-                        // Only initialize cache if we have a score
-                        if (!tweetIDRatingCache[tweetId]) {
-                            tweetIDRatingCache[tweetId] = {
-                                tweetContent: tweetText,
-                                score: currentScore,
-                                description: aggregatedContent,
-                                reasoning: aggregatedReasoning,
-                                streaming: true  // Mark as streaming/incomplete
-                            };
-                        } else {
-                            // Update existing cache entry if it exists
-                            tweetIDRatingCache[tweetId].description = aggregatedContent;
-                            tweetIDRatingCache[tweetId].reasoning = aggregatedReasoning;
-                            tweetIDRatingCache[tweetId].score = currentScore;
-                            tweetIDRatingCache[tweetId].streaming = true;
-                        }
-                        
-                        tweetArticle.dataset.sloppinessScore = currentScore.toString();
-                        
-                        // Save to storage periodically (once per second max)
-                        if (!window.lastCacheSaveTime || Date.now() - window.lastCacheSaveTime > 1000) {
-                            saveTweetRatings();
-                            window.lastCacheSaveTime = Date.now();
-                        }
-                    }
+                    // Don't cache streaming results - removed partial caching code
                     
                     // Update the tooltip content with both description and reasoning
                     if (tooltip) {
                         // Use the helper function from ui.js to update tooltip content
                         updateTooltipContent(tooltip, aggregatedContent, aggregatedReasoning);
-                        console.log(aggregatedReasoning);
-                        console.log(aggregatedContent);
                         tooltip.classList.add('streaming-tooltip');
                     }
                     
@@ -737,7 +764,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                             setScoreIndicator(tweetArticle, score, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                         }
                         
-                        console.log(`Rating complete for tweet ${tweetId} with score ${score}`);
                     } else {
                         // If no score was found anywhere, log a warning and set a default score
                         console.warn(`No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
@@ -805,7 +831,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 }
                 
                 reject(new Error(errorData.message));
-            }
+            },
+            30000, // timeout
+            tweetId  // Pass the tweet ID to associate with this request
         );
     });
 }
@@ -872,7 +900,6 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
 function fetchAvailableModels() {
     const apiKey = GM_getValue('openrouter-api-key', '');
     if (!apiKey) {
-        console.log('No API key available, skipping model fetch');
         showStatus('Please enter your OpenRouter API key');
         return;
     }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.3.1
+// @version      Version 1.3.4
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -2312,8 +2312,10 @@ async function getCompletion(request, apiKey, timeout = 30000) {
  * @param {Function} onComplete - Callback when streaming is complete
  * @param {Function} onError - Callback when an error occurs
  * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @param {string} [tweetId=null] - Optional tweet ID to associate with this request
+ * @returns {Object} The request object with an abort method
  */
-function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 30000) {
+function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 30000, tweetId = null) {
     // Add stream parameter to request
     const streamingRequest = {
         ...request,
@@ -2324,8 +2326,9 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     let content = "";
     let reasoning = ""; // Add a variable to track reasoning content
     let responseObj = null;
+    let streamComplete = false;
     
-    GM_xmlhttpRequest({
+    const reqObj = GM_xmlhttpRequest({
         method: "POST",
         url: "https://openrouter.ai/api/v1/chat/completions",
         headers: {
@@ -2360,9 +2363,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                 }, 10000); // 10 second timeout without activity
             };
-            
-            // Flag to track if we've completed
-            let streamComplete = false;
             
             // Process the stream
             const processStream = async () => {
@@ -2450,6 +2450,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         streamComplete = true;
                         if (streamTimeout) clearTimeout(streamTimeout);
                         
+                        // Remove from active requests tracking
+                        if (tweetId && window.activeStreamingRequests) {
+                            delete window.activeStreamingRequests[tweetId];
+                        }
+                        
                         onComplete({
                             content: content,
                             reasoning: reasoning, // Include reasoning in onComplete
@@ -2464,6 +2469,12 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
                         streamComplete = true;
+                        
+                        // Remove from active requests tracking
+                        if (tweetId && window.activeStreamingRequests) {
+                            delete window.activeStreamingRequests[tweetId];
+                        }
+                        
                         onError({
                             error: true,
                             message: `Stream processing error: ${error.toString()}`,
@@ -2478,6 +2489,12 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
+                    
+                    // Remove from active requests tracking
+                    if (tweetId && window.activeStreamingRequests) {
+                        delete window.activeStreamingRequests[tweetId];
+                    }
+                    
                     onError({
                         error: true,
                         message: `Unhandled stream error: ${error.toString()}`,
@@ -2487,6 +2504,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         },
         onerror: function(error) {
+            // Remove from active requests tracking
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            
             onError({
                 error: true,
                 message: `Request error: ${error.toString()}`,
@@ -2494,6 +2516,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         },
         ontimeout: function() {
+            // Remove from active requests tracking
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            
             onError({
                 error: true,
                 message: `Request timed out after ${timeout}ms`,
@@ -2501,6 +2528,30 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         }
     });
+    
+    // Create an object with an abort method that can be called to cancel the request
+    const streamingRequestObj = {
+        abort: function() {
+            streamComplete = true; // Set flag to prevent further processing
+            try {
+                reqObj.abort(); // Attempt to abort the XHR request
+            } catch (e) {
+                console.error("Error aborting request:", e);
+            }
+            
+            // Remove from active requests tracking
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+        }
+    };
+    
+    // Track this request if we have a tweet ID
+    if (tweetId && window.activeStreamingRequests) {
+        window.activeStreamingRequests[tweetId] = streamingRequestObj;
+    }
+    
+    return streamingRequestObj;
 }
 
 /** 
@@ -2584,12 +2635,12 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             content: [{
                 type: "text",
                 text:
-                    `provide your reasoning, and a rating (eg. SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.) for the tweet with tweet ID ${tweetId}.
-        [USER-DEFINED INSTRUCTIONS]:
+                    `provide your reasoning, and a rating according to the the following instructions for the tweet with tweet ID ${tweetId}.
         ${USER_DEFINED_INSTRUCTIONS}
                 _______BEGIN TWEET_______
                 ${tweetText}
-                _______END TWEET_______`
+                _______END TWEET_______
+                Make sure your response ends with SCORE_0, SCORE_1, SCORE_2, SCORE_3, SCORE_4, SCORE_5, SCORE_6, SCORE_7, SCORE_8, SCORE_9, or SCORE_10.`
             }]
         }]
     };
@@ -2609,9 +2660,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             });
         }
     }
-    if(isReasoningModel(selectedModel)){
-        request.include_reasoning = true;
-    }
     // Add model parameters
     request.temperature = modelTemperature;
     request.top_p = modelTopP;
@@ -2621,9 +2669,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
     request.provider = {
         sort: sortOrder.split('-')[0],
-        allow_fallbacks: false,
-    };
-
+        allow_fallbacks: true,
+    };  
     // Check if streaming is enabled
     const useStreaming = GM_getValue('enableStreaming', false);
     
@@ -2677,8 +2724,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             // If we get here, we couldn't find a score in the response
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
-                console.log(`Attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffDelay}ms...`);
-                console.log('Response:', result);
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         } catch (error) {
@@ -2688,7 +2733,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
-                console.log(`Error in attempt ${attempt}/${maxRetries}. Retrying in ${backoffDelay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         }
@@ -2752,12 +2796,23 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
         let aggregatedReasoning = ""; // Track reasoning traces
         let finalData = null;
         
+        // Initialize active streaming requests object if it doesn't exist
+        if (!window.activeStreamingRequests) {
+            window.activeStreamingRequests = {};
+        }
+        
+        // Cancel any existing request for this tweet
+        if (window.activeStreamingRequests[tweetId]) {
+            console.log(`Canceling previous streaming request for tweet ${tweetId}`);
+            window.activeStreamingRequests[tweetId].abort();
+            delete window.activeStreamingRequests[tweetId];
+        }
+        
         getCompletionStreaming(
             request,
             apiKey,
             // onChunk callback - update the tweet's rating indicator in real-time
             (chunkData) => {
-                console.log('chunkData', chunkData);
                 
                 // Use the content and reasoning directly from chunkData instead of aggregating manually
                 aggregatedContent = chunkData.content || "Rating in progress...";
@@ -2780,40 +2835,12 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingReasoning = aggregatedReasoning;
                     }
                     
-                    // Don't cache the streaming result until we have a score
-                    if (currentScore !== null) {
-                        // Only initialize cache if we have a score
-                        if (!tweetIDRatingCache[tweetId]) {
-                            tweetIDRatingCache[tweetId] = {
-                                tweetContent: tweetText,
-                                score: currentScore,
-                                description: aggregatedContent,
-                                reasoning: aggregatedReasoning,
-                                streaming: true  // Mark as streaming/incomplete
-                            };
-                        } else {
-                            // Update existing cache entry if it exists
-                            tweetIDRatingCache[tweetId].description = aggregatedContent;
-                            tweetIDRatingCache[tweetId].reasoning = aggregatedReasoning;
-                            tweetIDRatingCache[tweetId].score = currentScore;
-                            tweetIDRatingCache[tweetId].streaming = true;
-                        }
-                        
-                        tweetArticle.dataset.sloppinessScore = currentScore.toString();
-                        
-                        // Save to storage periodically (once per second max)
-                        if (!window.lastCacheSaveTime || Date.now() - window.lastCacheSaveTime > 1000) {
-                            saveTweetRatings();
-                            window.lastCacheSaveTime = Date.now();
-                        }
-                    }
+                    // Don't cache streaming results - removed partial caching code
                     
                     // Update the tooltip content with both description and reasoning
                     if (tooltip) {
                         // Use the helper function from ui.js to update tooltip content
                         updateTooltipContent(tooltip, aggregatedContent, aggregatedReasoning);
-                        console.log(aggregatedReasoning);
-                        console.log(aggregatedContent);
                         tooltip.classList.add('streaming-tooltip');
                     }
                     
@@ -2935,7 +2962,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                             setScoreIndicator(tweetArticle, score, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                         }
                         
-                        console.log(`Rating complete for tweet ${tweetId} with score ${score}`);
                     } else {
                         // If no score was found anywhere, log a warning and set a default score
                         console.warn(`No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
@@ -3003,7 +3029,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 }
                 
                 reject(new Error(errorData.message));
-            }
+            },
+            30000, // timeout
+            tweetId  // Pass the tweet ID to associate with this request
         );
     });
 }
@@ -3070,7 +3098,6 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
 function fetchAvailableModels() {
     const apiKey = GM_getValue('openrouter-api-key', '');
     if (!apiKey) {
-        console.log('No API key available, skipping model fetch');
         showStatus('Please enter your OpenRouter API key');
         return;
     }
@@ -3323,7 +3350,6 @@ function handleMutations(mutationsList) {
                                 const descBox = document.getElementById(descId);
                                 if (descBox) {
                                     descBox.remove();
-                                    //console.debug(`Removed description box ${descId} for tweet that was removed from the DOM`);
                                 }
                             }
                         });
@@ -3607,10 +3633,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 const isCached = tweetIDRatingCache[tweetId] &&
                     !tweetIDRatingCache[tweetId].streaming &&
                     tweetIDRatingCache[tweetId].score !== undefined;
-
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs);
-
-                
                 score = rating.score;
                 description = rating.content;
 
@@ -3669,7 +3692,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 }
 
             } catch (apiError) {
-                console.error(`API error for tweet ${tweetId}: ${apiError}`);
                 score = 10; // Fallback to a random score
                 tweetArticle.dataset.ratingStatus = 'error';
                 tweetArticle.dataset.ratingDescription = "API error";
@@ -3692,7 +3714,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
 
         // Always ensure a valid score is set
         if (score === undefined || score === null) {
-            console.warn(`Invalid score for tweet ${tweetId}, using default score 5`);
             score = 5;
         }
 
@@ -3709,7 +3730,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
             // Final verification of indicator
             if (!tweetArticle.querySelector('.score-indicator')) {
-                console.error(`Final indicator check failed for tweet ${tweetId}`);
                 processingSuccessful = false;
             }
         } catch (e) {
@@ -3739,7 +3759,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // If processing was not successful, remove from processedTweets
         // to allow future retry attempts
         if (!processingSuccessful) {
-            console.warn(`Removing tweet ${tweetId} from processedTweets to allow retry`);
             processedTweets.delete(tweetId);
         }
     }
@@ -3753,7 +3772,6 @@ function scheduleTweetProcessing(tweetArticle) {
     // First, ensure the tweet has a valid ID
     const tweetId = getTweetID(tweetArticle);
     if (!tweetId) {
-        console.error("Cannot schedule tweet without valid ID", tweetArticle);
         return;
     }
 
@@ -4434,10 +4452,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 }
             }
             
-            console.groupCollapsed('Thread Mapping');
-            console.log('Thread structure:', replyDocs);
-            console.log('Persistent relationships:', threadRelationships);
-            console.groupEnd();
             
             // Fourth pass: Update the cache with thread context
             // but with a limit on how many we process at once
@@ -4499,7 +4513,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         await Promise.race([mapping(), timeout]);
         
     } catch (error) {
-        console.error("Error in mapThreadStructure:", error);
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;
@@ -4516,8 +4529,7 @@ function getTweetReplyInfo(tweetId) {
 
 
     // ----- ui.js -----
-// --- Constants ---
-const VERSION = '1.3.3.1'; // Update version here
+const VERSION = '1.3.4'; // Update version here
 
 // --- Utility Functions ---
 
@@ -5289,6 +5301,7 @@ function closeAllSelectBoxes(exceptThisOne = null) {
  * @param {string} [reasoning] - Optional reasoning trace.
  */
 function setScoreIndicator(tweetArticle, score, status, description = "", reasoning = "") {
+    const tweetId = getTweetID(tweetArticle);
     let indicator = tweetArticle.querySelector('.score-indicator');
     if (!indicator) {
         indicator = document.createElement('div');
@@ -5300,6 +5313,9 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         const tooltip = document.createElement('div');
         tooltip.className = 'score-description';
         tooltip.style.display = 'none';
+        
+        // Store the tweet ID in the tooltip's dataset for cleanup
+        tooltip.dataset.tweetId = tweetId;
         
         // Create the fixed structure for the tooltip
         // Create the reasoning dropdown structure upfront
@@ -5318,7 +5334,8 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
         
         // Add event listener properly
-        reasoningToggle.addEventListener('click', function() {
+        reasoningToggle.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent bubbling to tooltip click handler
             const dropdown = this.closest('.reasoning-dropdown');
             dropdown.classList.toggle('expanded');
             
@@ -5362,9 +5379,16 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         // Store the tooltip reference
         indicator.scoreTooltip = tooltip;
         
-        // Add hover listeners
+        // Add mouse hover listeners
         indicator.addEventListener('mouseenter', handleIndicatorMouseEnter);
         indicator.addEventListener('mouseleave', handleIndicatorMouseLeave);
+        
+        // Add click/tap handler for toggling tooltip
+        indicator.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent opening the tweet
+            e.preventDefault();
+            toggleTooltipVisibility(this);
+        });
         
         // Also add hover listeners to the tooltip
         tooltip.addEventListener('mouseenter', () => {
@@ -5373,16 +5397,31 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         tooltip.addEventListener('mouseleave', () => {
             tooltip.style.display = 'none';
         });
+        
+        // Add click handler to close tooltip when clicking outside
+        tooltip.addEventListener('click', (e) => {
+            // Only if not clicking reasoning toggle
+            if (!e.target.closest('.reasoning-toggle')) {
+                tooltip.style.display = 'none';
+            }
+        });
+        
+        // Apply mobile positioning if needed
+        if (isMobileDevice()) {
+            indicator.classList.add('mobile-indicator');
+        }
     }
 
     // Update status class and text content
     indicator.classList.remove('pending-rating', 'rated-rating', 'error-rating', 'cached-rating', 'blacklisted-rating', 'streaming-rating'); // Clear previous
     indicator.dataset.description = description || ''; // Store description
     indicator.dataset.reasoning = reasoning || ''; // Store reasoning
+    indicator.dataset.tweetId = tweetId; // Store tweet ID in indicator
     
     // Update the tooltip content
     const tooltip = indicator.scoreTooltip;
     if (tooltip) {
+        tooltip.dataset.tweetId = tweetId; // Ensure the tooltip also has the tweet ID
         updateTooltipContent(tooltip, description, reasoning);
     }
 
@@ -5413,6 +5452,159 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
             indicator.textContent = score;
             break;
     }
+}
+
+/**
+ * Toggles the visibility of a tooltip associated with an indicator
+ * @param {HTMLElement} indicator - The indicator element
+ */
+function toggleTooltipVisibility(indicator) {
+    const tooltip = indicator.scoreTooltip;
+    if (!tooltip) return;
+    
+    if (tooltip.style.display === 'block') {
+        tooltip.style.display = 'none';
+    } else {
+        positionTooltip(indicator, tooltip);
+        tooltip.style.display = 'block';
+    }
+}
+
+/**
+ * Positions the tooltip relative to the indicator
+ * @param {HTMLElement} indicator - The indicator element
+ * @param {HTMLElement} tooltip - The tooltip element
+ */
+function positionTooltip(indicator, tooltip) {
+    if (!indicator || !tooltip) return;
+    
+    const rect = indicator.getBoundingClientRect();
+    const margin = 10;
+    const isMobile = isMobileDevice();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const safeArea = viewportHeight - margin; // Safe area to stay within
+    
+    // Reset any previous height constraints to measure true dimensions
+    tooltip.style.maxHeight = '';
+    tooltip.style.overflowY = '';
+    
+    // Force layout recalculation to get true dimensions
+    tooltip.style.display = 'block';
+    tooltip.style.visibility = 'hidden';
+    
+    const tooltipWidth = tooltip.offsetWidth;
+    const tooltipHeight = tooltip.offsetHeight;
+    
+    let left, top;
+    
+    if (isMobile) {
+        // Center tooltip horizontally on mobile
+        left = Math.max(0, (viewportWidth - tooltipWidth) / 2);
+        
+        // Always apply a max-height on mobile to ensure scrollability
+        const maxTooltipHeight = viewportHeight * 0.8; // 80% of viewport
+        
+        // If tooltip is taller than allowed, constrain it and enable scrolling
+        if (tooltipHeight > maxTooltipHeight) {
+            tooltip.style.maxHeight = `${maxTooltipHeight}px`;
+            tooltip.style.overflowY = 'scroll';
+        }
+        
+        // Position at the bottom part of the screen
+        top = (viewportHeight - tooltip.offsetHeight) / 2;
+        
+        // Ensure it's always fully visible
+        if (top < margin) {
+            top = margin;
+        }
+        if (top + tooltip.offsetHeight > safeArea) {
+            top = safeArea - tooltip.offsetHeight;
+        }
+    } else {
+        // Desktop positioning - to the right of indicator
+        left = rect.right + margin;
+        top = rect.top + (rect.height / 2) - (tooltipHeight / 2);
+        
+        // Check horizontal overflow
+        if (left + tooltipWidth > viewportWidth - margin) {
+            // Try positioning to the left of indicator
+            left = rect.left - tooltipWidth - margin;
+            
+            // If that doesn't work either, center horizontally
+            if (left < margin) {
+                left = Math.max(margin, (viewportWidth - tooltipWidth) / 2);
+                // And position below or above the indicator
+                if (rect.bottom + tooltipHeight + margin <= safeArea) {
+                    top = rect.bottom + margin;
+                } else if (rect.top - tooltipHeight - margin >= margin) {
+                    top = rect.top - tooltipHeight - margin;
+                } else {
+                    // If doesn't fit above or below, center vertically
+                    top = margin;
+                    // Apply max height and scrolling
+                    tooltip.style.maxHeight = `${safeArea - (margin * 2)}px`;
+                    tooltip.style.overflowY = 'scroll';
+                }
+            }
+        }
+        
+        // Final vertical adjustment and scrolling if needed
+        if (top < margin) {
+            top = margin;
+        }
+        if (top + tooltipHeight > safeArea) {
+            // If tooltip is too tall for the viewport, enable scrolling
+            if (tooltipHeight > safeArea - margin) {
+                top = margin;
+                tooltip.style.maxHeight = `${safeArea - (margin * 2)}px`;
+                tooltip.style.overflowY = 'scroll';
+            } else {
+                // Otherwise just move it up
+                top = safeArea - tooltipHeight;
+            }
+        }
+    }
+    
+    // Apply the position
+    tooltip.style.position = 'fixed';
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+    tooltip.style.zIndex = '99999999';
+    tooltip.style.visibility = 'visible';
+    
+    // Force scrollbars on WebKit browsers if needed
+    if (tooltip.style.overflowY === 'scroll') {
+        tooltip.style.WebkitOverflowScrolling = 'touch';
+    }
+    
+    // Store the current scroll position to check if user has manually scrolled
+    tooltip.lastScrollTop = tooltip.scrollTop;
+    
+    // Update scroll position for streaming tooltips
+    if (tooltip.classList.contains('streaming-tooltip')) {
+        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+        const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
+                               (Date.now() - tooltip.lastDisplayTime) > 1000;
+        
+        if (isInitialDisplay || isAtBottom) {
+            setTimeout(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+            }, 10);
+        }
+    }
+    
+    // Track when we displayed the tooltip
+    tooltip.lastDisplayTime = Date.now();
+}
+
+/**
+ * Detects if the user is on a mobile device
+ * @returns {boolean} true if mobile device detected
+ */
+function isMobileDevice() {
+    return (window.innerWidth <= 600 || 
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 }
 
 /** 
@@ -5495,6 +5687,9 @@ function updateTooltipContent(tooltip, description, reasoning) {
 
 /** Handles mouse enter event for score indicators. */
 function handleIndicatorMouseEnter(event) {
+    // Only use hover behavior on non-mobile
+    if (isMobileDevice()) return;
+    
     const indicator = event.currentTarget;
     const tooltip = indicator.scoreTooltip;
     if (!tooltip) return;
@@ -5504,9 +5699,8 @@ function handleIndicatorMouseEnter(event) {
     const tweetId = tweetArticle ? getTweetID(tweetArticle) : null;
     
     // Position the tooltip
-    tooltip.style.position = 'fixed';
+    positionTooltip(indicator, tooltip);
     tooltip.style.display = 'block';
-    tooltip.style.zIndex = '99999999';
     
     // Check if we have cached streaming content for this tweet
     if (tweetId && tweetIDRatingCache[tweetId]?.description) {
@@ -5537,55 +5731,13 @@ function handleIndicatorMouseEnter(event) {
             tooltip.classList.remove('streaming-tooltip');
         }
     }
-    
-    const rect = indicator.getBoundingClientRect();
-    const tooltipWidth = tooltip.offsetWidth;
-    const tooltipHeight = tooltip.offsetHeight;
-    const margin = 10;
-
-    let left = rect.right + margin;
-    let top = rect.top + (rect.height / 2) - (tooltipHeight / 2);
-
-    // Adjust if going off-screen
-    if (left + tooltipWidth > window.innerWidth - margin) {
-        left = rect.left - tooltipWidth - margin;
-    }
-    if (top < margin) {
-        top = margin;
-    }
-    if (top + tooltipHeight > window.innerHeight - margin) {
-        top = window.innerHeight - tooltipHeight - margin;
-    }
-
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
-    
-    // Store the current scroll position to check if user has manually scrolled
-    tooltip.lastScrollTop = tooltip.scrollTop;
-    
-    // If this is a streaming tooltip, scroll to the bottom to show latest content only if:
-    // 1. It's a fresh display (not previously scrolled by user)
-    // 2. User was already at the bottom when new content arrived
-    if (tooltip.classList.contains('streaming-tooltip')) {
-        // Check if tooltip was already visible and user had scrolled up
-        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
-        const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
-                               (Date.now() - tooltip.lastDisplayTime) > 1000;
-        
-        if (isInitialDisplay || isAtBottom) {
-            // Use setTimeout to ensure this happens after the tooltip is displayed
-            setTimeout(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-            }, 10);
-        }
-    }
-    
-    // Track when we displayed the tooltip
-    tooltip.lastDisplayTime = Date.now();
 }
 
 /** Handles mouse leave event for score indicators. */
 function handleIndicatorMouseLeave(event) {
+    // Only use hover behavior on non-mobile
+    if (isMobileDevice()) return;
+    
     const indicator = event.currentTarget;
     const tooltip = indicator.scoreTooltip;
     if (!tooltip) return;
@@ -5600,9 +5752,39 @@ function handleIndicatorMouseLeave(event) {
 
 /** Cleans up the global score tooltip element. */
 function cleanupDescriptionElements() {
-    // Now we need to remove any tooltips that might be in the DOM
+    // Remove all tooltips that might be in the DOM
     document.querySelectorAll('.score-description').forEach(tooltip => {
         tooltip.remove();
+    });
+}
+
+/**
+ * Performs a cleanup of orphaned tooltips that no longer have a visible tweet
+ * and cancels any streaming requests for those tweets
+ */
+function cleanupOrphanedTooltips() {
+    // Get all currently visible tweet IDs
+    const visibleTweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
+        .map(article => getTweetID(article));
+    
+    // Get all tooltips
+    const tooltips = document.querySelectorAll('.score-description');
+    
+    tooltips.forEach(tooltip => {
+        const tooltipTweetId = tooltip.dataset.tweetId;
+        
+        // If tooltip has no tweet ID or its tweet is no longer visible, remove it
+        if (!tooltipTweetId || !visibleTweets.includes(tooltipTweetId)) {
+            // If there's an active streaming request for this tweet, cancel it
+            if (window.activeStreamingRequests && window.activeStreamingRequests[tooltipTweetId]) {
+                console.log(`Canceling streaming request for tweet ${tooltipTweetId} as it's no longer visible`);
+                window.activeStreamingRequests[tooltipTweetId].abort();
+                delete window.activeStreamingRequests[tooltipTweetId];
+            }
+            
+            // Remove the tooltip
+            tooltip.remove();
+        }
     });
 }
 
@@ -5788,6 +5970,43 @@ function initialiseUI() {
     const uiContainer = injectUI();
     if (!uiContainer) return; // Stop if injection failed
 
+    // Add mobile-specific styles with the rest of our CSS
+    GM_addStyle(`
+        .score-indicator.mobile-indicator {
+            position: absolute !important;
+            bottom: 3% !important;
+            right: 10px !important;
+            top: auto !important;
+        }
+        
+        .score-description {
+            box-sizing: border-box !important;
+        }
+        
+        @media (max-width: 600px) {
+            .score-indicator {
+                position: absolute !important;
+                bottom: 3% !important;
+                right: 10px !important;
+                top: auto !important;
+            }
+            
+            .score-description {
+                max-width: 100% !important;
+                width: 96vw !important;
+                left: 2vw !important;
+                right: 2vw !important;
+                margin: 0 auto !important;
+                box-sizing: border-box !important;
+                max-height: 80vh !important;
+                overflow-y: scroll !important;
+                -webkit-overflow-scrolling: touch !important;
+                overscroll-behavior: contain !important;
+                transform: translateZ(0) !important; /* Force GPU acceleration */
+            }
+        }
+    `);
+
     initializeEventListeners(uiContainer);
     refreshSettingsUI(); // Set initial state from saved settings
     fetchAvailableModels(); // Fetch models async
@@ -5797,6 +6016,14 @@ function initialiseUI() {
     
     // Set up a periodic refresh of the cache stats to catch any updates
     setInterval(updateFloatingCacheStats, 10000); // Update every 10 seconds
+    
+    // Set up periodic cleanup of orphaned tooltips
+    setInterval(cleanupOrphanedTooltips, 5000); // Check every 5 seconds
+    
+    // Initialize tracking object for streaming requests if it doesn't exist
+    if (!window.activeStreamingRequests) {
+        window.activeStreamingRequests = {};
+    }
 }
 
 /**
