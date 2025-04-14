@@ -1,4 +1,4 @@
-const VERSION = '1.3.5.1'; // Update version here
+
 
 // --- Utility Functions ---
 
