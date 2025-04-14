@@ -1,5 +1,71 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
+
+/**
+ * Cache for tweet ratings - each entry should have:
+ * Required fields:
+ * - score: Number - The numerical rating score (must not be undefined/null)
+ * 
+ * Optional fields:
+ * - description: String - Text description of the rating
+ * - tweetContent: String - Full context of the tweet
+ * - streaming: Boolean - Whether rating is still being streamed (should be false for completed entries)
+ * - reasoning: String - Reasoning behind the rating
+ * - fromStorage: Boolean - Whether entry was loaded from persistent storage
+ * - threadContext: Object - Contains thread relationship data:
+ *   - replyTo: String - Username being replied to
+ *   - replyToId: String - Tweet ID being replied to
+ *   - isRoot: Boolean - Whether this is a root tweet
+ *   - threadMediaUrls: Array - Media URLs from previous tweets in thread
+ */
 const tweetIDRatingCache = {}; // ID-based cache for persistent storage
+
+/**
+ * Removes invalid entries from tweetIDRatingCache, including:
+ * - Entries with undefined/null scores
+ * - Streaming entries with undefined scores
+ * @param {boolean} saveAfterCleanup - Whether to save the cache after cleanup
+ * @returns {Object} - Statistics about the cleanup operation
+ */
+function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
+    const beforeCount = Object.keys(tweetIDRatingCache).length;
+    let deletedCount = 0;
+    let streamingDeletedCount = 0;
+    let undefinedScoreCount = 0;
+    
+    // Iterate through all entries
+    for (const tweetId in tweetIDRatingCache) {
+        const entry = tweetIDRatingCache[tweetId];
+        
+        // Check for invalid entries
+        if (entry.score === undefined || entry.score === null) {
+            // Count streaming entries separately
+            if (entry.streaming === true) {
+                streamingDeletedCount++;
+            } else {
+                undefinedScoreCount++;
+            }
+            
+            // Delete the invalid entry
+            delete tweetIDRatingCache[tweetId];
+            deletedCount++;
+        }
+    }
+    
+    // Save the cleaned cache if requested
+    if (saveAfterCleanup && deletedCount > 0) {
+        saveTweetRatings();
+    }
+    
+    // Return cleanup statistics
+    return {
+        beforeCount,
+        afterCount: Object.keys(tweetIDRatingCache).length,
+        deletedCount,
+        streamingDeletedCount,
+        undefinedScoreCount
+    };
+}
+
 const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
 let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets

@@ -147,7 +147,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             const reader = response.response.getReader();
             
             // Setup timeout to prevent hanging indefinitely
-            let streamTimeout = null;
+            
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
@@ -165,11 +165,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                 }, 10000); // 10 second timeout without activity
             };
-            
+            let streamTimeout = null;
             // Process the stream
             const processStream = async () => {
                 try {
-                    resetStreamTimeout(); // Initial timeout
+                    resetStreamTimeout()
                     let isDone = false;
                     let emptyChunksCount = 0;
                     
@@ -184,6 +184,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         // Convert the chunk to text
                         const chunk = new TextDecoder().decode(value);
                         
+                        clearTimeout(streamTimeout);
                         // Reset timeout on activity
                         resetStreamTimeout();
                         
@@ -360,34 +361,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
  * Formats description text for the tooltip.
  * Copy of the function from ui.js to ensure it's available for streaming.
  */
-function formatTooltipDescription(description, reasoning = "") {
-    if (!description) return { description: '', reasoning: '' };
-    
-    // Add markdown-style formatting
-    description = description.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); // Bold
-    description = description.replace(/\*([^*]+)\*/g, '<em>$1</em>'); // Italic
-    
-    // Basic formatting, can be expanded
-    description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
-    description = description.replace(/\n\n/g, '<br><br>'); // Keep in single paragraph
-    description = description.replace(/\n/g, '<br>');
-    
-    // Format reasoning trace with markdown support if provided
-    let formattedReasoning = '';
-    if (reasoning && reasoning.trim()) {
-        formattedReasoning = reasoning
-            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') // Bold
-            .replace(/\*([^*]+)\*/g, '<em>$1</em>') // Italic
-            .replace(/\n\n/g, '<br><br>') // Keep in single paragraph
-            .replace(/\n/g, '<br>');
-    }
-    
-    return {
-        description: description,
-        reasoning: formattedReasoning
-    };
-}
-
 const safetySettings = [
     {
         category: "HARM_CATEGORY_HARASSMENT",
@@ -410,6 +383,7 @@ const safetySettings = [
         threshold: "BLOCK_NONE",
     },
 ];
+
 /**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
  * 
@@ -421,6 +395,11 @@ const safetySettings = [
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
+    console.log(`Given Tweet Text: 
+        ${tweetText}
+        And Media URLS:
+        ${mediaUrls}
+        `)
     // Create the request body
     const request = {
         model: selectedModel,
@@ -609,7 +588,15 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
             window.activeStreamingRequests[tweetId].abort();
             delete window.activeStreamingRequests[tweetId];
         }
-        
+        tweetIDRatingCache[tweetId] = {
+            tweetContent: tweetText,
+            score: null,
+            description: "",
+            reasoning: "", // Store reasoning
+            streaming: true,  // Mark as complete
+            timestamp: Date.now()
+        };
+        saveTweetRatings();
         getCompletionStreaming(
             request,
             apiKey,
@@ -725,12 +712,12 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 if (tweetArticle) {
                     // Check for a score in the final content
                     const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
-                    
                     // Also check if we already found a score during streaming
                     const existingScore = tweetIDRatingCache[tweetId]?.score;
                     
                     if (scoreMatch || existingScore) {
-                        const score = scoreMatch ? parseInt(scoreMatch[1], 10) : existingScore;
+                        // if the AI writes multiple scores, use the last one
+                        const score = scoreMatch ? parseInt(scoreMatch[scoreMatch.length - 1], 10) : existingScore;
                         
                         // Update cache with final result (non-streaming)
                         tweetIDRatingCache[tweetId] = {
@@ -783,7 +770,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         saveTweetRatings();
                         
                         // Update UI with default score
-                        tweetArticle.dataset.ratingStatus = 'rated';
+                        tweetArticle.dataset.ratingStatus = 'error';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
                         tweetArticle.dataset.sloppinessScore = defaultScore.toString();

@@ -85,7 +85,7 @@ function applyTweetCachedRating(tweetArticle) {
             tweetArticle.dataset.ratingDescription = desc;
             filterSingleTweet(tweetArticle);
             return true;
-        } else {
+        } else if (!tweetIDRatingCache[tweetId].streaming){
             // Invalid cache entry - missing score
             console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
             delete tweetIDRatingCache[tweetId];  // Remove invalid entry
@@ -210,6 +210,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 // This is a streaming entry that's still in progress
                 // Don't delete it, but don't use it either
                 console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
+                
             } else {
                 // Invalid cache entry, delete it
                 console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cacheEntry);
@@ -424,7 +425,7 @@ function scheduleTweetProcessing(tweetArticle) {
         const isIncompleteStreaming =
             tweetIDRatingCache[tweetId].streaming === true &&
             (tweetIDRatingCache[tweetId].score === undefined || tweetIDRatingCache[tweetId].score === null);
-
+        
         if (!isIncompleteStreaming) {
             const wasApplied = applyTweetCachedRating(tweetArticle);
             if (wasApplied) {
@@ -448,7 +449,9 @@ function scheduleTweetProcessing(tweetArticle) {
     }
 
     // Immediately mark as pending before scheduling actual processing
-    processedTweets.add(tweetId);
+    if (!processedTweets.has(tweetId)) {
+        processedTweets.add(tweetId);
+    }
     tweetArticle.dataset.ratingStatus = 'pending';
 
     // Ensure indicator is set
@@ -474,6 +477,7 @@ function scheduleTweetProcessing(tweetArticle) {
 let threadRelationships = {};
 let lastThreadCheck = 0;
 const THREAD_CHECK_INTERVAL = 2000; // 2 seconds between thread checks
+let threadMappingInProgress = false; // Add a memory-based flag for more reliable state tracking
 
 // Load thread relationships from storage on script initialization
 function loadThreadRelationships() {
@@ -743,6 +747,7 @@ function ensureAllTweetsRated() {
             const hasScore = !!tweet.dataset.sloppinessScore;
             const hasError = tweet.dataset.ratingStatus === 'error';
             const hasIndicator = !!tweet.querySelector('.score-indicator');
+            const isStreaming = tweet.dataset.ratingStatus === 'streaming';
 
             // If tweet is in processedTweets but missing indicator, remove it from processed
             if (processedTweets.has(tweetId) && !hasIndicator) {
@@ -751,7 +756,7 @@ function ensureAllTweetsRated() {
             }
 
             // Schedule processing if needed and not already in progress
-            const needsProcessing = !hasScore || hasError || !hasIndicator;
+            const needsProcessing = (!hasScore && !isStreaming) || hasError || !hasIndicator;
             if (needsProcessing && !processedTweets.has(tweetId)) {
                 unreatedCount++;
                 const status = !hasIndicator ? 'missing indicator' :
@@ -786,8 +791,8 @@ async function handleThreads() {
         
         if (!conversation) return;
 
-        // Maintain compatibility with the existing implementation by checking dataset attributes
-        if (conversation.dataset.threadHist === "pending") {
+        // More reliable state checking with both DOM and memory-based flags
+        if (threadMappingInProgress || conversation.dataset.threadHist === "pending") {
             return; // Don't interrupt pending operations
         }
         
@@ -813,57 +818,101 @@ async function handleThreads() {
             const firstArticle = document.querySelector('article[data-testid="tweet"]');
             if (firstArticle) {
                 conversation.dataset.threadHist = 'pending';
-                const tweetId = getTweetID(firstArticle);
+                threadMappingInProgress = true; // Set memory-based flag
                 
-                // Get the full context of the root tweet
-                const apiKey = GM_getValue('openrouter-api-key', '');
-                const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
-                threadHist = fullcxt;
-                
-                conversation.dataset.threadHist = threadHist;
-                conversation.firstChild.dataset.canary = "true";
-                
-                // Schedule processing for the original tweet
-                if (!processedTweets.has(tweetId)) {
-                    scheduleTweetProcessing(firstArticle);
+                try {
+                    const tweetId = getTweetID(firstArticle);
+                    if (!tweetId) {
+                        throw new Error("Failed to get tweet ID from first article");
+                    }
+                    
+                    // Get the full context of the root tweet
+                    const apiKey = GM_getValue('openrouter-api-key', '');
+                    const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
+                    if (!fullcxt) {
+                        throw new Error("Failed to get full context for root tweet");
+                    }
+                    
+                    threadHist = fullcxt;
+                    conversation.dataset.threadHist = threadHist;
+                    
+                    if (conversation.firstChild) {
+                        conversation.firstChild.dataset.canary = "true";
+                    }
+                    
+                    // Schedule processing for the original tweet
+                    if (!processedTweets.has(tweetId)) {
+                        scheduleTweetProcessing(firstArticle);
+                    }
+                    
+                    // Use improved thread detection to map the structure
+                    setTimeout(() => {
+                        mapThreadStructure(conversation, localRootTweetId);
+                    }, 500);
+                } catch (error) {
+                    console.error("Error initializing thread history:", error);
+                    // Clean up on error
+                    threadMappingInProgress = false;
+                    delete conversation.dataset.threadHist;
                 }
-                
-                // Use improved thread detection to map the structure
-                setTimeout(() => {
-                    mapThreadStructure(conversation, localRootTweetId);
-                }, 500);
                 
                 return;
             }
-        } else if (conversation.dataset.threadHist !== "pending" && conversation.firstChild.dataset.canary === undefined) {
+        } else if (conversation.dataset.threadHist !== "pending" && 
+                  conversation.firstChild && 
+                  conversation.firstChild.dataset.canary === undefined) {
             // Original behavior for deep-diving into replies
-            conversation.firstChild.dataset.canary = "pending";
-            const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
-            if (nextArticle) {
-                const tweetId = getTweetID(nextArticle);
-                if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].tweetContent) {
-                    threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
-                } else {
-                    const apiKey = GM_getValue('openrouter-api-key', '');
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    const newContext = await getFullContext(nextArticle, tweetId, apiKey);
-                    threadHist = threadHist + "\n[REPLY]\n" + newContext;
-                }
-                conversation.dataset.threadHist = threadHist;
+            if (conversation.firstChild) {
+                conversation.firstChild.dataset.canary = "pending";
             }
+            threadMappingInProgress = true; // Set memory-based flag
             
-            // Map thread structure after updating history
-            setTimeout(() => {
-                mapThreadStructure(conversation, localRootTweetId);
-            }, 500);
-        } else if (!conversation.dataset.threadMappingInProgress) {
+            try {
+                const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
+                if (nextArticle) {
+                    const tweetId = getTweetID(nextArticle);
+                    if (!tweetId) {
+                        throw new Error("Failed to get tweet ID from next article");
+                    }
+                    
+                    if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].tweetContent) {
+                        threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
+                    } else {
+                        const apiKey = GM_getValue('openrouter-api-key', '');
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        const newContext = await getFullContext(nextArticle, tweetId, apiKey);
+                        if (!newContext) {
+                            throw new Error("Failed to get context for next article");
+                        }
+                        threadHist = threadHist + "\n[REPLY]\n" + newContext;
+                    }
+                    conversation.dataset.threadHist = threadHist;
+                }
+                
+                // Map thread structure after updating history
+                setTimeout(() => {
+                    mapThreadStructure(conversation, localRootTweetId);
+                }, 500);
+            } catch (error) {
+                console.error("Error processing reply:", error);
+                // Clean up on error
+                threadMappingInProgress = false;
+                if (conversation.firstChild) {
+                    delete conversation.firstChild.dataset.canary;
+                }
+            }
+        } else if (!threadMappingInProgress && !conversation.dataset.threadMappingInProgress) {
             // Run thread mapping periodically to catch new tweets loaded during scrolling
+            threadMappingInProgress = true; // Set memory-based flag
+            
             setTimeout(() => {
                 mapThreadStructure(conversation, localRootTweetId);
             }, 500);
         }
     } catch (error) {
         console.error("Error in handleThreads:", error);
+        // Clean up all state on error
+        threadMappingInProgress = false;
     }
 }
 
@@ -872,6 +921,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
     // Mark mapping in progress to prevent duplicate processing
     conversation.dataset.threadMappingInProgress = "true";
     conversation.dataset.threadMappedAt = Date.now().toString();
+    threadMappingInProgress = true; // Set memory-based flag
     
     try {
         // Use a timeout promise to prevent hanging
@@ -886,6 +936,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             if (!cellDivs.length) {
                 console.log("No cell divs found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
+                threadMappingInProgress = false;
                 return;
             }
             
@@ -971,6 +1022,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             if (tweetCells.length === 0) {
                 console.log("No valid tweets found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
+                threadMappingInProgress = false;
                 return;
             }
             
@@ -1057,27 +1109,32 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             if (rootTweet && rootTweet.tweetId) {
                 const rootTweetElement = tweetCells.find(t => t.tweetId === rootTweet.tweetId)?.tweetNode;
                 if (rootTweetElement) {
-                    const apiKey = GM_getValue('openrouter-api-key', '');
-                    const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
-                    if (rootContext) {
-                        completeThreadHistory = rootContext;
-                        // Store the thread history in dataset for getFullContext to use
-                        conversation.dataset.threadHist = completeThreadHistory;
-                        
-                        // Also store the comprehensive media URLs from the entire thread
-                        const allMediaUrls = [];
-                        replyDocs.forEach(doc => {
-                            if (doc.mediaLinks && doc.mediaLinks.length) {
-                                allMediaUrls.push(...doc.mediaLinks);
+                    try {
+                        const apiKey = GM_getValue('openrouter-api-key', '');
+                        const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
+                        if (rootContext) {
+                            completeThreadHistory = rootContext;
+                            // Store the thread history in dataset for getFullContext to use
+                            conversation.dataset.threadHist = completeThreadHistory;
+                            
+                            // Also store the comprehensive media URLs from the entire thread
+                            const allMediaUrls = [];
+                            replyDocs.forEach(doc => {
+                                if (doc.mediaLinks && doc.mediaLinks.length) {
+                                    allMediaUrls.push(...doc.mediaLinks);
+                                }
+                                if (doc.quotedMediaLinks && doc.quotedMediaLinks.length) {
+                                    allMediaUrls.push(...doc.quotedMediaLinks);
+                                }
+                            });
+                            
+                            if (allMediaUrls.length > 0) {
+                                conversation.dataset.threadMediaUrls = JSON.stringify(allMediaUrls);
                             }
-                            if (doc.quotedMediaLinks && doc.quotedMediaLinks.length) {
-                                allMediaUrls.push(...doc.quotedMediaLinks);
-                            }
-                        });
-                        
-                        if (allMediaUrls.length > 0) {
-                            conversation.dataset.threadMediaUrls = JSON.stringify(allMediaUrls);
                         }
+                    } catch (error) {
+                        console.error("Error getting root context:", error);
+                        // Continue processing even if full context fails
                     }
                 }
             }
@@ -1102,8 +1159,14 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             // Find the corresponding tweet article from our collected tweet cells
                             const tweetCell = tweetCells.find(tc => tc.tweetId === doc.tweetId);
                             if (tweetCell && tweetCell.tweetNode) {
-                                processedTweets.delete(doc.tweetId);
-                                scheduleTweetProcessing(tweetCell.tweetNode);
+                                // Don't reprocess if the tweet is currently streaming
+                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === 'streaming' ||
+                                                  (tweetIDRatingCache[doc.tweetId] && tweetIDRatingCache[doc.tweetId].streaming === true);
+                                
+                                if (!isStreaming) {
+                                    processedTweets.delete(doc.tweetId);
+                                    scheduleTweetProcessing(tweetCell.tweetNode);
+                                }
                             }
                         }
                     }
@@ -1117,6 +1180,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             
             // Mark mapping as complete
             delete conversation.dataset.threadMappingInProgress;
+            threadMappingInProgress = false;
         };
         
         // Helper function to get all media URLs from tweets that came before the current one in the thread
@@ -1143,9 +1207,11 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         await Promise.race([mapping(), timeout]);
         
     } catch (error) {
+        console.error("Error in mapThreadStructure:", error);
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;
+        threadMappingInProgress = false;
     }
 }
 
