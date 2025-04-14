@@ -303,7 +303,7 @@ function saveInstructions() {
     USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
     GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
-    if (isMobileDevice() confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
+    if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
     }
 }
