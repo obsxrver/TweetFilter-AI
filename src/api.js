@@ -826,7 +826,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     if (indicator && indicator.scoreTooltip) {
                         indicator.scoreTooltip.classList.remove('streaming-tooltip');
                     }
-                    
+                    console.log('errorData', errorData);
                     setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
                 }
                 

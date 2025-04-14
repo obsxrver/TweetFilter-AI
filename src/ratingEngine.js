@@ -10,7 +10,7 @@ function filterSingleTweet(tweetArticle) {
     // If the tweet is still pending a rating, keep it visible
     // Always get the latest threshold directly from storage
     const currentFilterThreshold = parseInt(GM_getValue('filterThreshold', '1'));
-    if (tweetArticle.dataset.ratingStatus === 'pending') {
+    if (tweetArticle.dataset.ratingStatus === 'pending' || tweetArticle.dataset.ratingStatus === 'streaming') {
         //tweetArticle.style.display = '';
         tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display = '';
     } else if (isNaN(score) || score < currentFilterThreshold) {

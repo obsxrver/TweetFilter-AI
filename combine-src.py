@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 import os
+import re
+import argparse
+
+# Set up command line arguments
+parser = argparse.ArgumentParser(description='Combine TweetFilter-AI source files into a single userscript.')
+parser.add_argument('--nolog', action='store_true', help='Remove console.* logging statements')
+args = parser.parse_args()
 
 # Define the files to combine in the correct order
 files_to_combine = [
@@ -19,6 +26,16 @@ resources = [
 
 src_dir = "src"
 output_file = "TweetFilter-AI.user.js"
+
+# Function to remove console.* statements
+def remove_console_logs(text):
+    # Remove full console.* statements ending with semicolon
+    text = re.sub(r'console\.[a-zA-Z]+\([\s\S]*?\);', '', text)
+    # Remove console.* at the end of a line (no semicolon)
+    text = re.sub(r'console\.[a-zA-Z]+\(.*$', '', text, flags=re.MULTILINE)
+    # Remove commented console statements
+    text = re.sub(r'\/\/\s*console\.[a-zA-Z]+\(.*$', '', text, flags=re.MULTILINE)
+    return text
 
 # Read header from main file
 with open(os.path.join(src_dir, "twitter-desloppifier.js"), 'r', encoding='utf-8') as f:
@@ -40,7 +57,10 @@ combined_lines = filtered_header
 # Add IIFE beginning
 combined_lines.append("(function() {\n")
 combined_lines.append("    'use strict';\n")
-combined_lines.append("    console.log(\"X/Twitter Tweet De-Sloppification Activated (Combined Version)\");\n\n")
+if not args.nolog:
+    combined_lines.append("    console.log(\"X/Twitter Tweet De-Sloppification Activated (Combined Version)\");\n\n")
+else:
+    combined_lines.append("\n")
 
 # Add embedded resources
 for resource in resources:
@@ -69,18 +89,19 @@ for js_file in files_to_combine:
     combined_lines.append(f"    // ----- {js_file} -----\n")
     
     with open(os.path.join(src_dir, js_file), 'r', encoding='utf-8') as f:
-        content = f.readlines()
+        content = f.read()
+        
         # Skip userscript header for twitter-desloppifier.js
         if js_file == "twitter-desloppifier.js":
-            skip = True
-            for line in content:
-                if skip and line.strip() == "// ==/UserScript==":
-                    skip = False
-                    continue
-                if not skip:
-                    combined_lines.append(line)
-        else:
-            combined_lines.extend(content)
+            # Find where the header ends
+            header_end = content.find("// ==/UserScript==") + len("// ==/UserScript==")
+            content = content[header_end:]
+        
+        # Remove console logs if --nolog is specified
+        if args.nolog:
+            content = remove_console_logs(content)
+        
+        combined_lines.append(content)
     
     combined_lines.append("\n")
 
@@ -91,4 +112,4 @@ combined_lines.append("})();\n")
 with open(output_file, 'w', encoding='utf-8') as f:
     f.writelines(combined_lines)
 
-print(f"Successfully created {output_file}")
+print(f"Successfully created {output_file}{' (without console logs)' if args.nolog else ''}")

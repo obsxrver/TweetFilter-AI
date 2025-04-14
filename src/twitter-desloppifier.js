@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.5
+// @version      Version 1.3.5.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -24,18 +24,18 @@
 // ==/UserScript==
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.3 - Enhanced)");
-    
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.5.1 - Enhanced)");
+
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");
     GM_setValue('menuHTML', menuhtml);
     let firstRun = GM_getValue('firstRun', true);
-    
+
     //GM_addStyle(css);
 
     // ----- Initialization -----
-    
+
     /**
      * Initializes the observer on the main content area, adds the UI elements,
      * starts processing visible tweets, and sets up periodic checks.
@@ -46,28 +46,24 @@
             observedTargetNode = target;
             console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
             initialiseUI();
-            if (firstRun){
+            if (firstRun) {
                 resetSettings(true);
                 GM_setValue('firstRun', false);
             }
             // If no API key is found, prompt the user
             const apiKey = GM_getValue('openrouter-api-key', '');
-            if (!apiKey) {
-                apiKey = alert("<TweetFilter AI>\nPlease enter your OpenRouter API key. You can get one at https://openrouter.ai/");
-                if (apiKey) {
-                    GM_setValue('openrouter-api-key', apiKey);
-                }
-                showStatus("No API key found. Please enter your OpenRouter API key.");
-            } else {
+            if (apiKey) {
+                GM_setValue('openrouter-api-key', apiKey);
+                showStatus("No API Key found Using promotional key.");
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
             // Process all currently visible tweets
             observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
-            
+
             // Apply filtering based on current threshold
             applyFilteringToAll();
-            
+
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
             ensureAllTweetsRated();
@@ -80,8 +76,8 @@
                 if (settingsUI) settingsUI.remove();
                 const statusIndicator = document.getElementById('status-indicator');
                 if (statusIndicator) statusIndicator.remove();
-                // Clean up all description elements
-                cleanupDescriptionElements();
+                //Now WHY TF did it call this LMAO. That's why it was broken!
+                //cleanupDescriptionElements();
                 console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
