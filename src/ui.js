@@ -843,6 +843,55 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         descriptionParagraph.className = 'description-text';
         tooltip.appendChild(descriptionParagraph);
         
+        // Add scroll-to-bottom button
+        const scrollButton = document.createElement('div');
+        scrollButton.className = 'scroll-to-bottom-button';
+        scrollButton.innerHTML = '⬇ Scroll to bottom';
+        scrollButton.style.display = 'none'; // Hidden by default
+        scrollButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Initial scroll
+            tooltip.scrollTop = tooltip.scrollHeight;
+            // Second scroll after a short delay to catch any new content
+            setTimeout(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+            }, 150);
+            tooltip.dataset.autoScroll = 'true';
+            scrollButton.style.display = 'none';
+        });
+        tooltip.appendChild(scrollButton);
+        
+        // Set initial auto-scroll state
+        tooltip.dataset.autoScroll = 'true';
+        
+        // Add scroll event to detect when user manually scrolls
+        tooltip.addEventListener('scroll', () => {
+            // Check if we're near the bottom
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+            
+            if (!isNearBottom && tooltip.dataset.autoScroll === 'true') {
+                // User has scrolled up, disable auto-scroll
+                tooltip.dataset.autoScroll = 'false';
+                
+                // Show the scroll-to-bottom button
+                if (tooltip.classList.contains('streaming-tooltip')) {
+                    const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
+                    if (scrollButton && scrollButton.style.display === 'none') {
+                        scrollButton.style.display = 'block';
+                    }
+                }
+            } else if (isNearBottom && tooltip.dataset.autoScroll === 'false') {
+                // User has manually scrolled to bottom, re-enable auto-scroll
+                tooltip.dataset.autoScroll = 'true';
+                
+                // Hide the scroll-to-bottom button
+                const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
+                if (scrollButton) {
+                    scrollButton.style.display = 'none';
+                }
+            }
+        });
+        
         document.body.appendChild(tooltip); // Append to body instead of indicator
         
         // Store the tooltip reference
@@ -870,7 +919,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         // Add click handler to close tooltip when clicking outside
         tooltip.addEventListener('click', (e) => {
             // Only if not clicking reasoning toggle
-            if (!e.target.closest('.reasoning-toggle')) {
+            if (!e.target.closest('.reasoning-toggle') && !e.target.closest('.scroll-to-bottom-button')) {
                 tooltip.style.display = 'none';
             }
         });
@@ -1144,12 +1193,24 @@ function updateTooltipContent(tooltip, description, reasoning) {
     
     // Auto-scroll behavior for streaming updates
     if (tooltip.style.display === 'block') {
-        // Check if scroll is at or near the bottom before auto-scrolling
-        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
-        
-        // Only auto-scroll if user was already at the bottom
-        if (isAtBottom) {
-            tooltip.scrollTop = tooltip.scrollHeight;
+        // Check if auto-scroll is enabled for this tooltip
+        if (tooltip.dataset.autoScroll === 'true') {
+            // Use requestAnimationFrame to ensure we're scrolling after content is rendered
+            requestAnimationFrame(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+                // Second scroll after a short delay to catch any new content
+                setTimeout(() => {
+                    tooltip.scrollTop = tooltip.scrollHeight;
+                }, 150);
+            });
+        } else {
+            // Show the scroll-to-bottom button if we're in a streaming tooltip
+            if (tooltip.classList.contains('streaming-tooltip')) {
+                const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
+                if (scrollButton && scrollButton.style.display === 'none') {
+                    scrollButton.style.display = 'block';
+                }
+            }
         }
     }
 }
@@ -1196,6 +1257,24 @@ function handleIndicatorMouseEnter(event) {
         // Add streaming class if status is streaming
         if (tweetArticle?.dataset.ratingStatus === 'streaming' || tweetIDRatingCache[tweetId].streaming === true) {
             tooltip.classList.add('streaming-tooltip');
+            
+            // Reset auto-scroll state for streaming tooltips when they're first shown
+            tooltip.dataset.autoScroll = 'true';
+            
+            // Scroll to bottom immediately for streaming tooltips
+            requestAnimationFrame(() => {
+                tooltip.scrollTop = tooltip.scrollHeight;
+                // Second scroll after a short delay to catch any new content
+                setTimeout(() => {
+                    tooltip.scrollTop = tooltip.scrollHeight;
+                }, 150);
+            });
+            
+            // Hide scroll button initially
+            const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
+            if (scrollButton) {
+                scrollButton.style.display = 'none';
+            }
         } else {
             tooltip.classList.remove('streaming-tooltip');
         }
@@ -1266,8 +1345,8 @@ function exportSettings() {
     try {
         const settingsToExport = {
             apiKey: GM_getValue('openrouter-api-key', ''),
-            selectedModel: GM_getValue('selectedModel', 'google/gemini-flash-1.5-8b'),
-            selectedImageModel: GM_getValue('selectedImageModel', 'google/gemini-flash-1.5-8b'),
+            selectedModel: GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct'),
+            selectedImageModel: GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
             enableStreaming: GM_getValue('enableStreaming', true),
             modelTemperature: GM_getValue('modelTemperature', 0.5),
@@ -1366,8 +1445,8 @@ function resetSettings(noconfirm=false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
-            selectedModel: 'google/gemini-2.0-flash-lite-001',
-            selectedImageModel: 'google/gemini-2.0-flash-lite-001',
+            selectedModel: 'mistralai/mistral-small-3.1-24b-instruct',
+            selectedImageModel: 'mistralai/mistral-small-3.1-24b-instruct',
             enableImageDescriptions: false,
             enableStreaming: true,
             modelTemperature: 0.5,
@@ -1450,6 +1529,27 @@ function initialiseUI() {
         
         .score-description {
             box-sizing: border-box !important;
+        }
+        
+        /* Style for the scroll to bottom button */
+        .scroll-to-bottom-button {
+            position: sticky;
+            bottom: 0;
+            width: 100%;
+            background-color: rgba(29, 155, 240, 0.9);
+            color: white;
+            text-align: center;
+            padding: 8px 0;
+            cursor: pointer;
+            font-weight: bold;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            margin-top: 10px;
+            z-index: 100;
+            transition: background-color 0.2s;
+        }
+        
+        .scroll-to-bottom-button:hover {
+            background-color: rgba(29, 155, 240, 1);
         }
         
         @media (max-width: 600px) {

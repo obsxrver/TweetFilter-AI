@@ -11,8 +11,8 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
-let selectedModel = GM_getValue('selectedModel', 'google/gemini-2.0-flash-lite-001');
-let selectedImageModel = GM_getValue('selectedImageModel', 'google/gemini-2.0-flash-lite-001');
+let selectedModel = GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct');
+let selectedImageModel = GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct');
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -45,11 +45,11 @@ _______END TWEET_______
 _______END TWEET SCHEMA_______
 
 You are to review and provide a rating for the tweet with the specified tweet ID.
-Ensure that you consider the user-defined instructions in your analysis and scoring, specified by:
-[USER-DEFINED INSTRUCTIONS]:
-
-Provide a concise explanation of your reasoning and then, on a new line, output your final rating in the exact format:
-SCORE_X where X is a number from 0 (lowest quality) to 10 (highest quality).
+Ensure that you consider the user-defined instructions in your analysis and scoring.
+Follow the user-defined instructions exactly, and do not deviate from them. Then, on a new line, provide a score between 0 and 10.
+Output your final rating in the exact format:
+(Response to user defined instructions)
+SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
 If one of the above is not present, the program will not be able to parse the response and will return an error.
 `
