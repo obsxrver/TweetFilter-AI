@@ -1,4 +1,4 @@
-const VERSION = '1.3.5.1'; // Update version here
+
 
 // --- Utility Functions ---
 
@@ -787,6 +787,48 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         tooltip.dataset.tweetId = tweetId;
         
         // Create the fixed structure for the tooltip
+        // Add tooltip controls row with pin and copy buttons
+        const tooltipControls = document.createElement('div');
+        tooltipControls.className = 'tooltip-controls';
+        
+        const pinButton = document.createElement('button');
+        pinButton.className = 'tooltip-pin-button';
+        pinButton.innerHTML = '📌';
+        pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        pinButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isPinned = tooltip.classList.toggle('pinned');
+            this.innerHTML = isPinned ? '📍' : '📌';
+            this.title = isPinned ? 'Unpin tooltip' : 'Pin tooltip (prevents auto-closing)';
+        });
+        
+        const copyButton = document.createElement('button');
+        copyButton.className = 'tooltip-copy-button';
+        copyButton.innerHTML = '📋';
+        copyButton.title = 'Copy content to clipboard';
+        copyButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const description = tooltip.querySelector('.description-text');
+            const reasoning = tooltip.querySelector('.reasoning-text');
+            let textToCopy = description ? description.textContent : '';
+            if (reasoning && reasoning.textContent) {
+                textToCopy += '\n\nReasoning:\n' + reasoning.textContent;
+            }
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = this.innerHTML;
+                this.innerHTML = '✓';
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        });
+        
+        tooltipControls.appendChild(pinButton);
+        tooltipControls.appendChild(copyButton);
+        tooltip.appendChild(tooltipControls);
+        
         // Create the reasoning dropdown structure upfront
         const reasoningDropdown = document.createElement('div');
         reasoningDropdown.className = 'reasoning-dropdown';
@@ -861,6 +903,11 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         });
         tooltip.appendChild(scrollButton);
         
+        // Add some spacing at the bottom for better scrolling experience
+        const bottomSpacer = document.createElement('div');
+        bottomSpacer.className = 'tooltip-bottom-spacer';
+        tooltip.appendChild(bottomSpacer);
+        
         // Set initial auto-scroll state
         tooltip.dataset.autoScroll = 'true';
         
@@ -910,17 +957,25 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         
         // Also add hover listeners to the tooltip
         tooltip.addEventListener('mouseenter', () => {
-            tooltip.style.display = 'block';
+            if (!tooltip.classList.contains('pinned')) {
+                tooltip.style.display = 'block';
+            }
         });
         tooltip.addEventListener('mouseleave', () => {
-            tooltip.style.display = 'none';
+            if (!tooltip.classList.contains('pinned')) {
+                tooltip.style.display = 'none';
+            }
         });
         
         // Add click handler to close tooltip when clicking outside
         tooltip.addEventListener('click', (e) => {
-            // Only if not clicking reasoning toggle
-            if (!e.target.closest('.reasoning-toggle') && !e.target.closest('.scroll-to-bottom-button')) {
-                tooltip.style.display = 'none';
+            // Only if not clicking reasoning toggle, buttons, or scroll button
+            if (!e.target.closest('.reasoning-toggle') && 
+                !e.target.closest('.scroll-to-bottom-button') &&
+                !e.target.closest('.tooltip-controls')) {
+                if (!tooltip.classList.contains('pinned')) {
+                    tooltip.style.display = 'none';
+                }
             }
         });
         
@@ -950,7 +1005,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
             break;
         case 'streaming':
             indicator.classList.add('streaming-rating');
-            indicator.textContent = score || '🔄';
+            indicator.textContent = '🔄';
             break;
         case 'error':
             indicator.classList.add('error-rating');
@@ -981,7 +1036,10 @@ function toggleTooltipVisibility(indicator) {
     if (!tooltip) return;
     
     if (tooltip.style.display === 'block') {
-        tooltip.style.display = 'none';
+        // Don't close if pinned
+        if (!tooltip.classList.contains('pinned')) {
+            tooltip.style.display = 'none';
+        }
     } else {
         positionTooltip(indicator, tooltip);
         tooltip.style.display = 'block';
@@ -1141,6 +1199,14 @@ function formatTooltipDescription(description, reasoning = "") {
     // Add markdown-style formatting
     description = description.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); // Bold
     description = description.replace(/\*([^*]+)\*/g, '<em>$1</em>'); // Italic
+    //h4
+    description = description.replace(/^#### (.*)$/gm, '<h4>$1</h4>');
+    //h3
+    description = description.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+    //h2
+    description = description.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+    //h1
+    description = description.replace(/^# (.*)$/gm, '<h1>$1</h1>');
     
     // Basic formatting, can be expanded
     description = description.replace(/SCORE_(\d+)/g, '<span style="display:inline-block;background-color:#1d9bf0;color:white;padding:3px 10px;border-radius:9999px;margin:8px 0;font-weight:bold;">SCORE: $1</span>');
@@ -1290,9 +1356,9 @@ function handleIndicatorMouseLeave(event) {
     const tooltip = indicator.scoreTooltip;
     if (!tooltip) return;
     
-    // Only hide if we're not moving to the tooltip itself
+    // Only hide if we're not moving to the tooltip itself and not pinned
     setTimeout(() => {
-        if (tooltip && !tooltip.matches(':hover')) {
+        if (tooltip && !tooltip.matches(':hover') && !tooltip.classList.contains('pinned')) {
             tooltip.style.display = 'none';
         }
     }, 100);
@@ -1684,60 +1750,148 @@ updateCacheStatsUI = function() {
     // Update the floating badge
     updateFloatingCacheStats();
     
-    // Add styles for reasoning dropdown
+    // Add styles for reasoning dropdown and tooltips with better responsive sizing
     GM_addStyle(`
+    .score-description {
+        width: 450px !important;
+        max-width: 80vw !important;
+        padding: 15px !important;
+        background-color: #15202b !important;
+        border: 1px solid #38444d !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
+        color: #fff !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        z-index: 99999 !important;
+    }
+    
+    .score-description.pinned {
+        border: 2px solid #1d9bf0 !important;
+    }
+    
+    .tooltip-controls {
+        display: flex !important;
+        justify-content: flex-end !important;
+        margin-bottom: 15px !important;
+        position: sticky !important;
+        top: 0 !important;
+        background-color: #15202b !important;
+        padding-bottom: 5px !important;
+        z-index: 2 !important;
+    }
+    
+    .tooltip-pin-button,
+    .tooltip-copy-button {
+        background: none !important;
+        border: none !important;
+        color: #8899a6 !important;
+        cursor: pointer !important;
+        font-size: 16px !important;
+        padding: 4px 8px !important;
+        margin-left: 8px !important;
+        border-radius: 4px !important;
+        transition: background-color 0.2s !important;
+    }
+    
+    .tooltip-pin-button:hover,
+    .tooltip-copy-button:hover {
+        background-color: rgba(29, 155, 240, 0.1) !important;
+        color: #1d9bf0 !important;
+    }
+    
+    .description-text {
+        margin: 0 0 15px 0 !important;
+        font-size: 15px !important;
+        line-height: 1.6 !important;
+        max-width: 100% !important;
+        overflow-wrap: break-word !important;
+        padding: 5px !important;
+    }
+    
+    .tooltip-bottom-spacer {
+        height: 20px !important;
+        width: 100% !important;
+    }
+    
     .reasoning-dropdown {
-        margin-top: 15px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        padding-top: 10px;
+        margin-top: 15px !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding-top: 10px !important;
     }
     
     .reasoning-toggle {
-        display: flex;
-        align-items: center;
-        color: #1d9bf0;
-        cursor: pointer;
-        font-weight: bold;
-        padding: 5px;
-        user-select: none;
+        display: flex !important;
+        align-items: center !important;
+        color: #1d9bf0 !important;
+        cursor: pointer !important;
+        font-weight: bold !important;
+        padding: 5px !important;
+        user-select: none !important;
     }
     
     .reasoning-toggle:hover {
-        background-color: rgba(29, 155, 240, 0.1);
-        border-radius: 4px;
+        background-color: rgba(29, 155, 240, 0.1) !important;
+        border-radius: 4px !important;
     }
     
     .reasoning-arrow {
-        display: inline-block;
-        margin-right: 5px;
-        transition: transform 0.2s ease;
+        display: inline-block !important;
+        margin-right: 5px !important;
+        transition: transform 0.2s ease !important;
     }
     
     .reasoning-content {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease-out, padding 0.3s ease-out;
-        background-color: rgba(0, 0, 0, 0.15);
-        border-radius: 5px;
-        margin-top: 5px;
-        padding: 0;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;
+        background-color: rgba(0, 0, 0, 0.15) !important;
+        border-radius: 5px !important;
+        margin-top: 5px !important;
+        padding: 0 !important;
     }
     
     .reasoning-dropdown.expanded .reasoning-content {
-        max-height: 300px;
-        overflow-y: auto;
-        padding: 10px;
+        max-height: 350px !important;
+        overflow-y: auto !important;
+        padding: 10px !important;
     }
     
     .reasoning-dropdown.expanded .reasoning-arrow {
-        transform: rotate(90deg);
+        transform: rotate(90deg) !important;
     }
     
     .reasoning-text {
-        font-size: 14px;
-        line-height: 1.4;
-        color: #ccc;
-        margin: 0;
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+        color: #ccc !important;
+        margin: 0 !important;
+        padding: 5px !important;
+    }
+    
+    /* Mobile specific styles */
+    @media (max-width: 600px) {
+        .score-description {
+            width: 90vw !important;
+            max-width: 90vw !important;
+            max-height: 60vh !important;
+            left: 5vw !important;
+            right: 5vw !important;
+            margin: 0 auto !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior: contain !important;
+            transform: translateZ(0) !important; /* Force GPU acceleration */
+        }
+        
+        .reasoning-dropdown.expanded .reasoning-content {
+            max-height: 200px !important;
+        }
     }
     `);
 };
