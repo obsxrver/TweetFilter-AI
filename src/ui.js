@@ -258,7 +258,7 @@ function saveApiKey() {
 
 /** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
-    if (confirm('Are you sure you want to clear all cached tweet ratings?')) {
+    if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear tweet ratings cache
         Object.keys(tweetIDRatingCache).forEach(key => delete tweetIDRatingCache[key]);
         GM_setValue('tweetRatings', '{}');
@@ -303,7 +303,7 @@ function saveInstructions() {
     USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
     GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
-    if (confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
+    if (isMobileDevice() confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
     }
 }
