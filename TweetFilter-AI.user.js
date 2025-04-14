@@ -20,8 +20,7 @@
     console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
 
     // Embedded Menu.html
-    const MENU = `
-<style>
+    const MENU = `<style>
 /*
         Modern X-Inspired Styles - Enhanced
         ---------------------------------
@@ -697,17 +696,15 @@
         transform: scale(1.05);
     }
 
-    /* Refresh animation */
-    .refreshing {
-        animation: spin 1s infinite linear;
+    /* Mobile indicator positioning */
+    .score-indicator.mobile-indicator {
+        position: absolute !important;
+        bottom: 3% !important;
+        right: 10px !important;
+        top: auto !important;
     }
 
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* The description box for ratings */
+    /* Base description box styles */
     .score-description {
         display: none;
         background-color: rgba(22, 24, 28, 0.95);
@@ -720,122 +717,169 @@
         line-height: 1.5;
         z-index: 99999999;
         position: absolute;
-        width: clamp(300px, 30vw, 500px);
+        width: 550px !important;
+        max-width: 80vw !important;
         max-height: 60vh;
         overflow-y: auto;
         border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
+        box-sizing: border-box !important;
     }
 
-    /* Rating status classes */
-    .cached-rating {
-        background-color: rgba(76, 175, 80, 0.9) !important;
-        color: white !important;
+    .score-description.pinned {
+        border: 2px solid #1d9bf0 !important;
     }
 
-    .blacklisted-rating {
-        background-color: rgba(255, 193, 7, 0.9) !important;
-        color: black !important;
+    /* Tooltip controls */
+    .tooltip-controls {
+        display: flex !important;
+        justify-content: flex-end !important;
+        margin-bottom: 15px !important;
+        position: sticky !important;
+        top: 0 !important;
+        background-color: #15202b !important;
+        padding-bottom: 5px !important;
+        z-index: 2 !important;
     }
 
-    .pending-rating {
-        background-color: rgba(255, 152, 0, 0.9) !important;
-        color: white !important;
+    .tooltip-pin-button,
+    .tooltip-copy-button {
+        background: none !important;
+        border: none !important;
+        color: #8899a6 !important;
+        cursor: pointer !important;
+        font-size: 16px !important;
+        padding: 4px 8px !important;
+        margin-left: 8px !important;
+        border-radius: 4px !important;
+        transition: background-color 0.2s !important;
     }
 
-    .error-rating {
-        background-color: rgba(244, 67, 54, 0.9) !important;
-        color: white !important;
+    .tooltip-pin-button:hover,
+    .tooltip-copy-button:hover {
+        background-color: rgba(29, 155, 240, 0.1) !important;
+        color: #1d9bf0 !important;
     }
 
-    /* Status indicator at bottom-right */
-    #status-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 15px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-        z-index: 9999;
-        display: none;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-        transform: translateY(100px);
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Description text */
+    .description-text {
+        margin: 0 0 15px 0 !important;
+        font-size: 15px !important;
+        line-height: 1.6 !important;
+        max-width: 100% !important;
+        overflow-wrap: break-word !important;
+        padding: 5px !important;
     }
 
-    #status-indicator.active {
-        display: block;
-        transform: translateY(0);
+    .tooltip-bottom-spacer {
+        height: 20px !important;
+        width: 100% !important;
     }
-    
-    /* Toggle switch styling */
-    .toggle-switch {
-        position: relative;
-        display: inline-block;
-        width: 36px;
-        height: 20px;
+
+    /* Reasoning dropdown */
+    .reasoning-dropdown {
+        margin-top: 15px !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding-top: 10px !important;
     }
-    
-    .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
+
+    .reasoning-toggle {
+        display: flex !important;
+        align-items: center !important;
+        color: #1d9bf0 !important;
+        cursor: pointer !important;
+        font-weight: bold !important;
+        padding: 5px !important;
+        user-select: none !important;
     }
-    
-    .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
+
+    .reasoning-toggle:hover {
+        background-color: rgba(29, 155, 240, 0.1) !important;
+        border-radius: 4px !important;
+    }
+
+    .reasoning-arrow {
+        display: inline-block !important;
+        margin-right: 5px !important;
+        transition: transform 0.2s ease !important;
+    }
+
+    .reasoning-content {
+        max-height: 0 !important;
+        overflow: hidden !important;
+        transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;
+        background-color: rgba(0, 0, 0, 0.15) !important;
+        border-radius: 5px !important;
+        margin-top: 5px !important;
+        padding: 0 !important;
+    }
+
+    .reasoning-dropdown.expanded .reasoning-content {
+        max-height: 350px !important;
+        overflow-y: auto !important;
+        padding: 10px !important;
+    }
+
+    .reasoning-dropdown.expanded .reasoning-arrow {
+        transform: rotate(90deg) !important;
+    }
+
+    .reasoning-text {
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+        color: #ccc !important;
+        margin: 0 !important;
+        padding: 5px !important;
+    }
+
+    /* Scroll to bottom button */
+    .scroll-to-bottom-button {
+        position: sticky;
         bottom: 0;
-        background-color: rgba(255, 255, 255, 0.2);
-        transition: .3s;
-        border-radius: 34px;
-    }
-    
-    .toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        left: 2px;
-        bottom: 2px;
-        background-color: white;
-        transition: .3s;
-        border-radius: 50%;
-    }
-    
-    input:checked + .toggle-slider {
-        background-color: #1d9bf0;
-    }
-    
-    input:checked + .toggle-slider:before {
-        transform: translateX(16px);
-    }
-    
-    .toggle-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        margin-bottom: 12px;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
+        width: 100%;
+        background-color: rgba(29, 155, 240, 0.9);
+        color: white;
+        text-align: center;
+        padding: 8px 0;
+        cursor: pointer;
+        font-weight: bold;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        margin-top: 10px;
+        z-index: 100;
         transition: background-color 0.2s;
     }
-    
-    .toggle-row:hover {
-        background-color: rgba(255, 255, 255, 0.08);
+
+    .scroll-to-bottom-button:hover {
+        background-color: rgba(29, 155, 240, 1);
     }
-    
-    .toggle-label {
-        font-size: 13px;
-        color: #e7e9ea;
+
+    /* Mobile specific styles */
+    @media (max-width: 600px) {
+        .score-indicator {
+            position: absolute !important;
+            bottom: 3% !important;
+            right: 10px !important;
+            top: auto !important;
+        }
+
+        .score-description {
+            width: 90vw !important;
+            max-width: 90vw !important;
+            max-height: 60vh !important;
+            left: 5vw !important;
+            right: 5vw !important;
+            margin: 0 auto !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior: contain !important;
+            transform: translateZ(0) !important; /* Force GPU acceleration */
+        }
+
+        .reasoning-dropdown.expanded .reasoning-content {
+            max-height: 200px !important;
+        }
     }
 
     /* Existing styles */
@@ -4647,8 +4691,6 @@ function getTweetReplyInfo(tweetId) {
 
 
     // ----- ui.js -----
-
-
 // --- Utility Functions ---
 
 /**
@@ -6022,33 +6064,80 @@ function cleanupDescriptionElements() {
 }
 
 /**
- * Performs a cleanup of orphaned tooltips that no longer have a visible tweet
- * and cancels any streaming requests for those tweets
+ * Cleans up orphaned tooltips that no longer have a visible tweet or indicator.
  */
 function cleanupOrphanedTooltips() {
-    // Get all currently visible tweet IDs
-    const visibleTweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
-        .map(article => getTweetID(article));
-    
     // Get all tooltips
     const tooltips = document.querySelectorAll('.score-description');
     
     tooltips.forEach(tooltip => {
         const tooltipTweetId = tooltip.dataset.tweetId;
+        if (!tooltipTweetId) {
+            // Remove tooltips without a tweet ID
+            tooltip.remove();
+            return;
+        }
+
+        // Find the corresponding indicator for this tooltip
+        const indicator = document.querySelector(`.score-indicator[data-tweet-id="${tooltipTweetId}"]`) ||
+                         document.querySelector(`article[data-testid="tweet"][data-tweet-id="${tooltipTweetId}"] .score-indicator`);
         
-        // If tooltip has no tweet ID or its tweet is no longer visible, remove it
-        if (!tooltipTweetId || !visibleTweets.includes(tooltipTweetId)) {
-            // If there's an active streaming request for this tweet, cancel it
+        // Only remove the tooltip if there's no indicator for it
+        if (!indicator) {
+            // Cancel any active streaming requests for this tweet
             if (window.activeStreamingRequests && window.activeStreamingRequests[tooltipTweetId]) {
-                console.log(`Canceling streaming request for tweet ${tooltipTweetId} as it's no longer visible`);
+                console.log(`Canceling streaming request for tweet ${tooltipTweetId} as its indicator was removed`);
                 window.activeStreamingRequests[tooltipTweetId].abort();
                 delete window.activeStreamingRequests[tooltipTweetId];
             }
             
             // Remove the tooltip
             tooltip.remove();
+            console.log(`Removed orphaned tooltip for tweet ${tooltipTweetId} (no indicator found)`);
         }
     });
+}
+
+// Add a MutationObserver to watch for removed tweets
+function initializeTooltipCleanup() {
+    // Create a MutationObserver to watch for removed tweets
+    const tweetObserver = new MutationObserver((mutations) => {
+        let needsCleanup = false;
+        
+        mutations.forEach(mutation => {
+            // Check for removed nodes that might be tweets or indicators
+            mutation.removedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Check if the removed node is a tweet or contains indicators
+                    if (node.matches('.score-indicator') || 
+                        node.querySelector('.score-indicator')) {
+                        needsCleanup = true;
+                    }
+                }
+            });
+        });
+        
+        // Only run cleanup if we detected relevant DOM changes
+        if (needsCleanup) {
+            cleanupOrphanedTooltips();
+        }
+    });
+
+    // Start observing the timeline with the configured parameters
+    const observerConfig = {
+        childList: true,
+        subtree: true
+    };
+
+    // Find the main timeline container
+    const timeline = document.querySelector('div[data-testid="primaryColumn"]');
+    if (timeline) {
+        tweetObserver.observe(timeline, observerConfig);
+        console.log('Tweet removal observer initialized');
+    }
+
+    // Also keep the periodic cleanup as a backup, but with a longer interval
+    setInterval(cleanupOrphanedTooltips, 10000);
 }
 
 // --- Settings Import/Export (Simplified) ---
@@ -6231,78 +6320,20 @@ function removeHandleFromBlacklist(handle) {
  */
 function initialiseUI() {
     const uiContainer = injectUI();
-    if (!uiContainer) return; // Stop if injection failed
-
-    // Add mobile-specific styles with the rest of our CSS
-    GM_addStyle(`
-        .score-indicator.mobile-indicator {
-            position: absolute !important;
-            bottom: 3% !important;
-            right: 10px !important;
-            top: auto !important;
-        }
-        
-        .score-description {
-            box-sizing: border-box !important;
-        }
-        
-        /* Style for the scroll to bottom button */
-        .scroll-to-bottom-button {
-            position: sticky;
-            bottom: 0;
-            width: 100%;
-            background-color: rgba(29, 155, 240, 0.9);
-            color: white;
-            text-align: center;
-            padding: 8px 0;
-            cursor: pointer;
-            font-weight: bold;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            margin-top: 10px;
-            z-index: 100;
-            transition: background-color 0.2s;
-        }
-        
-        .scroll-to-bottom-button:hover {
-            background-color: rgba(29, 155, 240, 1);
-        }
-        
-        @media (max-width: 600px) {
-            .score-indicator {
-                position: absolute !important;
-                bottom: 3% !important;
-                right: 10px !important;
-                top: auto !important;
-            }
-            
-            .score-description {
-                max-width: 100% !important;
-                width: 96vw !important;
-                left: 2vw !important;
-                right: 2vw !important;
-                margin: 0 auto !important;
-                box-sizing: border-box !important;
-                max-height: 80vh !important;
-                overflow-y: scroll !important;
-                -webkit-overflow-scrolling: touch !important;
-                overscroll-behavior: contain !important;
-                transform: translateZ(0) !important; /* Force GPU acceleration */
-            }
-        }
-    `);
+    if (!uiContainer) return;
 
     initializeEventListeners(uiContainer);
-    refreshSettingsUI(); // Set initial state from saved settings
-    fetchAvailableModels(); // Fetch models async
+    refreshSettingsUI();
+    fetchAvailableModels();
     
     // Initialize the floating cache stats badge
     updateFloatingCacheStats();
     
     // Set up a periodic refresh of the cache stats to catch any updates
-    setInterval(updateFloatingCacheStats, 10000); // Update every 10 seconds
+    setInterval(updateFloatingCacheStats, 10000);
     
-    // Set up periodic cleanup of orphaned tooltips
-    setInterval(cleanupOrphanedTooltips, 5000); // Check every 5 seconds
+    // Initialize the tooltip cleanup system
+    initializeTooltipCleanup();
     
     // Initialize tracking object for streaming requests if it doesn't exist
     if (!window.activeStreamingRequests) {
@@ -6398,151 +6429,6 @@ updateCacheStatsUI = function() {
     
     // Update the floating badge
     updateFloatingCacheStats();
-    
-    // Add styles for reasoning dropdown and tooltips with better responsive sizing
-    GM_addStyle(`
-    .score-description {
-        width: 450px !important;
-        max-width: 80vw !important;
-        padding: 15px !important;
-        background-color: #15202b !important;
-        border: 1px solid #38444d !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
-        color: #fff !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-        font-size: 14px !important;
-        line-height: 1.5 !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        z-index: 99999 !important;
-    }
-    
-    .score-description.pinned {
-        border: 2px solid #1d9bf0 !important;
-    }
-    
-    .tooltip-controls {
-        display: flex !important;
-        justify-content: flex-end !important;
-        margin-bottom: 15px !important;
-        position: sticky !important;
-        top: 0 !important;
-        background-color: #15202b !important;
-        padding-bottom: 5px !important;
-        z-index: 2 !important;
-    }
-    
-    .tooltip-pin-button,
-    .tooltip-copy-button {
-        background: none !important;
-        border: none !important;
-        color: #8899a6 !important;
-        cursor: pointer !important;
-        font-size: 16px !important;
-        padding: 4px 8px !important;
-        margin-left: 8px !important;
-        border-radius: 4px !important;
-        transition: background-color 0.2s !important;
-    }
-    
-    .tooltip-pin-button:hover,
-    .tooltip-copy-button:hover {
-        background-color: rgba(29, 155, 240, 0.1) !important;
-        color: #1d9bf0 !important;
-    }
-    
-    .description-text {
-        margin: 0 0 15px 0 !important;
-        font-size: 15px !important;
-        line-height: 1.6 !important;
-        max-width: 100% !important;
-        overflow-wrap: break-word !important;
-        padding: 5px !important;
-    }
-    
-    .tooltip-bottom-spacer {
-        height: 20px !important;
-        width: 100% !important;
-    }
-    
-    .reasoning-dropdown {
-        margin-top: 15px !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-        padding-top: 10px !important;
-    }
-    
-    .reasoning-toggle {
-        display: flex !important;
-        align-items: center !important;
-        color: #1d9bf0 !important;
-        cursor: pointer !important;
-        font-weight: bold !important;
-        padding: 5px !important;
-        user-select: none !important;
-    }
-    
-    .reasoning-toggle:hover {
-        background-color: rgba(29, 155, 240, 0.1) !important;
-        border-radius: 4px !important;
-    }
-    
-    .reasoning-arrow {
-        display: inline-block !important;
-        margin-right: 5px !important;
-        transition: transform 0.2s ease !important;
-    }
-    
-    .reasoning-content {
-        max-height: 0 !important;
-        overflow: hidden !important;
-        transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;
-        background-color: rgba(0, 0, 0, 0.15) !important;
-        border-radius: 5px !important;
-        margin-top: 5px !important;
-        padding: 0 !important;
-    }
-    
-    .reasoning-dropdown.expanded .reasoning-content {
-        max-height: 350px !important;
-        overflow-y: auto !important;
-        padding: 10px !important;
-    }
-    
-    .reasoning-dropdown.expanded .reasoning-arrow {
-        transform: rotate(90deg) !important;
-    }
-    
-    .reasoning-text {
-        font-size: 14px !important;
-        line-height: 1.4 !important;
-        color: #ccc !important;
-        margin: 0 !important;
-        padding: 5px !important;
-    }
-    
-    /* Mobile specific styles */
-    @media (max-width: 600px) {
-        .score-description {
-            width: 90vw !important;
-            max-width: 90vw !important;
-            max-height: 60vh !important;
-            left: 5vw !important;
-            right: 5vw !important;
-            margin: 0 auto !important;
-            padding: 12px !important;
-            box-sizing: border-box !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            overscroll-behavior: contain !important;
-            transform: translateZ(0) !important; /* Force GPU acceleration */
-        }
-        
-        .reasoning-dropdown.expanded .reasoning-content {
-            max-height: 200px !important;
-        }
-    }
-    `);
 };
 
 })();
