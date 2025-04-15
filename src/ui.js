@@ -1192,7 +1192,7 @@ function getScoreTooltip() {
 
 /** Formats description text for the tooltip. */
 function formatTooltipDescription(description, reasoning = "") {
-    if (!description) return '';
+    description=description||"*waiting for content...*";
     
     // Add markdown-style formatting
     description = description.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); // Bold
