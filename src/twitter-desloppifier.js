@@ -26,7 +26,7 @@ const VERSION = '1.3.6.2';
 (function () {
     
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.6.1 - Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.6.2 - Enhanced)");
 
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
