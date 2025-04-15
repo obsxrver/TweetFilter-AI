@@ -6224,8 +6224,8 @@ function resetSettings(noconfirm=false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
-            selectedModel: 'mistralai/mistral-small-3.1-24b-instruct',
-            selectedImageModel: 'mistralai/mistral-small-3.1-24b-instruct',
+            selectedModel: 'openai/gpt-4.1-nano',
+            selectedImageModel: 'openai/gpt-4.1-nano',
             enableImageDescriptions: false,
             enableStreaming: true,
             modelTemperature: 0.5,
