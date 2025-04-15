@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.6.1
+// @version      Version 1.3.6.2
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -60,6 +60,13 @@
         opacity: 0.8;
         transition: opacity 0.2s;
         border-radius: 50%;
+        /* Enhanced touch target and mobile styles */
+        min-width: 28px;
+        min-height: 28px;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        user-select: none;
+        z-index: 30;
     }
 
     .close-button:hover {
@@ -878,6 +885,22 @@
 
         .reasoning-dropdown.expanded .reasoning-content {
             max-height: 200px !important;
+        }
+
+        .close-button {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            font-size: 18px;
+            padding: 8px;
+            margin: -4px;  /* Compensate for larger padding while maintaining alignment */
+        }
+        
+        /* Ensure header close button is properly positioned */
+        .settings-header .close-button {
+            position: relative;
+            right: 0;
         }
     }
 
@@ -2042,7 +2065,7 @@
 
     // ----- twitter-desloppifier.js -----
 
-const VERSION = '1.3.6.1'; 
+const VERSION = '1.3.6.2'; 
 (function () {
     
     'use strict';
@@ -2073,14 +2096,15 @@ const VERSION = '1.3.6.1';
             }
             // If no API key is found, prompt the user
             let apiKey = GM_getValue('openrouter-api-key', '');
-            /*if(!apiKey){
+            if(!apiKey){
                 alert("No API Key found. Please enter your API Key in Settings > General.")
             }
-            */
+            /*
             if (!apiKey){
-                apiKey = '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'
+                //key is dead
+                apiKey = '*'
                 showStatus(`No API Key Found. Using Promotional Key`);
-            }
+            }*/
             if (apiKey) {
                 GM_setValue('openrouter-api-key', apiKey);
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
@@ -6224,8 +6248,8 @@ function resetSettings(noconfirm=false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
         // Define defaults (should match config.js ideally)
         const defaults = {
-            selectedModel: 'mistralai/mistral-small-3.1-24b-instruct',
-            selectedImageModel: 'mistralai/mistral-small-3.1-24b-instruct',
+            selectedModel: 'openai/gpt-4.1-nano',
+            selectedImageModel: 'openai/gpt-4.1-nano',
             enableImageDescriptions: false,
             enableStreaming: true,
             modelTemperature: 0.5,

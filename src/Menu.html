@@ -39,6 +39,13 @@
         opacity: 0.8;
         transition: opacity 0.2s;
         border-radius: 50%;
+        /* Enhanced touch target and mobile styles */
+        min-width: 28px;
+        min-height: 28px;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        user-select: none;
+        z-index: 30;
     }
 
     .close-button:hover {
@@ -857,6 +864,22 @@
 
         .reasoning-dropdown.expanded .reasoning-content {
             max-height: 200px !important;
+        }
+
+        .close-button {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            font-size: 18px;
+            padding: 8px;
+            margin: -4px;  /* Compensate for larger padding while maintaining alignment */
+        }
+        
+        /* Ensure header close button is properly positioned */
+        .settings-header .close-button {
+            position: relative;
+            right: 0;
         }
     }
 
