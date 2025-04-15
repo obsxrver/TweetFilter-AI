@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.6
+// @version      Version 1.3.6.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -17,11 +17,9 @@
 // ==/UserScript==
 (function() {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
 
     // Embedded Menu.html
-    const MENU = `
-<style>
+    const MENU = `<style>
 /*
         Modern X-Inspired Styles - Enhanced
         ---------------------------------
@@ -697,17 +695,15 @@
         transform: scale(1.05);
     }
 
-    /* Refresh animation */
-    .refreshing {
-        animation: spin 1s infinite linear;
+    /* Mobile indicator positioning */
+    .score-indicator.mobile-indicator {
+        position: absolute !important;
+        bottom: 3% !important;
+        right: 10px !important;
+        top: auto !important;
     }
 
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* The description box for ratings */
+    /* Base description box styles */
     .score-description {
         display: none;
         background-color: rgba(22, 24, 28, 0.95);
@@ -720,122 +716,169 @@
         line-height: 1.5;
         z-index: 99999999;
         position: absolute;
-        width: clamp(300px, 30vw, 500px);
+        width: 550px !important;
+        max-width: 80vw !important;
         max-height: 60vh;
         overflow-y: auto;
         border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
+        box-sizing: border-box !important;
     }
 
-    /* Rating status classes */
-    .cached-rating {
-        background-color: rgba(76, 175, 80, 0.9) !important;
-        color: white !important;
+    .score-description.pinned {
+        border: 2px solid #1d9bf0 !important;
     }
 
-    .blacklisted-rating {
-        background-color: rgba(255, 193, 7, 0.9) !important;
-        color: black !important;
+    /* Tooltip controls */
+    .tooltip-controls {
+        display: flex !important;
+        justify-content: flex-end !important;
+        margin-bottom: 15px !important;
+        position: sticky !important;
+        top: 0 !important;
+        background-color: #15202b !important;
+        padding-bottom: 5px !important;
+        z-index: 2 !important;
     }
 
-    .pending-rating {
-        background-color: rgba(255, 152, 0, 0.9) !important;
-        color: white !important;
+    .tooltip-pin-button,
+    .tooltip-copy-button {
+        background: none !important;
+        border: none !important;
+        color: #8899a6 !important;
+        cursor: pointer !important;
+        font-size: 16px !important;
+        padding: 4px 8px !important;
+        margin-left: 8px !important;
+        border-radius: 4px !important;
+        transition: background-color 0.2s !important;
     }
 
-    .error-rating {
-        background-color: rgba(244, 67, 54, 0.9) !important;
-        color: white !important;
+    .tooltip-pin-button:hover,
+    .tooltip-copy-button:hover {
+        background-color: rgba(29, 155, 240, 0.1) !important;
+        color: #1d9bf0 !important;
     }
 
-    /* Status indicator at bottom-right */
-    #status-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 15px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-        z-index: 9999;
-        display: none;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-        transform: translateY(100px);
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Description text */
+    .description-text {
+        margin: 0 0 15px 0 !important;
+        font-size: 15px !important;
+        line-height: 1.6 !important;
+        max-width: 100% !important;
+        overflow-wrap: break-word !important;
+        padding: 5px !important;
     }
 
-    #status-indicator.active {
-        display: block;
-        transform: translateY(0);
+    .tooltip-bottom-spacer {
+        height: 20px !important;
+        width: 100% !important;
     }
-    
-    /* Toggle switch styling */
-    .toggle-switch {
-        position: relative;
-        display: inline-block;
-        width: 36px;
-        height: 20px;
+
+    /* Reasoning dropdown */
+    .reasoning-dropdown {
+        margin-top: 15px !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding-top: 10px !important;
     }
-    
-    .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
+
+    .reasoning-toggle {
+        display: flex !important;
+        align-items: center !important;
+        color: #1d9bf0 !important;
+        cursor: pointer !important;
+        font-weight: bold !important;
+        padding: 5px !important;
+        user-select: none !important;
     }
-    
-    .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
+
+    .reasoning-toggle:hover {
+        background-color: rgba(29, 155, 240, 0.1) !important;
+        border-radius: 4px !important;
+    }
+
+    .reasoning-arrow {
+        display: inline-block !important;
+        margin-right: 5px !important;
+        transition: transform 0.2s ease !important;
+    }
+
+    .reasoning-content {
+        max-height: 0 !important;
+        overflow: hidden !important;
+        transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;
+        background-color: rgba(0, 0, 0, 0.15) !important;
+        border-radius: 5px !important;
+        margin-top: 5px !important;
+        padding: 0 !important;
+    }
+
+    .reasoning-dropdown.expanded .reasoning-content {
+        max-height: 350px !important;
+        overflow-y: auto !important;
+        padding: 10px !important;
+    }
+
+    .reasoning-dropdown.expanded .reasoning-arrow {
+        transform: rotate(90deg) !important;
+    }
+
+    .reasoning-text {
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+        color: #ccc !important;
+        margin: 0 !important;
+        padding: 5px !important;
+    }
+
+    /* Scroll to bottom button */
+    .scroll-to-bottom-button {
+        position: sticky;
         bottom: 0;
-        background-color: rgba(255, 255, 255, 0.2);
-        transition: .3s;
-        border-radius: 34px;
-    }
-    
-    .toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        left: 2px;
-        bottom: 2px;
-        background-color: white;
-        transition: .3s;
-        border-radius: 50%;
-    }
-    
-    input:checked + .toggle-slider {
-        background-color: #1d9bf0;
-    }
-    
-    input:checked + .toggle-slider:before {
-        transform: translateX(16px);
-    }
-    
-    .toggle-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        margin-bottom: 12px;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
+        width: 100%;
+        background-color: rgba(29, 155, 240, 0.9);
+        color: white;
+        text-align: center;
+        padding: 8px 0;
+        cursor: pointer;
+        font-weight: bold;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        margin-top: 10px;
+        z-index: 100;
         transition: background-color 0.2s;
     }
-    
-    .toggle-row:hover {
-        background-color: rgba(255, 255, 255, 0.08);
+
+    .scroll-to-bottom-button:hover {
+        background-color: rgba(29, 155, 240, 1);
     }
-    
-    .toggle-label {
-        font-size: 13px;
-        color: #e7e9ea;
+
+    /* Mobile specific styles */
+    @media (max-width: 600px) {
+        .score-indicator {
+            position: absolute !important;
+            bottom: 3% !important;
+            right: 10px !important;
+            top: auto !important;
+        }
+
+        .score-description {
+            width: 90vw !important;
+            max-width: 90vw !important;
+            max-height: 60vh !important;
+            left: 5vw !important;
+            right: 5vw !important;
+            margin: 0 auto !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior: contain !important;
+            transform: translateZ(0) !important; /* Force GPU acceleration */
+        }
+
+        .reasoning-dropdown.expanded .reasoning-content {
+            max-height: 200px !important;
+        }
     }
 
     /* Existing styles */
@@ -1999,11 +2042,10 @@
 
     // ----- twitter-desloppifier.js -----
 
-const VERSION = '1.3.6'; 
+const VERSION = '1.3.6.1'; 
 (function () {
     
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.6 - Enhanced)");
 
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -2023,17 +2065,24 @@ const VERSION = '1.3.6';
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (target) {
             observedTargetNode = target;
-            console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
+
             initialiseUI();
             if (firstRun) {
                 resetSettings(true);
                 GM_setValue('firstRun', false);
             }
             // If no API key is found, prompt the user
-            const apiKey = GM_getValue('openrouter-api-key', '');
+            let apiKey = GM_getValue('openrouter-api-key', '');
+            /*if(!apiKey){
+                alert("No API Key found. Please enter your API Key in Settings > General.")
+            }
+            */
+            if (!apiKey){
+                apiKey = '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'
+                showStatus(`No API Key Found. Using Promotional Key`);
+            }
             if (apiKey) {
                 GM_setValue('openrouter-api-key', apiKey);
-                showStatus("No API Key found Using promotional key.");
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
@@ -2057,7 +2106,7 @@ const VERSION = '1.3.6';
                 if (statusIndicator) statusIndicator.remove();
                 //Now WHY TF did it call this LMAO. That's why it was broken!
                 //cleanupDescriptionElements();
-                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
+
             });
         } else {
             setTimeout(initializeObserver, 1000);
@@ -2147,8 +2196,8 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
-let selectedModel = GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct');
-let selectedImageModel = GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct');
+let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
+let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -2156,7 +2205,6 @@ let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
 let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
-
 
 // Model parameters
 const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.
@@ -2253,10 +2301,9 @@ try {
             fromStorage: true  // Mark as loaded from storage
         };
     });
-    
-    console.log(`Loaded ${Object.keys(tweetIDRatingCache).length} cached tweet ratings`);
+
 } catch (e) {
-    console.error('Error loading stored ratings:', e);
+
 }
 
 
@@ -2414,7 +2461,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
-                    console.log("Stream timed out after inactivity");
+
                     if (!streamComplete) {
                         streamComplete = true;
                         // Call onComplete with whatever we have so far
@@ -2505,7 +2552,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                         });
                                     }
                                 } catch (e) {
-                                    console.error("Error parsing SSE data:", e, data);
+
                                 }
                             }
                         }
@@ -2530,7 +2577,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                     
                 } catch (error) {
-                    console.error("Stream processing error:", error);
+
                     // Make sure we clean up and call onError
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
@@ -2551,7 +2598,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             };
             
             processStream().catch(error => {
-                console.error("Unhandled stream error:", error);
+
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
@@ -2602,7 +2649,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             try {
                 reqObj.abort(); // Attempt to abort the XHR request
             } catch (e) {
-                console.error("Error aborting request:", e);
+
             }
             
             // Remove from active requests tracking
@@ -2658,11 +2705,7 @@ const safetySettings = [
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
-    console.log(`Given Tweet Text: 
-        ${tweetText}
-        And Media URLS:
-        ${mediaUrls}
-        `)
+
     // Create the request body
     const request = {
         model: selectedModel,
@@ -2773,8 +2816,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         } catch (error) {
             pendingRequests--;
             showStatus(`Rating tweet... (${pendingRequests} pending)`);
-            console.error(`API error during attempt ${attempt}:`, error);
-            
+
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
@@ -2847,7 +2889,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
         
         // Cancel any existing request for this tweet
         if (window.activeStreamingRequests[tweetId]) {
-            console.log(`Canceling previous streaming request for tweet ${tweetId}`);
+
             window.activeStreamingRequests[tweetId].abort();
             delete window.activeStreamingRequests[tweetId];
         }
@@ -3016,8 +3058,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         
                     } else {
                         // If no score was found anywhere, log a warning and set a default score
-                        console.warn(`No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
-                        
+
                         // Set a default score of 5
                         const defaultScore = 5;
                         
@@ -3053,7 +3094,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         }
                     }
                 } else {
-                    console.warn(`Tweet article not found for ID ${tweetId} when completing rating`);
+
                 }
                 
                 resolve({
@@ -3076,7 +3117,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     if (indicator && indicator.scoreTooltip) {
                         indicator.scoreTooltip.classList.remove('streaming-tooltip');
                     }
-                    console.log('errorData', errorData);
+
                     setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
                 }
                 
@@ -3172,12 +3213,12 @@ function fetchAvailableModels() {
                     showStatus('Models updated!');
                 }
             } catch (error) {
-                console.error('Error parsing model list:', error);
+
                 showStatus('Error parsing models list');
             }
         },
         onerror: function (error) {
-            console.error('Error fetching models:', error);
+
             showStatus('Error fetching models!');
         }
     });
@@ -3271,7 +3312,6 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 
-
 /**
  * Extracts and returns an array of media URLs from the tweet element.
  * @param {Element} scopeElement - The tweet element.
@@ -3353,7 +3393,6 @@ function isOriginalTweet(tweetArticle) {
     }
     return false;
 }
-
 
 // ----- MutationObserver Setup -----
 /**
@@ -3456,7 +3495,7 @@ function applyTweetCachedRating(tweetArticle) {
     const userHandle = handles.length > 0 ? handles[0] : '';
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-        //console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
+
         tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
@@ -3478,7 +3517,7 @@ function applyTweetCachedRating(tweetArticle) {
             const score = tweetIDRatingCache[tweetId].score;
             const desc = tweetIDRatingCache[tweetId].description;
             const reasoning = tweetIDRatingCache[tweetId].reasoning || "";
-            //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
+
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             if (reasoning) {
@@ -3509,7 +3548,7 @@ function applyTweetCachedRating(tweetArticle) {
             return true;
         } else if (!tweetIDRatingCache[tweetId].streaming){
             // Invalid cache entry - missing score
-            console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
+
             delete tweetIDRatingCache[tweetId];  // Remove invalid entry
             saveTweetRatings();
             return false;
@@ -3540,7 +3579,7 @@ function saveTweetRatings() {
             updateCacheStatsUI();
         }
     } catch (e) {
-        console.error('Error updating cache stats UI:', e);
+
     }
 }
 /**
@@ -3560,18 +3599,18 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
         try {
-            setScoreIndicator(tweetArticle, 10, 'error', "No API key");
+            setScoreIndicator(tweetArticle, 9, 'error', "No API key");
             // Verify indicator was actually created
             if (!tweetArticle.querySelector('.score-indicator')) {
-                console.error(`Failed to create score indicator for tweet ${tweetId}`);
+
             }
         } catch (e) {
-            console.error(`Error setting score indicator for tweet ${tweetId}:`, e);
+
         }
         filterSingleTweet(tweetArticle);
         // Remove from processedTweets to allow retrying
         processedTweets.delete(tweetId);
-        console.error(`Failed to process tweet ${tweetId}: No API key`);
+
         return;
     }
     let score = 5; // Default score if rating fails
@@ -3583,8 +3622,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
         const quotedHandle = handles.length > 1 ? handles[1] : '';
-
-
 
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
@@ -3599,7 +3636,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     throw new Error("Failed to create score indicator");
                 }
             } catch (e) {
-                console.error(`Error setting blacklist indicator for tweet ${tweetId}:`, e);
+
                 // Even if indicator fails, we've set the dataset properties
             }
             filterSingleTweet(tweetArticle);
@@ -3621,7 +3658,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 if (cacheApplied) {
                     // Verify the indicator exists after applying cached rating
                     if (!tweetArticle.querySelector('.score-indicator')) {
-                        console.error(`Missing indicator after applying cached rating to tweet ${tweetId}`);
+
                         processingSuccessful = false;
                     } else {
                         processingSuccessful = true;
@@ -3631,11 +3668,10 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             } else if (cacheEntry.streaming === true) {
                 // This is a streaming entry that's still in progress
                 // Don't delete it, but don't use it either
-                console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
-                
+
             } else {
                 // Invalid cache entry, delete it
-                console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cacheEntry);
+
                 delete tweetIDRatingCache[tweetId];
                 saveTweetRatings();
             }
@@ -3649,8 +3685,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // Add thread relationship context
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
-           
-            
+
             // Add thread context to cache entry if we process this tweet
             if (!tweetIDRatingCache[tweetId]) {
                 tweetIDRatingCache[tweetId] = {};
@@ -3711,7 +3746,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     // Log indicator classes after setting
 
                 } catch (e) {
-                    console.error(`Error setting rated indicator for tweet ${tweetId}:`, e);
+
                     // Continue even if indicator fails - we've set the dataset properties
                 }
 
@@ -3773,25 +3808,19 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.sloppinessScore = score.toString();
         try {
             //group should default to closed
-            console.groupCollapsed(`Tweet Rating ${tweetId} by ${userHandle} Score: ${score}`);
-            console.log(`Tweet ${tweetId}`);
-            console.log(`${fullContextWithImageDescription}`);
-            console.log(`Status ${tweetArticle.dataset.ratingStatus}`);
-            console.log(`Score ${score}`);
-            console.log(`Model ${GM_getValue('selectedModel', '')}`);console.log(`Description ${description}`);
-            console.groupEnd();
+
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
             // Final verification of indicator
             if (!tweetArticle.querySelector('.score-indicator')) {
                 processingSuccessful = false;
             }
         } catch (e) {
-            console.error(`Final error setting indicator for tweet ${tweetId}:`, e);
+
             processingSuccessful = false;
         }
         filterSingleTweet(tweetArticle);
     } catch (error) {
-        console.error(`Error processing tweet ${tweetId}: ${error}`);
+
         if (!tweetArticle.dataset.sloppinessScore) {
             tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
@@ -3800,10 +3829,10 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
                 // Verify indicator exists
                 if (!tweetArticle.querySelector('.score-indicator')) {
-                    console.error(`Failed to create error indicator for tweet ${tweetId}`);
+
                 }
             } catch (e) {
-                console.error(`Error setting error indicator for tweet ${tweetId}:`, e);
+
             }
             filterSingleTweet(tweetArticle);
         }
@@ -3863,7 +3892,7 @@ function scheduleTweetProcessing(tweetArticle) {
         // Verify that the tweet actually has an indicator - if not, remove from processed
         const hasIndicator = !!tweetArticle.querySelector('.score-indicator');
         if (!hasIndicator) {
-            console.warn(`Tweet ${tweetId} was marked as processed but has no indicator, reprocessing`);
+
             processedTweets.delete(tweetId);
         } else {
             return;
@@ -3880,7 +3909,7 @@ function scheduleTweetProcessing(tweetArticle) {
     try {
         setScoreIndicator(tweetArticle, null, 'pending');
     } catch (e) {
-        console.error(`Failed to set indicator for tweet ${tweetId}:`, e);
+
     }
 
     // Now schedule the actual rating processing
@@ -3888,7 +3917,7 @@ function scheduleTweetProcessing(tweetArticle) {
         try {
             delayedProcessTweet(tweetArticle, tweetId);
         } catch (e) {
-            console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
+
             processedTweets.delete(tweetId);
         }
     }, PROCESSING_DELAY_MS);
@@ -3906,9 +3935,9 @@ function loadThreadRelationships() {
     try {
         const savedRelationships = GM_getValue('threadRelationships', '{}');
         threadRelationships = JSON.parse(savedRelationships);
-        console.log(`Loaded ${Object.keys(threadRelationships).length} thread relationships`);
+
     } catch (e) {
-        console.error('Error loading thread relationships:', e);
+
         threadRelationships = {};
     }
 }
@@ -3929,7 +3958,7 @@ function saveThreadRelationships() {
         
         GM_setValue('threadRelationships', JSON.stringify(threadRelationships));
     } catch (e) {
-        console.error('Error saving thread relationships:', e);
+
     }
 }
 
@@ -3992,7 +4021,6 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
     const userHandle = handles.length > 0 ? handles[0] : '';
     const quotedHandle = handles.length > 1 ? handles[1] : '';
-    
     // --- Extract Main Tweet Content ---
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
     
@@ -4038,7 +4066,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
             threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
         } catch (e) {
-            console.error("Error parsing thread media URLs:", e);
+
         }
     }
     
@@ -4139,7 +4167,6 @@ ${quotedMediaLinks.join(", ")}`;
     return fullContextWithImageDescription;
 }
 
-
 /**
  * Applies filtering to all tweets currently in the observed container.
  */
@@ -4149,13 +4176,12 @@ function applyFilteringToAll() {
     tweets.forEach(filterSingleTweet);
 }
 
-
 function ensureAllTweetsRated() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
 
     if (tweets.length > 0) {
-        console.log(`Checking ${tweets.length} tweets to ensure all are rated...`);
+
         let unreatedCount = 0;
 
         tweets.forEach(tweet => {
@@ -4173,7 +4199,7 @@ function ensureAllTweetsRated() {
 
             // If tweet is in processedTweets but missing indicator, remove it from processed
             if (processedTweets.has(tweetId) && !hasIndicator) {
-                console.warn(`Tweet ${tweetId} in processedTweets but missing indicator, removing`);
+
                 processedTweets.delete(tweetId);
             }
 
@@ -4185,13 +4211,12 @@ function ensureAllTweetsRated() {
                     !hasScore ? 'unrated' :
                         hasError ? 'error' : 'unknown issue';
 
-                //console.log(`Found tweet ${tweetId} with ${status}, scheduling processing`);
                 scheduleTweetProcessing(tweet);
             }
         });
 
         if (unreatedCount > 0) {
-            //console.log(`Scheduled ${unreatedCount} tweets for processing`);
+
         }
     }
 }
@@ -4272,7 +4297,7 @@ async function handleThreads() {
                         mapThreadStructure(conversation, localRootTweetId);
                     }, 500);
                 } catch (error) {
-                    console.error("Error initializing thread history:", error);
+
                     // Clean up on error
                     threadMappingInProgress = false;
                     delete conversation.dataset.threadHist;
@@ -4316,7 +4341,7 @@ async function handleThreads() {
                     mapThreadStructure(conversation, localRootTweetId);
                 }, 500);
             } catch (error) {
-                console.error("Error processing reply:", error);
+
                 // Clean up on error
                 threadMappingInProgress = false;
                 if (conversation.firstChild) {
@@ -4332,7 +4357,7 @@ async function handleThreads() {
             }, 500);
         }
     } catch (error) {
-        console.error("Error in handleThreads:", error);
+
         // Clean up all state on error
         threadMappingInProgress = false;
     }
@@ -4356,7 +4381,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             // Process all visible tweets using the cellInnerDiv structure for improved mapping
             let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
             if (!cellDivs.length) {
-                console.log("No cell divs found, thread mapping aborted");
+
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4434,7 +4459,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         scheduleTweetProcessing(article);
                     }
                 } catch (err) {
-                    console.error("Error processing tweet in mapThreadStructure:", err);
+
                     // Continue with next tweet
                     continue;
                 }
@@ -4442,7 +4467,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             
             // Build reply structure only if we have tweets to process
             if (tweetCells.length === 0) {
-                console.log("No valid tweets found, thread mapping aborted");
+
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4555,13 +4580,12 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             }
                         }
                     } catch (error) {
-                        console.error("Error getting root context:", error);
+
                         // Continue processing even if full context fails
                     }
                 }
             }
-            
-            
+
             // Fourth pass: Update the cache with thread context
             // but with a limit on how many we process at once
             const batchSize = 10;
@@ -4629,7 +4653,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         await Promise.race([mapping(), timeout]);
         
     } catch (error) {
-        console.error("Error in mapThreadStructure:", error);
+
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;
@@ -4647,8 +4671,6 @@ function getTweetReplyInfo(tweetId) {
 
 
     // ----- ui.js -----
-
-
 // --- Utility Functions ---
 
 /**
@@ -4658,7 +4680,7 @@ function getTweetReplyInfo(tweetId) {
 function showStatus(message) {
     const indicator = document.getElementById('status-indicator');
     if (!indicator) {
-        console.error('#status-indicator element not found.');
+
         return;
     }
     indicator.textContent = message;
@@ -4703,7 +4725,7 @@ function injectUI() {
     }
     
     if (!menuHTML) {
-        console.error('Failed to load Menu.html resource!');
+
         showStatus('Error: Could not load UI components.');
         return null;
     }
@@ -4712,7 +4734,7 @@ function injectUI() {
     const containerId = 'tweetfilter-root-container'; // Use the ID from the updated HTML
     let uiContainer = document.getElementById(containerId);
     if (uiContainer) {
-        console.warn('UI container already exists. Skipping injection.');
+
         return uiContainer; // Return existing container
     }
 
@@ -4724,15 +4746,14 @@ function injectUI() {
     const stylesheet = uiContainer.querySelector('style');
     if (stylesheet) {
         GM_addStyle(stylesheet.textContent);
-        console.log('Injected styles from Menu.html');
+
         stylesheet.remove(); // Remove style tag after injecting
     } else {
-        console.warn('No <style> tag found in Menu.html');
+
     }
 
     // Append the rest of the UI elements
     document.body.appendChild(uiContainer);
-    console.log('TweetFilter UI Injected from HTML resource.');
 
     // Set version number
     const versionInfo = uiContainer.querySelector('#version-info');
@@ -4749,11 +4770,9 @@ function injectUI() {
  */
 function initializeEventListeners(uiContainer) {
     if (!uiContainer) {
-        console.error('UI Container not found for event listeners.');
+
         return;
     }
-
-    console.log('Wiring UI events...');
 
     const settingsContainer = uiContainer.querySelector('#settings-container');
     const filterContainer = uiContainer.querySelector('#tweet-filter-container');
@@ -4882,7 +4901,6 @@ function initializeEventListeners(uiContainer) {
     // Close custom selects when clicking outside
     document.addEventListener('click', closeAllSelectBoxes);
 
-    console.log('UI events wired.');
 }
 
 // --- Event Handlers ---
@@ -4909,7 +4927,7 @@ function saveApiKey() {
 
 /** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
-    if (confirm('Are you sure you want to clear all cached tweet ratings?')) {
+    if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear tweet ratings cache
         Object.keys(tweetIDRatingCache).forEach(key => delete tweetIDRatingCache[key]);
         GM_setValue('tweetRatings', '{}');
@@ -4918,11 +4936,10 @@ function clearTweetRatingsAndRefreshUI() {
         if (window.threadRelationships) {
             window.threadRelationships = {};
             GM_setValue('threadRelationships', '{}');
-            console.log('Cleared thread relationships cache');
+
         }
         
         showStatus('All cached ratings and thread relationships cleared!');
-        console.log('Cleared all tweet ratings and thread relationships');
 
         updateCacheStatsUI();
 
@@ -4954,7 +4971,7 @@ function saveInstructions() {
     USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
     GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
-    if (confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
+    if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
     }
 }
@@ -5470,7 +5487,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
                     this.innerHTML = originalText;
                 }, 1500);
             }).catch(err => {
-                console.error('Failed to copy text: ', err);
+
             });
         });
         
@@ -5837,7 +5854,7 @@ function isMobileDevice() {
  * It's kept for backward compatibility but is not used 
  */
 function getScoreTooltip() {
-    console.warn('getScoreTooltip is deprecated as each indicator now has its own tooltip');
+
     return null;
 }
 
@@ -6022,33 +6039,80 @@ function cleanupDescriptionElements() {
 }
 
 /**
- * Performs a cleanup of orphaned tooltips that no longer have a visible tweet
- * and cancels any streaming requests for those tweets
+ * Cleans up orphaned tooltips that no longer have a visible tweet or indicator.
  */
 function cleanupOrphanedTooltips() {
-    // Get all currently visible tweet IDs
-    const visibleTweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
-        .map(article => getTweetID(article));
-    
     // Get all tooltips
     const tooltips = document.querySelectorAll('.score-description');
     
     tooltips.forEach(tooltip => {
         const tooltipTweetId = tooltip.dataset.tweetId;
+        if (!tooltipTweetId) {
+            // Remove tooltips without a tweet ID
+            tooltip.remove();
+            return;
+        }
+
+        // Find the corresponding indicator for this tooltip
+        const indicator = document.querySelector(`.score-indicator[data-tweet-id="${tooltipTweetId}"]`) ||
+                         document.querySelector(`article[data-testid="tweet"][data-tweet-id="${tooltipTweetId}"] .score-indicator`);
         
-        // If tooltip has no tweet ID or its tweet is no longer visible, remove it
-        if (!tooltipTweetId || !visibleTweets.includes(tooltipTweetId)) {
-            // If there's an active streaming request for this tweet, cancel it
+        // Only remove the tooltip if there's no indicator for it
+        if (!indicator) {
+            // Cancel any active streaming requests for this tweet
             if (window.activeStreamingRequests && window.activeStreamingRequests[tooltipTweetId]) {
-                console.log(`Canceling streaming request for tweet ${tooltipTweetId} as it's no longer visible`);
+
                 window.activeStreamingRequests[tooltipTweetId].abort();
                 delete window.activeStreamingRequests[tooltipTweetId];
             }
             
             // Remove the tooltip
             tooltip.remove();
+
         }
     });
+}
+
+// Add a MutationObserver to watch for removed tweets
+function initializeTooltipCleanup() {
+    // Create a MutationObserver to watch for removed tweets
+    const tweetObserver = new MutationObserver((mutations) => {
+        let needsCleanup = false;
+        
+        mutations.forEach(mutation => {
+            // Check for removed nodes that might be tweets or indicators
+            mutation.removedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Check if the removed node is a tweet or contains indicators
+                    if (node.matches('.score-indicator') || 
+                        node.querySelector('.score-indicator')) {
+                        needsCleanup = true;
+                    }
+                }
+            });
+        });
+        
+        // Only run cleanup if we detected relevant DOM changes
+        if (needsCleanup) {
+            cleanupOrphanedTooltips();
+        }
+    });
+
+    // Start observing the timeline with the configured parameters
+    const observerConfig = {
+        childList: true,
+        subtree: true
+    };
+
+    // Find the main timeline container
+    const timeline = document.querySelector('div[data-testid="primaryColumn"]');
+    if (timeline) {
+        tweetObserver.observe(timeline, observerConfig);
+
+    }
+
+    // Also keep the periodic cleanup as a backup, but with a longer interval
+    setInterval(cleanupOrphanedTooltips, 10000);
 }
 
 // --- Settings Import/Export (Simplified) ---
@@ -6060,8 +6124,8 @@ function exportSettings() {
     try {
         const settingsToExport = {
             apiKey: GM_getValue('openrouter-api-key', ''),
-            selectedModel: GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct'),
-            selectedImageModel: GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct'),
+            selectedModel: GM_getValue('selectedModel', 'openai/gpt-4.1-nano'),
+            selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
             enableStreaming: GM_getValue('enableStreaming', true),
             modelTemperature: GM_getValue('modelTemperature', 0.5),
@@ -6091,7 +6155,7 @@ function exportSettings() {
         URL.revokeObjectURL(url);
         showStatus('Settings exported successfully!');
     } catch (error) {
-        console.error('Error exporting settings:', error);
+
         showStatus('Error exporting settings: ' + error.message);
     }
 }
@@ -6140,7 +6204,7 @@ function importSettings() {
                     showStatus('Settings imported successfully!');
 
                 } catch (error) {
-                    console.error('Error parsing settings file:', error);
+
                     showStatus('Error importing settings: ' + error.message);
                 }
             };
@@ -6148,7 +6212,7 @@ function importSettings() {
         };
         input.click();
     } catch (error) {
-        console.error('Error importing settings:', error);
+
         showStatus('Error importing settings: ' + error.message);
     }
 }
@@ -6220,7 +6284,7 @@ function removeHandleFromBlacklist(handle) {
         updateCacheStatsUI();
         showStatus(`Removed @${handle} from auto-rate list.`);
                 } else {
-        console.warn(`Attempted to remove non-existent handle: ${handle}`);
+
     }
 }
 
@@ -6231,78 +6295,20 @@ function removeHandleFromBlacklist(handle) {
  */
 function initialiseUI() {
     const uiContainer = injectUI();
-    if (!uiContainer) return; // Stop if injection failed
-
-    // Add mobile-specific styles with the rest of our CSS
-    GM_addStyle(`
-        .score-indicator.mobile-indicator {
-            position: absolute !important;
-            bottom: 3% !important;
-            right: 10px !important;
-            top: auto !important;
-        }
-        
-        .score-description {
-            box-sizing: border-box !important;
-        }
-        
-        /* Style for the scroll to bottom button */
-        .scroll-to-bottom-button {
-            position: sticky;
-            bottom: 0;
-            width: 100%;
-            background-color: rgba(29, 155, 240, 0.9);
-            color: white;
-            text-align: center;
-            padding: 8px 0;
-            cursor: pointer;
-            font-weight: bold;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            margin-top: 10px;
-            z-index: 100;
-            transition: background-color 0.2s;
-        }
-        
-        .scroll-to-bottom-button:hover {
-            background-color: rgba(29, 155, 240, 1);
-        }
-        
-        @media (max-width: 600px) {
-            .score-indicator {
-                position: absolute !important;
-                bottom: 3% !important;
-                right: 10px !important;
-                top: auto !important;
-            }
-            
-            .score-description {
-                max-width: 100% !important;
-                width: 96vw !important;
-                left: 2vw !important;
-                right: 2vw !important;
-                margin: 0 auto !important;
-                box-sizing: border-box !important;
-                max-height: 80vh !important;
-                overflow-y: scroll !important;
-                -webkit-overflow-scrolling: touch !important;
-                overscroll-behavior: contain !important;
-                transform: translateZ(0) !important; /* Force GPU acceleration */
-            }
-        }
-    `);
+    if (!uiContainer) return;
 
     initializeEventListeners(uiContainer);
-    refreshSettingsUI(); // Set initial state from saved settings
-    fetchAvailableModels(); // Fetch models async
+    refreshSettingsUI();
+    fetchAvailableModels();
     
     // Initialize the floating cache stats badge
     updateFloatingCacheStats();
     
     // Set up a periodic refresh of the cache stats to catch any updates
-    setInterval(updateFloatingCacheStats, 10000); // Update every 10 seconds
+    setInterval(updateFloatingCacheStats, 10000);
     
-    // Set up periodic cleanup of orphaned tooltips
-    setInterval(cleanupOrphanedTooltips, 5000); // Check every 5 seconds
+    // Initialize the tooltip cleanup system
+    initializeTooltipCleanup();
     
     // Initialize tracking object for streaming requests if it doesn't exist
     if (!window.activeStreamingRequests) {
@@ -6398,151 +6404,6 @@ updateCacheStatsUI = function() {
     
     // Update the floating badge
     updateFloatingCacheStats();
-    
-    // Add styles for reasoning dropdown and tooltips with better responsive sizing
-    GM_addStyle(`
-    .score-description {
-        width: 450px !important;
-        max-width: 80vw !important;
-        padding: 15px !important;
-        background-color: #15202b !important;
-        border: 1px solid #38444d !important;
-        border-radius: 8px !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
-        color: #fff !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-        font-size: 14px !important;
-        line-height: 1.5 !important;
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        z-index: 99999 !important;
-    }
-    
-    .score-description.pinned {
-        border: 2px solid #1d9bf0 !important;
-    }
-    
-    .tooltip-controls {
-        display: flex !important;
-        justify-content: flex-end !important;
-        margin-bottom: 15px !important;
-        position: sticky !important;
-        top: 0 !important;
-        background-color: #15202b !important;
-        padding-bottom: 5px !important;
-        z-index: 2 !important;
-    }
-    
-    .tooltip-pin-button,
-    .tooltip-copy-button {
-        background: none !important;
-        border: none !important;
-        color: #8899a6 !important;
-        cursor: pointer !important;
-        font-size: 16px !important;
-        padding: 4px 8px !important;
-        margin-left: 8px !important;
-        border-radius: 4px !important;
-        transition: background-color 0.2s !important;
-    }
-    
-    .tooltip-pin-button:hover,
-    .tooltip-copy-button:hover {
-        background-color: rgba(29, 155, 240, 0.1) !important;
-        color: #1d9bf0 !important;
-    }
-    
-    .description-text {
-        margin: 0 0 15px 0 !important;
-        font-size: 15px !important;
-        line-height: 1.6 !important;
-        max-width: 100% !important;
-        overflow-wrap: break-word !important;
-        padding: 5px !important;
-    }
-    
-    .tooltip-bottom-spacer {
-        height: 20px !important;
-        width: 100% !important;
-    }
-    
-    .reasoning-dropdown {
-        margin-top: 15px !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-        padding-top: 10px !important;
-    }
-    
-    .reasoning-toggle {
-        display: flex !important;
-        align-items: center !important;
-        color: #1d9bf0 !important;
-        cursor: pointer !important;
-        font-weight: bold !important;
-        padding: 5px !important;
-        user-select: none !important;
-    }
-    
-    .reasoning-toggle:hover {
-        background-color: rgba(29, 155, 240, 0.1) !important;
-        border-radius: 4px !important;
-    }
-    
-    .reasoning-arrow {
-        display: inline-block !important;
-        margin-right: 5px !important;
-        transition: transform 0.2s ease !important;
-    }
-    
-    .reasoning-content {
-        max-height: 0 !important;
-        overflow: hidden !important;
-        transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;
-        background-color: rgba(0, 0, 0, 0.15) !important;
-        border-radius: 5px !important;
-        margin-top: 5px !important;
-        padding: 0 !important;
-    }
-    
-    .reasoning-dropdown.expanded .reasoning-content {
-        max-height: 350px !important;
-        overflow-y: auto !important;
-        padding: 10px !important;
-    }
-    
-    .reasoning-dropdown.expanded .reasoning-arrow {
-        transform: rotate(90deg) !important;
-    }
-    
-    .reasoning-text {
-        font-size: 14px !important;
-        line-height: 1.4 !important;
-        color: #ccc !important;
-        margin: 0 !important;
-        padding: 5px !important;
-    }
-    
-    /* Mobile specific styles */
-    @media (max-width: 600px) {
-        .score-description {
-            width: 90vw !important;
-            max-width: 90vw !important;
-            max-height: 60vh !important;
-            left: 5vw !important;
-            right: 5vw !important;
-            margin: 0 auto !important;
-            padding: 12px !important;
-            box-sizing: border-box !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            overscroll-behavior: contain !important;
-            transform: translateZ(0) !important; /* Force GPU acceleration */
-        }
-        
-        .reasoning-dropdown.expanded .reasoning-content {
-            max-height: 200px !important;
-        }
-    }
-    `);
 };
 
 })();

@@ -138,7 +138,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
         try {
-            setScoreIndicator(tweetArticle, 10, 'error', "No API key");
+            setScoreIndicator(tweetArticle, 9, 'error', "No API key");
             // Verify indicator was actually created
             if (!tweetArticle.querySelector('.score-indicator')) {
                 console.error(`Failed to create score indicator for tweet ${tweetId}`);
@@ -570,7 +570,6 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
     const userHandle = handles.length > 0 ? handles[0] : '';
     const quotedHandle = handles.length > 1 ? handles[1] : '';
-    
     // --- Extract Main Tweet Content ---
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
     

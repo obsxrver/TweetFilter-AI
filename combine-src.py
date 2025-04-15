@@ -29,12 +29,21 @@ output_file = "TweetFilter-AI.user.js"
 
 # Function to remove console.* statements
 def remove_console_logs(text):
-    # Remove full console.* statements ending with semicolon
-    text = re.sub(r'console\.[a-zA-Z]+\([\s\S]*?\);', '', text)
-    # Remove console.* at the end of a line (no semicolon)
-    text = re.sub(r'console\.[a-zA-Z]+\(.*$', '', text, flags=re.MULTILINE)
+    # Remove single-line console.* statements (with or without semicolon)
+    text = re.sub(r'^\s*console\.[a-zA-Z]+\(.*?\);?\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove console.* statements with template literals, being careful not to consume too much
+    text = re.sub(r'^\s*console\.[a-zA-Z]+\(`[^`]*`\);?\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove multiline console.* statements with template literals
+    text = re.sub(r'^\s*console\.[a-zA-Z]+\(`(?:[^`]|`(?!;?\s*$))*`\);?\s*$', '', text, flags=re.MULTILINE)
+    
     # Remove commented console statements
-    text = re.sub(r'\/\/\s*console\.[a-zA-Z]+\(.*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\/\/\s*console\.[a-zA-Z]+\(.*$', '', text, flags=re.MULTILINE)
+    
+    # Clean up any double blank lines created
+    text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
+    
     return text
 
 # Read header from main file
