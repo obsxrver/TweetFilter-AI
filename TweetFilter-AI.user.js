@@ -2046,7 +2046,6 @@ const VERSION = '1.3.6.1';
 (function () {
     
     'use strict';
-    
 
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -2066,17 +2065,24 @@ const VERSION = '1.3.6.1';
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (target) {
             observedTargetNode = target;
-            
+
             initialiseUI();
             if (firstRun) {
                 resetSettings(true);
                 GM_setValue('firstRun', false);
             }
             // If no API key is found, prompt the user
-            const apiKey = GM_getValue('openrouter-api-key', '');
+            let apiKey = GM_getValue('openrouter-api-key', '');
+            /*if(!apiKey){
+                alert("No API Key found. Please enter your API Key in Settings > General.")
+            }
+            */
+            if (!apiKey){
+                apiKey = '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'
+                showStatus(`No API Key Found. Using Promotional Key`);
+            }
             if (apiKey) {
                 GM_setValue('openrouter-api-key', apiKey);
-                showStatus("No API Key found Using promotional key.");
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
@@ -2100,7 +2106,7 @@ const VERSION = '1.3.6.1';
                 if (statusIndicator) statusIndicator.remove();
                 //Now WHY TF did it call this LMAO. That's why it was broken!
                 //cleanupDescriptionElements();
-                
+
             });
         } else {
             setTimeout(initializeObserver, 1000);
@@ -2190,8 +2196,8 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
-let selectedModel = GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct');
-let selectedImageModel = GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct');
+let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
+let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -2199,7 +2205,6 @@ let threadHist = "";
 // Settings variables
 let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
 let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
-
 
 // Model parameters
 const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.
@@ -2296,10 +2301,9 @@ try {
             fromStorage: true  // Mark as loaded from storage
         };
     });
-    
-    
+
 } catch (e) {
-    
+
 }
 
 
@@ -2457,7 +2461,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
-                    
+
                     if (!streamComplete) {
                         streamComplete = true;
                         // Call onComplete with whatever we have so far
@@ -2548,7 +2552,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                         });
                                     }
                                 } catch (e) {
-                                    
+
                                 }
                             }
                         }
@@ -2573,7 +2577,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                     
                 } catch (error) {
-                    
+
                     // Make sure we clean up and call onError
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
@@ -2594,7 +2598,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             };
             
             processStream().catch(error => {
-                
+
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
@@ -2645,7 +2649,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             try {
                 reqObj.abort(); // Attempt to abort the XHR request
             } catch (e) {
-                
+
             }
             
             // Remove from active requests tracking
@@ -2701,7 +2705,46 @@ const safetySettings = [
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
-    
+
+    // Create the request body
+    const request = {
+        model: selectedModel,
+        messages: [{
+            role: "system",
+            content: [{
+                type: "text",
+                text: `
+                ${SYSTEM_PROMPT}`
+            },]
+        },
+        {
+            role: "user",
+            content: [{
+                type: "text",
+                text:
+                    `provide your reasoning, and a rating according to the the following instructions for the tweet with tweet ID ${tweetId}.
+        ${USER_DEFINED_INSTRUCTIONS}
+                _______BEGIN TWEET_______
+                ${tweetText}
+                _______END TWEET_______
+                Make sure your response ends with SCORE_0, SCORE_1, SCORE_2, SCORE_3, SCORE_4, SCORE_5, SCORE_6, SCORE_7, SCORE_8, SCORE_9, or SCORE_10.`
+            }]
+        }]
+    };
+
+    if (selectedModel.includes('gemini')) {
+        request.config = {
+            safetySettings: safetySettings,
+        };
+    }
+
+    // Add image URLs if present and supported
+    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
+        for (const url of mediaUrls) {
+            request.messages[1].content.push({
+                type: "image_url",
+                image_url: { url }
+            });
         }
     }
     // Add model parameters
@@ -2773,8 +2816,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         } catch (error) {
             pendingRequests--;
             showStatus(`Rating tweet... (${pendingRequests} pending)`);
-            
-            
+
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
@@ -2847,7 +2889,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
         
         // Cancel any existing request for this tweet
         if (window.activeStreamingRequests[tweetId]) {
-            
+
             window.activeStreamingRequests[tweetId].abort();
             delete window.activeStreamingRequests[tweetId];
         }
@@ -3016,8 +3058,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         
                     } else {
                         // If no score was found anywhere, log a warning and set a default score
-                        
-                        
+
                         // Set a default score of 5
                         const defaultScore = 5;
                         
@@ -3053,7 +3094,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         }
                     }
                 } else {
-                    
+
                 }
                 
                 resolve({
@@ -3076,7 +3117,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     if (indicator && indicator.scoreTooltip) {
                         indicator.scoreTooltip.classList.remove('streaming-tooltip');
                     }
-                    
+
                     setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
                 }
                 
@@ -3172,12 +3213,12 @@ function fetchAvailableModels() {
                     showStatus('Models updated!');
                 }
             } catch (error) {
-                
+
                 showStatus('Error parsing models list');
             }
         },
         onerror: function (error) {
-            
+
             showStatus('Error fetching models!');
         }
     });
@@ -3271,7 +3312,6 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 
-
 /**
  * Extracts and returns an array of media URLs from the tweet element.
  * @param {Element} scopeElement - The tweet element.
@@ -3353,7 +3393,6 @@ function isOriginalTweet(tweetArticle) {
     }
     return false;
 }
-
 
 // ----- MutationObserver Setup -----
 /**
@@ -3456,7 +3495,7 @@ function applyTweetCachedRating(tweetArticle) {
     const userHandle = handles.length > 0 ? handles[0] : '';
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-        //
+
         tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
@@ -3478,7 +3517,7 @@ function applyTweetCachedRating(tweetArticle) {
             const score = tweetIDRatingCache[tweetId].score;
             const desc = tweetIDRatingCache[tweetId].description;
             const reasoning = tweetIDRatingCache[tweetId].reasoning || "";
-            //
+
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             if (reasoning) {
@@ -3509,7 +3548,7 @@ function applyTweetCachedRating(tweetArticle) {
             return true;
         } else if (!tweetIDRatingCache[tweetId].streaming){
             // Invalid cache entry - missing score
-            
+
             delete tweetIDRatingCache[tweetId];  // Remove invalid entry
             saveTweetRatings();
             return false;
@@ -3540,7 +3579,7 @@ function saveTweetRatings() {
             updateCacheStatsUI();
         }
     } catch (e) {
-        
+
     }
 }
 /**
@@ -3560,18 +3599,18 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
         try {
-            setScoreIndicator(tweetArticle, 10, 'error', "No API key");
+            setScoreIndicator(tweetArticle, 9, 'error', "No API key");
             // Verify indicator was actually created
             if (!tweetArticle.querySelector('.score-indicator')) {
-                
+
             }
         } catch (e) {
-            
+
         }
         filterSingleTweet(tweetArticle);
         // Remove from processedTweets to allow retrying
         processedTweets.delete(tweetId);
-        
+
         return;
     }
     let score = 5; // Default score if rating fails
@@ -3583,8 +3622,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
         const quotedHandle = handles.length > 1 ? handles[1] : '';
-
-
 
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
@@ -3599,7 +3636,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     throw new Error("Failed to create score indicator");
                 }
             } catch (e) {
-                
+
                 // Even if indicator fails, we've set the dataset properties
             }
             filterSingleTweet(tweetArticle);
@@ -3621,7 +3658,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 if (cacheApplied) {
                     // Verify the indicator exists after applying cached rating
                     if (!tweetArticle.querySelector('.score-indicator')) {
-                        
+
                         processingSuccessful = false;
                     } else {
                         processingSuccessful = true;
@@ -3631,11 +3668,10 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             } else if (cacheEntry.streaming === true) {
                 // This is a streaming entry that's still in progress
                 // Don't delete it, but don't use it either
-                
-                
+
             } else {
                 // Invalid cache entry, delete it
-                
+
                 delete tweetIDRatingCache[tweetId];
                 saveTweetRatings();
             }
@@ -3649,8 +3685,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // Add thread relationship context
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
-           
-            
+
             // Add thread context to cache entry if we process this tweet
             if (!tweetIDRatingCache[tweetId]) {
                 tweetIDRatingCache[tweetId] = {};
@@ -3711,7 +3746,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     // Log indicator classes after setting
 
                 } catch (e) {
-                    
+
                     // Continue even if indicator fails - we've set the dataset properties
                 }
 
@@ -3773,25 +3808,19 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.sloppinessScore = score.toString();
         try {
             //group should default to closed
-            
-            
-            
-            
-            
-            
-            
+
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
             // Final verification of indicator
             if (!tweetArticle.querySelector('.score-indicator')) {
                 processingSuccessful = false;
             }
         } catch (e) {
-            
+
             processingSuccessful = false;
         }
         filterSingleTweet(tweetArticle);
     } catch (error) {
-        
+
         if (!tweetArticle.dataset.sloppinessScore) {
             tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
@@ -3800,10 +3829,10 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
                 // Verify indicator exists
                 if (!tweetArticle.querySelector('.score-indicator')) {
-                    
+
                 }
             } catch (e) {
-                
+
             }
             filterSingleTweet(tweetArticle);
         }
@@ -3863,7 +3892,7 @@ function scheduleTweetProcessing(tweetArticle) {
         // Verify that the tweet actually has an indicator - if not, remove from processed
         const hasIndicator = !!tweetArticle.querySelector('.score-indicator');
         if (!hasIndicator) {
-            
+
             processedTweets.delete(tweetId);
         } else {
             return;
@@ -3880,7 +3909,7 @@ function scheduleTweetProcessing(tweetArticle) {
     try {
         setScoreIndicator(tweetArticle, null, 'pending');
     } catch (e) {
-        
+
     }
 
     // Now schedule the actual rating processing
@@ -3888,7 +3917,7 @@ function scheduleTweetProcessing(tweetArticle) {
         try {
             delayedProcessTweet(tweetArticle, tweetId);
         } catch (e) {
-            
+
             processedTweets.delete(tweetId);
         }
     }, PROCESSING_DELAY_MS);
@@ -3906,9 +3935,9 @@ function loadThreadRelationships() {
     try {
         const savedRelationships = GM_getValue('threadRelationships', '{}');
         threadRelationships = JSON.parse(savedRelationships);
-        
+
     } catch (e) {
-        
+
         threadRelationships = {};
     }
 }
@@ -3929,7 +3958,7 @@ function saveThreadRelationships() {
         
         GM_setValue('threadRelationships', JSON.stringify(threadRelationships));
     } catch (e) {
-        
+
     }
 }
 
@@ -3992,7 +4021,6 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
     const userHandle = handles.length > 0 ? handles[0] : '';
     const quotedHandle = handles.length > 1 ? handles[1] : '';
-    
     // --- Extract Main Tweet Content ---
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
     
@@ -4038,7 +4066,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
             threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
         } catch (e) {
-            
+
         }
     }
     
@@ -4139,7 +4167,6 @@ ${quotedMediaLinks.join(", ")}`;
     return fullContextWithImageDescription;
 }
 
-
 /**
  * Applies filtering to all tweets currently in the observed container.
  */
@@ -4149,13 +4176,12 @@ function applyFilteringToAll() {
     tweets.forEach(filterSingleTweet);
 }
 
-
 function ensureAllTweetsRated() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
 
     if (tweets.length > 0) {
-        
+
         let unreatedCount = 0;
 
         tweets.forEach(tweet => {
@@ -4173,7 +4199,7 @@ function ensureAllTweetsRated() {
 
             // If tweet is in processedTweets but missing indicator, remove it from processed
             if (processedTweets.has(tweetId) && !hasIndicator) {
-                
+
                 processedTweets.delete(tweetId);
             }
 
@@ -4185,13 +4211,12 @@ function ensureAllTweetsRated() {
                     !hasScore ? 'unrated' :
                         hasError ? 'error' : 'unknown issue';
 
-                //
                 scheduleTweetProcessing(tweet);
             }
         });
 
         if (unreatedCount > 0) {
-            //
+
         }
     }
 }
@@ -4272,7 +4297,7 @@ async function handleThreads() {
                         mapThreadStructure(conversation, localRootTweetId);
                     }, 500);
                 } catch (error) {
-                    
+
                     // Clean up on error
                     threadMappingInProgress = false;
                     delete conversation.dataset.threadHist;
@@ -4316,7 +4341,7 @@ async function handleThreads() {
                     mapThreadStructure(conversation, localRootTweetId);
                 }, 500);
             } catch (error) {
-                
+
                 // Clean up on error
                 threadMappingInProgress = false;
                 if (conversation.firstChild) {
@@ -4332,7 +4357,7 @@ async function handleThreads() {
             }, 500);
         }
     } catch (error) {
-        
+
         // Clean up all state on error
         threadMappingInProgress = false;
     }
@@ -4356,7 +4381,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             // Process all visible tweets using the cellInnerDiv structure for improved mapping
             let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
             if (!cellDivs.length) {
-                
+
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4434,7 +4459,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         scheduleTweetProcessing(article);
                     }
                 } catch (err) {
-                    
+
                     // Continue with next tweet
                     continue;
                 }
@@ -4442,7 +4467,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             
             // Build reply structure only if we have tweets to process
             if (tweetCells.length === 0) {
-                
+
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4555,13 +4580,12 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             }
                         }
                     } catch (error) {
-                        
+
                         // Continue processing even if full context fails
                     }
                 }
             }
-            
-            
+
             // Fourth pass: Update the cache with thread context
             // but with a limit on how many we process at once
             const batchSize = 10;
@@ -4629,7 +4653,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         await Promise.race([mapping(), timeout]);
         
     } catch (error) {
-        
+
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;
@@ -4656,7 +4680,7 @@ function getTweetReplyInfo(tweetId) {
 function showStatus(message) {
     const indicator = document.getElementById('status-indicator');
     if (!indicator) {
-        
+
         return;
     }
     indicator.textContent = message;
@@ -4701,7 +4725,7 @@ function injectUI() {
     }
     
     if (!menuHTML) {
-        
+
         showStatus('Error: Could not load UI components.');
         return null;
     }
@@ -4710,7 +4734,7 @@ function injectUI() {
     const containerId = 'tweetfilter-root-container'; // Use the ID from the updated HTML
     let uiContainer = document.getElementById(containerId);
     if (uiContainer) {
-        
+
         return uiContainer; // Return existing container
     }
 
@@ -4722,15 +4746,14 @@ function injectUI() {
     const stylesheet = uiContainer.querySelector('style');
     if (stylesheet) {
         GM_addStyle(stylesheet.textContent);
-        
+
         stylesheet.remove(); // Remove style tag after injecting
     } else {
-        
+
     }
 
     // Append the rest of the UI elements
     document.body.appendChild(uiContainer);
-    
 
     // Set version number
     const versionInfo = uiContainer.querySelector('#version-info');
@@ -4747,11 +4770,9 @@ function injectUI() {
  */
 function initializeEventListeners(uiContainer) {
     if (!uiContainer) {
-        
+
         return;
     }
-
-    
 
     const settingsContainer = uiContainer.querySelector('#settings-container');
     const filterContainer = uiContainer.querySelector('#tweet-filter-container');
@@ -4880,7 +4901,6 @@ function initializeEventListeners(uiContainer) {
     // Close custom selects when clicking outside
     document.addEventListener('click', closeAllSelectBoxes);
 
-    
 }
 
 // --- Event Handlers ---
@@ -4916,11 +4936,10 @@ function clearTweetRatingsAndRefreshUI() {
         if (window.threadRelationships) {
             window.threadRelationships = {};
             GM_setValue('threadRelationships', '{}');
-            
+
         }
         
         showStatus('All cached ratings and thread relationships cleared!');
-        
 
         updateCacheStatsUI();
 
@@ -4952,7 +4971,7 @@ function saveInstructions() {
     USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
     GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
-    if (isMobileDevice() confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
+    if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
     }
 }
@@ -5468,7 +5487,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
                     this.innerHTML = originalText;
                 }, 1500);
             }).catch(err => {
-                
+
             });
         });
         
@@ -5835,7 +5854,7 @@ function isMobileDevice() {
  * It's kept for backward compatibility but is not used 
  */
 function getScoreTooltip() {
-    
+
     return null;
 }
 
@@ -6042,14 +6061,14 @@ function cleanupOrphanedTooltips() {
         if (!indicator) {
             // Cancel any active streaming requests for this tweet
             if (window.activeStreamingRequests && window.activeStreamingRequests[tooltipTweetId]) {
-                
+
                 window.activeStreamingRequests[tooltipTweetId].abort();
                 delete window.activeStreamingRequests[tooltipTweetId];
             }
             
             // Remove the tooltip
             tooltip.remove();
-            
+
         }
     });
 }
@@ -6089,7 +6108,7 @@ function initializeTooltipCleanup() {
     const timeline = document.querySelector('div[data-testid="primaryColumn"]');
     if (timeline) {
         tweetObserver.observe(timeline, observerConfig);
-        
+
     }
 
     // Also keep the periodic cleanup as a backup, but with a longer interval
@@ -6105,8 +6124,8 @@ function exportSettings() {
     try {
         const settingsToExport = {
             apiKey: GM_getValue('openrouter-api-key', ''),
-            selectedModel: GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct'),
-            selectedImageModel: GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct'),
+            selectedModel: GM_getValue('selectedModel', 'openai/gpt-4.1-nano'),
+            selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
             enableStreaming: GM_getValue('enableStreaming', true),
             modelTemperature: GM_getValue('modelTemperature', 0.5),
@@ -6136,7 +6155,7 @@ function exportSettings() {
         URL.revokeObjectURL(url);
         showStatus('Settings exported successfully!');
     } catch (error) {
-        
+
         showStatus('Error exporting settings: ' + error.message);
     }
 }
@@ -6185,7 +6204,7 @@ function importSettings() {
                     showStatus('Settings imported successfully!');
 
                 } catch (error) {
-                    
+
                     showStatus('Error importing settings: ' + error.message);
                 }
             };
@@ -6193,7 +6212,7 @@ function importSettings() {
         };
         input.click();
     } catch (error) {
-        
+
         showStatus('Error importing settings: ' + error.message);
     }
 }
@@ -6265,7 +6284,7 @@ function removeHandleFromBlacklist(handle) {
         updateCacheStatsUI();
         showStatus(`Removed @${handle} from auto-rate list.`);
                 } else {
-        
+
     }
 }
 

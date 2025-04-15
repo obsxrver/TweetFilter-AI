@@ -53,10 +53,17 @@ const VERSION = '1.3.6.1';
                 GM_setValue('firstRun', false);
             }
             // If no API key is found, prompt the user
-            const apiKey = GM_getValue('openrouter-api-key', '');
+            let apiKey = GM_getValue('openrouter-api-key', '');
+            /*if(!apiKey){
+                alert("No API Key found. Please enter your API Key in Settings > General.")
+            }
+            */
+            if (!apiKey){
+                apiKey = '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'
+                showStatus(`No API Key Found. Using Promotional Key`);
+            }
             if (apiKey) {
                 GM_setValue('openrouter-api-key', apiKey);
-                showStatus("No API Key found Using promotional key.");
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }

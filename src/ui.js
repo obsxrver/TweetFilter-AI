@@ -1456,8 +1456,8 @@ function exportSettings() {
     try {
         const settingsToExport = {
             apiKey: GM_getValue('openrouter-api-key', ''),
-            selectedModel: GM_getValue('selectedModel', 'mistralai/mistral-small-3.1-24b-instruct'),
-            selectedImageModel: GM_getValue('selectedImageModel', 'mistralai/mistral-small-3.1-24b-instruct'),
+            selectedModel: GM_getValue('selectedModel', 'openai/gpt-4.1-nano'),
+            selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
             enableStreaming: GM_getValue('enableStreaming', true),
             modelTemperature: GM_getValue('modelTemperature', 0.5),
