@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.6.1
+// @version      Version 1.3.6.2
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -22,7 +22,7 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-const VERSION = '1.3.6.1'; 
+const VERSION = '1.3.6.2'; 
 (function () {
     
     'use strict';
@@ -54,14 +54,15 @@ const VERSION = '1.3.6.1';
             }
             // If no API key is found, prompt the user
             let apiKey = GM_getValue('openrouter-api-key', '');
-            /*if(!apiKey){
+            if(!apiKey){
                 alert("No API Key found. Please enter your API Key in Settings > General.")
             }
-            */
+            /*
             if (!apiKey){
-                apiKey = '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'
+                //key is dead
+                apiKey = '*'
                 showStatus(`No API Key Found. Using Promotional Key`);
-            }
+            }*/
             if (apiKey) {
                 GM_setValue('openrouter-api-key', apiKey);
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
