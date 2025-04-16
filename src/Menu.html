@@ -99,7 +99,53 @@
         cursor: pointer;
         width: 120px;
         vertical-align: middle;
-        accent-color: #1d9bf0;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 6px;
+        border-radius: 3px;
+        background: linear-gradient(to right,
+            #FF0000 0%,
+            #FF8800 calc(var(--slider-percent, 50%) * 0.166),
+            #FFFF00 calc(var(--slider-percent, 50%) * 0.333),
+            #00FF00 calc(var(--slider-percent, 50%) * 0.5),
+            #00FFFF calc(var(--slider-percent, 50%) * 0.666),
+            #0000FF calc(var(--slider-percent, 50%) * 0.833),
+            #800080 var(--slider-percent, 50%),
+            #DEE2E6 var(--slider-percent, 50%),
+            #DEE2E6 100%
+        );
+    }
+
+    #tweet-filter-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #1d9bf0;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        transition: transform 0.1s;
+    }
+
+    #tweet-filter-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+    }
+
+    #tweet-filter-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #1d9bf0;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        transition: transform 0.1s;
+    }
+
+    #tweet-filter-slider::-moz-range-thumb:hover {
+        transform: scale(1.2);
     }
 
     #tweet-filter-value {
@@ -126,7 +172,8 @@
         box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
         display: flex;
         flex-direction: column;
-        width: 380px;
+        width: 90vw; /* Default width for mobile */
+        max-width: 380px; /* Default max-width for mobile */
         max-height: 85vh;
         overflow: hidden; /* Hide overflow to make the sticky header work properly */
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -694,7 +741,7 @@
         display: none;
         background-color: rgba(22, 24, 28, 0.95);
         color: #e7e9ea;
-        padding: 16px 20px;
+        padding: 0 20px 16px 20px; /* Remove top padding */
         border-radius: 12px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -719,12 +766,16 @@
     .tooltip-controls {
         display: flex !important;
         justify-content: flex-end !important;
-        margin-bottom: 15px !important;
+        margin: 0 -20px 15px -20px !important;
         position: sticky !important;
         top: 0 !important;
-        background-color: #15202b !important;
-        padding-bottom: 5px !important;
+        background-color: rgba(39, 44, 48, 0.95) !important;
+        padding: 12px 15px !important;
         z-index: 2 !important;
+        border-top-left-radius: 12px !important;
+        border-top-right-radius: 12px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(5px) !important;
     }
 
     .tooltip-pin-button,
@@ -737,7 +788,7 @@
         padding: 4px 8px !important;
         margin-left: 8px !important;
         border-radius: 4px !important;
-        transition: background-color 0.2s !important;
+        transition: all 0.2s !important;
     }
 
     .tooltip-pin-button:hover,
@@ -746,19 +797,25 @@
         color: #1d9bf0 !important;
     }
 
-    /* Description text */
+    .tooltip-pin-button:active,
+    .tooltip-copy-button:active {
+        transform: scale(0.95) !important;
+    }
+
+    /* Description text container needs padding to account for sticky header */
     .description-text {
-        margin: 0 0 15px 0 !important;
+        margin: 0 0 25px 0 !important;
         font-size: 15px !important;
         line-height: 1.6 !important;
         max-width: 100% !important;
         overflow-wrap: break-word !important;
-        padding: 5px !important;
+        padding: 5px 0 !important;
     }
 
     .tooltip-bottom-spacer {
-        height: 20px !important;
+        height: 30px !important;
         width: 100% !important;
+        margin-bottom: 10px !important;
     }
 
     /* Reasoning dropdown */
@@ -891,11 +948,19 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        justify-content: space-between;
     }
     
     .sort-container label {
         font-size: 14px;
         color: var(--text-color);
+        white-space: nowrap;
+    }
+
+    .sort-container .controls-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
     }
     
     .sort-container select {
@@ -906,6 +971,7 @@
         color: #e7e9ea;
         font-size: 14px;
         cursor: pointer;
+        min-width: 120px;
     }
     
     .sort-container select:hover {
@@ -917,11 +983,91 @@
         border-color: #1d9bf0;
         box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
     }
-    
+
+    .sort-toggle {
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .sort-toggle:hover {
+        border-color: #1d9bf0;
+        background-color: rgba(29, 155, 240, 0.1);
+    }
+
+    .sort-toggle.active {
+        background-color: rgba(29, 155, 240, 0.2);
+        border-color: #1d9bf0;
+    }
+
     /* Dropdown option styling */
     .sort-container select option {
         background-color: rgba(39, 44, 48, 0.95);
         color: #e7e9ea;
+    }
+
+    /* Desktop-specific width */
+    @media (min-width: 601px) {
+        #settings-container {
+            width: 480px;
+            max-width: 480px;
+        }
+    }
+
+    /* Handle input styling */
+    #handle-input {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        transition: border-color 0.2s;
+        min-width: 200px;
+    }
+
+    #handle-input:focus {
+        outline: none;
+        border-color: #1d9bf0;
+        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
+    }
+
+    #handle-input::placeholder {
+        color: rgba(231, 233, 234, 0.5);
+    }
+
+    .handle-input-container {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 5px;
+        border-radius: 8px;
+        background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    .add-handle-btn {
+        background-color: #1d9bf0;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+        transition: background-color 0.2s;
+        white-space: nowrap;
+    }
+    
+    .add-handle-btn:hover {
+        background-color: #1a8cd8;
     }
 </style>
 <div id="tweetfilter-root-container">
@@ -981,39 +1127,58 @@
                     <span style="font-size: 14px;">🧠</span> Tweet Rating Model
                 </div>
                 <div class="section-description">
-                    Hint: If you want to rate tweets with images, you need to select an image model.
-                </div>
-                <div class="sort-container">
-                    <label for="model-sort-order">Sort models by: </label>
-                    <select id="model-sort-order" data-setting="modelSortOrder">
-                        <option value="price-low-to-high">Price (Low to High)</option>
-                        <option value="price-high-to-low">Price (High to Low)</option>
-                        <option value="throughput-high-to-low">Throughput (High to Low)</option>
-                        <option value="throughput-low-to-high">Throughput (Low to High)</option>
-                        <option value="latency-low-to-high">Latency (Low to High)</option>
-                        <option value="latency-high-to-low">Latency (High to Low)</option>
-                    </select>
+                    The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.
                 </div>
                 <div class="select-container" id="model-select-container">
                 </div>
-                <div class="advanced-options" id="rating-advanced-options">
-                    <div class="advanced-toggle" data-toggle="rating-advanced-content">
-                        <div class="advanced-toggle-title">Advanced Options</div>
+
+                <div class="advanced-options">
+                    <div class="advanced-toggle" data-toggle="model-options-content">
+                        <div class="advanced-toggle-title">Options</div>
                         <div class="advanced-toggle-icon">▼</div>
                     </div>
-                    <div class="advanced-content" id="rating-advanced-content">
+                    <div class="advanced-content" id="model-options-content">
+                        <div class="sort-container">
+                            <label for="model-sort-order">Sort models by: </label>
+                            <div class="controls-group">
+                                <select id="model-sort-order" data-setting="modelSortOrder">
+                                    <option value="pricing-low-to-high">Price</option>
+                                    <option value="latency-low-to-high">Latency</option>
+                                    <option value="throughput-high-to-low">Throughput</option>
+                                    <option value="top-weekly">Popularity</option>
+                                    <option value="">Age</option>
+                                </select>
+                                <button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button>
+                            </div>
+                        </div>
+                        <div class="sort-container">
+                            <label for="provider-sort">API Endpoint Priority: </label>
+                            <select id="provider-sort" data-setting="providerSort">
+                                <option value="">Default (load-balanced)</option>
+                                <option value="throughput">Throughput</option>
+                                <option value="latency">Latency</option>
+                                <option value="price">Price</option>
+                            </select>
+                        </div>
+                        <div class="sort-container">
+                            <label>
+                                <input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>
+                                Show Free Models
+                            </label>
+                        </div>
+
                         <div class="parameter-row" data-param-name="modelTemperature">
                             <div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;">
+                                <input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;">
                             </div>
                         </div>
                         <div class="parameter-row" data-param-name="modelTopP">
                             <div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                                <input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;">
                             </div>
                         </div>
                         <div class="parameter-row" data-param-name="maxTokens">
@@ -1033,8 +1198,9 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div>
-                <div class="section-description">This model generates <strong>text descriptions</strong> of images, which are then sent to the rating model above. If you've selected an image-capable model (🖼️) as your main rating model above, you can disable this to process images directly.</div>
+                <div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div>
                 <div class="toggle-row">
                     <div class="toggle-label">Enable Image Descriptions</div>
                     <label class="toggle-switch">
@@ -1043,12 +1209,11 @@
                     </label>
                 </div>
                 <div id="image-model-container" style="display: none;">
-                    <div class="section-description">Select a model with vision capabilities to describe images in tweets.</div>
                     <div class="select-container" id="image-model-select-container">
                     </div>
                     <div class="advanced-options" id="image-advanced-options">
                         <div class="advanced-toggle" data-toggle="image-advanced-content">
-                            <div class="advanced-toggle-title">Advanced Options</div>
+                            <div class="advanced-toggle-title">Options</div>
                             <div class="advanced-toggle-icon">▼</div>
                         </div>
                         <div class="advanced-content" id="image-advanced-content">
@@ -1071,7 +1236,7 @@
                 </div>
             </div>
             <div id="instructions-tab" class="tab-content">
-                <div class="section-title">Custom Tweet Rating Instructions</div>
+                <div class="section-title">Custom Instructions</div>
                 <div class="section-description">Add custom instructions for how the model should score tweets:</div>
                 <textarea id="user-instructions" placeholder="Examples:
                 - Give high scores to tweets about technology
@@ -1080,7 +1245,7 @@
                 <button class="settings-button" data-action="save-instructions">Save Instructions</button>
                 <div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div>
                 <div class="section-description">Add Twitter handles to automatically rate as 10/10:</div>
-                <div style="display: flex; align-items: center; gap: 5px;">
+                <div class="handle-input-container">
                     <input id="handle-input" type="text" placeholder="Twitter handle (without @)">
                     <button class="add-handle-btn" data-action="add-handle">Add</button>
                 </div>

@@ -446,12 +446,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     request.top_p = modelTopP;
     request.max_tokens = maxTokens;
 
-    // Add provider settings
-    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-    request.provider = {
-        sort: sortOrder.split('-')[0],
-        allow_fallbacks: true,
-    };  
+    // Add provider settings only if a specific sort is selected
+    if (providerSort) {
+        request.provider = {
+            sort: providerSort,
+            allow_fallbacks: true
+        };
+    }
     // Check if streaming is enabled
     const useStreaming = GM_getValue('enableStreaming', false);
     
@@ -788,6 +789,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         } else {
                             setScoreIndicator(tweetArticle, defaultScore, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                         }
+                        
                     }
                 } else {
                     console.warn(`Tweet article not found for ID ${tweetId} when completing rating`);
@@ -859,15 +861,17 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
             temperature: imageModelTemperature,
             top_p: imageModelTopP,
             max_tokens: maxTokens,
-            provider: {
-                sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
-                allow_fallbacks: true
-            }
         };
         if (selectedImageModel.includes('gemini')) {
             request.config = {
                 safetySettings: safetySettings,
             }
+        }
+        if (providerSort) {
+            request.provider = {
+                sort: providerSort,
+                allow_fallbacks: true
+            };
         }
         const result = await getCompletion(request, apiKey);
         if (!result.error && result.data?.choices?.[0]?.message?.content) {
@@ -897,14 +901,21 @@ function fetchAvailableModels() {
         url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
         headers: {
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Use a more generic referer if preferred
+            "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
             "X-Title": "Tweet Rating Tool"
         },
         onload: function (response) {
             try {
                 const data = JSON.parse(response.responseText);
                 if (data.data && data.data.models) {
-                    availableModels = data.data.models || [];
+                    //filter all models that don't have key "endpoint" or endpoint is null
+                    let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
+                    // Reverse initial order for latency sorting to match High-Low expectations
+                    if (sortOrder === 'latency-low-to-high') {
+                        filteredModels.reverse();
+                    }
+                    availableModels = filteredModels || [];
+                    listedModels = [...availableModels]; // Initialize listedModels
                     refreshModelsUI();
                     showStatus('Models updated!');
                 }
