@@ -709,6 +709,8 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
         box-sizing: border-box !important;
+        padding-left: 25px !important;
+        padding-right: 25px !important;
     }
 
     .score-description.pinned {
@@ -748,17 +750,27 @@
 
     /* Description text */
     .description-text {
-        margin: 0 0 15px 0 !important;
+        margin: 0 0 25px 0 !important;
         font-size: 15px !important;
         line-height: 1.6 !important;
         max-width: 100% !important;
         overflow-wrap: break-word !important;
-        padding: 5px !important;
+        padding: 5px 10px !important;
+        & strong, & em, & br {
+            display: inline-block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: inherit !important;
+        }
+        & br {
+            margin-bottom: 0.5em !important;
+        }
     }
 
     .tooltip-bottom-spacer {
-        height: 20px !important;
+        height: 30px !important;
         width: 100% !important;
+        margin-bottom: 10px !important;
     }
 
     /* Reasoning dropdown */

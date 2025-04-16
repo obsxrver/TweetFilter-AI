@@ -788,6 +788,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         } else {
                             setScoreIndicator(tweetArticle, defaultScore, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                         }
+                        
                     }
                 } else {
                     console.warn(`Tweet article not found for ID ${tweetId} when completing rating`);
