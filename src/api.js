@@ -117,7 +117,7 @@ async function getCompletion(request, apiKey, timeout = 30000) {
  * @param {string} [tweetId=null] - Optional tweet ID to associate with this request
  * @returns {Object} The request object with an abort method
  */
-function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 30000, tweetId = null) {
+function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 90000, tweetId = null) {
     // Add stream parameter to request
     const streamingRequest = {
         ...request,
@@ -163,7 +163,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                             timedOut: true
                         });
                     }
-                }, 10000); // 10 second timeout without activity
+                }, 30000); // 10 second timeout without activity
             };
             let streamTimeout = null;
             // Process the stream
@@ -911,7 +911,7 @@ function fetchAvailableModels() {
                     //filter all models that don't have key "endpoint" or endpoint is null
                     let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
                     // Reverse initial order for latency sorting to match High-Low expectations
-                    if (sortOrder === 'latency-low-to-high') {
+                    if (sortOrder === 'latency-low-to-high'|| sortOrder === 'pricing-low-to-high') {
                         filteredModels.reverse();
                     }
                     availableModels = filteredModels || [];

@@ -701,13 +701,13 @@ function formatModelLabel(model) {
         const completionPrice = parseFloat(pricing.completion);
 
         if (!isNaN(promptPrice)) {
-            pricingInfo += ` - $${promptPrice.toFixed(7)}/in`;
+            pricingInfo += ` - $${(promptPrice*1e6).toFixed(4)}/mil. tok.-in`;
             if (!isNaN(completionPrice) && completionPrice !== promptPrice) {
-                pricingInfo += ` $${completionPrice.toFixed(7)}/out`;
+                pricingInfo += ` $${(completionPrice*1e6).toFixed(4)}/mil. tok.-out`;
             }
         } else if (!isNaN(completionPrice)) {
             // Handle case where only completion price is available (less common)
-            pricingInfo += ` - $${completionPrice.toFixed(7)}/out`;
+            pricingInfo += ` - $${(completionPrice*1e6).toFixed(4)}/mil. tok.-out`;
         }
     }
 
@@ -973,21 +973,25 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         scrollButton.style.display = 'none'; // Hidden by default
         scrollButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Enable smooth scrolling
-            tooltip.style.scrollBehavior = 'smooth';
-            // Smooth scroll to bottom
-            tooltip.scrollTo({
-                top: tooltip.scrollHeight,
-                behavior: 'smooth'
-            });
-            // Second scroll after animation completes to catch any new content
-            setTimeout(() => {
-                tooltip.scrollTo({
-                    top: tooltip.scrollHeight,
-                    behavior: 'smooth'
-                });
-            }, 500);
             tooltip.dataset.autoScroll = 'true';
+            
+            // Use double requestAnimationFrame to ensure we get the final scroll height
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    tooltip.scrollTo({
+                        top: tooltip.scrollHeight,
+                        behavior: 'instant'  // Use instant instead of smooth
+                    });
+                    
+                    // Double-check scroll position after a small delay
+                    setTimeout(() => {
+                        if (tooltip.dataset.autoScroll === 'true') {
+                            tooltip.scrollTop = tooltip.scrollHeight;
+                        }
+                    }, 50);
+                });
+            });
+            
             scrollButton.style.display = 'none';
         });
         tooltip.appendChild(scrollButton);
@@ -998,34 +1002,43 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         tooltip.appendChild(bottomSpacer);
         
         // Set initial auto-scroll state
-        tooltip.dataset.autoScroll = 'true';
+        tooltip.dataset.autoScroll = status=='rated' || status=='cached'?'false':'true';
         
         // Add scroll event to detect when user manually scrolls
         tooltip.addEventListener('scroll', () => {
             // Check if we're near the bottom
-            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < isMobileDevice()? 40: 30;
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < (isMobileDevice() ? 40 : 55);
+            const isStreaming = tooltip.classList.contains('streaming-tooltip');
+            const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
             
-            if (!isNearBottom && tooltip.dataset.autoScroll === 'true') {
-                // User has scrolled up, disable auto-scroll
-                tooltip.dataset.autoScroll = 'false';
-                
-                // Show the scroll-to-bottom button
-                if (tooltip.classList.contains('streaming-tooltip')) {
-                    const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
-                    if (scrollButton && scrollButton.style.display === 'none') {
-                        scrollButton.style.display = 'block';
-                    }
+            if (!isNearBottom) {
+                // User has scrolled up
+                if (tooltip.dataset.autoScroll === 'true') {
+                    tooltip.dataset.autoScroll = 'false';
                 }
-            } else if (isNearBottom && tooltip.dataset.autoScroll === 'false') {
-                // User has manually scrolled to bottom, re-enable auto-scroll
-                tooltip.dataset.autoScroll = 'true';
                 
-                // Hide the scroll-to-bottom button
-                const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
+                // Show the scroll-to-bottom button if we're streaming
+                if (isStreaming && scrollButton) {
+                    scrollButton.style.display = 'block';
+                }
+            } else {
+                // User has scrolled to bottom
                 if (scrollButton) {
                     scrollButton.style.display = 'none';
                 }
+                // Only re-enable auto-scroll if user explicitly scrolled to bottom
+                if (tooltip.dataset.userInitiatedScroll === 'true') {
+                    tooltip.dataset.autoScroll = 'true';
+                }
             }
+            
+            // Track that this was a user-initiated scroll
+            tooltip.dataset.userInitiatedScroll = 'true';
+            
+            // Clear the flag after a short delay
+            setTimeout(() => {
+                tooltip.dataset.userInitiatedScroll = 'false';
+            }, 100);
         });
         
         document.body.appendChild(tooltip); // Append to body instead of indicator
@@ -1248,14 +1261,21 @@ function positionTooltip(indicator, tooltip) {
     
     // Update scroll position for streaming tooltips
     if (tooltip.classList.contains('streaming-tooltip')) {
-        const isAtBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+        // Only auto-scroll on initial display
         const isInitialDisplay = tooltip.lastDisplayTime === undefined || 
                                (Date.now() - tooltip.lastDisplayTime) > 1000;
         
-        if (isInitialDisplay || isAtBottom) {
-            setTimeout(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-            }, 10);
+        if (isInitialDisplay) {
+            tooltip.dataset.autoScroll = 'true';
+            // Use double requestAnimationFrame to ensure content is rendered
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    tooltip.scrollTo({
+                        top: tooltip.scrollHeight,
+                        behavior: 'instant'
+                    });
+                });
+            });
         }
     }
     
@@ -1328,16 +1348,21 @@ function updateTooltipContent(tooltip, description, reasoning) {
     if (!tooltip) return;
     
     const formatted = formatTooltipDescription(description, reasoning);
+    let contentChanged = false;
     
     // Update only the contents, not the structure
     const descriptionElement = tooltip.querySelector('.description-text');
     if (descriptionElement) {
+        const oldContent = descriptionElement.innerHTML;
         descriptionElement.innerHTML = formatted.description;
+        contentChanged = oldContent !== formatted.description;
     }
     
     const reasoningElement = tooltip.querySelector('.reasoning-text');
     if (reasoningElement && formatted.reasoning) {
+        const oldReasoning = reasoningElement.innerHTML;
         reasoningElement.innerHTML = formatted.reasoning;
+        contentChanged = contentChanged || oldReasoning !== formatted.reasoning;
         
         // Make reasoning dropdown visible only if there is content
         const dropdown = tooltip.querySelector('.reasoning-dropdown');
@@ -1346,41 +1371,42 @@ function updateTooltipContent(tooltip, description, reasoning) {
         }
     }
     
-    // Auto-scroll behavior for streaming updates
+    // Handle auto-scrolling
     if (tooltip.style.display === 'block') {
-        // Check if auto-scroll is enabled for this tooltip
-        if (tooltip.dataset.autoScroll === 'true') {
-            // Use smooth scrolling behavior
-            if (!tooltip.style.scrollBehavior) {
-                tooltip.style.scrollBehavior = 'smooth';
-            }
-            
-            // Calculate if we're already near the bottom
-            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
-            
-            // Only smooth scroll if we're not already near the bottom
-            if (!isNearBottom) {
-                // Use requestAnimationFrame to ensure we're scrolling after content is rendered
+        const isStreaming = tooltip.classList.contains('streaming-tooltip');
+        const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
+        
+        // Calculate if we're near bottom before content update
+        const wasNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < (isMobileDevice() ? 40 : 55);
+        
+        // If content changed and we should auto-scroll
+        if (contentChanged && (wasNearBottom || tooltip.dataset.autoScroll === 'true')) {
+            // Use double requestAnimationFrame to ensure DOM has updated
+            requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                    tooltip.scrollTo({
-                        top: tooltip.scrollHeight,
-                        behavior: 'smooth'
-                    });
+                    // Recheck if we should still scroll (user might have scrolled during update)
+                    if (tooltip.dataset.autoScroll === 'true') {
+                        const targetScroll = tooltip.scrollHeight;
+                        tooltip.scrollTo({
+                            top: targetScroll,
+                            behavior: 'instant' // Use instant to prevent interruption
+                        });
+                        
+                        // Double-check scroll position after a small delay
+                        setTimeout(() => {
+                            if (tooltip.dataset.autoScroll === 'true') {
+                                tooltip.scrollTop = tooltip.scrollHeight;
+                            }
+                        }, 50);
+                    }
                 });
-            } else {
-                // If we're already near bottom, just jump to keep up with content
-                requestAnimationFrame(() => {
-                    tooltip.scrollTop = tooltip.scrollHeight;
-                });
-            }
-        } else {
-            // Show the scroll-to-bottom button if we're in a streaming tooltip
-            if (tooltip.classList.contains('streaming-tooltip')) {
-                const scrollButton = tooltip.querySelector('.scroll-to-bottom-button');
-                if (scrollButton && scrollButton.style.display === 'none') {
-                    scrollButton.style.display = 'block';
-                }
-            }
+            });
+        }
+        
+        // Update scroll button visibility
+        if (isStreaming && scrollButton) {
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < (isMobileDevice() ? 40 : 55);
+            scrollButton.style.display = isNearBottom ? 'none' : 'block';
         }
     }
 }
