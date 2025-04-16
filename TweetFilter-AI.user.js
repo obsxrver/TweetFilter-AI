@@ -120,7 +120,53 @@
         cursor: pointer;
         width: 120px;
         vertical-align: middle;
-        accent-color: #1d9bf0;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 6px;
+        border-radius: 3px;
+        background: linear-gradient(to right,
+            #FF0000 0%,
+            #FF8800 calc(var(--slider-percent, 50%) * 0.166),
+            #FFFF00 calc(var(--slider-percent, 50%) * 0.333),
+            #00FF00 calc(var(--slider-percent, 50%) * 0.5),
+            #00FFFF calc(var(--slider-percent, 50%) * 0.666),
+            #0000FF calc(var(--slider-percent, 50%) * 0.833),
+            #800080 var(--slider-percent, 50%),
+            #DEE2E6 var(--slider-percent, 50%),
+            #DEE2E6 100%
+        );
+    }
+
+    #tweet-filter-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #1d9bf0;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        transition: transform 0.1s;
+    }
+
+    #tweet-filter-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+    }
+
+    #tweet-filter-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #1d9bf0;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        transition: transform 0.1s;
+    }
+
+    #tweet-filter-slider::-moz-range-thumb:hover {
+        transform: scale(1.2);
     }
 
     #tweet-filter-value {
@@ -147,7 +193,8 @@
         box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
         display: flex;
         flex-direction: column;
-        width: 380px;
+        width: 90vw; /* Default width for mobile */
+        max-width: 380px; /* Default max-width for mobile */
         max-height: 85vh;
         overflow: hidden; /* Hide overflow to make the sticky header work properly */
         border: 1px solid rgba(255, 255, 255, 0.1);
@@ -715,7 +762,7 @@
         display: none;
         background-color: rgba(22, 24, 28, 0.95);
         color: #e7e9ea;
-        padding: 16px 20px;
+        padding: 0 20px 16px 20px; /* Remove top padding */
         border-radius: 12px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -730,8 +777,6 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         word-wrap: break-word;
         box-sizing: border-box !important;
-        padding-left: 25px !important;
-        padding-right: 25px !important;
     }
 
     .score-description.pinned {
@@ -742,12 +787,16 @@
     .tooltip-controls {
         display: flex !important;
         justify-content: flex-end !important;
-        margin-bottom: 15px !important;
+        margin: 0 -20px 15px -20px !important;
         position: sticky !important;
         top: 0 !important;
-        background-color: #15202b !important;
-        padding-bottom: 5px !important;
+        background-color: rgba(39, 44, 48, 0.95) !important;
+        padding: 12px 15px !important;
         z-index: 2 !important;
+        border-top-left-radius: 12px !important;
+        border-top-right-radius: 12px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(5px) !important;
     }
 
     .tooltip-pin-button,
@@ -760,7 +809,7 @@
         padding: 4px 8px !important;
         margin-left: 8px !important;
         border-radius: 4px !important;
-        transition: background-color 0.2s !important;
+        transition: all 0.2s !important;
     }
 
     .tooltip-pin-button:hover,
@@ -769,23 +818,19 @@
         color: #1d9bf0 !important;
     }
 
-    /* Description text */
+    .tooltip-pin-button:active,
+    .tooltip-copy-button:active {
+        transform: scale(0.95) !important;
+    }
+
+    /* Description text container needs padding to account for sticky header */
     .description-text {
         margin: 0 0 25px 0 !important;
         font-size: 15px !important;
         line-height: 1.6 !important;
         max-width: 100% !important;
         overflow-wrap: break-word !important;
-        padding: 5px 10px !important;
-        & strong, & em, & br {
-            display: inline-block !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            line-height: inherit !important;
-        }
-        & br {
-            margin-bottom: 0.5em !important;
-        }
+        padding: 5px 0 !important;
     }
 
     .tooltip-bottom-spacer {
@@ -924,11 +969,19 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        justify-content: space-between;
     }
     
     .sort-container label {
         font-size: 14px;
         color: var(--text-color);
+        white-space: nowrap;
+    }
+
+    .sort-container .controls-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
     }
     
     .sort-container select {
@@ -939,6 +992,7 @@
         color: #e7e9ea;
         font-size: 14px;
         cursor: pointer;
+        min-width: 120px;
     }
     
     .sort-container select:hover {
@@ -950,11 +1004,91 @@
         border-color: #1d9bf0;
         box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
     }
-    
+
+    .sort-toggle {
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .sort-toggle:hover {
+        border-color: #1d9bf0;
+        background-color: rgba(29, 155, 240, 0.1);
+    }
+
+    .sort-toggle.active {
+        background-color: rgba(29, 155, 240, 0.2);
+        border-color: #1d9bf0;
+    }
+
     /* Dropdown option styling */
     .sort-container select option {
         background-color: rgba(39, 44, 48, 0.95);
         color: #e7e9ea;
+    }
+
+    /* Desktop-specific width */
+    @media (min-width: 601px) {
+        #settings-container {
+            width: 480px;
+            max-width: 480px;
+        }
+    }
+
+    /* Handle input styling */
+    #handle-input {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(39, 44, 48, 0.95);
+        color: #e7e9ea;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        transition: border-color 0.2s;
+        min-width: 200px;
+    }
+
+    #handle-input:focus {
+        outline: none;
+        border-color: #1d9bf0;
+        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
+    }
+
+    #handle-input::placeholder {
+        color: rgba(231, 233, 234, 0.5);
+    }
+
+    .handle-input-container {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 5px;
+        border-radius: 8px;
+        background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    .add-handle-btn {
+        background-color: #1d9bf0;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+        transition: background-color 0.2s;
+        white-space: nowrap;
+    }
+    
+    .add-handle-btn:hover {
+        background-color: #1a8cd8;
     }
 </style>
 <div id="tweetfilter-root-container">
@@ -1014,39 +1148,58 @@
                     <span style="font-size: 14px;">🧠</span> Tweet Rating Model
                 </div>
                 <div class="section-description">
-                    Hint: If you want to rate tweets with images, you need to select an image model.
-                </div>
-                <div class="sort-container">
-                    <label for="model-sort-order">Sort models by: </label>
-                    <select id="model-sort-order" data-setting="modelSortOrder">
-                        <option value="price-low-to-high">Price (Low to High)</option>
-                        <option value="price-high-to-low">Price (High to Low)</option>
-                        <option value="throughput-high-to-low">Throughput (High to Low)</option>
-                        <option value="throughput-low-to-high">Throughput (Low to High)</option>
-                        <option value="latency-low-to-high">Latency (Low to High)</option>
-                        <option value="latency-high-to-low">Latency (High to Low)</option>
-                    </select>
+                    The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.
                 </div>
                 <div class="select-container" id="model-select-container">
                 </div>
-                <div class="advanced-options" id="rating-advanced-options">
-                    <div class="advanced-toggle" data-toggle="rating-advanced-content">
-                        <div class="advanced-toggle-title">Advanced Options</div>
+
+                <div class="advanced-options">
+                    <div class="advanced-toggle" data-toggle="model-options-content">
+                        <div class="advanced-toggle-title">Options</div>
                         <div class="advanced-toggle-icon">▼</div>
                     </div>
-                    <div class="advanced-content" id="rating-advanced-content">
+                    <div class="advanced-content" id="model-options-content">
+                        <div class="sort-container">
+                            <label for="model-sort-order">Sort models by: </label>
+                            <div class="controls-group">
+                                <select id="model-sort-order" data-setting="modelSortOrder">
+                                    <option value="pricing-low-to-high">Price</option>
+                                    <option value="latency-low-to-high">Latency</option>
+                                    <option value="throughput-high-to-low">Throughput</option>
+                                    <option value="top-weekly">Popularity</option>
+                                    <option value="">Age</option>
+                                </select>
+                                <button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button>
+                            </div>
+                        </div>
+                        <div class="sort-container">
+                            <label for="provider-sort">API Endpoint Priority: </label>
+                            <select id="provider-sort" data-setting="providerSort">
+                                <option value="">Default (load-balanced)</option>
+                                <option value="throughput">Throughput</option>
+                                <option value="latency">Latency</option>
+                                <option value="price">Price</option>
+                            </select>
+                        </div>
+                        <div class="sort-container">
+                            <label>
+                                <input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>
+                                Show Free Models
+                            </label>
+                        </div>
+
                         <div class="parameter-row" data-param-name="modelTemperature">
                             <div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;">
+                                <input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;">
                             </div>
                         </div>
                         <div class="parameter-row" data-param-name="modelTopP">
                             <div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
+                                <input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;">
                             </div>
                         </div>
                         <div class="parameter-row" data-param-name="maxTokens">
@@ -1066,8 +1219,9 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div>
-                <div class="section-description">This model generates <strong>text descriptions</strong> of images, which are then sent to the rating model above. If you've selected an image-capable model (🖼️) as your main rating model above, you can disable this to process images directly.</div>
+                <div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div>
                 <div class="toggle-row">
                     <div class="toggle-label">Enable Image Descriptions</div>
                     <label class="toggle-switch">
@@ -1076,12 +1230,11 @@
                     </label>
                 </div>
                 <div id="image-model-container" style="display: none;">
-                    <div class="section-description">Select a model with vision capabilities to describe images in tweets.</div>
                     <div class="select-container" id="image-model-select-container">
                     </div>
                     <div class="advanced-options" id="image-advanced-options">
                         <div class="advanced-toggle" data-toggle="image-advanced-content">
-                            <div class="advanced-toggle-title">Advanced Options</div>
+                            <div class="advanced-toggle-title">Options</div>
                             <div class="advanced-toggle-icon">▼</div>
                         </div>
                         <div class="advanced-content" id="image-advanced-content">
@@ -1104,7 +1257,7 @@
                 </div>
             </div>
             <div id="instructions-tab" class="tab-content">
-                <div class="section-title">Custom Tweet Rating Instructions</div>
+                <div class="section-title">Custom Instructions</div>
                 <div class="section-description">Add custom instructions for how the model should score tweets:</div>
                 <textarea id="user-instructions" placeholder="Examples:
                 - Give high scores to tweets about technology
@@ -1113,7 +1266,7 @@
                 <button class="settings-button" data-action="save-instructions">Save Instructions</button>
                 <div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div>
                 <div class="section-description">Add Twitter handles to automatically rate as 10/10:</div>
-                <div style="display: flex; align-items: center; gap: 5px;">
+                <div class="handle-input-container">
                     <input id="handle-input" type="text" placeholder="Twitter handle (without @)">
                     <button class="add-handle-btn" data-action="add-handle">Add</button>
                 </div>
@@ -2232,8 +2385,12 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
+let listedModels = []; // Filtered list of models actually shown in UI
 let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
 let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
+let modelSortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+let showFreeModels = GM_getValue('showFreeModels', true);
+let providerSort = GM_getValue('providerSort', ''); // Default to load-balanced
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -2273,10 +2430,10 @@ SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
 If one of the above is not present, the program will not be able to parse the response and will return an error.
 `
-let modelTemperature = GM_getValue('modelTemperature', 0.5);
-let modelTopP = GM_getValue('modelTopP', 0.9);
-let imageModelTemperature = GM_getValue('imageModelTemperature', 0.5);
-let imageModelTopP = GM_getValue('imageModelTopP', 0.9);
+let modelTemperature = GM_getValue('modelTemperature', 1);
+let modelTopP = GM_getValue('modelTopP', 1);
+let imageModelTemperature = GM_getValue('imageModelTemperature', 1);
+let imageModelTopP = GM_getValue('imageModelTopP', 1);
 let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
 let imageModelMaxTokens = GM_getValue('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
 //let menuHTML= "";
@@ -2788,12 +2945,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     request.top_p = modelTopP;
     request.max_tokens = maxTokens;
 
-    // Add provider settings
-    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-    request.provider = {
-        sort: sortOrder.split('-')[0],
-        allow_fallbacks: true,
-    };  
+    // Add provider settings only if a specific sort is selected
+    if (providerSort) {
+        request.provider = {
+            sort: providerSort,
+            allow_fallbacks: true
+        };
+    }
     // Check if streaming is enabled
     const useStreaming = GM_getValue('enableStreaming', false);
     
@@ -3200,15 +3358,17 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
             temperature: imageModelTemperature,
             top_p: imageModelTopP,
             max_tokens: maxTokens,
-            provider: {
-                sort: GM_getValue('modelSortOrder', 'throughput-high-to-low').split('-')[0],
-                allow_fallbacks: true
-            }
         };
         if (selectedImageModel.includes('gemini')) {
             request.config = {
                 safetySettings: safetySettings,
             }
+        }
+        if (providerSort) {
+            request.provider = {
+                sort: providerSort,
+                allow_fallbacks: true
+            };
         }
         const result = await getCompletion(request, apiKey);
         if (!result.error && result.data?.choices?.[0]?.message?.content) {
@@ -3238,14 +3398,21 @@ function fetchAvailableModels() {
         url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
         headers: {
             "Authorization": `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter", // Use a more generic referer if preferred
+            "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
             "X-Title": "Tweet Rating Tool"
         },
         onload: function (response) {
             try {
                 const data = JSON.parse(response.responseText);
                 if (data.data && data.data.models) {
-                    availableModels = data.data.models || [];
+                    //filter all models that don't have key "endpoint" or endpoint is null
+                    let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
+                    // Reverse initial order for latency sorting to match High-Low expectations
+                    if (sortOrder === 'latency-low-to-high') {
+                        filteredModels.reverse();
+                    }
+                    availableModels = filteredModels || [];
+                    listedModels = [...availableModels]; // Initialize listedModels
                     refreshModelsUI();
                     showStatus('Models updated!');
                 }
@@ -3502,7 +3669,7 @@ function handleMutations(mutationsList) {
  * @param {Element} tweetArticle - The tweet element.
  */
 function filterSingleTweet(tweetArticle) {
-    const score = parseInt(tweetArticle.dataset.sloppinessScore || '1', 10);
+    const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
     // Update the indicator based on the tweet's rating status
     setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus || 'rated', tweetArticle.dataset.ratingDescription);
     // If the tweet is still pending a rating, keep it visible
@@ -4938,6 +5105,49 @@ function initializeEventListeners(uiContainer) {
     // Close custom selects when clicking outside
     document.addEventListener('click', closeAllSelectBoxes);
 
+    // Add handlers for new controls
+    const showFreeModelsCheckbox = uiContainer.querySelector('#show-free-models');
+    if (showFreeModelsCheckbox) {
+        showFreeModelsCheckbox.addEventListener('change', function() {
+            showFreeModels = this.checked;
+            GM_setValue('showFreeModels', showFreeModels);
+            refreshModelsUI();
+        });
+    }
+
+    const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
+    if (sortDirectionBtn) {
+        sortDirectionBtn.addEventListener('click', function() {
+            const currentDirection = GM_getValue('sortDirection', 'default');
+            const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
+            GM_setValue('sortDirection', newDirection);
+            this.dataset.value = newDirection;
+            refreshModelsUI();
+        });
+    }
+
+    const modelSortSelect = uiContainer.querySelector('#model-sort-order');
+    if (modelSortSelect) {
+        modelSortSelect.addEventListener('change', function() {
+            GM_setValue('modelSortOrder', this.value);
+            // Set default direction for latency and age
+            if (this.value === 'latency-low-to-high') {
+                GM_setValue('sortDirection', 'default'); // Show lowest latency first
+            } else if (this.value === '') { // Age
+                GM_setValue('sortDirection', 'default'); // Show newest first
+            }
+            refreshModelsUI();
+        });
+    }
+
+    const providerSortSelect = uiContainer.querySelector('#provider-sort');
+    if (providerSortSelect) {
+        providerSortSelect.addEventListener('change', function() {
+            providerSort = this.value;
+            GM_setValue('providerSort', providerSort);
+        });
+    }
+
 }
 
 // --- Event Handlers ---
@@ -5099,6 +5309,11 @@ function handleFilterSliderChange(slider) {
     if (valueDisplay) {
         valueDisplay.textContent = currentFilterThreshold.toString();
     }
+    
+    // Update the gradient position based on the slider value
+    const percentage = (currentFilterThreshold / 10) * 100;
+    slider.style.setProperty('--slider-percent', `${percentage}%`);
+    
     GM_setValue('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
@@ -5197,6 +5412,9 @@ function refreshSettingsUI() {
     if (filterSlider && filterValueDisplay) {
         filterSlider.value = currentFilterThreshold.toString();
         filterValueDisplay.textContent = currentFilterThreshold.toString();
+        // Initialize the gradient position
+        const percentage = (currentFilterThreshold / 10) * 100;
+        filterSlider.style.setProperty('--slider-percent', `${percentage}%`);
     }
 
     // Refresh dynamically populated lists/dropdowns
@@ -5215,7 +5433,7 @@ function refreshSettingsUI() {
     document.querySelectorAll('.advanced-toggle-icon.expanded').forEach(icon => {
         // Ensure icon matches state if CSS defaults to expanded
         if (!icon.closest('.advanced-toggle')?.nextElementSibling?.classList.contains('expanded')) {
-           icon.classList.remove('expanded');
+            icon.classList.remove('expanded');
         }
     });
 }
@@ -5264,45 +5482,77 @@ function refreshModelsUI() {
     const modelSelectContainer = document.getElementById('model-select-container');
     const imageModelSelectContainer = document.getElementById('image-model-select-container');
 
-    const models = availableModels || []; // Ensure availableModels is an array
+    // Filter and sort models
+    listedModels = [...availableModels];
+    
+    // Filter free models if needed
+    if (!showFreeModels) {
+        listedModels = listedModels.filter(model => !model.slug.endsWith(':free'));
+    }
+
+    // Sort models based on current sort order and direction
+    const sortDirection = GM_getValue('sortDirection', 'default');
+    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+    
+    // Update toggle button text based on sort order
+    const toggleBtn = document.getElementById('sort-direction');
+    if (toggleBtn) {
+        switch(sortOrder) {
+            case 'latency-low-to-high':
+                toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
+                if (sortDirection === 'reverse') listedModels.reverse();
+                break;
+            case '': // Age
+                toggleBtn.textContent = sortDirection === 'default' ? 'New-Old' : 'Old-New';
+                if (sortDirection === 'reverse') listedModels.reverse();
+                break;
+            case 'top-weekly':
+                toggleBtn.textContent = sortDirection === 'default' ? 'Most Popular' : 'Least Popular';
+                if (sortDirection === 'reverse') listedModels.reverse();
+                break;
+            default:
+                toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
+                if (sortDirection === 'reverse') listedModels.reverse();
+        }
+    }
 
     // Update main model selector
     if (modelSelectContainer) {
-        modelSelectContainer.innerHTML = ''; // Clear current
-    createCustomSelect(
-        modelSelectContainer,
-            'model-selector', // ID for the custom select element
-            models.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
-            selectedModel, // Current selected value
-            (newValue) => { // onChange callback
-            selectedModel = newValue;
-            GM_setValue('selectedModel', selectedModel);
-            showStatus('Rating model updated');
-        },
-            'Search rating models...' // Placeholder
+        modelSelectContainer.innerHTML = '';
+        createCustomSelect(
+            modelSelectContainer,
+            'model-selector',
+            listedModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            selectedModel,
+            (newValue) => {
+                selectedModel = newValue;
+                GM_setValue('selectedModel', selectedModel);
+                showStatus('Rating model updated');
+            },
+            'Search rating models...'
         );
     }
 
     // Update image model selector
     if (imageModelSelectContainer) {
-        const visionModels = models.filter(model =>
+        const visionModels = listedModels.filter(model =>
             model.input_modalities?.includes('image') ||
             model.architecture?.input_modalities?.includes('image') ||
             model.architecture?.modality?.includes('image')
         );
 
-        imageModelSelectContainer.innerHTML = ''; // Clear current
-    createCustomSelect(
-        imageModelSelectContainer,
-            'image-model-selector', // ID for the custom select element
+        imageModelSelectContainer.innerHTML = '';
+        createCustomSelect(
+            imageModelSelectContainer,
+            'image-model-selector',
             visionModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
-            selectedImageModel, // Current selected value
-            (newValue) => { // onChange callback
-            selectedImageModel = newValue;
-            GM_setValue('selectedImageModel', selectedImageModel);
-            showStatus('Image model updated');
-        },
-            'Search vision models...' // Placeholder
+            selectedImageModel,
+            (newValue) => {
+                selectedImageModel = newValue;
+                GM_setValue('selectedImageModel', selectedImageModel);
+                showStatus('Image model updated');
+            },
+            'Search vision models...'
         );
     }
 }
@@ -5595,12 +5845,20 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         scrollButton.style.display = 'none'; // Hidden by default
         scrollButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Initial scroll
-            tooltip.scrollTop = tooltip.scrollHeight;
-            // Second scroll after a short delay to catch any new content
+            // Enable smooth scrolling
+            tooltip.style.scrollBehavior = 'smooth';
+            // Smooth scroll to bottom
+            tooltip.scrollTo({
+                top: tooltip.scrollHeight,
+                behavior: 'smooth'
+            });
+            // Second scroll after animation completes to catch any new content
             setTimeout(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-            }, 150);
+                tooltip.scrollTo({
+                    top: tooltip.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 500);
             tooltip.dataset.autoScroll = 'true';
             scrollButton.style.display = 'none';
         });
@@ -5617,7 +5875,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         // Add scroll event to detect when user manually scrolls
         tooltip.addEventListener('scroll', () => {
             // Check if we're near the bottom
-            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < isMobileDevice()? 40: 30;
             
             if (!isNearBottom && tooltip.dataset.autoScroll === 'true') {
                 // User has scrolled up, disable auto-scroll
@@ -5897,7 +6155,7 @@ function getScoreTooltip() {
 
 /** Formats description text for the tooltip. */
 function formatTooltipDescription(description, reasoning = "") {
-    if (!description) return '';
+    description=description||"*waiting for content...*";
     
     // Add markdown-style formatting
     description = description.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>'); // Bold
@@ -5964,14 +6222,29 @@ function updateTooltipContent(tooltip, description, reasoning) {
     if (tooltip.style.display === 'block') {
         // Check if auto-scroll is enabled for this tooltip
         if (tooltip.dataset.autoScroll === 'true') {
-            // Use requestAnimationFrame to ensure we're scrolling after content is rendered
-            requestAnimationFrame(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-                // Second scroll after a short delay to catch any new content
-                setTimeout(() => {
+            // Use smooth scrolling behavior
+            if (!tooltip.style.scrollBehavior) {
+                tooltip.style.scrollBehavior = 'smooth';
+            }
+            
+            // Calculate if we're already near the bottom
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+            
+            // Only smooth scroll if we're not already near the bottom
+            if (!isNearBottom) {
+                // Use requestAnimationFrame to ensure we're scrolling after content is rendered
+                requestAnimationFrame(() => {
+                    tooltip.scrollTo({
+                        top: tooltip.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                });
+            } else {
+                // If we're already near bottom, just jump to keep up with content
+                requestAnimationFrame(() => {
                     tooltip.scrollTop = tooltip.scrollHeight;
-                }, 150);
-            });
+                });
+            }
         } else {
             // Show the scroll-to-bottom button if we're in a streaming tooltip
             if (tooltip.classList.contains('streaming-tooltip')) {
@@ -6165,10 +6438,10 @@ function exportSettings() {
             selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
             enableStreaming: GM_getValue('enableStreaming', true),
-            modelTemperature: GM_getValue('modelTemperature', 0.5),
-            modelTopP: GM_getValue('modelTopP', 0.9),
-            imageModelTemperature: GM_getValue('imageModelTemperature', 0.5),
-            imageModelTopP: GM_getValue('imageModelTopP', 0.9),
+            modelTemperature: GM_getValue('modelTemperature', 1),
+            modelTopP: GM_getValue('modelTopP', 1),
+            imageModelTemperature: GM_getValue('imageModelTemperature', 1),
+            imageModelTopP: GM_getValue('imageModelTopP', 1),
             maxTokens: GM_getValue('maxTokens', 0),
             filterThreshold: GM_getValue('filterThreshold', 1),
             userDefinedInstructions: GM_getValue('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),

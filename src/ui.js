@@ -231,6 +231,49 @@ function initializeEventListeners(uiContainer) {
     // Close custom selects when clicking outside
     document.addEventListener('click', closeAllSelectBoxes);
 
+    // Add handlers for new controls
+    const showFreeModelsCheckbox = uiContainer.querySelector('#show-free-models');
+    if (showFreeModelsCheckbox) {
+        showFreeModelsCheckbox.addEventListener('change', function() {
+            showFreeModels = this.checked;
+            GM_setValue('showFreeModels', showFreeModels);
+            refreshModelsUI();
+        });
+    }
+
+    const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
+    if (sortDirectionBtn) {
+        sortDirectionBtn.addEventListener('click', function() {
+            const currentDirection = GM_getValue('sortDirection', 'default');
+            const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
+            GM_setValue('sortDirection', newDirection);
+            this.dataset.value = newDirection;
+            refreshModelsUI();
+        });
+    }
+
+    const modelSortSelect = uiContainer.querySelector('#model-sort-order');
+    if (modelSortSelect) {
+        modelSortSelect.addEventListener('change', function() {
+            GM_setValue('modelSortOrder', this.value);
+            // Set default direction for latency and age
+            if (this.value === 'latency-low-to-high') {
+                GM_setValue('sortDirection', 'default'); // Show lowest latency first
+            } else if (this.value === '') { // Age
+                GM_setValue('sortDirection', 'default'); // Show newest first
+            }
+            refreshModelsUI();
+        });
+    }
+
+    const providerSortSelect = uiContainer.querySelector('#provider-sort');
+    if (providerSortSelect) {
+        providerSortSelect.addEventListener('change', function() {
+            providerSort = this.value;
+            GM_setValue('providerSort', providerSort);
+        });
+    }
+
     console.log('UI events wired.');
 }
 
@@ -394,6 +437,11 @@ function handleFilterSliderChange(slider) {
     if (valueDisplay) {
         valueDisplay.textContent = currentFilterThreshold.toString();
     }
+    
+    // Update the gradient position based on the slider value
+    const percentage = (currentFilterThreshold / 10) * 100;
+    slider.style.setProperty('--slider-percent', `${percentage}%`);
+    
     GM_setValue('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
@@ -492,6 +540,9 @@ function refreshSettingsUI() {
     if (filterSlider && filterValueDisplay) {
         filterSlider.value = currentFilterThreshold.toString();
         filterValueDisplay.textContent = currentFilterThreshold.toString();
+        // Initialize the gradient position
+        const percentage = (currentFilterThreshold / 10) * 100;
+        filterSlider.style.setProperty('--slider-percent', `${percentage}%`);
     }
 
     // Refresh dynamically populated lists/dropdowns
@@ -510,7 +561,7 @@ function refreshSettingsUI() {
     document.querySelectorAll('.advanced-toggle-icon.expanded').forEach(icon => {
         // Ensure icon matches state if CSS defaults to expanded
         if (!icon.closest('.advanced-toggle')?.nextElementSibling?.classList.contains('expanded')) {
-           icon.classList.remove('expanded');
+            icon.classList.remove('expanded');
         }
     });
 }
@@ -559,45 +610,77 @@ function refreshModelsUI() {
     const modelSelectContainer = document.getElementById('model-select-container');
     const imageModelSelectContainer = document.getElementById('image-model-select-container');
 
-    const models = availableModels || []; // Ensure availableModels is an array
+    // Filter and sort models
+    listedModels = [...availableModels];
+    
+    // Filter free models if needed
+    if (!showFreeModels) {
+        listedModels = listedModels.filter(model => !model.slug.endsWith(':free'));
+    }
+
+    // Sort models based on current sort order and direction
+    const sortDirection = GM_getValue('sortDirection', 'default');
+    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+    
+    // Update toggle button text based on sort order
+    const toggleBtn = document.getElementById('sort-direction');
+    if (toggleBtn) {
+        switch(sortOrder) {
+            case 'latency-low-to-high':
+                toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
+                if (sortDirection === 'reverse') listedModels.reverse();
+                break;
+            case '': // Age
+                toggleBtn.textContent = sortDirection === 'default' ? 'New-Old' : 'Old-New';
+                if (sortDirection === 'reverse') listedModels.reverse();
+                break;
+            case 'top-weekly':
+                toggleBtn.textContent = sortDirection === 'default' ? 'Most Popular' : 'Least Popular';
+                if (sortDirection === 'reverse') listedModels.reverse();
+                break;
+            default:
+                toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
+                if (sortDirection === 'reverse') listedModels.reverse();
+        }
+    }
 
     // Update main model selector
     if (modelSelectContainer) {
-        modelSelectContainer.innerHTML = ''; // Clear current
-    createCustomSelect(
-        modelSelectContainer,
-            'model-selector', // ID for the custom select element
-            models.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
-            selectedModel, // Current selected value
-            (newValue) => { // onChange callback
-            selectedModel = newValue;
-            GM_setValue('selectedModel', selectedModel);
-            showStatus('Rating model updated');
-        },
-            'Search rating models...' // Placeholder
+        modelSelectContainer.innerHTML = '';
+        createCustomSelect(
+            modelSelectContainer,
+            'model-selector',
+            listedModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            selectedModel,
+            (newValue) => {
+                selectedModel = newValue;
+                GM_setValue('selectedModel', selectedModel);
+                showStatus('Rating model updated');
+            },
+            'Search rating models...'
         );
     }
 
     // Update image model selector
     if (imageModelSelectContainer) {
-        const visionModels = models.filter(model =>
+        const visionModels = listedModels.filter(model =>
             model.input_modalities?.includes('image') ||
             model.architecture?.input_modalities?.includes('image') ||
             model.architecture?.modality?.includes('image')
         );
 
-        imageModelSelectContainer.innerHTML = ''; // Clear current
-    createCustomSelect(
-        imageModelSelectContainer,
-            'image-model-selector', // ID for the custom select element
+        imageModelSelectContainer.innerHTML = '';
+        createCustomSelect(
+            imageModelSelectContainer,
+            'image-model-selector',
             visionModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
-            selectedImageModel, // Current selected value
-            (newValue) => { // onChange callback
-            selectedImageModel = newValue;
-            GM_setValue('selectedImageModel', selectedImageModel);
-            showStatus('Image model updated');
-        },
-            'Search vision models...' // Placeholder
+            selectedImageModel,
+            (newValue) => {
+                selectedImageModel = newValue;
+                GM_setValue('selectedImageModel', selectedImageModel);
+                showStatus('Image model updated');
+            },
+            'Search vision models...'
         );
     }
 }
@@ -890,12 +973,20 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         scrollButton.style.display = 'none'; // Hidden by default
         scrollButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            // Initial scroll
-            tooltip.scrollTop = tooltip.scrollHeight;
-            // Second scroll after a short delay to catch any new content
+            // Enable smooth scrolling
+            tooltip.style.scrollBehavior = 'smooth';
+            // Smooth scroll to bottom
+            tooltip.scrollTo({
+                top: tooltip.scrollHeight,
+                behavior: 'smooth'
+            });
+            // Second scroll after animation completes to catch any new content
             setTimeout(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-            }, 150);
+                tooltip.scrollTo({
+                    top: tooltip.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 500);
             tooltip.dataset.autoScroll = 'true';
             scrollButton.style.display = 'none';
         });
@@ -912,7 +1003,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
         // Add scroll event to detect when user manually scrolls
         tooltip.addEventListener('scroll', () => {
             // Check if we're near the bottom
-            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < isMobileDevice()? 40: 30;
             
             if (!isNearBottom && tooltip.dataset.autoScroll === 'true') {
                 // User has scrolled up, disable auto-scroll
@@ -1259,14 +1350,29 @@ function updateTooltipContent(tooltip, description, reasoning) {
     if (tooltip.style.display === 'block') {
         // Check if auto-scroll is enabled for this tooltip
         if (tooltip.dataset.autoScroll === 'true') {
-            // Use requestAnimationFrame to ensure we're scrolling after content is rendered
-            requestAnimationFrame(() => {
-                tooltip.scrollTop = tooltip.scrollHeight;
-                // Second scroll after a short delay to catch any new content
-                setTimeout(() => {
+            // Use smooth scrolling behavior
+            if (!tooltip.style.scrollBehavior) {
+                tooltip.style.scrollBehavior = 'smooth';
+            }
+            
+            // Calculate if we're already near the bottom
+            const isNearBottom = tooltip.scrollHeight - tooltip.scrollTop - tooltip.clientHeight < 30;
+            
+            // Only smooth scroll if we're not already near the bottom
+            if (!isNearBottom) {
+                // Use requestAnimationFrame to ensure we're scrolling after content is rendered
+                requestAnimationFrame(() => {
+                    tooltip.scrollTo({
+                        top: tooltip.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                });
+            } else {
+                // If we're already near bottom, just jump to keep up with content
+                requestAnimationFrame(() => {
                     tooltip.scrollTop = tooltip.scrollHeight;
-                }, 150);
-            });
+                });
+            }
         } else {
             // Show the scroll-to-bottom button if we're in a streaming tooltip
             if (tooltip.classList.contains('streaming-tooltip')) {
@@ -1460,10 +1566,10 @@ function exportSettings() {
             selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
             enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
             enableStreaming: GM_getValue('enableStreaming', true),
-            modelTemperature: GM_getValue('modelTemperature', 0.5),
-            modelTopP: GM_getValue('modelTopP', 0.9),
-            imageModelTemperature: GM_getValue('imageModelTemperature', 0.5),
-            imageModelTopP: GM_getValue('imageModelTopP', 0.9),
+            modelTemperature: GM_getValue('modelTemperature', 1),
+            modelTopP: GM_getValue('modelTopP', 1),
+            imageModelTemperature: GM_getValue('imageModelTemperature', 1),
+            imageModelTopP: GM_getValue('imageModelTopP', 1),
             maxTokens: GM_getValue('maxTokens', 0),
             filterThreshold: GM_getValue('filterThreshold', 1),
             userDefinedInstructions: GM_getValue('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),

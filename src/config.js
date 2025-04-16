@@ -77,8 +77,12 @@ let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
+let listedModels = []; // Filtered list of models actually shown in UI
 let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
 let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
+let modelSortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+let showFreeModels = GM_getValue('showFreeModels', true);
+let providerSort = GM_getValue('providerSort', ''); // Default to load-balanced
 let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = GM_getValue('tweetRatings', '{}');
@@ -119,10 +123,10 @@ SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
 If one of the above is not present, the program will not be able to parse the response and will return an error.
 `
-let modelTemperature = GM_getValue('modelTemperature', 0.5);
-let modelTopP = GM_getValue('modelTopP', 0.9);
-let imageModelTemperature = GM_getValue('imageModelTemperature', 0.5);
-let imageModelTopP = GM_getValue('imageModelTopP', 0.9);
+let modelTemperature = GM_getValue('modelTemperature', 1);
+let modelTopP = GM_getValue('modelTopP', 1);
+let imageModelTemperature = GM_getValue('imageModelTemperature', 1);
+let imageModelTopP = GM_getValue('imageModelTopP', 1);
 let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
 let imageModelMaxTokens = GM_getValue('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
 //let menuHTML= "";

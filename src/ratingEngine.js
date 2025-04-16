@@ -4,7 +4,7 @@
  * @param {Element} tweetArticle - The tweet element.
  */
 function filterSingleTweet(tweetArticle) {
-    const score = parseInt(tweetArticle.dataset.sloppinessScore || '1', 10);
+    const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
     // Update the indicator based on the tweet's rating status
     setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus || 'rated', tweetArticle.dataset.ratingDescription);
     // If the tweet is still pending a rating, keep it visible
