@@ -17,6 +17,7 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/backends/InstructionsHistory.js
 // @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css
 // @run-at       document-idle
