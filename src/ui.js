@@ -133,12 +133,6 @@ function initializeEventListeners(uiContainer) {
                 case 'clear-cache':
                     clearTweetRatingsAndRefreshUI();
                     break;
-                case 'export-settings':
-                    exportSettings();
-                    break;
-                case 'import-settings':
-                    importSettings();
-                    break;
                 case 'reset-settings':
                     resetSettings();
                     break;
@@ -302,9 +296,8 @@ function saveApiKey() {
 /** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
-        // Clear tweet ratings cache
-        Object.keys(tweetIDRatingCache).forEach(key => delete tweetIDRatingCache[key]);
-        browserSet('tweetRatings', '{}');
+        // Clear all ratings
+        tweetCache.clear();
         
         // Clear thread relationships cache
         if (window.threadRelationships) {
@@ -316,18 +309,23 @@ function clearTweetRatingsAndRefreshUI() {
         showStatus('All cached ratings and thread relationships cleared!');
         console.log('Cleared all tweet ratings and thread relationships');
 
-
-        // Re-process visible tweets
+        // Reset all tweet elements to unrated state and reprocess them
         if (observedTargetNode) {
-            observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(tweet => {
-                tweet.dataset.sloppinessScore = ''; // Clear potential old score attribute
-                delete tweet.dataset.cachedRating;
-                delete tweet.dataset.blacklisted;
+            observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
+                tweet.removeAttribute('data-sloppiness-score');
+                tweet.removeAttribute('data-rating-status');
+                tweet.removeAttribute('data-rating-description');
+                tweet.removeAttribute('data-cached-rating');
+                const indicator = tweet.querySelector('.score-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+                // Remove from processed set and schedule reprocessing
                 processedTweets.delete(getTweetID(tweet));
                 scheduleTweetProcessing(tweet);
             });
         }
-        
+
         // Reset thread mapping on any conversation containers
         document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
             delete conversation.dataset.threadMapping;
@@ -336,6 +334,9 @@ function clearTweetRatingsAndRefreshUI() {
             delete conversation.dataset.threadHist;
             delete conversation.dataset.threadMediaUrls;
         });
+
+        // Update UI elements
+        updateCacheStatsUI();
     }
 }
 
@@ -1411,9 +1412,9 @@ function handleIndicatorMouseEnter(event) {
     tooltip.style.display = 'block';
     
     // Check if we have cached streaming content for this tweet
-    if (tweetId && tweetIDRatingCache[tweetId]?.description) {
-        const reasoning = tweetIDRatingCache[tweetId].reasoning || "";
-        const formatted = formatTooltipDescription(tweetIDRatingCache[tweetId].description, reasoning);
+    if (tweetId && tweetCache.has(tweetId) && tweetCache.get(tweetId).description) {
+        const reasoning = tweetCache.get(tweetId).reasoning || "";
+        const formatted = formatTooltipDescription(tweetCache.get(tweetId).description, reasoning);
         
         // Update content using the proper elements
         const descriptionElement = tooltip.querySelector('.description-text');
@@ -1433,7 +1434,7 @@ function handleIndicatorMouseEnter(event) {
         }
         
         // Add streaming class if status is streaming
-        if (tweetArticle?.dataset.ratingStatus === 'streaming' || tweetIDRatingCache[tweetId].streaming === true) {
+        if (tweetArticle?.dataset.ratingStatus === 'streaming' || tweetCache.get(tweetId).streaming === true) {
             tooltip.classList.add('streaming-tooltip');
             
             // Reset auto-scroll state for streaming tooltips when they're first shown
@@ -1561,107 +1562,6 @@ function initializeTooltipCleanup() {
     setInterval(cleanupOrphanedTooltips, 10000);
 }
 
-// --- Settings Import/Export (Simplified) ---
-
-/**
- * Exports all settings and cache to a JSON file.
- */
-function exportSettings() {
-    try {
-        const settingsToExport = {
-            apiKey: browserGet('openrouter-api-key', ''),
-            selectedModel: browserGet('selectedModel', 'openai/gpt-4.1-nano'),
-            selectedImageModel: browserGet('selectedImageModel', 'openai/gpt-4.1-nano'),
-            enableImageDescriptions: browserGet('enableImageDescriptions', false),
-            enableStreaming: browserGet('enableStreaming', true),
-            modelTemperature: browserGet('modelTemperature', 1),
-            modelTopP: browserGet('modelTopP', 1),
-            imageModelTemperature: browserGet('imageModelTemperature', 1),
-            imageModelTopP: browserGet('imageModelTopP', 1),
-            maxTokens: browserGet('maxTokens', 0),
-            filterThreshold: browserGet('filterThreshold', 1),
-            userDefinedInstructions: browserGet('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),
-            modelSortOrder: browserGet('modelSortOrder', 'throughput-high-to-low')
-        };
-
-        const data = {
-            version: VERSION,
-            date: new Date().toISOString(),
-            settings: settingsToExport,
-            blacklistedHandles: blacklistedHandles || [],
-            tweetRatings: tweetIDRatingCache || {}
-        };
-
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `tweetfilter-ai-backup-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showStatus('Settings exported successfully!');
-    } catch (error) {
-        console.error('Error exporting settings:', error);
-        showStatus('Error exporting settings: ' + error.message);
-    }
-}
-
-/**
- * Imports settings and cache from a JSON file.
- */
-function importSettings() {
-    try {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const data = JSON.parse(event.target.result);
-                    if (!data.settings) throw new Error('Invalid backup file format');
-
-                    // Import settings
-                    for (const key in data.settings) {
-                        if (window[key] !== undefined) {
-                            window[key] = data.settings[key];
-                        }
-                        browserSet(key, data.settings[key]);
-                    }
-
-                    // Import blacklisted handles
-                    if (data.blacklistedHandles && Array.isArray(data.blacklistedHandles)) {
-                        blacklistedHandles = data.blacklistedHandles;
-                        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
-                    }
-
-                    // Import tweet ratings (merge with existing)
-                    if (data.tweetRatings && typeof data.tweetRatings === 'object') {
-                        Object.assign(tweetIDRatingCache, data.tweetRatings);
-                        saveTweetRatings();
-                    }
-
-                    refreshSettingsUI();
-                    fetchAvailableModels();
-                    showStatus('Settings imported successfully!');
-
-                } catch (error) {
-                    console.error('Error parsing settings file:', error);
-                    showStatus('Error importing settings: ' + error.message);
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
-    } catch (error) {
-        console.error('Error importing settings:', error);
-        showStatus('Error importing settings: ' + error.message);
-    }
-}
 
 /**
  * Resets all configurable settings to their default values.
@@ -1820,16 +1720,7 @@ function initializeFloatingCacheStats() {
         resetFadeTimeout();
     }
     
-    // Update the content
-    const cachedCount = Object.keys(tweetIDRatingCache).length;
-    const wlCount = blacklistedHandles.length;
-    
-    statsBadge.innerHTML = `
-        <span style="margin-right: 5px;">🧠</span>
-        <span data-cached-count>${cachedCount} rated</span>
-        ${wlCount > 0 ? `<span style="margin-left: 5px;"> | ${wlCount} whitelisted</span>` : ''}
-    `;
-    
+    updateCacheStatsUI();
     // Make it visible and reset the timeout
     statsBadge.style.opacity = '1';
     clearTimeout(statsBadge.fadeTimeout);

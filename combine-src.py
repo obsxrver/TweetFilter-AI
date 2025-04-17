@@ -11,15 +11,15 @@ args = parser.parse_args()
 # Define the files to combine in the correct order
 files_to_combine = [
     "twitter-desloppifier.js",
+    "helpers/browserStorage.js",
+    "helpers/TweetCache.js",
+    "helpers/cache.js",
+    
     "config.js",
     "api.js",
     "domScraper.js", 
     "ratingEngine.js",
     "ui.js",
-    "helpers/browserStorage.js",
-    "helpers/cache.js",
-    "helpers/TweetCache.js",
-    "helpers/helpers.js"
 ]
 
 # Define embedded resources

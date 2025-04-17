@@ -1,5 +1,8 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 
+// Use the global tweetCache instance
+// Note: TweetCache.js must be loaded before this file using @require in the userscript metadata
+
 /**
  * Cache for tweet ratings - each entry should have:
  * Required fields:
@@ -17,53 +20,16 @@ const processedTweets = new Set(); // Set of tweet IDs already processed in this
  *   - isRoot: Boolean - Whether this is a root tweet
  *   - threadMediaUrls: Array - Media URLs from previous tweets in thread
  */
-const tweetIDRatingCache = {}; // ID-based cache for persistent storage
 
 /**
- * Removes invalid entries from tweetIDRatingCache, including:
+ * Removes invalid entries from the tweet cache, including:
  * - Entries with undefined/null scores
  * - Streaming entries with undefined scores
  * @param {boolean} saveAfterCleanup - Whether to save the cache after cleanup
  * @returns {Object} - Statistics about the cleanup operation
  */
 function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
-    const beforeCount = Object.keys(tweetIDRatingCache).length;
-    let deletedCount = 0;
-    let streamingDeletedCount = 0;
-    let undefinedScoreCount = 0;
-    
-    // Iterate through all entries
-    for (const tweetId in tweetIDRatingCache) {
-        const entry = tweetIDRatingCache[tweetId];
-        
-        // Check for invalid entries
-        if (entry.score === undefined || entry.score === null) {
-            // Count streaming entries separately
-            if (entry.streaming === true) {
-                streamingDeletedCount++;
-            } else {
-                undefinedScoreCount++;
-            }
-            
-            // Delete the invalid entry
-            delete tweetIDRatingCache[tweetId];
-            deletedCount++;
-        }
-    }
-    
-    // Save the cleaned cache if requested
-    if (saveAfterCleanup && deletedCount > 0) {
-        saveTweetRatings();
-    }
-    
-    // Return cleanup statistics
-    return {
-        beforeCount,
-        afterCount: Object.keys(tweetIDRatingCache).length,
-        deletedCount,
-        streamingDeletedCount,
-        undefinedScoreCount
-    };
+    return tweetCache.cleanup(saveAfterCleanup);
 }
 
 const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
@@ -176,19 +142,9 @@ function isReasoningModel(modelId){
 }
 
 try {
-    // Load ratings from storage
-    const parsedRatings = JSON.parse(storedRatings);
     
-    // Mark all ratings from storage as "fromStorage: true" so they'll be 
-    // properly recognized as cached when loaded
-    Object.entries(parsedRatings).forEach(([tweetId, ratingData]) => {
-        tweetIDRatingCache[tweetId] = {
-            ...ratingData,
-            fromStorage: true  // Mark as loaded from storage
-        };
-    });
-    
-    console.log(`Loaded ${Object.keys(tweetIDRatingCache).length} cached tweet ratings`);
+    // No need to manually load ratings - TweetCache handles this in its constructor
+    console.log(`Loaded ${tweetCache.size} cached tweet ratings`);
 } catch (e) {
     console.error('Error loading stored ratings:', e);
 }

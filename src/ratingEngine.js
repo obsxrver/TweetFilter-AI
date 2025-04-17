@@ -32,9 +32,9 @@ function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
+    
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-        //console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
         tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
@@ -43,20 +43,22 @@ function applyTweetCachedRating(tweetArticle) {
         filterSingleTweet(tweetArticle);
         return true;
     }
-    // Check ID-based cache
-    if (tweetIDRatingCache[tweetId]) {
+
+    // Check cache for rating
+    const cachedRating = tweetCache.get(tweetId);
+    if (cachedRating) {
         // Skip incomplete streaming entries that don't have a score yet
-        if (tweetIDRatingCache[tweetId].streaming === true &&
-            (tweetIDRatingCache[tweetId].score === undefined || tweetIDRatingCache[tweetId].score === null)) {
+        if (cachedRating.streaming === true && 
+            (cachedRating.score === undefined || cachedRating.score === null)) {
             return false;
         }
 
         // Ensure the score exists before applying it
-        if (tweetIDRatingCache[tweetId].score !== undefined && tweetIDRatingCache[tweetId].score !== null) {
-            const score = tweetIDRatingCache[tweetId].score;
-            const desc = tweetIDRatingCache[tweetId].description;
-            const reasoning = tweetIDRatingCache[tweetId].reasoning || "";
-            //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
+        if (cachedRating.score !== undefined && cachedRating.score !== null) {
+            const score = cachedRating.score;
+            const desc = cachedRating.description;
+            const reasoning = cachedRating.reasoning || "";
+            
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             if (reasoning) {
@@ -64,18 +66,17 @@ function applyTweetCachedRating(tweetArticle) {
             }
 
             // If it's a streaming entry that's not complete, mark as streaming instead of cached
-            if (tweetIDRatingCache[tweetId].streaming === true) {
+            if (cachedRating.streaming === true) {
                 tweetArticle.dataset.ratingStatus = 'streaming';
                 setScoreIndicator(tweetArticle, score, 'streaming', desc);
             } else {
                 // Check if this rating is from storage (cached) or newly created
-                const isFromStorage = tweetIDRatingCache[tweetId].fromStorage === true;
+                const isFromStorage = cachedRating.fromStorage === true;
 
                 // Set status based on source
                 if (isFromStorage) {
                     tweetArticle.dataset.ratingStatus = 'cached';
                     setScoreIndicator(tweetArticle, score, 'cached', desc);
-                    
                 } else {
                     tweetArticle.dataset.ratingStatus = 'rated';
                     setScoreIndicator(tweetArticle, score, 'rated', desc);
@@ -85,17 +86,17 @@ function applyTweetCachedRating(tweetArticle) {
             tweetArticle.dataset.ratingDescription = desc;
             filterSingleTweet(tweetArticle);
             return true;
-        } else if (!tweetIDRatingCache[tweetId].streaming){
+        } else if (!cachedRating.streaming) {
             // Invalid cache entry - missing score
             console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
-            delete tweetIDRatingCache[tweetId];  // Remove invalid entry
-            saveTweetRatings();
+            tweetCache.delete(tweetId);
             return false;
         }
     }
 
     return false;
 }
+
 // ----- UI Helper Functions -----
 
 
@@ -165,12 +166,12 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
 
         // Check for a cached rating, but only use it if it has a valid score
         // and is not an incomplete streaming entry
-        if (tweetIDRatingCache[tweetId]) {
-            const cacheEntry = tweetIDRatingCache[tweetId];
+        const cachedRating = tweetCache.get(tweetId);
+        if (cachedRating) {
             const isValidCacheEntry =
-                cacheEntry.score !== undefined &&
-                cacheEntry.score !== null &&
-                !(cacheEntry.streaming === true && cacheEntry.score === undefined);
+                cachedRating.score !== undefined &&
+                cachedRating.score !== null &&
+                !(cachedRating.streaming === true && cachedRating.score === undefined);
 
             if (isValidCacheEntry) {
                 const cacheApplied = applyTweetCachedRating(tweetArticle);
@@ -184,16 +185,14 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     }
                     return;
                 }
-            } else if (cacheEntry.streaming === true) {
+            } else if (cachedRating.streaming === true) {
                 // This is a streaming entry that's still in progress
                 // Don't delete it, but don't use it either
                 console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
-                
             } else {
                 // Invalid cache entry, delete it
-                console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cacheEntry);
-                delete tweetIDRatingCache[tweetId];
-                saveTweetRatings();
+                console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
+                tweetCache.delete(tweetId);
             }
         }
 
@@ -208,12 +207,12 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
            
             
             // Add thread context to cache entry if we process this tweet
-            if (!tweetIDRatingCache[tweetId]) {
-                tweetIDRatingCache[tweetId] = {};
+            if (!tweetCache.has(tweetId)) {
+                tweetCache.set(tweetId, {});
             }
             
-            if (!tweetIDRatingCache[tweetId].threadContext) {
-                tweetIDRatingCache[tweetId].threadContext = {
+            if (!tweetCache.get(tweetId).threadContext) {
+                tweetCache.get(tweetId).threadContext = {
                     replyTo: replyInfo.to,
                     replyToId: replyInfo.replyTo,
                     isRoot: false
@@ -239,15 +238,15 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (apiKey && fullContextWithImageDescription) {
             try {
                 // Check if there's already a complete entry in the cache before calling the API
-                const isCached = tweetIDRatingCache[tweetId] &&
-                    !tweetIDRatingCache[tweetId].streaming &&
-                    tweetIDRatingCache[tweetId].score !== undefined;
+                const isCached = tweetCache.has(tweetId) &&
+                    !tweetCache.get(tweetId).streaming &&
+                    tweetCache.get(tweetId).score !== undefined;
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs);
                 score = rating.score;
                 description = rating.content;
 
                 // Check if this rating was loaded from storage
-                if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].fromStorage === true) {
+                if (tweetCache.has(tweetId) && tweetCache.get(tweetId).fromStorage === true) {
                     // If it was loaded from storage, mark it as cached
                     tweetArticle.dataset.ratingStatus = 'cached';
                 } else {
@@ -276,26 +275,26 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 processingSuccessful = !rating.error;
                 // Store the full context after rating is complete
                 if (!rating.error) {
-                    if (tweetIDRatingCache[tweetId]) {
-                        tweetIDRatingCache[tweetId].score = score;
-                        tweetIDRatingCache[tweetId].description = description;
-                        tweetIDRatingCache[tweetId].tweetContent = fullContextWithImageDescription;
-                        tweetIDRatingCache[tweetId].streaming = false; // Mark as complete
+                    if (tweetCache.has(tweetId)) {
+                        tweetCache.get(tweetId).score = score;
+                        tweetCache.get(tweetId).description = description;
+                        tweetCache.get(tweetId).tweetContent = fullContextWithImageDescription;
+                        tweetCache.get(tweetId).streaming = false; // Mark as complete
                     } else {
-                        tweetIDRatingCache[tweetId] = {
+                        tweetCache.set(tweetId, {
                             score: score,
                             description: description,
                             tweetContent: fullContextWithImageDescription,
                             streaming: false // Mark as complete
-                        };
+                        });
                     }
 
                     // Save ratings to persistent storage
                     saveTweetRatings();
                 } else {
                     // On error, remove any existing cache entry to allow retry
-                    if (tweetIDRatingCache[tweetId]) {
-                        delete tweetIDRatingCache[tweetId];
+                    if (tweetCache.has(tweetId)) {
+                        tweetCache.delete(tweetId);
                         saveTweetRatings();
                     }
                 }
@@ -398,11 +397,11 @@ function scheduleTweetProcessing(tweetArticle) {
     }
 
     // Check for a cached rating, but be careful with streaming cache entries
-    if (tweetIDRatingCache[tweetId]) {
+    if (tweetCache.has(tweetId)) {
         // Only apply cached rating if it has a valid score and isn't an incomplete streaming entry
         const isIncompleteStreaming =
-            tweetIDRatingCache[tweetId].streaming === true &&
-            (tweetIDRatingCache[tweetId].score === undefined || tweetIDRatingCache[tweetId].score === null);
+            tweetCache.get(tweetId).streaming === true &&
+            (tweetCache.get(tweetId).score === undefined || tweetCache.get(tweetId).score === null);
         
         if (!isIncompleteStreaming) {
             const wasApplied = applyTweetCachedRating(tweetArticle);
@@ -584,9 +583,9 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
         document.querySelector('div[aria-label^="Timeline: Conversation"]');
     
     let threadMediaUrls = [];
-    if (conversation && conversation.dataset.threadMapping && tweetIDRatingCache[tweetId]?.threadContext?.threadMediaUrls) {
+    if (conversation && conversation.dataset.threadMapping && tweetCache.has(tweetId) && tweetCache.get(tweetId).threadContext?.threadMediaUrls) {
         // Get thread media URLs from cache if available
-        threadMediaUrls = tweetIDRatingCache[tweetId].threadContext.threadMediaUrls || [];
+        threadMediaUrls = tweetCache.get(tweetId).threadContext.threadMediaUrls || [];
     } else if (conversation && conversation.dataset.threadMediaUrls) {
         // Or get them from the dataset if available
         try {
@@ -852,8 +851,8 @@ async function handleThreads() {
                         throw new Error("Failed to get tweet ID from next article");
                     }
                     
-                    if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].tweetContent) {
-                        threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
+                    if (tweetCache.has(tweetId) && tweetCache.get(tweetId).tweetContent) {
+                        threadHist = threadHist + "\n[REPLY]\n" + tweetCache.get(tweetId).tweetContent;
                     } else {
                         const apiKey = browserGet('openrouter-api-key', '');
                         await new Promise(resolve => setTimeout(resolve, 100));
@@ -1123,8 +1122,8 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             for (let i = 0; i < replyDocs.length; i += batchSize) {
                 const batch = replyDocs.slice(i, i + batchSize);
                 batch.forEach(doc => {
-                    if (doc.tweetId && tweetIDRatingCache[doc.tweetId]) {
-                        tweetIDRatingCache[doc.tweetId].threadContext = {
+                    if (doc.tweetId && tweetCache.has(doc.tweetId)) {
+                        tweetCache.get(doc.tweetId).threadContext = {
                             replyTo: doc.to,
                             replyToId: doc.toId,
                             isRoot: doc.isRoot,
@@ -1138,7 +1137,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             if (tweetCell && tweetCell.tweetNode) {
                                 // Don't reprocess if the tweet is currently streaming
                                 const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === 'streaming' ||
-                                                  (tweetIDRatingCache[doc.tweetId] && tweetIDRatingCache[doc.tweetId].streaming === true);
+                                                  (tweetCache.has(doc.tweetId) && tweetCache.get(doc.tweetId).streaming === true);
                                 
                                 if (!isStreaming) {
                                     processedTweets.delete(doc.tweetId);

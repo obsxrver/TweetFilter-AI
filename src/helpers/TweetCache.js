@@ -14,6 +14,9 @@ class TweetCache {
         try {
             const storedCache = browserGet('tweetRatings', '{}');
             this.cache = JSON.parse(storedCache);
+            for (const tweetId in this.cache) {
+                this.cache[tweetId].fromStorage = true;
+            }
         } catch (error) {
             console.error('Error loading tweet cache:', error);
             this.cache = {};
@@ -40,7 +43,7 @@ class TweetCache {
     /**
      * Sets a tweet rating in the cache.
      * @param {string} tweetId - The ID of the tweet.
-     * @param {Object} rating - The rating object containing score, description, etc.
+     * @param {Object} rating - The rating object: {score(required), description, reasoning, timestamp, streaming, blacklisted,fromStorage}
      * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately.
      */
     set(tweetId, rating, saveImmediately = true) {
@@ -51,14 +54,17 @@ class TweetCache {
             reasoning: rating.reasoning || '',
             timestamp: rating.timestamp || Date.now(),
             streaming: rating.streaming || false,
-            blacklisted: rating.blacklisted || false
+            blacklisted: rating.blacklisted || false,
+            fromStorage: rating.fromStorage || false
         };
 
         if (saveImmediately) {
             this.saveToStorage();
         }
     }
-
+    has(tweetId) {
+        return this.cache[tweetId] !== undefined;
+    }
     /**
      * Removes a tweet rating from the cache.
      * @param {string} tweetId - The ID of the tweet to remove.
@@ -128,8 +134,6 @@ class TweetCache {
     }
 }
 
-// Create a global instance
 const tweetCache = new TweetCache();
-
 // Export for use in other modules
-export { tweetCache, TweetCache }; 
+//export { tweetCache, TweetCache }; 

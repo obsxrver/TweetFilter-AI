@@ -456,6 +456,12 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     // Check if streaming is enabled
     const useStreaming = browserGet('enableStreaming', false);
     
+    // Store the streaming entry in cache
+    tweetCache.set(tweetId, {
+        streaming: true,
+        timestamp: Date.now()
+    });
+    
     // Implement retry logic
     let attempt = 0;
     while (attempt < maxRetries) {
@@ -492,6 +498,14 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 
                 if (scoreMatch) {
                     const score = parseInt(scoreMatch[1], 10);
+                    
+                    // Store the rating in cache
+                    tweetCache.set(tweetId, {
+                        score: score,
+                        description: result.content,
+                        tweetContent: tweetText,
+                        streaming: false
+                    });
                     
                     return {
                         score,
@@ -537,26 +551,34 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
 async function rateTweet(request, apiKey) {
+    const tweetId = request.tweetId;
+    const existingScore = tweetCache.get(tweetId)?.score;
+
     const result = await getCompletion(request, apiKey);
     
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
         const reasoning = result.data.choices[0].message.reasoning || "";
         
+        // Store the rating in cache
+        const scoreMatch = content.match(/SCORE_(\d+)/);
+        tweetCache.set(tweetId, {
+            score: existingScore || (scoreMatch ? parseInt(scoreMatch[1], 10) : null),
+            description: content,
+            tweetContent: request.tweetText,
+            streaming: false
+        });
+        
         return {
             content,
-            reasoning,
-            error: false,
-            data: result.data
-        };
-    } else {
-        return {
-            content: result.message || "Error getting response",
-            reasoning: "",
-            error: true,
-            data: result.data
+            reasoning
         };
     }
+
+    return {
+        error: true,
+        content: result.error || "Unknown error"
+    };
 }
 
 /**
@@ -569,6 +591,12 @@ async function rateTweet(request, apiKey) {
  * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
  */
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
+    // Store initial streaming entry
+    tweetCache.set(tweetId, {
+        streaming: true,
+        timestamp: Date.now()
+    });
+
     return new Promise((resolve, reject) => {
         // Find the tweet article element for this tweet ID
         const tweetArticle = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
@@ -589,15 +617,14 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
             window.activeStreamingRequests[tweetId].abort();
             delete window.activeStreamingRequests[tweetId];
         }
-        tweetIDRatingCache[tweetId] = {
+        tweetCache.set(tweetId, {
             tweetContent: tweetText,
             score: null,
             description: "",
             reasoning: "", // Store reasoning
             streaming: true,  // Mark as complete
             timestamp: Date.now()
-        };
-        saveTweetRatings();
+        });
         getCompletionStreaming(
             request,
             apiKey,
@@ -714,22 +741,21 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     // Check for a score in the final content
                     const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
                     // Also check if we already found a score during streaming
-                    const existingScore = tweetIDRatingCache[tweetId]?.score;
+                    const existingScore = tweetCache.get(tweetId)?.score;
                     
                     if (scoreMatch || existingScore) {
                         // if the AI writes multiple scores, use the last one
                         const score = scoreMatch ? parseInt(scoreMatch[scoreMatch.length - 1], 10) : existingScore;
                         
                         // Update cache with final result (non-streaming)
-                        tweetIDRatingCache[tweetId] = {
+                        tweetCache.set(tweetId, {
                             tweetContent: tweetText,
                             score: score,
                             description: aggregatedContent,
                             reasoning: finalResult.reasoning || aggregatedReasoning, // Store reasoning
                             streaming: false,  // Mark as complete
                             timestamp: Date.now()
-                        };
-                        saveTweetRatings();
+                        });
                         
                         // Finalize UI update
                         tweetArticle.dataset.ratingStatus = 'rated';
@@ -760,15 +786,14 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         const defaultScore = 5;
                         
                         // Update cache with default score
-                        tweetIDRatingCache[tweetId] = {
+                        tweetCache.set(tweetId, {
                             tweetContent: tweetText,
                             score: defaultScore,
                             description: aggregatedContent + " [No explicit score detected, using default score of 5]",
                             reasoning: finalResult.reasoning || aggregatedReasoning,
                             streaming: false,
                             timestamp: Date.now()
-                        };
-                        saveTweetRatings();
+                        });
                         
                         // Update UI with default score
                         tweetArticle.dataset.ratingStatus = 'error';
