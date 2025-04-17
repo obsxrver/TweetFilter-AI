@@ -3308,7 +3308,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         // Update the score indicator but preserve tooltip state
                         if (indicator) {
                             // Store the current score
-                            tweetArticle.dataset.slopScore = currentScore.toString();
+                            tweetArticle.dataset.sloppinessScore = currentScore.toString();
                             
                             // Update just the score number and class
                             indicator.textContent = currentScore;
@@ -3404,7 +3404,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingStatus = 'rated';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.slopScore = score.toString();
+                        tweetArticle.dataset.sloppinessScore = score.toString();
                         
                         // Remove streaming class from tooltip
                         const indicator = tweetArticle.querySelector('.score-indicator');
@@ -3441,7 +3441,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingStatus = 'error';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.slopScore = defaultScore.toString();
+                        tweetArticle.dataset.sloppinessScore = defaultScore.toString();
                         
                         // Set indicator with default score
                         const indicator = tweetArticle.querySelector('.score-indicator');
@@ -3475,7 +3475,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 if (tweetArticle) {
                     tweetArticle.dataset.ratingStatus = 'error';
                     tweetArticle.dataset.ratingDescription = errorData.message;
-                    tweetArticle.dataset.slopScore = '5';
+                    tweetArticle.dataset.sloppinessScore = '5';
                     
                     // Remove streaming class from tooltip
                     const indicator = tweetArticle.querySelector('.score-indicator');
@@ -3839,7 +3839,7 @@ function handleMutations(mutationsList) {
  * @param {Element} tweetArticle - The tweet element.
  */
 function filterSingleTweet(tweetArticle) {
-    const score = parseInt(tweetArticle.dataset.slopScore || '9', 10);
+    const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
     // Update the indicator based on the tweet's rating status
     setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus || 'rated', tweetArticle.dataset.ratingDescription);
     // If the tweet is still pending a rating, keep it visible
@@ -3870,7 +3870,7 @@ function applyTweetCachedRating(tweetArticle) {
     
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-        tweetArticle.dataset.slopScore = '10';
+        tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
         tweetArticle.dataset.ratingDescription = 'Whitelisted user';
@@ -3894,7 +3894,7 @@ function applyTweetCachedRating(tweetArticle) {
             const desc = cachedRating.description;
             const reasoning = cachedRating.reasoning || "";
             
-            tweetArticle.dataset.slopScore = score.toString();
+            tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             if (reasoning) {
                 tweetArticle.dataset.ratingReasoning = reasoning;
@@ -3932,6 +3932,8 @@ function applyTweetCachedRating(tweetArticle) {
     return false;
 }
 
+// ----- UI Helper Functions -----
+
 /**
  * Checks if a given user handle is in the blacklist.
  * @param {string} handle - The Twitter handle.
@@ -3944,23 +3946,12 @@ function isUserBlacklisted(handle) {
 }
 
 async function delayedProcessTweet(tweetArticle, tweetId) {
-    // Check if this is part of a thread that's still being mapped
-    const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') || 
-                        document.querySelector('div[aria-label^="Timeline: Conversation"]');
-    
-    if (conversation && (conversation.dataset.threadMappingInProgress === "true" || threadMappingInProgress)) {
-        // Thread mapping is in progress, reschedule this tweet for later
-
-        processedTweets.delete(tweetId);
-        setTimeout(() => scheduleTweetProcessing(tweetArticle), PROCESSING_DELAY_MS);
-        return;
-    }
     const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
         try {
-            setScoreIndicator(tweetArticle, 10, 'error', "No API key");
+            setScoreIndicator(tweetArticle, 9, 'error', "No API key");
             // Verify indicator was actually created
             if (!tweetArticle.querySelector('.score-indicator')) {
 
@@ -3969,6 +3960,9 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
 
         }
         filterSingleTweet(tweetArticle);
+        // Remove from processedTweets to allow retrying
+        processedTweets.delete(tweetId);
+
         return;
     }
     let score = 5; // Default score if rating fails
@@ -3976,9 +3970,64 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
     let processingSuccessful = false;
 
     try {
+        // Get user handle
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
-        
+        const quotedHandle = handles.length > 1 ? handles[1] : '';
+
+        // Check if tweet's author is blacklisted (fast path)
+        if (userHandle && isUserBlacklisted(userHandle)) {
+            tweetArticle.dataset.sloppinessScore = '10';
+            tweetArticle.dataset.blacklisted = 'true';
+            tweetArticle.dataset.ratingStatus = 'blacklisted';
+            tweetArticle.dataset.ratingDescription = "Blacklisted user";
+            try {
+                setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is blacklisted");
+                // Verify indicator was actually created
+                if (!tweetArticle.querySelector('.score-indicator')) {
+                    throw new Error("Failed to create score indicator");
+                }
+            } catch (e) {
+
+                // Even if indicator fails, we've set the dataset properties
+            }
+            filterSingleTweet(tweetArticle);
+            processingSuccessful = true;
+            
+        }
+
+        // Check for a cached rating, but only use it if it has a valid score
+        // and is not an incomplete streaming entry
+        const cachedRating = tweetCache.get(tweetId);
+        if (cachedRating) {
+            const isValidCacheEntry =
+                cachedRating.score !== undefined &&
+                cachedRating.score !== null &&
+                !(cachedRating.streaming === true && cachedRating.score === undefined);
+
+            if (isValidCacheEntry) {
+                const cacheApplied = applyTweetCachedRating(tweetArticle);
+                if (cacheApplied) {
+                    // Verify the indicator exists after applying cached rating
+                    if (!tweetArticle.querySelector('.score-indicator')) {
+
+                        processingSuccessful = false;
+                    } else {
+                        processingSuccessful = true;
+                    }
+                    return;
+                }
+            } else if (cachedRating.streaming === true) {
+                // This is a streaming entry that's still in progress
+                // Don't delete it, but don't use it either
+
+            } else {
+                // Invalid cache entry, delete it
+
+                tweetCache.delete(tweetId);
+            }
+        }
+
         const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
         if (!fullContextWithImageDescription) {
             throw new Error("Failed to get tweet context");
@@ -3987,10 +4036,12 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // Add thread relationship context
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
+
             // Add thread context to cache entry if we process this tweet
             if (!tweetCache.has(tweetId)) {
                 tweetCache.set(tweetId, {});
             }
+            
             if (!tweetCache.get(tweetId).threadContext) {
                 tweetCache.get(tweetId).threadContext = {
                     replyTo: replyInfo.to,
@@ -4013,7 +4064,8 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (quotedMediaMatches && quotedMediaMatches[1]) {
             mediaURLs.push(...quotedMediaMatches[1].split(', '));
         }
-        
+
+        // --- API Call or Fallback ---
         if (apiKey && fullContextWithImageDescription) {
             try {
                 // Check if there's already a complete entry in the cache before calling the API
@@ -4033,7 +4085,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     tweetArticle.dataset.ratingStatus = rating.error ? 'error' : (isCached || rating.cached ? 'cached' : 'rated');
                 }
                 tweetArticle.dataset.ratingDescription = description || "not available";
-                tweetArticle.dataset.slopScore = score.toString();
+                tweetArticle.dataset.sloppinessScore = score.toString();
 
                 if (!isUserBlacklisted(userHandle)){
                 try {
@@ -4067,10 +4119,14 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                             streaming: false // Mark as complete
                         });
                     }
+
+                    // Save ratings to persistent storage
+                    saveTweetRatings();
                 } else {
                     // On error, remove any existing cache entry to allow retry
                     if (tweetCache.has(tweetId)) {
                         tweetCache.delete(tweetId);
+                        saveTweetRatings();
                     }
                 }
 
@@ -4081,9 +4137,15 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 // Don't consider API errors as successful processing
                 processingSuccessful = false;
             }
-        } else {
+        } else if (fullContextWithImageDescription) {
             score = 10;
             //show all tweets that errored
+            tweetArticle.dataset.ratingStatus = 'error';
+            tweetArticle.dataset.ratingDescription = "No API key";
+            processingSuccessful = true;
+        } else {
+            //show all tweets that errored
+            score = 10;
             tweetArticle.dataset.ratingStatus = 'error';
             tweetArticle.dataset.ratingDescription = "No content";
             processingSuccessful = true;
@@ -4094,10 +4156,12 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             score = 5;
         }
 
-        tweetArticle.dataset.slopScore = score.toString();
+        tweetArticle.dataset.sloppinessScore = score.toString();
         try {
+            //group should default to closed
 
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
+            // Final verification of indicator
             if (!tweetArticle.querySelector('.score-indicator')) {
                 processingSuccessful = false;
             }
@@ -4108,8 +4172,8 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         filterSingleTweet(tweetArticle);
     } catch (error) {
 
-        if (!tweetArticle.dataset.slopScore) {
-            tweetArticle.dataset.slopScore = '5';
+        if (!tweetArticle.dataset.sloppinessScore) {
+            tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
             tweetArticle.dataset.ratingDescription = "error processing tweet";
             try {
@@ -4140,14 +4204,15 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
 function scheduleTweetProcessing(tweetArticle) {
     // First, ensure the tweet has a valid ID
     const tweetId = getTweetID(tweetArticle);
-    if (!tweetId) return;
+    if (!tweetId) {
+        return;
+    }
 
     // Fast-path: if author is blacklisted, assign score immediately
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
     if (userHandle && isUserBlacklisted(userHandle)) {
-        processedTweets.add(tweetId);
-        tweetArticle.dataset.slopScore = '10';
+        tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
         tweetArticle.dataset.ratingDescription = "Whitelisted user";
@@ -4167,7 +4232,6 @@ function scheduleTweetProcessing(tweetArticle) {
             const wasApplied = applyTweetCachedRating(tweetArticle);
             if (wasApplied) {
                 // Force redraw filter to ensure the tweet is properly filtered
-                processedTweets.add(tweetId);
                 filterSingleTweet(tweetArticle);
                 return;
             }
@@ -4185,11 +4249,13 @@ function scheduleTweetProcessing(tweetArticle) {
             return;
         }
     }
+
     // Immediately mark as pending before scheduling actual processing
     if (!processedTweets.has(tweetId)) {
         processedTweets.add(tweetId);
     }
     tweetArticle.dataset.ratingStatus = 'pending';
+
     // Ensure indicator is set
     try {
         setScoreIndicator(tweetArticle, null, 'pending');
@@ -4197,6 +4263,7 @@ function scheduleTweetProcessing(tweetArticle) {
 
     }
 
+    // Now schedule the actual rating processing
     setTimeout(() => {
         try {
             delayedProcessTweet(tweetArticle, tweetId);
@@ -4476,7 +4543,7 @@ function ensureAllTweetsRated() {
             // 1. No score data attribute
             // 2. Error status
             // 3. Missing indicator element (even if in processedTweets)
-            const hasScore = !!tweet.dataset.slopScore;
+            const hasScore = !!tweet.dataset.sloppinessScore;
             const hasError = tweet.dataset.ratingStatus === 'error';
             const hasIndicator = !!tweet.querySelector('.score-indicator');
             const isStreaming = tweet.dataset.ratingStatus === 'streaming';
@@ -4498,6 +4565,10 @@ function ensureAllTweetsRated() {
                 scheduleTweetProcessing(tweet);
             }
         });
+
+        if (unreatedCount > 0) {
+
+        }
     }
 }
 

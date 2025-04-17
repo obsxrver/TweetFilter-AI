@@ -665,7 +665,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         // Update the score indicator but preserve tooltip state
                         if (indicator) {
                             // Store the current score
-                            tweetArticle.dataset.slopScore = currentScore.toString();
+                            tweetArticle.dataset.sloppinessScore = currentScore.toString();
                             
                             // Update just the score number and class
                             indicator.textContent = currentScore;
@@ -761,7 +761,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingStatus = 'rated';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.slopScore = score.toString();
+                        tweetArticle.dataset.sloppinessScore = score.toString();
                         
                         // Remove streaming class from tooltip
                         const indicator = tweetArticle.querySelector('.score-indicator');
@@ -799,7 +799,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingStatus = 'error';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.slopScore = defaultScore.toString();
+                        tweetArticle.dataset.sloppinessScore = defaultScore.toString();
                         
                         // Set indicator with default score
                         const indicator = tweetArticle.querySelector('.score-indicator');
@@ -833,7 +833,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 if (tweetArticle) {
                     tweetArticle.dataset.ratingStatus = 'error';
                     tweetArticle.dataset.ratingDescription = errorData.message;
-                    tweetArticle.dataset.slopScore = '5';
+                    tweetArticle.dataset.sloppinessScore = '5';
                     
                     // Remove streaming class from tooltip
                     const indicator = tweetArticle.querySelector('.score-indicator');
