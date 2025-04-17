@@ -46,7 +46,6 @@ let availableModels = []; // List of models fetched from API
 let listedModels = []; // Filtered list of models actually shown in UI
 let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
 let selectedImageModel = browserGet('selectedImageModel', 'openai/gpt-4.1-nano');
-let modelSortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
 let showFreeModels = browserGet('showFreeModels', true);
 let providerSort = browserGet('providerSort', ''); // Default to load-balanced
 let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
@@ -94,13 +93,9 @@ let modelTopP = browserGet('modelTopP', 1);
 let imageModelTemperature = browserGet('imageModelTemperature', 1);
 let imageModelTopP = browserGet('imageModelTopP', 1);
 let maxTokens = browserGet('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
-let imageModelMaxTokens = browserGet('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
-//let menuHTML= "";
-
 // ----- DOM Selectors (for tweet elements) -----
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
-const USER_NAME_SELECTOR = 'div[data-testid="User-Name"] span > span';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
@@ -126,26 +121,3 @@ function modelSupportsImages(modelId) {
     return model.input_modalities &&
         model.input_modalities.includes('image');
 }
-function isReasoningModel(modelId){
-    if (!availableModels || availableModels.length === 0) {
-        return false; // If we don't have model info, assume it doesn't support images
-    }
-
-    const model = availableModels.find(m => m.slug === modelId);
-    if (!model) {
-        return false; // Model not found in available models list
-    }
-
-    // Check if model supports images based on its architecture
-    return model.supported_parameters &&
-        model.supported_parameters.includes('include_reasoning');
-}
-
-try {
-    
-    // No need to manually load ratings - TweetCache handles this in its constructor
-    console.log(`Loaded ${tweetCache.size} cached tweet ratings`);
-} catch (e) {
-    console.error('Error loading stored ratings:', e);
-}
-
