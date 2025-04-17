@@ -477,7 +477,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
         // Update status
         pendingRequests++;
-        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+        UIUtils.showStatus(`Rating tweet... (${pendingRequests} pending)`);
         
         try {
             let result;
@@ -490,7 +490,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             }
             
             pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            UIUtils.showStatus(`Rating tweet... (${pendingRequests} pending)`);
             
             // Parse the result for score
             if (!result.error && result.content) {
@@ -524,7 +524,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             }
         } catch (error) {
             pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            UIUtils.showStatus(`Rating tweet... (${pendingRequests} pending)`);
             console.error(`API error during attempt ${attempt}:`, error);
             
             if (attempt < maxRetries) {
@@ -540,6 +540,48 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         content: "Failed to get valid rating after multiple attempts",
         error: true,
         data: null
+    };
+}
+/**
+ * Gets the description of the user's custom instructions to be used as the title of the (cust instructions history) dropdown entry. 
+ * 
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
+ */
+async function getCustomInstructionsDescription(custInstructions) {
+    const request = {
+        model: selectedModel,
+        messages: [{
+            role: "system",
+            content: [{
+                type: "text",
+                text: `Summarize the following custom instructions in 5 words`,
+            },]
+        },
+        {
+            role: "user",
+            content: [{
+                type: "text",
+                text: `Summarize the following custom instructions in 5 words: ${custInstructions}`,
+            }]
+        }]
+    };
+    let key = browserGet('openrouter-api-key',null);
+    if(!key) return {error: true, content: "No API key found"};
+    const result = await getCompletion(request, key);
+    
+    if (!result.error && result.data?.choices?.[0]?.message) {
+        const content = result.data.choices[0].message.content || ""
+        return {
+            content,
+            error: false
+        };
+    }
+
+    return {
+        error: true,
+        content: result.error || "Unknown error"
     };
 }
 
@@ -657,7 +699,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     // Update the tooltip content with both description and reasoning
                     if (tooltip) {
                         // Use the helper function from ui.js to update tooltip content
-                        updateTooltipContent(tooltip, aggregatedContent, aggregatedReasoning);
+                        TooltipManager.updateTooltipContent(tooltip, aggregatedContent, aggregatedReasoning);
                         tooltip.classList.add('streaming-tooltip');
                     }
                     
@@ -679,7 +721,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                                 const reasoningElement = tooltip.querySelector('.reasoning-text');
                                 
                                 // Format the text
-                                const formatted = formatTooltipDescription(aggregatedContent, aggregatedReasoning);
+                                const formatted = TooltipManager.formatTooltipDescription(aggregatedContent, aggregatedReasoning);
                                 
                                 if (descriptionElement) {
                                     descriptionElement.innerHTML = formatted.description;
@@ -711,7 +753,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                             
                             // Format the text - ensure we have at least a placeholder for content
                             const contentToShow = aggregatedContent || "Rating in progress...";
-                            const formatted = formatTooltipDescription(contentToShow, aggregatedReasoning);
+                            const formatted = TooltipManager.formatTooltipDescription(contentToShow, aggregatedReasoning);
                             
                             if (descriptionElement) {
                                 descriptionElement.innerHTML = formatted.description;
@@ -767,7 +809,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         const indicator = tweetArticle.querySelector('.score-indicator');
                         if (indicator && indicator.scoreTooltip) {
                             // Update the final tooltip content
-                            updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
+                            TooltipManager.updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                             indicator.scoreTooltip.classList.remove('streaming-tooltip');
                             
                             // Set final indicator state - ensure we're not recreating the tooltip
@@ -808,7 +850,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                             indicator.textContent = defaultScore;
                             
                             if (indicator.scoreTooltip) {
-                                updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
+                                TooltipManager.updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
                                 indicator.scoreTooltip.classList.remove('streaming-tooltip');
                             }
                         } else {
@@ -916,10 +958,10 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
 function fetchAvailableModels() {
     const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
-        showStatus('Please enter your OpenRouter API key');
+        UIUtils.showStatus('Please enter your OpenRouter API key');
         return;
     }
-    showStatus('Fetching available models...');
+    UIUtils.showStatus('Fetching available models...');
     const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
     GM_xmlhttpRequest({
         method: "GET",
@@ -941,17 +983,17 @@ function fetchAvailableModels() {
                     }
                     availableModels = filteredModels || [];
                     listedModels = [...availableModels]; // Initialize listedModels
-                    refreshModelsUI();
-                    showStatus('Models updated!');
+                    ModelUI.refreshModelsUI();
+                    UIUtils.showStatus('Models updated!');
                 }
             } catch (error) {
                 console.error('Error parsing model list:', error);
-                showStatus('Error parsing models list');
+                UIUtils.showStatus('Error parsing models list');
             }
         },
         onerror: function (error) {
             console.error('Error fetching models:', error);
-            showStatus('Error fetching models!');
+            UIUtils.showStatus('Error fetching models!');
         }
     });
 }

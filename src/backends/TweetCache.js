@@ -28,7 +28,7 @@ class TweetCache {
      */
     saveToStorage() {
         browserSet('tweetRatings', JSON.stringify(this.cache));
-        updateCacheStatsUI();
+        StatsManager.updateCacheStatsUI();
     }
 
     /**

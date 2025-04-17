@@ -11,15 +11,24 @@ args = parser.parse_args()
 # Define the files to combine in the correct order
 files_to_combine = [
     "twitter-desloppifier.js",
-    "helpers/browserStorage.js",
-    "helpers/TweetCache.js",
-    "helpers/cache.js",
-    
-    "config.js",
-    "api.js",
-    "domScraper.js", 
-    "ratingEngine.js",
-    "ui.js",
+    "helpers/browserStorage.js",      # Basic browser storage utilities
+    "backends/TweetCache.js",         # Core cache functionality
+    "helpers/cache.js",               # Cache helpers (depends on TweetCache)
+    "backends/InstructionsHistory.js", # Instructions history backend
+    "config.js",                      # Global configuration
+    "api.js",                         # API functionality
+    "domScraper.js",                  # DOM manipulation utilities
+    "ratingEngine.js",                # Rating functionality
+    "ui/uiUtils.js",                  # Base UI utilities needed by all UI modules
+    "ui/customSelect.js",             # Independent UI component
+    "ui/tooltipManager.js",           # Independent UI component for tooltips
+    "ui/statsManager.js",             # Stats display (depends on TweetCache)
+    "ui/handleManager.js",            # Handle management (depends on uiUtils)
+    "ui/instructionsManager.js",      # Instructions management (depends on InstructionsHistory)
+    "ui/modelUI.js",                  # Model UI (depends on customSelect)
+    "ui/settings.js",                 # Settings (depends on most UI modules)
+    "ui/eventHandlers.js",            # Event handlers (depends on all UI modules)
+    "ui/ui.js",                       # Main UI coordinator (depends on everything)
 ]
 
 # Define embedded resources
@@ -92,10 +101,6 @@ for resource in resources:
 # Apply CSS directly
 combined_lines.append("    // Apply CSS\n")
 combined_lines.append("    GM_addStyle(STYLE);\n\n")
-
-# Set menu HTML
-combined_lines.append("    // Set menu HTML\n")
-combined_lines.append("    GM_setValue('menuHTML', MENU);\n\n")
 
 # Add all JavaScript files except header of the main file
 for js_file in files_to_combine:

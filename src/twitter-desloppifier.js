@@ -17,6 +17,7 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/backends/InstructionsHistory.js
 // @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css
 // @run-at       document-idle
@@ -47,9 +48,9 @@ const VERSION = '1.3.8';
         if (target) {
             observedTargetNode = target;
             console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
-            initialiseUI();
+            UI.initialize();
             if (firstRun) {
-                resetSettings(true);
+                SettingsManager.resetSettings(true);
                 browserSet('firstRun', false);
             }
             // If no API key is found, prompt the user
@@ -61,11 +62,11 @@ const VERSION = '1.3.8';
             if (!apiKey){
                 //key is dead
                 apiKey = '*'
-                showStatus(`No API Key Found. Using Promotional Key`);
+                UIUtils.showStatus(`No API Key Found. Using Promotional Key`);
             }*/
             if (apiKey) {
                 browserSet('openrouter-api-key', apiKey);
-                showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
+                UIUtils.showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
             // Process all currently visible tweets
@@ -87,8 +88,7 @@ const VERSION = '1.3.8';
                 const statusIndicator = document.getElementById('status-indicator');
                 if (statusIndicator) statusIndicator.remove();
                 //Now WHY TF did it call this LMAO. That's why it was broken!
-                //cleanupDescriptionElements();
-                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
+                
             });
         } else {
             setTimeout(initializeObserver, 1000);
