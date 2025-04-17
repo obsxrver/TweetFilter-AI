@@ -1,5 +1,8 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 
+// Use the global tweetCache instance
+// Note: TweetCache.js must be loaded before this file using @require in the userscript metadata
+
 /**
  * Cache for tweet ratings - each entry should have:
  * Required fields:
@@ -17,79 +20,41 @@ const processedTweets = new Set(); // Set of tweet IDs already processed in this
  *   - isRoot: Boolean - Whether this is a root tweet
  *   - threadMediaUrls: Array - Media URLs from previous tweets in thread
  */
-const tweetIDRatingCache = {}; // ID-based cache for persistent storage
 
 /**
- * Removes invalid entries from tweetIDRatingCache, including:
+ * Removes invalid entries from the tweet cache, including:
  * - Entries with undefined/null scores
  * - Streaming entries with undefined scores
  * @param {boolean} saveAfterCleanup - Whether to save the cache after cleanup
  * @returns {Object} - Statistics about the cleanup operation
  */
 function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
-    const beforeCount = Object.keys(tweetIDRatingCache).length;
-    let deletedCount = 0;
-    let streamingDeletedCount = 0;
-    let undefinedScoreCount = 0;
-    
-    // Iterate through all entries
-    for (const tweetId in tweetIDRatingCache) {
-        const entry = tweetIDRatingCache[tweetId];
-        
-        // Check for invalid entries
-        if (entry.score === undefined || entry.score === null) {
-            // Count streaming entries separately
-            if (entry.streaming === true) {
-                streamingDeletedCount++;
-            } else {
-                undefinedScoreCount++;
-            }
-            
-            // Delete the invalid entry
-            delete tweetIDRatingCache[tweetId];
-            deletedCount++;
-        }
-    }
-    
-    // Save the cleaned cache if requested
-    if (saveAfterCleanup && deletedCount > 0) {
-        saveTweetRatings();
-    }
-    
-    // Return cleanup statistics
-    return {
-        beforeCount,
-        afterCount: Object.keys(tweetIDRatingCache).length,
-        deletedCount,
-        streamingDeletedCount,
-        undefinedScoreCount
-    };
+    return tweetCache.cleanup(saveAfterCleanup);
 }
 
 const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
-let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
+let USER_DEFINED_INSTRUCTIONS = browserGet('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
 - Give high scores to high-effort content and artistic content`);
-let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter threshold for tweet visibility
+let currentFilterThreshold = browserGet('filterThreshold', 1); // Filter threshold for tweet visibility
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
 let listedModels = []; // Filtered list of models actually shown in UI
-let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
-let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
-let modelSortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-let showFreeModels = GM_getValue('showFreeModels', true);
-let providerSort = GM_getValue('providerSort', ''); // Default to load-balanced
-let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
+let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
+let selectedImageModel = browserGet('selectedImageModel', 'openai/gpt-4.1-nano');
+let showFreeModels = browserGet('showFreeModels', true);
+let providerSort = browserGet('providerSort', ''); // Default to load-balanced
+let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
-let storedRatings = GM_getValue('tweetRatings', '{}');
+let storedRatings = browserGet('tweetRatings', '{}');
 let threadHist = "";
 // Settings variables
-let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
-let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
+let enableImageDescriptions = browserGet('enableImageDescriptions', false);
+let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 
 
 // Model parameters
@@ -123,18 +88,14 @@ SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
 If one of the above is not present, the program will not be able to parse the response and will return an error.
 `
-let modelTemperature = GM_getValue('modelTemperature', 1);
-let modelTopP = GM_getValue('modelTopP', 1);
-let imageModelTemperature = GM_getValue('imageModelTemperature', 1);
-let imageModelTopP = GM_getValue('imageModelTopP', 1);
-let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
-let imageModelMaxTokens = GM_getValue('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
-//let menuHTML= "";
-
+let modelTemperature = browserGet('modelTemperature', 1);
+let modelTopP = browserGet('modelTopP', 1);
+let imageModelTemperature = browserGet('imageModelTemperature', 1);
+let imageModelTopP = browserGet('imageModelTopP', 1);
+let maxTokens = browserGet('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
 // ----- DOM Selectors (for tweet elements) -----
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
-const USER_NAME_SELECTOR = 'div[data-testid="User-Name"] span > span';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
@@ -160,36 +121,3 @@ function modelSupportsImages(modelId) {
     return model.input_modalities &&
         model.input_modalities.includes('image');
 }
-function isReasoningModel(modelId){
-    if (!availableModels || availableModels.length === 0) {
-        return false; // If we don't have model info, assume it doesn't support images
-    }
-
-    const model = availableModels.find(m => m.slug === modelId);
-    if (!model) {
-        return false; // Model not found in available models list
-    }
-
-    // Check if model supports images based on its architecture
-    return model.supported_parameters &&
-        model.supported_parameters.includes('include_reasoning');
-}
-
-try {
-    // Load ratings from storage
-    const parsedRatings = JSON.parse(storedRatings);
-    
-    // Mark all ratings from storage as "fromStorage: true" so they'll be 
-    // properly recognized as cached when loaded
-    Object.entries(parsedRatings).forEach(([tweetId, ratingData]) => {
-        tweetIDRatingCache[tweetId] = {
-            ...ratingData,
-            fromStorage: true  // Mark as loaded from storage
-        };
-    });
-    
-    console.log(`Loaded ${Object.keys(tweetIDRatingCache).length} cached tweet ratings`);
-} catch (e) {
-    console.error('Error loading stored ratings:', e);
-}
-
