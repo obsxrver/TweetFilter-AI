@@ -9,7 +9,7 @@ function filterSingleTweet(tweetArticle) {
     setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus || 'rated', tweetArticle.dataset.ratingDescription);
     // If the tweet is still pending a rating, keep it visible
     // Always get the latest threshold directly from storage
-    const currentFilterThreshold = parseInt(GM_getValue('filterThreshold', '1'));
+    const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     if (tweetArticle.dataset.ratingStatus === 'pending' || tweetArticle.dataset.ratingStatus === 'streaming') {
         //tweetArticle.style.display = '';
         tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display = '';
@@ -98,29 +98,7 @@ function applyTweetCachedRating(tweetArticle) {
 }
 // ----- UI Helper Functions -----
 
-/**
- * Saves the tweet ratings (by tweet ID) to persistent storage and updates the UI.
- */
-function saveTweetRatings() {
-    GM_setValue('tweetRatings', JSON.stringify(tweetIDRatingCache));
 
-    // Dynamically update the UI cache stats counter
-    // Only try to update if the element exists (the settings panel is open)
-    const cachedCountEl = document.getElementById('cached-ratings-count');
-    if (cachedCountEl) {
-        cachedCountEl.textContent = Object.keys(tweetIDRatingCache).length;
-    }
-
-    // Also update the cache stats in the settings panel
-    try {
-        // Use the UI function if it's available
-        if (typeof updateCacheStatsUI === 'function') {
-            updateCacheStatsUI();
-        }
-    } catch (e) {
-        console.error('Error updating cache stats UI:', e);
-    }
-}
 /**
  * Checks if a given user handle is in the blacklist.
  * @param {string} handle - The Twitter handle.
@@ -133,7 +111,7 @@ function isUserBlacklisted(handle) {
 }
 
 async function delayedProcessTweet(tweetArticle, tweetId) {
-    const apiKey = GM_getValue('openrouter-api-key', '');
+    const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
@@ -356,7 +334,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             console.log(`${fullContextWithImageDescription}`);
             console.log(`Status ${tweetArticle.dataset.ratingStatus}`);
             console.log(`Score ${score}`);
-            console.log(`Model ${GM_getValue('selectedModel', '')}`);console.log(`Description ${description}`);
+            console.log(`Model ${browserGet('selectedModel', '')}`);console.log(`Description ${description}`);
             console.groupEnd();
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
             // Final verification of indicator
@@ -482,7 +460,7 @@ let threadMappingInProgress = false; // Add a memory-based flag for more reliabl
 // Load thread relationships from storage on script initialization
 function loadThreadRelationships() {
     try {
-        const savedRelationships = GM_getValue('threadRelationships', '{}');
+        const savedRelationships = browserGet('threadRelationships', '{}');
         threadRelationships = JSON.parse(savedRelationships);
         console.log(`Loaded ${Object.keys(threadRelationships).length} thread relationships`);
     } catch (e) {
@@ -505,7 +483,7 @@ function saveThreadRelationships() {
             threadRelationships = Object.fromEntries(recent);
         }
         
-        GM_setValue('threadRelationships', JSON.stringify(threadRelationships));
+        browserSet('threadRelationships', JSON.stringify(threadRelationships));
     } catch (e) {
         console.error('Error saving thread relationships:', e);
     }
@@ -633,7 +611,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     // Add media from the current tweet
     if (mainMediaLinks.length > 0) {
         // Process main tweet images only if image descriptions are enabled
-        if (enableImageDescriptions = GM_getValue('enableImageDescriptions', false)) {
+        if (enableImageDescriptions = browserGet('enableImageDescriptions', false)) {
             let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
             fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
@@ -826,7 +804,7 @@ async function handleThreads() {
                     }
                     
                     // Get the full context of the root tweet
-                    const apiKey = GM_getValue('openrouter-api-key', '');
+                    const apiKey = browserGet('openrouter-api-key', '');
                     const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
                     if (!fullcxt) {
                         throw new Error("Failed to get full context for root tweet");
@@ -877,7 +855,7 @@ async function handleThreads() {
                     if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].tweetContent) {
                         threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
                     } else {
-                        const apiKey = GM_getValue('openrouter-api-key', '');
+                        const apiKey = browserGet('openrouter-api-key', '');
                         await new Promise(resolve => setTimeout(resolve, 100));
                         const newContext = await getFullContext(nextArticle, tweetId, apiKey);
                         if (!newContext) {
@@ -1109,7 +1087,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 const rootTweetElement = tweetCells.find(t => t.tweetId === rootTweet.tweetId)?.tweetNode;
                 if (rootTweetElement) {
                     try {
-                        const apiKey = GM_getValue('openrouter-api-key', '');
+                        const apiKey = browserGet('openrouter-api-key', '');
                         const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
                         if (rootContext) {
                             completeThreadHistory = rootContext;

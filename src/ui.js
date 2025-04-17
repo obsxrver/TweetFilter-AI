@@ -48,7 +48,7 @@ function injectUI() {
     if(MENU){
         menuHTML = MENU;
     }else{
-        menuHTML = GM_getValue('menuHTML');
+        menuHTML = browserGet('menuHTML');
     }
     
     if (!menuHTML) {
@@ -236,7 +236,7 @@ function initializeEventListeners(uiContainer) {
     if (showFreeModelsCheckbox) {
         showFreeModelsCheckbox.addEventListener('change', function() {
             showFreeModels = this.checked;
-            GM_setValue('showFreeModels', showFreeModels);
+            browserSet('showFreeModels', showFreeModels);
             refreshModelsUI();
         });
     }
@@ -244,9 +244,9 @@ function initializeEventListeners(uiContainer) {
     const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
     if (sortDirectionBtn) {
         sortDirectionBtn.addEventListener('click', function() {
-            const currentDirection = GM_getValue('sortDirection', 'default');
+            const currentDirection = browserGet('sortDirection', 'default');
             const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
-            GM_setValue('sortDirection', newDirection);
+            browserSet('sortDirection', newDirection);
             this.dataset.value = newDirection;
             refreshModelsUI();
         });
@@ -255,12 +255,12 @@ function initializeEventListeners(uiContainer) {
     const modelSortSelect = uiContainer.querySelector('#model-sort-order');
     if (modelSortSelect) {
         modelSortSelect.addEventListener('change', function() {
-            GM_setValue('modelSortOrder', this.value);
+            browserSet('modelSortOrder', this.value);
             // Set default direction for latency and age
             if (this.value === 'latency-low-to-high') {
-                GM_setValue('sortDirection', 'default'); // Show lowest latency first
+                browserSet('sortDirection', 'default'); // Show lowest latency first
             } else if (this.value === '') { // Age
-                GM_setValue('sortDirection', 'default'); // Show newest first
+                browserSet('sortDirection', 'default'); // Show newest first
             }
             refreshModelsUI();
         });
@@ -270,7 +270,7 @@ function initializeEventListeners(uiContainer) {
     if (providerSortSelect) {
         providerSortSelect.addEventListener('change', function() {
             providerSort = this.value;
-            GM_setValue('providerSort', providerSort);
+            browserSet('providerSort', providerSort);
         });
     }
 
@@ -283,13 +283,13 @@ function initializeEventListeners(uiContainer) {
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
-    let previousAPIKey = GM_getValue('openrouter-api-key', '').length>0?true:false;
+    let previousAPIKey = browserGet('openrouter-api-key', '').length>0?true:false;
     if (apiKey) {
         if (!previousAPIKey){
             resetSettings(true);
             //jank hack to get the UI defaults to load correctly
         }
-        GM_setValue('openrouter-api-key', apiKey);
+        browserSet('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
         fetchAvailableModels(); // Refresh model list
         //refresh the website
@@ -304,19 +304,18 @@ function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear tweet ratings cache
         Object.keys(tweetIDRatingCache).forEach(key => delete tweetIDRatingCache[key]);
-        GM_setValue('tweetRatings', '{}');
+        browserSet('tweetRatings', '{}');
         
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};
-            GM_setValue('threadRelationships', '{}');
+            browserSet('threadRelationships', '{}');
             console.log('Cleared thread relationships cache');
         }
         
         showStatus('All cached ratings and thread relationships cleared!');
         console.log('Cleared all tweet ratings and thread relationships');
 
-        updateCacheStatsUI();
 
         // Re-process visible tweets
         if (observedTargetNode) {
@@ -344,7 +343,7 @@ function clearTweetRatingsAndRefreshUI() {
 function saveInstructions() {
     const instructionsTextarea = document.getElementById('user-instructions');
     USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
-    GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
+    browserSet('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
     if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
@@ -380,7 +379,7 @@ function handleSettingChange(target, settingName) {
     }
 
     // Save to GM storage
-    GM_setValue(settingName, value);
+    browserSet(settingName, value);
 
     // Special UI updates for specific settings
     if (settingName === 'enableImageDescriptions') {
@@ -424,7 +423,7 @@ function handleParameterChange(target, paramName) {
     }
 
     // Save to GM storage
-    GM_setValue(paramName, newValue);
+    browserSet(paramName, newValue);
 }
 
 /**
@@ -442,7 +441,7 @@ function handleFilterSliderChange(slider) {
     const percentage = (currentFilterThreshold / 10) * 100;
     slider.style.setProperty('--slider-percent', `${percentage}%`);
     
-    GM_setValue('filterThreshold', currentFilterThreshold);
+    browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
 
@@ -491,20 +490,6 @@ function toggleAdvancedOptions(contentId) {
     }
 }
 
-// --- UI Update Functions ---
-
-/** Updates the cache statistics display in the General tab. */
-function updateCacheStatsUI() {
-    const cachedCountEl = document.getElementById('cached-ratings-count');
-    const whitelistedCountEl = document.getElementById('whitelisted-handles-count');
-
-    if (cachedCountEl) {
-        cachedCountEl.textContent = Object.keys(tweetIDRatingCache).length;
-    }
-    if (whitelistedCountEl) {
-        whitelistedCountEl.textContent = blacklistedHandles.length;
-    }
-}
 
 /**
  * Refreshes the entire settings UI to reflect current settings.
@@ -513,7 +498,7 @@ function refreshSettingsUI() {
     // Update general settings inputs/toggles
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
-        const value = GM_getValue(settingName, window[settingName]); // Get saved or default value
+        const value = browserGet(settingName, window[settingName]); // Get saved or default value
         if (input.type === 'checkbox') {
             input.checked = value;
             // Trigger change handler for side effects (like hiding/showing image model section)
@@ -528,7 +513,7 @@ function refreshSettingsUI() {
         const paramName = row.dataset.paramName;
         const slider = row.querySelector('.parameter-slider');
         const valueInput = row.querySelector('.parameter-value');
-        const value = GM_getValue(paramName, window[paramName]);
+        const value = browserGet(paramName, window[paramName]);
 
         if (slider) slider.value = value;
         if (valueInput) valueInput.value = value;
@@ -546,11 +531,8 @@ function refreshSettingsUI() {
     }
 
     // Refresh dynamically populated lists/dropdowns
-        refreshHandleList(document.getElementById('handle-list'));
+    refreshHandleList(document.getElementById('handle-list'));
     refreshModelsUI(); // Refreshes model dropdowns
-
-    // Update cache stats
-    updateCacheStatsUI();
 
     // Set initial state for advanced sections (collapsed by default unless CSS specifies otherwise)
     document.querySelectorAll('.advanced-content').forEach(content => {
@@ -619,8 +601,8 @@ function refreshModelsUI() {
     }
 
     // Sort models based on current sort order and direction
-    const sortDirection = GM_getValue('sortDirection', 'default');
-    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+    const sortDirection = browserGet('sortDirection', 'default');
+    const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
     
     // Update toggle button text based on sort order
     const toggleBtn = document.getElementById('sort-direction');
@@ -654,7 +636,7 @@ function refreshModelsUI() {
             selectedModel,
             (newValue) => {
                 selectedModel = newValue;
-                GM_setValue('selectedModel', selectedModel);
+                browserSet('selectedModel', selectedModel);
                 showStatus('Rating model updated');
             },
             'Search rating models...'
@@ -677,7 +659,7 @@ function refreshModelsUI() {
             selectedImageModel,
             (newValue) => {
                 selectedImageModel = newValue;
-                GM_setValue('selectedImageModel', selectedImageModel);
+                browserSet('selectedImageModel', selectedImageModel);
                 showStatus('Image model updated');
             },
             'Search vision models...'
@@ -1587,19 +1569,19 @@ function initializeTooltipCleanup() {
 function exportSettings() {
     try {
         const settingsToExport = {
-            apiKey: GM_getValue('openrouter-api-key', ''),
-            selectedModel: GM_getValue('selectedModel', 'openai/gpt-4.1-nano'),
-            selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
-            enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
-            enableStreaming: GM_getValue('enableStreaming', true),
-            modelTemperature: GM_getValue('modelTemperature', 1),
-            modelTopP: GM_getValue('modelTopP', 1),
-            imageModelTemperature: GM_getValue('imageModelTemperature', 1),
-            imageModelTopP: GM_getValue('imageModelTopP', 1),
-            maxTokens: GM_getValue('maxTokens', 0),
-            filterThreshold: GM_getValue('filterThreshold', 1),
-            userDefinedInstructions: GM_getValue('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),
-            modelSortOrder: GM_getValue('modelSortOrder', 'throughput-high-to-low')
+            apiKey: browserGet('openrouter-api-key', ''),
+            selectedModel: browserGet('selectedModel', 'openai/gpt-4.1-nano'),
+            selectedImageModel: browserGet('selectedImageModel', 'openai/gpt-4.1-nano'),
+            enableImageDescriptions: browserGet('enableImageDescriptions', false),
+            enableStreaming: browserGet('enableStreaming', true),
+            modelTemperature: browserGet('modelTemperature', 1),
+            modelTopP: browserGet('modelTopP', 1),
+            imageModelTemperature: browserGet('imageModelTemperature', 1),
+            imageModelTopP: browserGet('imageModelTopP', 1),
+            maxTokens: browserGet('maxTokens', 0),
+            filterThreshold: browserGet('filterThreshold', 1),
+            userDefinedInstructions: browserGet('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),
+            modelSortOrder: browserGet('modelSortOrder', 'throughput-high-to-low')
         };
 
         const data = {
@@ -1648,13 +1630,13 @@ function importSettings() {
                         if (window[key] !== undefined) {
                             window[key] = data.settings[key];
                         }
-                        GM_setValue(key, data.settings[key]);
+                        browserSet(key, data.settings[key]);
                     }
 
                     // Import blacklisted handles
                     if (data.blacklistedHandles && Array.isArray(data.blacklistedHandles)) {
                         blacklistedHandles = data.blacklistedHandles;
-                        GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+                        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
                     }
 
                     // Import tweet ratings (merge with existing)
@@ -1707,7 +1689,7 @@ function resetSettings(noconfirm=false) {
             if (window[key] !== undefined) {
                 window[key] = defaults[key];
             }
-            GM_setValue(key, defaults[key]);
+            browserSet(key, defaults[key]);
         }
 
         refreshSettingsUI();
@@ -1729,9 +1711,8 @@ function addHandleToBlacklist(handle) {
             return;
         }
     blacklistedHandles.push(handle);
-    GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+    browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
     refreshHandleList(document.getElementById('handle-list'));
-    updateCacheStatsUI();
     showStatus(`Added @${handle} to auto-rate list.`);
 }
 
@@ -1743,9 +1724,8 @@ function removeHandleFromBlacklist(handle) {
     const index = blacklistedHandles.indexOf(handle);
     if (index > -1) {
         blacklistedHandles.splice(index, 1);
-        GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
         refreshHandleList(document.getElementById('handle-list'));
-        updateCacheStatsUI();
         showStatus(`Removed @${handle} from auto-rate list.`);
                 } else {
         console.warn(`Attempted to remove non-existent handle: ${handle}`);
@@ -1766,11 +1746,9 @@ function initialiseUI() {
     fetchAvailableModels();
     
     // Initialize the floating cache stats badge
-    updateFloatingCacheStats();
+    initializeFloatingCacheStats();
     
-    // Set up a periodic refresh of the cache stats to catch any updates
-    setInterval(updateFloatingCacheStats, 10000);
-    
+    setInterval(updateCacheStatsUI, 3000);
     // Initialize the tooltip cleanup system
     initializeTooltipCleanup();
     
@@ -1785,7 +1763,7 @@ function initialiseUI() {
  * This provides real-time feedback when tweets are rated and cached,
  * even when the settings panel is not open.
  */
-function updateFloatingCacheStats() {
+function initializeFloatingCacheStats() {
     let statsBadge = document.getElementById('tweet-filter-stats-badge');
     
     if (!statsBadge) {
@@ -1814,7 +1792,7 @@ function updateFloatingCacheStats() {
         
         // Add click event to open settings
         statsBadge.addEventListener('click', () => {
-            const settingsToggle = document.querySelector('.settings-toggle');
+            const settingsToggle = document.getElementById('settings-toggle');
             if (settingsToggle) {
                 settingsToggle.click();
             }
@@ -1848,7 +1826,7 @@ function updateFloatingCacheStats() {
     
     statsBadge.innerHTML = `
         <span style="margin-right: 5px;">🧠</span>
-        <span>${cachedCount} rated</span>
+        <span data-cached-count>${cachedCount} rated</span>
         ${wlCount > 0 ? `<span style="margin-left: 5px;"> | ${wlCount} whitelisted</span>` : ''}
     `;
     
@@ -1860,12 +1838,3 @@ function updateFloatingCacheStats() {
     }, 5000);
 }
 
-// Extend the updateCacheStatsUI function to also update the floating stats badge
-const originalUpdateCacheStatsUI = updateCacheStatsUI;
-updateCacheStatsUI = function() {
-    // Call the original function
-    originalUpdateCacheStatsUI.apply(this, arguments);
-    
-    // Update the floating badge
-    updateFloatingCacheStats();
-};

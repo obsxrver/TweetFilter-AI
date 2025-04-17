@@ -15,7 +15,11 @@ files_to_combine = [
     "api.js",
     "domScraper.js", 
     "ratingEngine.js",
-    "ui.js"
+    "ui.js",
+    "helpers/browserStorage.js",
+    "helpers/cache.js",
+    "helpers/TweetCache.js",
+    "helpers/helpers.js"
 ]
 
 # Define embedded resources

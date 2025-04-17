@@ -17,6 +17,7 @@
 // ==/UserScript==
 (function() {
     'use strict';
+    console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
 
     // Embedded Menu.html
     const MENU = `<style>
@@ -2237,12 +2238,13 @@ const VERSION = '1.3.7';
 (function () {
     
     'use strict';
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.7- Enhanced)");
 
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");
-    GM_setValue('menuHTML', menuhtml);
-    let firstRun = GM_getValue('firstRun', true);
+    browserSet('menuHTML', menuhtml);
+    let firstRun = browserGet('firstRun', true);
 
     //GM_addStyle(css);
 
@@ -2256,14 +2258,14 @@ const VERSION = '1.3.7';
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (target) {
             observedTargetNode = target;
-
+            console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
             initialiseUI();
             if (firstRun) {
                 resetSettings(true);
-                GM_setValue('firstRun', false);
+                browserSet('firstRun', false);
             }
             // If no API key is found, prompt the user
-            let apiKey = GM_getValue('openrouter-api-key', '');
+            let apiKey = browserGet('openrouter-api-key', '');
             if(!apiKey){
                 alert("No API Key found. Please enter your API Key in Settings > General.")
             }
@@ -2274,7 +2276,7 @@ const VERSION = '1.3.7';
                 showStatus(`No API Key Found. Using Promotional Key`);
             }*/
             if (apiKey) {
-                GM_setValue('openrouter-api-key', apiKey);
+                browserSet('openrouter-api-key', apiKey);
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
@@ -2298,7 +2300,7 @@ const VERSION = '1.3.7';
                 if (statusIndicator) statusIndicator.remove();
                 //Now WHY TF did it call this LMAO. That's why it was broken!
                 //cleanupDescriptionElements();
-
+                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
             setTimeout(initializeObserver, 1000);
@@ -2379,28 +2381,29 @@ function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
 
 const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
-let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
+let USER_DEFINED_INSTRUCTIONS = browserGet('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
 - Give high scores to high-effort content and artistic content`);
-let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter threshold for tweet visibility
+let currentFilterThreshold = browserGet('filterThreshold', 1); // Filter threshold for tweet visibility
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
 let listedModels = []; // Filtered list of models actually shown in UI
-let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
-let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
-let modelSortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-let showFreeModels = GM_getValue('showFreeModels', true);
-let providerSort = GM_getValue('providerSort', ''); // Default to load-balanced
-let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
+let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
+let selectedImageModel = browserGet('selectedImageModel', 'openai/gpt-4.1-nano');
+let modelSortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
+let showFreeModels = browserGet('showFreeModels', true);
+let providerSort = browserGet('providerSort', ''); // Default to load-balanced
+let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
-let storedRatings = GM_getValue('tweetRatings', '{}');
+let storedRatings = browserGet('tweetRatings', '{}');
 let threadHist = "";
 // Settings variables
-let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
-let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
+let enableImageDescriptions = browserGet('enableImageDescriptions', false);
+let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
+
 
 // Model parameters
 const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.
@@ -2433,12 +2436,12 @@ SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
 If one of the above is not present, the program will not be able to parse the response and will return an error.
 `
-let modelTemperature = GM_getValue('modelTemperature', 1);
-let modelTopP = GM_getValue('modelTopP', 1);
-let imageModelTemperature = GM_getValue('imageModelTemperature', 1);
-let imageModelTopP = GM_getValue('imageModelTopP', 1);
-let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
-let imageModelMaxTokens = GM_getValue('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
+let modelTemperature = browserGet('modelTemperature', 1);
+let modelTopP = browserGet('modelTopP', 1);
+let imageModelTemperature = browserGet('imageModelTemperature', 1);
+let imageModelTopP = browserGet('imageModelTopP', 1);
+let maxTokens = browserGet('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
+let imageModelMaxTokens = browserGet('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
 //let menuHTML= "";
 
 // ----- DOM Selectors (for tweet elements) -----
@@ -2497,9 +2500,10 @@ try {
             fromStorage: true  // Mark as loaded from storage
         };
     });
-
+    
+    console.log(`Loaded ${Object.keys(tweetIDRatingCache).length} cached tweet ratings`);
 } catch (e) {
-
+    console.error('Error loading stored ratings:', e);
 }
 
 
@@ -2657,7 +2661,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
-
+                    console.log("Stream timed out after inactivity");
                     if (!streamComplete) {
                         streamComplete = true;
                         // Call onComplete with whatever we have so far
@@ -2748,7 +2752,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                         });
                                     }
                                 } catch (e) {
-
+                                    console.error("Error parsing SSE data:", e, data);
                                 }
                             }
                         }
@@ -2773,7 +2777,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                     
                 } catch (error) {
-
+                    console.error("Stream processing error:", error);
                     // Make sure we clean up and call onError
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
@@ -2794,7 +2798,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             };
             
             processStream().catch(error => {
-
+                console.error("Unhandled stream error:", error);
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
@@ -2845,7 +2849,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             try {
                 reqObj.abort(); // Attempt to abort the XHR request
             } catch (e) {
-
+                console.error("Error aborting request:", e);
             }
             
             // Remove from active requests tracking
@@ -2901,7 +2905,11 @@ const safetySettings = [
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
-
+    console.log(`Given Tweet Text: 
+        ${tweetText}
+        And Media URLS:
+        ${mediaUrls}
+        `)
     // Create the request body
     const request = {
         model: selectedModel,
@@ -3013,7 +3021,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         } catch (error) {
             pendingRequests--;
             showStatus(`Rating tweet... (${pendingRequests} pending)`);
-
+            console.error(`API error during attempt ${attempt}:`, error);
+            
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
@@ -3086,7 +3095,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
         
         // Cancel any existing request for this tweet
         if (window.activeStreamingRequests[tweetId]) {
-
+            console.log(`Canceling previous streaming request for tweet ${tweetId}`);
             window.activeStreamingRequests[tweetId].abort();
             delete window.activeStreamingRequests[tweetId];
         }
@@ -3255,7 +3264,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         
                     } else {
                         // If no score was found anywhere, log a warning and set a default score
-
+                        console.warn(`No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                        
                         // Set a default score of 5
                         const defaultScore = 5;
                         
@@ -3292,7 +3302,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         
                     }
                 } else {
-
+                    console.warn(`Tweet article not found for ID ${tweetId} when completing rating`);
                 }
                 
                 resolve({
@@ -3315,7 +3325,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                     if (indicator && indicator.scoreTooltip) {
                         indicator.scoreTooltip.classList.remove('streaming-tooltip');
                     }
-
+                    console.log('errorData', errorData);
                     setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
                 }
                 
@@ -3420,12 +3430,12 @@ function fetchAvailableModels() {
                     showStatus('Models updated!');
                 }
             } catch (error) {
-
+                console.error('Error parsing model list:', error);
                 showStatus('Error parsing models list');
             }
         },
         onerror: function (error) {
-
+            console.error('Error fetching models:', error);
             showStatus('Error fetching models!');
         }
     });
@@ -3519,6 +3529,7 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 
+
 /**
  * Extracts and returns an array of media URLs from the tweet element.
  * @param {Element} scopeElement - The tweet element.
@@ -3601,6 +3612,7 @@ function isOriginalTweet(tweetArticle) {
     return false;
 }
 
+
 // ----- MutationObserver Setup -----
 /**
  * Handles DOM mutations to detect new tweets added to the timeline.
@@ -3677,7 +3689,7 @@ function filterSingleTweet(tweetArticle) {
     setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus || 'rated', tweetArticle.dataset.ratingDescription);
     // If the tweet is still pending a rating, keep it visible
     // Always get the latest threshold directly from storage
-    const currentFilterThreshold = parseInt(GM_getValue('filterThreshold', '1'));
+    const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     if (tweetArticle.dataset.ratingStatus === 'pending' || tweetArticle.dataset.ratingStatus === 'streaming') {
         //tweetArticle.style.display = '';
         tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display = '';
@@ -3702,7 +3714,7 @@ function applyTweetCachedRating(tweetArticle) {
     const userHandle = handles.length > 0 ? handles[0] : '';
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-
+        //console.debug(`Blacklisted user detected: ${userHandle}, assigning score 10`);
         tweetArticle.dataset.sloppinessScore = '10';
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
@@ -3724,7 +3736,7 @@ function applyTweetCachedRating(tweetArticle) {
             const score = tweetIDRatingCache[tweetId].score;
             const desc = tweetIDRatingCache[tweetId].description;
             const reasoning = tweetIDRatingCache[tweetId].reasoning || "";
-
+            //console.debug(`Applied cached rating for tweet ${tweetId}: ${score}`);
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             if (reasoning) {
@@ -3755,7 +3767,7 @@ function applyTweetCachedRating(tweetArticle) {
             return true;
         } else if (!tweetIDRatingCache[tweetId].streaming){
             // Invalid cache entry - missing score
-
+            console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
             delete tweetIDRatingCache[tweetId];  // Remove invalid entry
             saveTweetRatings();
             return false;
@@ -3770,7 +3782,7 @@ function applyTweetCachedRating(tweetArticle) {
  * Saves the tweet ratings (by tweet ID) to persistent storage and updates the UI.
  */
 function saveTweetRatings() {
-    GM_setValue('tweetRatings', JSON.stringify(tweetIDRatingCache));
+    browserSet('tweetRatings', JSON.stringify(tweetIDRatingCache));
 
     // Dynamically update the UI cache stats counter
     // Only try to update if the element exists (the settings panel is open)
@@ -3786,7 +3798,7 @@ function saveTweetRatings() {
             updateCacheStatsUI();
         }
     } catch (e) {
-
+        console.error('Error updating cache stats UI:', e);
     }
 }
 /**
@@ -3801,7 +3813,7 @@ function isUserBlacklisted(handle) {
 }
 
 async function delayedProcessTweet(tweetArticle, tweetId) {
-    const apiKey = GM_getValue('openrouter-api-key', '');
+    const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
@@ -3809,15 +3821,15 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             setScoreIndicator(tweetArticle, 9, 'error', "No API key");
             // Verify indicator was actually created
             if (!tweetArticle.querySelector('.score-indicator')) {
-
+                console.error(`Failed to create score indicator for tweet ${tweetId}`);
             }
         } catch (e) {
-
+            console.error(`Error setting score indicator for tweet ${tweetId}:`, e);
         }
         filterSingleTweet(tweetArticle);
         // Remove from processedTweets to allow retrying
         processedTweets.delete(tweetId);
-
+        console.error(`Failed to process tweet ${tweetId}: No API key`);
         return;
     }
     let score = 5; // Default score if rating fails
@@ -3829,6 +3841,8 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
         const quotedHandle = handles.length > 1 ? handles[1] : '';
+
+
 
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
@@ -3843,7 +3857,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     throw new Error("Failed to create score indicator");
                 }
             } catch (e) {
-
+                console.error(`Error setting blacklist indicator for tweet ${tweetId}:`, e);
                 // Even if indicator fails, we've set the dataset properties
             }
             filterSingleTweet(tweetArticle);
@@ -3865,7 +3879,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 if (cacheApplied) {
                     // Verify the indicator exists after applying cached rating
                     if (!tweetArticle.querySelector('.score-indicator')) {
-
+                        console.error(`Missing indicator after applying cached rating to tweet ${tweetId}`);
                         processingSuccessful = false;
                     } else {
                         processingSuccessful = true;
@@ -3875,10 +3889,11 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             } else if (cacheEntry.streaming === true) {
                 // This is a streaming entry that's still in progress
                 // Don't delete it, but don't use it either
-
+                console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
+                
             } else {
                 // Invalid cache entry, delete it
-
+                console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cacheEntry);
                 delete tweetIDRatingCache[tweetId];
                 saveTweetRatings();
             }
@@ -3892,7 +3907,8 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         // Add thread relationship context
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
-
+           
+            
             // Add thread context to cache entry if we process this tweet
             if (!tweetIDRatingCache[tweetId]) {
                 tweetIDRatingCache[tweetId] = {};
@@ -3953,7 +3969,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     // Log indicator classes after setting
 
                 } catch (e) {
-
+                    console.error(`Error setting rated indicator for tweet ${tweetId}:`, e);
                     // Continue even if indicator fails - we've set the dataset properties
                 }
 
@@ -4015,19 +4031,25 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.sloppinessScore = score.toString();
         try {
             //group should default to closed
-
+            console.groupCollapsed(`Tweet Rating ${tweetId} by ${userHandle} Score: ${score}`);
+            console.log(`Tweet ${tweetId}`);
+            console.log(`${fullContextWithImageDescription}`);
+            console.log(`Status ${tweetArticle.dataset.ratingStatus}`);
+            console.log(`Score ${score}`);
+            console.log(`Model ${browserGet('selectedModel', '')}`);console.log(`Description ${description}`);
+            console.groupEnd();
             setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
             // Final verification of indicator
             if (!tweetArticle.querySelector('.score-indicator')) {
                 processingSuccessful = false;
             }
         } catch (e) {
-
+            console.error(`Final error setting indicator for tweet ${tweetId}:`, e);
             processingSuccessful = false;
         }
         filterSingleTweet(tweetArticle);
     } catch (error) {
-
+        console.error(`Error processing tweet ${tweetId}: ${error}`);
         if (!tweetArticle.dataset.sloppinessScore) {
             tweetArticle.dataset.sloppinessScore = '5';
             tweetArticle.dataset.ratingStatus = 'error';
@@ -4036,10 +4058,10 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
                 // Verify indicator exists
                 if (!tweetArticle.querySelector('.score-indicator')) {
-
+                    console.error(`Failed to create error indicator for tweet ${tweetId}`);
                 }
             } catch (e) {
-
+                console.error(`Error setting error indicator for tweet ${tweetId}:`, e);
             }
             filterSingleTweet(tweetArticle);
         }
@@ -4099,7 +4121,7 @@ function scheduleTweetProcessing(tweetArticle) {
         // Verify that the tweet actually has an indicator - if not, remove from processed
         const hasIndicator = !!tweetArticle.querySelector('.score-indicator');
         if (!hasIndicator) {
-
+            console.warn(`Tweet ${tweetId} was marked as processed but has no indicator, reprocessing`);
             processedTweets.delete(tweetId);
         } else {
             return;
@@ -4116,7 +4138,7 @@ function scheduleTweetProcessing(tweetArticle) {
     try {
         setScoreIndicator(tweetArticle, null, 'pending');
     } catch (e) {
-
+        console.error(`Failed to set indicator for tweet ${tweetId}:`, e);
     }
 
     // Now schedule the actual rating processing
@@ -4124,7 +4146,7 @@ function scheduleTweetProcessing(tweetArticle) {
         try {
             delayedProcessTweet(tweetArticle, tweetId);
         } catch (e) {
-
+            console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
             processedTweets.delete(tweetId);
         }
     }, PROCESSING_DELAY_MS);
@@ -4140,11 +4162,11 @@ let threadMappingInProgress = false; // Add a memory-based flag for more reliabl
 // Load thread relationships from storage on script initialization
 function loadThreadRelationships() {
     try {
-        const savedRelationships = GM_getValue('threadRelationships', '{}');
+        const savedRelationships = browserGet('threadRelationships', '{}');
         threadRelationships = JSON.parse(savedRelationships);
-
+        console.log(`Loaded ${Object.keys(threadRelationships).length} thread relationships`);
     } catch (e) {
-
+        console.error('Error loading thread relationships:', e);
         threadRelationships = {};
     }
 }
@@ -4163,9 +4185,9 @@ function saveThreadRelationships() {
             threadRelationships = Object.fromEntries(recent);
         }
         
-        GM_setValue('threadRelationships', JSON.stringify(threadRelationships));
+        browserSet('threadRelationships', JSON.stringify(threadRelationships));
     } catch (e) {
-
+        console.error('Error saving thread relationships:', e);
     }
 }
 
@@ -4273,7 +4295,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
             threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
         } catch (e) {
-
+            console.error("Error parsing thread media URLs:", e);
         }
     }
     
@@ -4291,7 +4313,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     // Add media from the current tweet
     if (mainMediaLinks.length > 0) {
         // Process main tweet images only if image descriptions are enabled
-        if (enableImageDescriptions = GM_getValue('enableImageDescriptions', false)) {
+        if (enableImageDescriptions = browserGet('enableImageDescriptions', false)) {
             let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
             fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
@@ -4374,6 +4396,7 @@ ${quotedMediaLinks.join(", ")}`;
     return fullContextWithImageDescription;
 }
 
+
 /**
  * Applies filtering to all tweets currently in the observed container.
  */
@@ -4383,12 +4406,13 @@ function applyFilteringToAll() {
     tweets.forEach(filterSingleTweet);
 }
 
+
 function ensureAllTweetsRated() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
 
     if (tweets.length > 0) {
-
+        console.log(`Checking ${tweets.length} tweets to ensure all are rated...`);
         let unreatedCount = 0;
 
         tweets.forEach(tweet => {
@@ -4406,7 +4430,7 @@ function ensureAllTweetsRated() {
 
             // If tweet is in processedTweets but missing indicator, remove it from processed
             if (processedTweets.has(tweetId) && !hasIndicator) {
-
+                console.warn(`Tweet ${tweetId} in processedTweets but missing indicator, removing`);
                 processedTweets.delete(tweetId);
             }
 
@@ -4418,12 +4442,13 @@ function ensureAllTweetsRated() {
                     !hasScore ? 'unrated' :
                         hasError ? 'error' : 'unknown issue';
 
+                //console.log(`Found tweet ${tweetId} with ${status}, scheduling processing`);
                 scheduleTweetProcessing(tweet);
             }
         });
 
         if (unreatedCount > 0) {
-
+            //console.log(`Scheduled ${unreatedCount} tweets for processing`);
         }
     }
 }
@@ -4481,7 +4506,7 @@ async function handleThreads() {
                     }
                     
                     // Get the full context of the root tweet
-                    const apiKey = GM_getValue('openrouter-api-key', '');
+                    const apiKey = browserGet('openrouter-api-key', '');
                     const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
                     if (!fullcxt) {
                         throw new Error("Failed to get full context for root tweet");
@@ -4504,7 +4529,7 @@ async function handleThreads() {
                         mapThreadStructure(conversation, localRootTweetId);
                     }, 500);
                 } catch (error) {
-
+                    console.error("Error initializing thread history:", error);
                     // Clean up on error
                     threadMappingInProgress = false;
                     delete conversation.dataset.threadHist;
@@ -4532,7 +4557,7 @@ async function handleThreads() {
                     if (tweetIDRatingCache[tweetId] && tweetIDRatingCache[tweetId].tweetContent) {
                         threadHist = threadHist + "\n[REPLY]\n" + tweetIDRatingCache[tweetId].tweetContent;
                     } else {
-                        const apiKey = GM_getValue('openrouter-api-key', '');
+                        const apiKey = browserGet('openrouter-api-key', '');
                         await new Promise(resolve => setTimeout(resolve, 100));
                         const newContext = await getFullContext(nextArticle, tweetId, apiKey);
                         if (!newContext) {
@@ -4548,7 +4573,7 @@ async function handleThreads() {
                     mapThreadStructure(conversation, localRootTweetId);
                 }, 500);
             } catch (error) {
-
+                console.error("Error processing reply:", error);
                 // Clean up on error
                 threadMappingInProgress = false;
                 if (conversation.firstChild) {
@@ -4564,7 +4589,7 @@ async function handleThreads() {
             }, 500);
         }
     } catch (error) {
-
+        console.error("Error in handleThreads:", error);
         // Clean up all state on error
         threadMappingInProgress = false;
     }
@@ -4588,7 +4613,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             // Process all visible tweets using the cellInnerDiv structure for improved mapping
             let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
             if (!cellDivs.length) {
-
+                console.log("No cell divs found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4666,7 +4691,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         scheduleTweetProcessing(article);
                     }
                 } catch (err) {
-
+                    console.error("Error processing tweet in mapThreadStructure:", err);
                     // Continue with next tweet
                     continue;
                 }
@@ -4674,7 +4699,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             
             // Build reply structure only if we have tweets to process
             if (tweetCells.length === 0) {
-
+                console.log("No valid tweets found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4764,7 +4789,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 const rootTweetElement = tweetCells.find(t => t.tweetId === rootTweet.tweetId)?.tweetNode;
                 if (rootTweetElement) {
                     try {
-                        const apiKey = GM_getValue('openrouter-api-key', '');
+                        const apiKey = browserGet('openrouter-api-key', '');
                         const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
                         if (rootContext) {
                             completeThreadHistory = rootContext;
@@ -4787,12 +4812,13 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             }
                         }
                     } catch (error) {
-
+                        console.error("Error getting root context:", error);
                         // Continue processing even if full context fails
                     }
                 }
             }
-
+            
+            
             // Fourth pass: Update the cache with thread context
             // but with a limit on how many we process at once
             const batchSize = 10;
@@ -4860,7 +4886,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         await Promise.race([mapping(), timeout]);
         
     } catch (error) {
-
+        console.error("Error in mapThreadStructure:", error);
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;
@@ -4887,7 +4913,7 @@ function getTweetReplyInfo(tweetId) {
 function showStatus(message) {
     const indicator = document.getElementById('status-indicator');
     if (!indicator) {
-
+        console.error('#status-indicator element not found.');
         return;
     }
     indicator.textContent = message;
@@ -4928,11 +4954,11 @@ function injectUI() {
     if(MENU){
         menuHTML = MENU;
     }else{
-        menuHTML = GM_getValue('menuHTML');
+        menuHTML = browserGet('menuHTML');
     }
     
     if (!menuHTML) {
-
+        console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
         return null;
     }
@@ -4941,7 +4967,7 @@ function injectUI() {
     const containerId = 'tweetfilter-root-container'; // Use the ID from the updated HTML
     let uiContainer = document.getElementById(containerId);
     if (uiContainer) {
-
+        console.warn('UI container already exists. Skipping injection.');
         return uiContainer; // Return existing container
     }
 
@@ -4953,14 +4979,15 @@ function injectUI() {
     const stylesheet = uiContainer.querySelector('style');
     if (stylesheet) {
         GM_addStyle(stylesheet.textContent);
-
+        console.log('Injected styles from Menu.html');
         stylesheet.remove(); // Remove style tag after injecting
     } else {
-
+        console.warn('No <style> tag found in Menu.html');
     }
 
     // Append the rest of the UI elements
     document.body.appendChild(uiContainer);
+    console.log('TweetFilter UI Injected from HTML resource.');
 
     // Set version number
     const versionInfo = uiContainer.querySelector('#version-info');
@@ -4977,9 +5004,11 @@ function injectUI() {
  */
 function initializeEventListeners(uiContainer) {
     if (!uiContainer) {
-
+        console.error('UI Container not found for event listeners.');
         return;
     }
+
+    console.log('Wiring UI events...');
 
     const settingsContainer = uiContainer.querySelector('#settings-container');
     const filterContainer = uiContainer.querySelector('#tweet-filter-container');
@@ -5113,7 +5142,7 @@ function initializeEventListeners(uiContainer) {
     if (showFreeModelsCheckbox) {
         showFreeModelsCheckbox.addEventListener('change', function() {
             showFreeModels = this.checked;
-            GM_setValue('showFreeModels', showFreeModels);
+            browserSet('showFreeModels', showFreeModels);
             refreshModelsUI();
         });
     }
@@ -5121,9 +5150,9 @@ function initializeEventListeners(uiContainer) {
     const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
     if (sortDirectionBtn) {
         sortDirectionBtn.addEventListener('click', function() {
-            const currentDirection = GM_getValue('sortDirection', 'default');
+            const currentDirection = browserGet('sortDirection', 'default');
             const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
-            GM_setValue('sortDirection', newDirection);
+            browserSet('sortDirection', newDirection);
             this.dataset.value = newDirection;
             refreshModelsUI();
         });
@@ -5132,12 +5161,12 @@ function initializeEventListeners(uiContainer) {
     const modelSortSelect = uiContainer.querySelector('#model-sort-order');
     if (modelSortSelect) {
         modelSortSelect.addEventListener('change', function() {
-            GM_setValue('modelSortOrder', this.value);
+            browserSet('modelSortOrder', this.value);
             // Set default direction for latency and age
             if (this.value === 'latency-low-to-high') {
-                GM_setValue('sortDirection', 'default'); // Show lowest latency first
+                browserSet('sortDirection', 'default'); // Show lowest latency first
             } else if (this.value === '') { // Age
-                GM_setValue('sortDirection', 'default'); // Show newest first
+                browserSet('sortDirection', 'default'); // Show newest first
             }
             refreshModelsUI();
         });
@@ -5147,10 +5176,11 @@ function initializeEventListeners(uiContainer) {
     if (providerSortSelect) {
         providerSortSelect.addEventListener('change', function() {
             providerSort = this.value;
-            GM_setValue('providerSort', providerSort);
+            browserSet('providerSort', providerSort);
         });
     }
 
+    console.log('UI events wired.');
 }
 
 // --- Event Handlers ---
@@ -5159,13 +5189,13 @@ function initializeEventListeners(uiContainer) {
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
-    let previousAPIKey = GM_getValue('openrouter-api-key', '').length>0?true:false;
+    let previousAPIKey = browserGet('openrouter-api-key', '').length>0?true:false;
     if (apiKey) {
         if (!previousAPIKey){
             resetSettings(true);
             //jank hack to get the UI defaults to load correctly
         }
-        GM_setValue('openrouter-api-key', apiKey);
+        browserSet('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
         fetchAvailableModels(); // Refresh model list
         //refresh the website
@@ -5180,16 +5210,17 @@ function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear tweet ratings cache
         Object.keys(tweetIDRatingCache).forEach(key => delete tweetIDRatingCache[key]);
-        GM_setValue('tweetRatings', '{}');
+        browserSet('tweetRatings', '{}');
         
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};
-            GM_setValue('threadRelationships', '{}');
-
+            browserSet('threadRelationships', '{}');
+            console.log('Cleared thread relationships cache');
         }
         
         showStatus('All cached ratings and thread relationships cleared!');
+        console.log('Cleared all tweet ratings and thread relationships');
 
         updateCacheStatsUI();
 
@@ -5219,7 +5250,7 @@ function clearTweetRatingsAndRefreshUI() {
 function saveInstructions() {
     const instructionsTextarea = document.getElementById('user-instructions');
     USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
-    GM_setValue('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
+    browserSet('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
     if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
@@ -5255,7 +5286,7 @@ function handleSettingChange(target, settingName) {
     }
 
     // Save to GM storage
-    GM_setValue(settingName, value);
+    browserSet(settingName, value);
 
     // Special UI updates for specific settings
     if (settingName === 'enableImageDescriptions') {
@@ -5299,7 +5330,7 @@ function handleParameterChange(target, paramName) {
     }
 
     // Save to GM storage
-    GM_setValue(paramName, newValue);
+    browserSet(paramName, newValue);
 }
 
 /**
@@ -5317,7 +5348,7 @@ function handleFilterSliderChange(slider) {
     const percentage = (currentFilterThreshold / 10) * 100;
     slider.style.setProperty('--slider-percent', `${percentage}%`);
     
-    GM_setValue('filterThreshold', currentFilterThreshold);
+    browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
 
@@ -5388,7 +5419,7 @@ function refreshSettingsUI() {
     // Update general settings inputs/toggles
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
-        const value = GM_getValue(settingName, window[settingName]); // Get saved or default value
+        const value = browserGet(settingName, window[settingName]); // Get saved or default value
         if (input.type === 'checkbox') {
             input.checked = value;
             // Trigger change handler for side effects (like hiding/showing image model section)
@@ -5403,7 +5434,7 @@ function refreshSettingsUI() {
         const paramName = row.dataset.paramName;
         const slider = row.querySelector('.parameter-slider');
         const valueInput = row.querySelector('.parameter-value');
-        const value = GM_getValue(paramName, window[paramName]);
+        const value = browserGet(paramName, window[paramName]);
 
         if (slider) slider.value = value;
         if (valueInput) valueInput.value = value;
@@ -5494,8 +5525,8 @@ function refreshModelsUI() {
     }
 
     // Sort models based on current sort order and direction
-    const sortDirection = GM_getValue('sortDirection', 'default');
-    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+    const sortDirection = browserGet('sortDirection', 'default');
+    const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
     
     // Update toggle button text based on sort order
     const toggleBtn = document.getElementById('sort-direction');
@@ -5529,7 +5560,7 @@ function refreshModelsUI() {
             selectedModel,
             (newValue) => {
                 selectedModel = newValue;
-                GM_setValue('selectedModel', selectedModel);
+                browserSet('selectedModel', selectedModel);
                 showStatus('Rating model updated');
             },
             'Search rating models...'
@@ -5552,7 +5583,7 @@ function refreshModelsUI() {
             selectedImageModel,
             (newValue) => {
                 selectedImageModel = newValue;
-                GM_setValue('selectedImageModel', selectedImageModel);
+                browserSet('selectedImageModel', selectedImageModel);
                 showStatus('Image model updated');
             },
             'Search vision models...'
@@ -5777,7 +5808,7 @@ function setScoreIndicator(tweetArticle, score, status, description = "", reason
                     this.innerHTML = originalText;
                 }, 1500);
             }).catch(err => {
-
+                console.error('Failed to copy text: ', err);
             });
         });
         
@@ -6172,7 +6203,7 @@ function isMobileDevice() {
  * It's kept for backward compatibility but is not used 
  */
 function getScoreTooltip() {
-
+    console.warn('getScoreTooltip is deprecated as each indicator now has its own tooltip');
     return null;
 }
 
@@ -6400,14 +6431,14 @@ function cleanupOrphanedTooltips() {
         if (!indicator) {
             // Cancel any active streaming requests for this tweet
             if (window.activeStreamingRequests && window.activeStreamingRequests[tooltipTweetId]) {
-
+                console.log(`Canceling streaming request for tweet ${tooltipTweetId} as its indicator was removed`);
                 window.activeStreamingRequests[tooltipTweetId].abort();
                 delete window.activeStreamingRequests[tooltipTweetId];
             }
             
             // Remove the tooltip
             tooltip.remove();
-
+            console.log(`Removed orphaned tooltip for tweet ${tooltipTweetId} (no indicator found)`);
         }
     });
 }
@@ -6447,7 +6478,7 @@ function initializeTooltipCleanup() {
     const timeline = document.querySelector('div[data-testid="primaryColumn"]');
     if (timeline) {
         tweetObserver.observe(timeline, observerConfig);
-
+        console.log('Tweet removal observer initialized');
     }
 
     // Also keep the periodic cleanup as a backup, but with a longer interval
@@ -6462,19 +6493,19 @@ function initializeTooltipCleanup() {
 function exportSettings() {
     try {
         const settingsToExport = {
-            apiKey: GM_getValue('openrouter-api-key', ''),
-            selectedModel: GM_getValue('selectedModel', 'openai/gpt-4.1-nano'),
-            selectedImageModel: GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano'),
-            enableImageDescriptions: GM_getValue('enableImageDescriptions', false),
-            enableStreaming: GM_getValue('enableStreaming', true),
-            modelTemperature: GM_getValue('modelTemperature', 1),
-            modelTopP: GM_getValue('modelTopP', 1),
-            imageModelTemperature: GM_getValue('imageModelTemperature', 1),
-            imageModelTopP: GM_getValue('imageModelTopP', 1),
-            maxTokens: GM_getValue('maxTokens', 0),
-            filterThreshold: GM_getValue('filterThreshold', 1),
-            userDefinedInstructions: GM_getValue('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),
-            modelSortOrder: GM_getValue('modelSortOrder', 'throughput-high-to-low')
+            apiKey: browserGet('openrouter-api-key', ''),
+            selectedModel: browserGet('selectedModel', 'openai/gpt-4.1-nano'),
+            selectedImageModel: browserGet('selectedImageModel', 'openai/gpt-4.1-nano'),
+            enableImageDescriptions: browserGet('enableImageDescriptions', false),
+            enableStreaming: browserGet('enableStreaming', true),
+            modelTemperature: browserGet('modelTemperature', 1),
+            modelTopP: browserGet('modelTopP', 1),
+            imageModelTemperature: browserGet('imageModelTemperature', 1),
+            imageModelTopP: browserGet('imageModelTopP', 1),
+            maxTokens: browserGet('maxTokens', 0),
+            filterThreshold: browserGet('filterThreshold', 1),
+            userDefinedInstructions: browserGet('userDefinedInstructions', 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'),
+            modelSortOrder: browserGet('modelSortOrder', 'throughput-high-to-low')
         };
 
         const data = {
@@ -6494,7 +6525,7 @@ function exportSettings() {
         URL.revokeObjectURL(url);
         showStatus('Settings exported successfully!');
     } catch (error) {
-
+        console.error('Error exporting settings:', error);
         showStatus('Error exporting settings: ' + error.message);
     }
 }
@@ -6523,13 +6554,13 @@ function importSettings() {
                         if (window[key] !== undefined) {
                             window[key] = data.settings[key];
                         }
-                        GM_setValue(key, data.settings[key]);
+                        browserSet(key, data.settings[key]);
                     }
 
                     // Import blacklisted handles
                     if (data.blacklistedHandles && Array.isArray(data.blacklistedHandles)) {
                         blacklistedHandles = data.blacklistedHandles;
-                        GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+                        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
                     }
 
                     // Import tweet ratings (merge with existing)
@@ -6543,7 +6574,7 @@ function importSettings() {
                     showStatus('Settings imported successfully!');
 
                 } catch (error) {
-
+                    console.error('Error parsing settings file:', error);
                     showStatus('Error importing settings: ' + error.message);
                 }
             };
@@ -6551,7 +6582,7 @@ function importSettings() {
         };
         input.click();
     } catch (error) {
-
+        console.error('Error importing settings:', error);
         showStatus('Error importing settings: ' + error.message);
     }
 }
@@ -6582,7 +6613,7 @@ function resetSettings(noconfirm=false) {
             if (window[key] !== undefined) {
                 window[key] = defaults[key];
             }
-            GM_setValue(key, defaults[key]);
+            browserSet(key, defaults[key]);
         }
 
         refreshSettingsUI();
@@ -6604,7 +6635,7 @@ function addHandleToBlacklist(handle) {
             return;
         }
     blacklistedHandles.push(handle);
-    GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+    browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
     refreshHandleList(document.getElementById('handle-list'));
     updateCacheStatsUI();
     showStatus(`Added @${handle} to auto-rate list.`);
@@ -6618,12 +6649,12 @@ function removeHandleFromBlacklist(handle) {
     const index = blacklistedHandles.indexOf(handle);
     if (index > -1) {
         blacklistedHandles.splice(index, 1);
-        GM_setValue('blacklistedHandles', blacklistedHandles.join('\n'));
+        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
         refreshHandleList(document.getElementById('handle-list'));
         updateCacheStatsUI();
         showStatus(`Removed @${handle} from auto-rate list.`);
                 } else {
-
+        console.warn(`Attempted to remove non-existent handle: ${handle}`);
     }
 }
 
@@ -6745,4 +6776,44 @@ updateCacheStatsUI = function() {
     updateFloatingCacheStats();
 };
 
+    // ----- browserStorage.js -----
+/**
+ * Browser storage wrapper functions for Chrome Extension Manifest V3 compatibility
+ */
+
+/**
+ * Gets a value from browser storage
+ * @param {string} key - The key to get from storage
+ * @param {any} defaultValue - The default value if key doesn't exist
+ * @returns {Promise<any>} - The value from storage or default value
+ */
+//CHANGE TO AWAIT WHEN CHROME
+function browserGet(key, defaultValue = null) {
+    try {
+        return GM_getValue(key, defaultValue);
+        //const result = await chrome.storage.local.get(key);
+        //return result[key] !== undefined ? result[key] : defaultValue;
+    } catch (error) {
+        console.error('Error reading from browser storage:', error);
+        return defaultValue;
+    }
+}
+
+/**
+ * Sets a value in browser storage
+ * @param {string} key - The key to set in storage
+ * @param {any} value - The value to store
+ * @returns {Promise<void>}
+ */
+//CHANGE 2 await when chrome.
+function browserSet(key, value) {
+    try {
+        GM_setValue(key, value);
+    } catch (error) {
+        console.error('Error writing to browser storage:', error);
+    }
+}
+
+// Export the functions when Chrome.
+//export { browserGet, browserSet }; 
 })();

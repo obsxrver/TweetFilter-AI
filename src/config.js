@@ -68,28 +68,28 @@ function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
 
 const PROCESSING_DELAY_MS = 100; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
-let USER_DEFINED_INSTRUCTIONS = GM_getValue('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
+let USER_DEFINED_INSTRUCTIONS = browserGet('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
 - Give high scores to high-effort content and artistic content`);
-let currentFilterThreshold = GM_getValue('filterThreshold', 1); // Filter threshold for tweet visibility
+let currentFilterThreshold = browserGet('filterThreshold', 1); // Filter threshold for tweet visibility
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 3;
 let availableModels = []; // List of models fetched from API
 let listedModels = []; // Filtered list of models actually shown in UI
-let selectedModel = GM_getValue('selectedModel', 'openai/gpt-4.1-nano');
-let selectedImageModel = GM_getValue('selectedImageModel', 'openai/gpt-4.1-nano');
-let modelSortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
-let showFreeModels = GM_getValue('showFreeModels', true);
-let providerSort = GM_getValue('providerSort', ''); // Default to load-balanced
-let blacklistedHandles = GM_getValue('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
+let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
+let selectedImageModel = browserGet('selectedImageModel', 'openai/gpt-4.1-nano');
+let modelSortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
+let showFreeModels = browserGet('showFreeModels', true);
+let providerSort = browserGet('providerSort', ''); // Default to load-balanced
+let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
-let storedRatings = GM_getValue('tweetRatings', '{}');
+let storedRatings = browserGet('tweetRatings', '{}');
 let threadHist = "";
 // Settings variables
-let enableImageDescriptions = GM_getValue('enableImageDescriptions', false);
-let enableStreaming = GM_getValue('enableStreaming', true); // Enable streaming by default for better UX
+let enableImageDescriptions = browserGet('enableImageDescriptions', false);
+let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 
 
 // Model parameters
@@ -123,12 +123,12 @@ SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
 If one of the above is not present, the program will not be able to parse the response and will return an error.
 `
-let modelTemperature = GM_getValue('modelTemperature', 1);
-let modelTopP = GM_getValue('modelTopP', 1);
-let imageModelTemperature = GM_getValue('imageModelTemperature', 1);
-let imageModelTopP = GM_getValue('imageModelTopP', 1);
-let maxTokens = GM_getValue('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
-let imageModelMaxTokens = GM_getValue('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
+let modelTemperature = browserGet('modelTemperature', 1);
+let modelTopP = browserGet('modelTopP', 1);
+let imageModelTemperature = browserGet('imageModelTemperature', 1);
+let imageModelTopP = browserGet('imageModelTopP', 1);
+let maxTokens = browserGet('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
+let imageModelMaxTokens = browserGet('imageModelMaxTokens', 0); // Maximum number of tokens for image model API requests, 0 means no limit
 //let menuHTML= "";
 
 // ----- DOM Selectors (for tweet elements) -----

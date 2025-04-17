@@ -454,7 +454,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         };
     }
     // Check if streaming is enabled
-    const useStreaming = GM_getValue('enableStreaming', false);
+    const useStreaming = browserGet('enableStreaming', false);
     
     // Implement retry logic
     let attempt = 0;
@@ -889,13 +889,13 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
  * Uses the stored API key, and updates the model selector upon success.
  */
 function fetchAvailableModels() {
-    const apiKey = GM_getValue('openrouter-api-key', '');
+    const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
         showStatus('Please enter your OpenRouter API key');
         return;
     }
     showStatus('Fetching available models...');
-    const sortOrder = GM_getValue('modelSortOrder', 'throughput-high-to-low');
+    const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
     GM_xmlhttpRequest({
         method: "GET",
         url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,

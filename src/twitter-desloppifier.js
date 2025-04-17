@@ -31,8 +31,8 @@ const VERSION = '1.3.7';
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");
-    GM_setValue('menuHTML', menuhtml);
-    let firstRun = GM_getValue('firstRun', true);
+    browserSet('menuHTML', menuhtml);
+    let firstRun = browserGet('firstRun', true);
 
     //GM_addStyle(css);
 
@@ -50,10 +50,10 @@ const VERSION = '1.3.7';
             initialiseUI();
             if (firstRun) {
                 resetSettings(true);
-                GM_setValue('firstRun', false);
+                browserSet('firstRun', false);
             }
             // If no API key is found, prompt the user
-            let apiKey = GM_getValue('openrouter-api-key', '');
+            let apiKey = browserGet('openrouter-api-key', '');
             if(!apiKey){
                 alert("No API Key found. Please enter your API Key in Settings > General.")
             }
@@ -64,7 +64,7 @@ const VERSION = '1.3.7';
                 showStatus(`No API Key Found. Using Promotional Key`);
             }*/
             if (apiKey) {
-                GM_setValue('openrouter-api-key', apiKey);
+                browserSet('openrouter-api-key', apiKey);
                 showStatus(`Loaded ${Object.keys(tweetIDRatingCache).length} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
