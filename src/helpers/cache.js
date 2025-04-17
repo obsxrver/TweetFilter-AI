@@ -42,4 +42,4 @@ function updateCacheStatsUI() {
 }
 
 // Export functions for use in other modules
-export { saveTweetRatings, cleanupInvalidCacheEntries, updateCacheStatsUI };
+//export { saveTweetRatings, cleanupInvalidCacheEntries, updateCacheStatsUI };
