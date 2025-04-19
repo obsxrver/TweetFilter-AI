@@ -397,9 +397,8 @@ const safetySettings = [
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
     console.log(`Given Tweet Text: 
         ${tweetText}
-        And Media URLS:
-        ${mediaUrls}
-        `)
+        And Media URLS:`);
+    console.log(mediaUrls);
     // Create the request body
     const request = {
         model: selectedModel,
@@ -542,7 +541,54 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         data: null
     };
 }
+/**
+ * Summarizes the custom instructions for the user
+ * 
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
+ */
+async function getCustomInstructionsDescription(instructions) {
+    const request={
+        model: selectedModel,
+        messages: [{
+            role: "system",
+            content: [{
+                type: "text",
+                text: `
+                Please come up with a 5-word summary of the following instructions:
+                ${instructions}
+                `
+            }]
+        },
+    {
+        role: "user",
+        content: [{
+            type: "text",
+            text: `Please come up with a 5-word summary of the following instructions:
+            ${instructions}
+            `
+        }]
+    }]
+}
+    let key = browserGet('openrouter-api-key');
+    const result = await getCompletion(request,key);
+    
+    if (!result.error && result.data?.choices?.[0]?.message) {
+        const content = result.data.choices[0].message.content || "";
+        
+        
+        return {
+            content,
+            error: false,
+        };
+    }
 
+    return {
+        error: true,
+        content: result.error || "Unknown error"
+    };
+}
 /**
  * Performs a non-streaming tweet rating request
  * 
@@ -665,7 +711,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         // Update the score indicator but preserve tooltip state
                         if (indicator) {
                             // Store the current score
-                            tweetArticle.dataset.slopScore = currentScore.toString();
+                            tweetArticle.dataset.sloppinessScore = currentScore.toString();
                             
                             // Update just the score number and class
                             indicator.textContent = currentScore;
@@ -761,7 +807,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingStatus = 'rated';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.slopScore = score.toString();
+                        tweetArticle.dataset.sloppinessScore = score.toString();
                         
                         // Remove streaming class from tooltip
                         const indicator = tweetArticle.querySelector('.score-indicator');
@@ -799,7 +845,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                         tweetArticle.dataset.ratingStatus = 'error';
                         tweetArticle.dataset.ratingDescription = aggregatedContent;
                         tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.slopScore = defaultScore.toString();
+                        tweetArticle.dataset.sloppinessScore = defaultScore.toString();
                         
                         // Set indicator with default score
                         const indicator = tweetArticle.querySelector('.score-indicator');
@@ -833,7 +879,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
                 if (tweetArticle) {
                     tweetArticle.dataset.ratingStatus = 'error';
                     tweetArticle.dataset.ratingDescription = errorData.message;
-                    tweetArticle.dataset.slopScore = '5';
+                    tweetArticle.dataset.sloppinessScore = '5';
                     
                     // Remove streaming class from tooltip
                     const indicator = tweetArticle.querySelector('.score-indicator');

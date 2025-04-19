@@ -14,7 +14,7 @@ files_to_combine = [
     "helpers/browserStorage.js",
     "helpers/TweetCache.js",
     "helpers/cache.js",
-    
+    "backends/InstructionsHistory.js",
     "config.js",
     "api.js",
     "domScraper.js", 

@@ -134,13 +134,16 @@ function initializeEventListeners(uiContainer) {
                     clearTweetRatingsAndRefreshUI();
                     break;
                 case 'reset-settings':
-                    resetSettings();
+                    resetSettings(isMobileDevice());
                     break;
                 case 'save-instructions':
                     saveInstructions();
                     break;
                 case 'add-handle':
                     addHandleFromInput();
+                    break;
+                case 'clear-instructions-history':
+                    clearInstructionsHistory();
                     break;
             }
         }
@@ -341,13 +344,107 @@ function clearTweetRatingsAndRefreshUI() {
 }
 
 /** Saves the custom instructions from the textarea. */
-function saveInstructions() {
+async function saveInstructions() {
     const instructionsTextarea = document.getElementById('user-instructions');
-    USER_DEFINED_INSTRUCTIONS = instructionsTextarea.value;
+    const instructions = instructionsTextarea.value.trim();
+    if (!instructions) {
+        showStatus('Instructions cannot be empty');
+        return;
+    }
+
+    USER_DEFINED_INSTRUCTIONS = instructions;
     browserSet('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
+
+    // Get 5-word summary for the instructions
+    const summary = await getCustomInstructionsDescription(instructions);
+    if (!summary.error) {
+        // Add to history using the singleton
+        await instructionsHistory.add(instructions, summary.content);
+        
+        // Refresh the history list
+        refreshInstructionsHistory();
+    }
+
     showStatus('Scoring instructions saved! New tweets will use these instructions.');
     if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
         clearTweetRatingsAndRefreshUI();
+    }
+}
+
+/**
+ * Refreshes the instructions history list in the UI.
+ */
+function refreshInstructionsHistory() {
+    const listElement = document.getElementById('instructions-list');
+    if (!listElement) return;
+
+    // Get history from singleton
+    const history = instructionsHistory.getAll();
+    listElement.innerHTML = ''; // Clear existing list
+
+    if (history.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = 'padding: 8px; opacity: 0.7; font-style: italic;';
+        emptyMsg.textContent = 'No saved instructions yet';
+        listElement.appendChild(emptyMsg);
+        return;
+    }
+
+    history.forEach((entry, index) => {
+        const item = document.createElement('div');
+        item.className = 'instruction-item';
+        item.dataset.index = index;
+
+        const text = document.createElement('div');
+        text.className = 'instruction-text';
+        text.textContent = entry.summary;
+        text.title = entry.instructions; // Show full instructions on hover
+        item.appendChild(text);
+
+        const buttons = document.createElement('div');
+        buttons.className = 'instruction-buttons';
+
+        const useBtn = document.createElement('button');
+        useBtn.className = 'use-instruction';
+        useBtn.textContent = 'Use';
+        useBtn.title = 'Use these instructions';
+        useBtn.onclick = () => useInstructions(entry.instructions);
+        buttons.appendChild(useBtn);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-instruction';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove from history';
+        removeBtn.onclick = () => removeInstructions(index);
+        buttons.appendChild(removeBtn);
+
+        item.appendChild(buttons);
+        listElement.appendChild(item);
+    });
+}
+
+/**
+ * Uses the selected instructions from history.
+ * @param {string} instructions - The instructions to use.
+ */
+function useInstructions(instructions) {
+    const textarea = document.getElementById('user-instructions');
+    if (textarea) {
+        textarea.value = instructions;
+        saveInstructions();
+    }
+}
+
+/**
+ * Removes instructions from history at the specified index.
+ * @param {number} index - The index of the instructions to remove.
+ */
+function removeInstructions(index) {
+    if (instructionsHistory.remove(index)) {
+        refreshInstructionsHistory();
+        showStatus('Instructions removed from history');
+    } else {
+        showStatus('Error removing instructions');
     }
 }
 
@@ -547,6 +644,9 @@ function refreshSettingsUI() {
             icon.classList.remove('expanded');
         }
     });
+
+    // Refresh instructions history
+    refreshInstructionsHistory();
 }
 
 /**
@@ -1567,7 +1667,9 @@ function initializeTooltipCleanup() {
  * Resets all configurable settings to their default values.
  */
 function resetSettings(noconfirm=false) {
-    if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings or blacklisted handles.')) {
+    if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
+        tweetCache.clear();
+        
         // Define defaults (should match config.js ideally)
         const defaults = {
             selectedModel: 'openai/gpt-4.1-nano',
@@ -1727,5 +1829,14 @@ function initializeFloatingCacheStats() {
     statsBadge.fadeTimeout = setTimeout(() => {
         statsBadge.style.opacity = '0.3';
     }, 5000);
+}
+
+/** Clears all instructions history after confirmation */
+function clearInstructionsHistory() {
+    if (isMobileDevice() || confirm('Are you sure you want to clear all instruction history?')) {
+        instructionsHistory.clear();
+        refreshInstructionsHistory();
+        showStatus('Instructions history cleared');
+    }
 }
 
