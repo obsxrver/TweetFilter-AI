@@ -2383,7 +2383,6 @@ const VERSION = '1.3.8';
             observer.observe(observedTargetNode, { childList: true, subtree: true });
             ensureAllTweetsRated();
             window.addEventListener('beforeunload', () => {
-                saveTweetRatings();
                 observer.disconnect();
                 const sliderUI = document.getElementById('tweet-filter-container');
                 if (sliderUI) sliderUI.remove();
@@ -2581,14 +2580,6 @@ const tweetCache = new TweetCache();
 //MODULE
 //Helper functions and wiring for the cache
 // Import the TweetCache instance
-
-/**
- * Saves the tweet ratings to persistent storage and updates the UI.
- * @deprecated Use tweetCache.saveToStorage() instead.
- */
-function saveTweetRatings() {
-    tweetCache.saveToStorage();
-}
 
 /**
  * Removes invalid entries from the cache.
@@ -3304,9 +3295,8 @@ const safetySettings = [
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
     console.log(`Given Tweet Text: 
         ${tweetText}
-        And Media URLS:
-        ${mediaUrls}
-        `)
+        And Media URLS:`);
+    console.log(mediaUrls);
     // Create the request body
     const request = {
         model: selectedModel,
@@ -4289,9 +4279,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         const handles = getUserHandles(tweetArticle);
         const userHandle = handles.length > 0 ? handles[0] : '';
         const quotedHandle = handles.length > 1 ? handles[1] : '';
-
-
-
         // Check if tweet's author is blacklisted (fast path)
         if (userHandle && isUserBlacklisted(userHandle)) {
             tweetArticle.dataset.sloppinessScore = '10';
@@ -4349,12 +4336,11 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         if (!fullContextWithImageDescription) {
             throw new Error("Failed to get tweet context");
         }
+        let mediaURLs = [];
         
         // Add thread relationship context
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
-           
-            
             // Add thread context to cache entry if we process this tweet
             if (!tweetCache.has(tweetId)) {
                 tweetCache.set(tweetId, {});
@@ -4369,20 +4355,17 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
             }
         }
 
-        //Get the media URLS from the entire fullContextWithImageDescription, and pass that to the rating engine
-        //This allows us to get the media links from the thread history as well
-        const mediaURLs = [];
-        // Extract regular media URLs
-        const mediaMatches = fullContextWithImageDescription.match(/\[MEDIA_URLS\]:\s*\n(.*?)(?:\n|$)/);
-        if (mediaMatches && mediaMatches[1]) {
-            mediaURLs.push(...mediaMatches[1].split(', '));
-        }
-        // Extract quoted tweet media URLs
-        const quotedMediaMatches = fullContextWithImageDescription.match(/\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n(.*?)(?:\n|$)/);
-        if (quotedMediaMatches && quotedMediaMatches[1]) {
-            mediaURLs.push(...quotedMediaMatches[1].split(', '));
+        // Get all media URLs from any section in one go
+        const allMediaMatches = fullContextWithImageDescription.matchAll(/(?:MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+        for (const match of allMediaMatches) {
+            if (match[1]) {
+                mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
+            }
         }
 
+        // Remove duplicates and empty URLs
+        mediaURLs = [...new Set(mediaURLs.filter(url => url.trim()))];
+        
         // --- API Call or Fallback ---
         if (apiKey && fullContextWithImageDescription) {
             try {
@@ -4437,14 +4420,10 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                             streaming: false // Mark as complete
                         });
                     }
-
-                    // Save ratings to persistent storage
-                    saveTweetRatings();
                 } else {
                     // On error, remove any existing cache entry to allow retry
                     if (tweetCache.has(tweetId)) {
                         tweetCache.delete(tweetId);
-                        saveTweetRatings();
                     }
                 }
 

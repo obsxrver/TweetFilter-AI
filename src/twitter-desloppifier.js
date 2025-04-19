@@ -79,7 +79,6 @@ const VERSION = '1.3.8';
             observer.observe(observedTargetNode, { childList: true, subtree: true });
             ensureAllTweetsRated();
             window.addEventListener('beforeunload', () => {
-                saveTweetRatings();
                 observer.disconnect();
                 const sliderUI = document.getElementById('tweet-filter-container');
                 if (sliderUI) sliderUI.remove();

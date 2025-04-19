@@ -397,9 +397,8 @@ const safetySettings = [
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
     console.log(`Given Tweet Text: 
         ${tweetText}
-        And Media URLS:
-        ${mediaUrls}
-        `)
+        And Media URLS:`);
+    console.log(mediaUrls);
     // Create the request body
     const request = {
         model: selectedModel,
