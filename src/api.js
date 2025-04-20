@@ -392,9 +392,10 @@ const safetySettings = [
  * @param {string} apiKey - The API key for authentication
  * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
  * @param {number} [maxRetries=3] - Maximum number of retry attempts
+ * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
-async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3) {
+async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null) {
     console.log(`Given Tweet Text: 
         ${tweetText}
         And Media URLS:`);
@@ -483,7 +484,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             
             // Call appropriate rating function based on streaming setting
             if (useStreaming) {
-                result = await rateTweetStreaming(request, apiKey, tweetId, tweetText);
+                result = await rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle);
             } else {
                 result = await rateTweet(request, apiKey);
             }
@@ -537,6 +538,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     return {
         score: 5,
         content: "Failed to get valid rating after multiple attempts",
+        reasoning: "",
         error: true,
         data: null
     };
@@ -623,7 +625,9 @@ async function rateTweet(request, apiKey) {
 
     return {
         error: true,
-        content: result.error || "Unknown error"
+        content: result.error || "Unknown error",
+        reasoning: "",
+        data: null
     };
 }
 
@@ -634,263 +638,158 @@ async function rateTweet(request, apiKey) {
  * @param {string} apiKey - API key for authentication
  * @param {string} tweetId - The tweet ID
  * @param {string} tweetText - The text content of the tweet
+ * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
  */
-async function rateTweetStreaming(request, apiKey, tweetId, tweetText) {
-    // Store initial streaming entry
-    tweetCache.set(tweetId, {
-        streaming: true,
-        timestamp: Date.now()
-    });
+async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
+    // Store initial streaming entry only if not already cached with a score
+    const existingCache = tweetCache.get(tweetId);
+    if (!existingCache || existingCache.score === undefined || existingCache.score === null) {
+        tweetCache.set(tweetId, {
+            streaming: true,
+            timestamp: Date.now(),
+            tweetContent: tweetText, // Store context early
+            description: "", // Initialize fields
+            reasoning: "",
+            score: null
+        });
+    }
 
     return new Promise((resolve, reject) => {
-        // Find the tweet article element for this tweet ID
-        const tweetArticle = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
-            .find(article => getTweetID(article) === tweetId);
+        // Find the tweet article element *once* if possible
+        // const tweetArticle = Array.from(document.querySelectorAll('article[data-testid="tweet"]'))
+        //    .find(article => getTweetID(article) === tweetId);
         
-        let aggregatedContent = "";
-        let aggregatedReasoning = ""; // Track reasoning traces
+        // Get or create the indicator instance *once*
+        // Use the passed-in tweetArticle
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        if (!indicatorInstance) {
+             console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
+             // Update cache to reflect error/non-streaming state
+             if (tweetCache.has(tweetId)) {
+                 tweetCache.get(tweetId).streaming = false;
+                 tweetCache.get(tweetId).error = "Indicator initialization failed";
+             }
+             return reject(new Error(`ScoreIndicator instance could not be initialized for tweet ${tweetId}`));
+        }
+
+        let aggregatedContent = existingCache?.description || "";
+        let aggregatedReasoning = existingCache?.reasoning || ""; // Track reasoning traces
         let finalData = null;
+        let finalScore = existingCache?.score || null;
         
-        // Initialize active streaming requests object if it doesn't exist
-        if (!window.activeStreamingRequests) {
-            window.activeStreamingRequests = {};
-        }
-        
-        // Cancel any existing request for this tweet
-        if (window.activeStreamingRequests[tweetId]) {
-            console.log(`Canceling previous streaming request for tweet ${tweetId}`);
-            window.activeStreamingRequests[tweetId].abort();
-            delete window.activeStreamingRequests[tweetId];
-        }
-        tweetCache.set(tweetId, {
-            tweetContent: tweetText,
-            score: null,
-            description: "",
-            reasoning: "", // Store reasoning
-            streaming: true,  // Mark as complete
-            timestamp: Date.now()
-        });
         getCompletionStreaming(
             request,
             apiKey,
-            // onChunk callback - update the tweet's rating indicator in real-time
+            // onChunk callback - update the ScoreIndicator instance
             (chunkData) => {
+                aggregatedContent = chunkData.content || aggregatedContent;
+                aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
                 
-                // Use the content and reasoning directly from chunkData instead of aggregating manually
-                aggregatedContent = chunkData.content || "Rating in progress...";
-                aggregatedReasoning = chunkData.reasoning || "";
+                // Look for a score in the accumulated content so far
+                const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/g); // Use global flag to get all matches
+                // Use the *last* score found in the stream
+                if (scoreMatch) {
+                    finalScore = parseInt(scoreMatch[scoreMatch.length - 1].match(/SCORE_(\d+)/)[1], 10);
+                }
                 
-                if (tweetArticle) {
-                    // Look for a score in the accumulated content so far
-                    const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
-                    let currentScore = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
-                    
-                    // Store references and current state
-                    const indicator = tweetArticle.querySelector('.score-indicator');
-                    const tooltip = indicator?.scoreTooltip;
-                    
-                    // Update the indicator with current partial content
-                    tweetArticle.dataset.streamingContent = aggregatedContent;
-                    tweetArticle.dataset.ratingStatus = 'streaming';
-                    tweetArticle.dataset.ratingDescription = aggregatedContent;
-                    if (aggregatedReasoning) {
-                        tweetArticle.dataset.ratingReasoning = aggregatedReasoning;
-                    }
-                    
-                    // Don't cache streaming results - removed partial caching code
-                    
-                    // Update the tooltip content with both description and reasoning
-                    if (tooltip) {
-                        // Use the helper function from ui.js to update tooltip content
-                        updateTooltipContent(tooltip, aggregatedContent, aggregatedReasoning);
-                        tooltip.classList.add('streaming-tooltip');
-                    }
-                    
-                    if (currentScore !== null && aggregatedReasoning !== "" && aggregatedContent !== "") {
-                        // Update the score indicator but preserve tooltip state
-                        if (indicator) {
-                            // Store the current score
-                            tweetArticle.dataset.sloppinessScore = currentScore.toString();
-                            
-                            // Update just the score number and class
-                            indicator.textContent = currentScore;
-                            indicator.className = 'score-indicator streaming-rating';
-                            
-                            // Get the tooltip and update only the content
-                            const tooltip = indicator.scoreTooltip;
-                            if (tooltip) {
-                                // Update tooltip content directly without recreating it
-                                const descriptionElement = tooltip.querySelector('.description-text');
-                                const reasoningElement = tooltip.querySelector('.reasoning-text');
-                                
-                                // Format the text
-                                const formatted = formatTooltipDescription(aggregatedContent, aggregatedReasoning);
-                                
-                                if (descriptionElement) {
-                                    descriptionElement.innerHTML = formatted.description;
-                                }
-                                
-                                if (reasoningElement) {
-                                    reasoningElement.innerHTML = formatted.reasoning;
-                                }
-                                
-                                // Preserve expanded state - only show/hide dropdown if reasoning exists
-                                const dropdown = tooltip.querySelector('.reasoning-dropdown');
-                                if (dropdown && !formatted.reasoning) {
-                                    dropdown.style.display = 'none';
-                                } else if (dropdown && formatted.reasoning && dropdown.style.display === 'none') {
-                                    dropdown.style.display = 'block';
-                                }
-                            }
-                        }
-                    } else if (indicator && (aggregatedReasoning !== "" || aggregatedContent !== "")) {
-                        // Handle case where score isn't available yet but reasoning is
-                        indicator.className = 'score-indicator streaming-rating';
-                        indicator.textContent = '🔄';
-                        
-                        // Update tooltip content directly
-                        const tooltip = indicator.scoreTooltip;
-                        if (tooltip) {
-                            const descriptionElement = tooltip.querySelector('.description-text');
-                            const reasoningElement = tooltip.querySelector('.reasoning-text');
-                            
-                            // Format the text - ensure we have at least a placeholder for content
-                            const contentToShow = aggregatedContent || "Rating in progress...";
-                            const formatted = formatTooltipDescription(contentToShow, aggregatedReasoning);
-                            
-                            if (descriptionElement) {
-                                descriptionElement.innerHTML = formatted.description;
-                            }
-                            
-                            if (reasoningElement) {
-                                reasoningElement.innerHTML = formatted.reasoning;
-                            }
-                            
-                            // Only show/hide dropdown if reasoning exists
-                            const dropdown = tooltip.querySelector('.reasoning-dropdown');
-                            if (dropdown && !formatted.reasoning) {
-                                dropdown.style.display = 'none';
-                            } else if (dropdown && formatted.reasoning && dropdown.style.display === 'none') {
-                                dropdown.style.display = 'block';
-                            }
-                        }
-                    }
+                // Update the instance
+                 indicatorInstance.update({
+                    status: 'streaming',
+                    score: finalScore, // Update with score found so far
+                    description: aggregatedContent || "Rating in progress...",
+                    reasoning: aggregatedReasoning
+                });
+                
+                // Update cache with partial data during streaming
+                if (tweetCache.has(tweetId)) {
+                    const entry = tweetCache.get(tweetId);
+                    entry.description = aggregatedContent;
+                    entry.reasoning = aggregatedReasoning;
+                    entry.score = finalScore;
+                    entry.streaming = true; // Still streaming
                 }
             },
             // onComplete callback - finalize the rating
             (finalResult) => {
+                aggregatedContent = finalResult.content || aggregatedContent;
+                aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
                 
-                // When streaming completes, update the cache with the final result
-                if (tweetArticle) {
-                    // Check for a score in the final content
-                    const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/);
-                    // Also check if we already found a score during streaming
-                    const existingScore = tweetCache.get(tweetId)?.score;
-                    
-                    if (scoreMatch || existingScore) {
-                        // if the AI writes multiple scores, use the last one
-                        const score = scoreMatch ? parseInt(scoreMatch[scoreMatch.length - 1], 10) : existingScore;
-                        
-                        // Update cache with final result (non-streaming)
-                        tweetCache.set(tweetId, {
-                            tweetContent: tweetText,
-                            score: score,
-                            description: aggregatedContent,
-                            reasoning: finalResult.reasoning || aggregatedReasoning, // Store reasoning
-                            streaming: false,  // Mark as complete
-                            timestamp: Date.now()
-                        });
-                        
-                        // Finalize UI update
-                        tweetArticle.dataset.ratingStatus = 'rated';
-                        tweetArticle.dataset.ratingDescription = aggregatedContent;
-                        tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.sloppinessScore = score.toString();
-                        
-                        // Remove streaming class from tooltip
-                        const indicator = tweetArticle.querySelector('.score-indicator');
-                        if (indicator && indicator.scoreTooltip) {
-                            // Update the final tooltip content
-                            updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
-                            indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                            
-                            // Set final indicator state - ensure we're not recreating the tooltip
-                            indicator.className = 'score-indicator rated-rating';
-                            indicator.textContent = score;
-                        } else {
-                            // If no indicator exists yet, create one with setScoreIndicator
-                            setScoreIndicator(tweetArticle, score, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
-                        }
-                        
-                    } else {
-                        // If no score was found anywhere, log a warning and set a default score
-                        console.warn(`No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
-                        
-                        // Set a default score of 5
-                        const defaultScore = 5;
-                        
-                        // Update cache with default score
-                        tweetCache.set(tweetId, {
-                            tweetContent: tweetText,
-                            score: defaultScore,
-                            description: aggregatedContent + " [No explicit score detected, using default score of 5]",
-                            reasoning: finalResult.reasoning || aggregatedReasoning,
-                            streaming: false,
-                            timestamp: Date.now()
-                        });
-                        
-                        // Update UI with default score
-                        tweetArticle.dataset.ratingStatus = 'error';
-                        tweetArticle.dataset.ratingDescription = aggregatedContent;
-                        tweetArticle.dataset.ratingReasoning = finalResult.reasoning || aggregatedReasoning;
-                        tweetArticle.dataset.sloppinessScore = defaultScore.toString();
-                        
-                        // Set indicator with default score
-                        const indicator = tweetArticle.querySelector('.score-indicator');
-                        if (indicator) {
-                            indicator.className = 'score-indicator rated-rating';
-                            indicator.textContent = defaultScore;
-                            
-                            if (indicator.scoreTooltip) {
-                                updateTooltipContent(indicator.scoreTooltip, aggregatedContent, finalResult.reasoning || aggregatedReasoning);
-                                indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                            }
-                        } else {
-                            setScoreIndicator(tweetArticle, defaultScore, 'rated', aggregatedContent, finalResult.reasoning || aggregatedReasoning);
-                        }
-                        
-                    }
-                } else {
-                    console.warn(`Tweet article not found for ID ${tweetId} when completing rating`);
+                // Final check for score
+                const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/g);
+                if (scoreMatch) {
+                    finalScore = parseInt(scoreMatch[scoreMatch.length - 1].match(/SCORE_(\d+)/)[1], 10);
                 }
+
+                let finalStatus = 'rated';
+                // If no score was found anywhere, mark as error
+                if (finalScore === null || finalScore === undefined) {
+                    console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                    finalStatus = 'error';
+                    finalScore = 5; // Assign default error score
+                    aggregatedContent += "\n[No score detected - Error]";
+                }
+
+                // Update cache with final result (non-streaming)
+                tweetCache.set(tweetId, {
+                    tweetContent: tweetText,
+                    score: finalScore,
+                    description: aggregatedContent,
+                    reasoning: aggregatedReasoning,
+                    streaming: false, // Mark as complete
+                    timestamp: Date.now(),
+                    error: finalStatus === 'error' ? "No score detected" : undefined
+                });
                 
+                // Finalize UI update via instance
+                indicatorInstance.update({
+                    status: finalStatus,
+                    score: finalScore,
+                    description: aggregatedContent,
+                    reasoning: aggregatedReasoning
+                });
+                
+                 // Re-apply filtering after completion
+                 if (tweetArticle) {
+                     filterSingleTweet(tweetArticle);
+                 }
+
                 resolve({
+                    score: finalScore,
                     content: aggregatedContent,
-                    reasoning: finalResult.reasoning || aggregatedReasoning,
-                    error: false,
+                    reasoning: aggregatedReasoning,
+                    error: finalStatus === 'error',
+                    cached: false, // Streaming implies not from initial cache load
                     data: finalData
                 });
             },
             // onError callback
             (errorData) => {
-                // Update UI on error
-                if (tweetArticle) {
-                    tweetArticle.dataset.ratingStatus = 'error';
-                    tweetArticle.dataset.ratingDescription = errorData.message;
-                    tweetArticle.dataset.sloppinessScore = '5';
-                    
-                    // Remove streaming class from tooltip
-                    const indicator = tweetArticle.querySelector('.score-indicator');
-                    if (indicator && indicator.scoreTooltip) {
-                        indicator.scoreTooltip.classList.remove('streaming-tooltip');
-                    }
-                    console.log('errorData', errorData);
-                    setScoreIndicator(tweetArticle, 5, 'error', errorData.message);
+                 console.error(`[API Stream Error] Tweet ${tweetId}: ${errorData.message}`);
+                // Update UI via instance to show error
+                indicatorInstance.update({
+                    status: 'error',
+                    score: 5, // Default error score
+                    description: `Stream Error: ${errorData.message}`,
+                    reasoning: ''
+                });
+
+                // Update cache to reflect error
+                if (tweetCache.has(tweetId)) {
+                     const entry = tweetCache.get(tweetId);
+                     entry.streaming = false;
+                     entry.error = errorData.message;
+                     entry.score = 5; // Store default error score in cache too
+                     entry.description = `Stream Error: ${errorData.message}`; // Store error message
                 }
                 
-                reject(new Error(errorData.message));
+                 // Re-apply filtering after error
+                 if (tweetArticle) {
+                     filterSingleTweet(tweetArticle);
+                 }
+
+                reject(new Error(errorData.message)); // Reject the promise
             },
             30000, // timeout
             tweetId  // Pass the tweet ID to associate with this request

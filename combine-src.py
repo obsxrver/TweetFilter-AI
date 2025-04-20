@@ -6,21 +6,30 @@ import argparse
 # Set up command line arguments
 parser = argparse.ArgumentParser(description='Combine TweetFilter-AI source files into a single userscript.')
 parser.add_argument('--nolog', action='store_true', help='Remove console.* logging statements')
+parser.add_argument('--nocomments', action='store_true', help='Remove JavaScript comments')
 args = parser.parse_args()
 
 # Define the files to combine in the correct order
 files_to_combine = [
-    "twitter-desloppifier.js",
+    # Helpers first
     "helpers/browserStorage.js",
     "helpers/TweetCache.js",
     "helpers/cache.js",
+    # Backend logic
     "backends/InstructionsHistory.js",
+    # Configuration
     "config.js",
-    "api.js",
-    "domScraper.js", 
+    # Core DOM/UI definitions needed by ScoreIndicator
+    "domScraper.js",
+    "ui.js", 
+    # The new class definition
+    "ui/ScoreIndicator.js",
+    # Files using the ScoreIndicatorRegistry
+    "ui/tooltipManager.js", # Keep for cleanup delegation
     "ratingEngine.js",
-    "ui/tooltipManager.js",
-    "ui.js",
+    "api.js", 
+    # Main script file (header excluded, contains initialization)
+    "twitter-desloppifier.js", 
 ]
 
 # Define embedded resources
@@ -49,6 +58,21 @@ def remove_console_logs(text):
     # Clean up any double blank lines created
     text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
     
+    return text
+
+# Function to remove JavaScript comments
+def remove_comments(text):
+    # Remove multi-line comments /* ... */ first
+    # Use [\s\S] to match any character including newline, non-greedily
+    text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+    # Remove single-line comments // that start the line (potentially after whitespace)
+    text = re.sub(r'^\s*//.*$', '', text, flags=re.MULTILINE)
+    # Remove single-line comments that are preceded by code and whitespace (more fragile)
+    # Avoids removing http:// but might miss some comments or remove code.
+    # Let's stick to the safer line-start removal for now.
+    # text = re.sub(r'(?<![:\'\"])\\s*//.*$', '', text, flags=re.MULTILINE) 
+    # Clean up potentially empty lines left after comment removal
+    text = re.sub(r'^\\s*\\n', '', text, flags=re.MULTILINE)
     return text
 
 # Read header from main file
@@ -115,6 +139,10 @@ for js_file in files_to_combine:
         if args.nolog:
             content = remove_console_logs(content)
         
+        # Remove comments if --nocomments is specified
+        if args.nocomments:
+            content = remove_comments(content)
+        
         combined_lines.append(content)
     
     combined_lines.append("\n")
@@ -126,4 +154,8 @@ combined_lines.append("})();\n")
 with open(output_file, 'w', encoding='utf-8') as f:
     f.writelines(combined_lines)
 
-print(f"Successfully created {output_file}{' (without console logs)' if args.nolog else ''}")
+status_message = f"Successfully created {output_file}"
+log_status = " (without console logs)" if args.nolog else ""
+comment_status = " (without comments)" if args.nocomments else ""
+
+print(status_message + log_status + comment_status)

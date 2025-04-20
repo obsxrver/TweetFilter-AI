@@ -17,6 +17,8 @@
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui/tooltipManager.js
+// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui/ScoreIndicator.js
 // @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/backends/InstructionsHistory.js
 // @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css
@@ -86,14 +88,12 @@ const VERSION = '1.3.9';
                 if (settingsUI) settingsUI.remove();
                 const statusIndicator = document.getElementById('status-indicator');
                 if (statusIndicator) statusIndicator.remove();
-                //Now WHY TF did it call this LMAO. That's why it was broken!
-                //cleanupDescriptionElements();
+                ScoreIndicatorRegistry.destroyAll();
                 console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
             setTimeout(initializeObserver, 1000);
         }
     }
-    // Start observing tweets and initializing the UI
     initializeObserver();
 })();

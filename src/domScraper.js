@@ -203,31 +203,45 @@ function handleMutations(mutationsList) {
             if (mutation.removedNodes.length > 0) {
                 mutation.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        // Check if the removed node is a tweet article or contains tweet articles
-                        const isTweet = node.matches && node.matches(TWEET_ARTICLE_SELECTOR);
-                        const removedTweets = isTweet ? [node] :
-                            (node.querySelectorAll ? Array.from(node.querySelectorAll(TWEET_ARTICLE_SELECTOR)) : []);
-                        
-                        // Check if the removed node is an indicator or contains indicators
-                        const isIndicator = node.matches && node.matches('.score-indicator');
-                        const hasIndicator = node.querySelector && node.querySelector('.score-indicator');
-                        
-                        // If a tweet or indicator was removed, mark for cleanup
-                        if (removedTweets.length > 0 || isIndicator || hasIndicator) {
-                            needsCleanup = true;
+                        // Check if the removed node is a tweet article
+                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                             const tweetId = getTweetID(node);
+                             if (tweetId) {
+                                 // Destroy the corresponding ScoreIndicator instance, if it exists
+                                 ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                 needsCleanup = true; // Mark that registry cleanup might be needed
+                             }
                         }
-
-                        // For each removed tweet, find and remove its description element
-                        removedTweets.forEach(tweet => {
-                            const indicator = tweet.querySelector('.score-indicator');
-                            if (indicator && indicator.dataset.id) {
-                                const descId = 'desc-' + indicator.dataset.id;
-                                const descBox = document.getElementById(descId);
-                                if (descBox) {
-                                    descBox.remove();
-                                }
-                            }
-                        });
+                        // Check if the removed node *contains* a tweet article 
+                        // (e.g., a cell wrapper removed)
+                        else if (node.querySelectorAll) {
+                             const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                             removedTweets.forEach(tweet => {
+                                 const tweetId = getTweetID(tweet);
+                                 if (tweetId) {
+                                     ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                     needsCleanup = true;
+                                 }
+                             });
+                        }
+                        
+                        // Direct check if an indicator itself was removed (less likely but possible)
+                        if (node.matches && node.matches('.score-indicator')) {
+                             const tweetId = node.dataset.tweetId;
+                             if (tweetId) {
+                                  ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                  needsCleanup = true;
+                             }
+                        }
+                         // Check if the removed node *contains* an indicator
+                        else if (node.querySelector && node.querySelector('.score-indicator')) {
+                             const indicator = node.querySelector('.score-indicator');
+                             const tweetId = indicator.dataset.tweetId;
+                             if (tweetId) {
+                                  ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                  needsCleanup = true;
+                             }
+                        }
                     }
                 });
             }
@@ -242,8 +256,9 @@ function handleMutations(mutationsList) {
         }, 100);
     }
 
-    // If cleanup is needed, call the cleanup function
+    // If cleanup is needed, call the registry cleanup function
     if (needsCleanup) {
-        cleanupOrphanedTooltips();
+        // Use the registry's cleanup method
+        ScoreIndicatorRegistry.cleanupOrphaned();
     }
 }
