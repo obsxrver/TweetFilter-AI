@@ -19,6 +19,7 @@ files_to_combine = [
     "api.js",
     "domScraper.js", 
     "ratingEngine.js",
+    "ui/tooltipManager.js",
     "ui.js",
 ]
 

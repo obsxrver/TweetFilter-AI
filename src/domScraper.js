@@ -175,6 +175,7 @@ function isOriginalTweet(tweetArticle) {
  */
 function handleMutations(mutationsList) {
     let tweetsAdded = false;
+    let needsCleanup = false; // Add flag to track if cleanup is needed
 
     for (const mutation of mutationsList) {
         handleThreads();
@@ -206,6 +207,15 @@ function handleMutations(mutationsList) {
                         const isTweet = node.matches && node.matches(TWEET_ARTICLE_SELECTOR);
                         const removedTweets = isTweet ? [node] :
                             (node.querySelectorAll ? Array.from(node.querySelectorAll(TWEET_ARTICLE_SELECTOR)) : []);
+                        
+                        // Check if the removed node is an indicator or contains indicators
+                        const isIndicator = node.matches && node.matches('.score-indicator');
+                        const hasIndicator = node.querySelector && node.querySelector('.score-indicator');
+                        
+                        // If a tweet or indicator was removed, mark for cleanup
+                        if (removedTweets.length > 0 || isIndicator || hasIndicator) {
+                            needsCleanup = true;
+                        }
 
                         // For each removed tweet, find and remove its description element
                         removedTweets.forEach(tweet => {
@@ -230,5 +240,10 @@ function handleMutations(mutationsList) {
         setTimeout(() => {
             applyFilteringToAll();
         }, 100);
+    }
+
+    // If cleanup is needed, call the cleanup function
+    if (needsCleanup) {
+        cleanupOrphanedTooltips();
     }
 }
