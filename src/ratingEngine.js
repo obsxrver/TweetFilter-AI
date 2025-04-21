@@ -28,6 +28,7 @@ function filterSingleTweet(tweetArticle) {
         cell.style.display = '';
     } else if (isNaN(score) || score < currentFilterThreshold) {
         cell.innerHTML = '';
+        cell.style.display = 'none';
     } else {
         // Show otherwise
         cell.style.display = '';
