@@ -13,8 +13,9 @@ args = parser.parse_args()
 files_to_combine = [
     # Helpers first
     "helpers/browserStorage.js",
-    "helpers/TweetCache.js",
+    
     "helpers/cache.js",
+    "backends/TweetCache.js",
     # Backend logic
     "backends/InstructionsHistory.js",
     # Configuration
@@ -24,8 +25,6 @@ files_to_combine = [
     "ui.js", 
     # The new class definition
     "ui/ScoreIndicator.js",
-    # Files using the ScoreIndicatorRegistry
-    "ui/tooltipManager.js", # Keep for cleanup delegation
     "ratingEngine.js",
     "api.js", 
     # Main script file (header excluded, contains initialization)
@@ -65,13 +64,7 @@ def remove_comments(text):
     # Remove multi-line comments /* ... */ first
     # Use [\s\S] to match any character including newline, non-greedily
     text = re.sub(r'/\*[\s\S]*?\*/', '', text)
-    # Remove single-line comments // that start the line (potentially after whitespace)
     text = re.sub(r'^\s*//.*$', '', text, flags=re.MULTILINE)
-    # Remove single-line comments that are preceded by code and whitespace (more fragile)
-    # Avoids removing http:// but might miss some comments or remove code.
-    # Let's stick to the safer line-start removal for now.
-    # text = re.sub(r'(?<![:\'\"])\\s*//.*$', '', text, flags=re.MULTILINE) 
-    # Clean up potentially empty lines left after comment removal
     text = re.sub(r'^\\s*\\n', '', text, flags=re.MULTILINE)
     return text
 
@@ -110,6 +103,8 @@ for resource in resources:
         content = f.read()
         # Escape backticks
         content = content.replace('`', '\\`')
+        content = content.replace('    ', '')
+        content = content.replace('\n', '')
         combined_lines.append(content)
     
     combined_lines.append("`;\n\n")

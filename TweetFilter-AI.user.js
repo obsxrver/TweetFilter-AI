@@ -19,2304 +19,10 @@
     'use strict';
 
     // Embedded Menu.html
-    const MENU = `<style>
-/*
-        Modern X-Inspired Styles - Enhanced
-        ---------------------------------
-    */
-
-    /* Main tweet filter container */
-    #tweet-filter-container {
-        position: fixed;
-        top: 70px;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 12px;
-        border-radius: 12px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* Close button styles */
-    .close-button {
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-size: 16px;
-        cursor: pointer;
-        padding: 0;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0.8;
-        transition: opacity 0.2s;
-        border-radius: 50%;
-        /* Enhanced touch target and mobile styles */
-        min-width: 28px;
-        min-height: 28px;
-        -webkit-tap-highlight-color: transparent;
-        touch-action: manipulation;
-        user-select: none;
-        z-index: 30;
-    }
-
-    .close-button:hover {
-        opacity: 1;
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    /* Hidden state */
-    .hidden {
-        display: none !important;
-    }
-
-    /* Show/hide button */
-    .toggle-button {
-        position: fixed;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 8px 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
-        z-index: 9999;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s ease;
-    }
-    
-    .toggle-button:hover {
-        background-color: rgba(29, 155, 240, 0.2);
-    }
-
-    #filter-toggle {
-        top: 70px;
-    }
-
-    #settings-toggle {
-        top: 120px;
-    }
-
-    #tweet-filter-container label {
-        margin: 0;
-        font-weight: bold;
-    }
-
-    #tweet-filter-slider {
-        cursor: pointer;
-        width: 120px;
-        vertical-align: middle;
-        -webkit-appearance: none;
-        appearance: none;
-        height: 6px;
-        border-radius: 3px;
-        background: linear-gradient(to right,
-            #FF0000 0%,
-            #FF8800 calc(var(--slider-percent, 50%) * 0.166),
-            #FFFF00 calc(var(--slider-percent, 50%) * 0.333),
-            #00FF00 calc(var(--slider-percent, 50%) * 0.5),
-            #00FFFF calc(var(--slider-percent, 50%) * 0.666),
-            #0000FF calc(var(--slider-percent, 50%) * 0.833),
-            #800080 var(--slider-percent, 50%),
-            #DEE2E6 var(--slider-percent, 50%),
-            #DEE2E6 100%
-        );
-    }
-
-    #tweet-filter-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #1d9bf0;
-        cursor: pointer;
-        border: 2px solid white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        transition: transform 0.1s;
-    }
-
-    #tweet-filter-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.2);
-    }
-
-    #tweet-filter-slider::-moz-range-thumb {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #1d9bf0;
-        cursor: pointer;
-        border: 2px solid white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        transition: transform 0.1s;
-    }
-
-    #tweet-filter-slider::-moz-range-thumb:hover {
-        transform: scale(1.2);
-    }
-
-    #tweet-filter-value {
-        min-width: 20px;
-        text-align: center;
-        font-weight: bold;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 2px 5px;
-        border-radius: 4px;
-    }
-
-    /* Settings UI with Tabs */
-    #settings-container {
-        position: fixed;
-        top: 70px;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 0; /* Remove padding to accommodate sticky header */
-        border-radius: 16px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
-        display: flex;
-        flex-direction: column;
-        width: 90vw; /* Default width for mobile */
-        max-width: 380px; /* Default max-width for mobile */
-        max-height: 85vh;
-        overflow: hidden; /* Hide overflow to make the sticky header work properly */
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        line-height: 1.3;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        transform-origin: top right;
-    }
-    
-    #settings-container.hidden {
-        opacity: 0;
-        transform: scale(0.9);
-        pointer-events: none;
-    }
-    
-    /* Header section */
-    .settings-header {
-        padding: 12px 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: sticky;
-        top: 0;
-        background-color: rgba(22, 24, 28, 0.98);
-        z-index: 20;
-        border-radius: 16px 16px 0 0;
-    }
-    
-    .settings-title {
-        font-weight: bold;
-        font-size: 16px;
-    }
-    
-    /* Content area with scrolling */
-    .settings-content {
-        overflow-y: auto;
-        max-height: calc(85vh - 110px); /* Account for header and tabs */
-        padding: 0;
-    }
-    
-    /* Scrollbar styling for settings container */
-    .settings-content::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .settings-content::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-
-    .settings-content::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-
-    .settings-content::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
-    /* Tab Navigation */
-    .tab-navigation {
-        display: flex;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        position: sticky;
-        top: 0;
-        background-color: rgba(22, 24, 28, 0.98);
-        z-index: 10;
-        padding: 10px 15px;
-        gap: 8px;
-    }
-
-    .tab-button {
-        padding: 6px 10px;
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-weight: bold;
-        cursor: pointer;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        flex: 1;
-        text-align: center;
-    }
-
-    .tab-button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .tab-button.active {
-        color: #1d9bf0;
-        background-color: rgba(29, 155, 240, 0.1);
-        border-bottom: 2px solid #1d9bf0;
-    }
-
-    /* Tab Content */
-    .tab-content {
-        display: none;
-        animation: fadeIn 0.3s ease;
-        padding: 15px;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    .tab-content.active {
-        display: block;
-    }
-
-    /* Enhanced dropdowns */
-    .select-container {
-        position: relative;
-        margin-bottom: 15px;
-    }
-    
-    .select-container .search-field {
-        position: sticky;
-        top: 0;
-        background-color: rgba(39, 44, 48, 0.95);
-        padding: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        z-index: 1;
-    }
-    
-    .select-container .search-input {
-        width: 100%;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.9);
-        color: #e7e9ea;
-        font-size: 12px;
-        transition: border-color 0.2s;
-    }
-    
-    .select-container .search-input:focus {
-        border-color: #1d9bf0;
-        outline: none;
-    }
-    
-    .custom-select {
-        position: relative;
-        display: inline-block;
-        width: 100%;
-    }
-    
-    .select-selected {
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        padding: 10px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        cursor: pointer;
-        user-select: none;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 13px;
-        transition: border-color 0.2s;
-    }
-    
-    .select-selected:hover {
-        border-color: rgba(255, 255, 255, 0.4);
-    }
-    
-    .select-selected:after {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border: 2px solid #e7e9ea;
-        border-width: 0 2px 2px 0;
-        display: inline-block;
-        transform: rotate(45deg);
-        margin-left: 10px;
-        transition: transform 0.2s;
-    }
-    
-    .select-selected.select-arrow-active:after {
-        transform: rotate(-135deg);
-    }
-    
-    .select-items {
-        position: absolute;
-        background-color: rgba(39, 44, 48, 0.98);
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 99;
-        max-height: 300px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        margin-top: 5px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        display: none;
-    }
-    
-    .select-items div {
-        color: #e7e9ea;
-        padding: 10px 12px;
-        cursor: pointer;
-        user-select: none;
-        transition: background-color 0.2s;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .select-items div:hover {
-        background-color: rgba(29, 155, 240, 0.1);
-    }
-    
-    .select-items div.same-as-selected {
-        background-color: rgba(29, 155, 240, 0.2);
-    }
-    
-    /* Scrollbar for select items */
-    .select-items::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .select-items::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .select-items::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-    
-    .select-items::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-    
-    /* Form elements */
-    #openrouter-api-key,
-    #user-instructions {
-        width: 100%;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        margin-bottom: 12px;
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        transition: border-color 0.2s;
-    }
-    
-    #openrouter-api-key:focus,
-    #user-instructions:focus {
-        border-color: #1d9bf0;
-        outline: none;
-    }
-
-    #user-instructions {
-        height: 120px;
-        resize: vertical;
-    }
-
-    /* Parameter controls */
-    .parameter-row {
-        display: flex;
-        align-items: center;
-        margin-bottom: 12px;
-        gap: 8px;
-        padding: 6px;
-        border-radius: 8px;
-        transition: background-color 0.2s;
-    }
-    
-    .parameter-row:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .parameter-label {
-        flex: 1;
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-
-    .parameter-control {
-        flex: 1.5;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .parameter-value {
-        min-width: 28px;
-        text-align: center;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 3px 5px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    .parameter-slider {
-        flex: 1;
-        -webkit-appearance: none;
-        height: 4px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.2);
-        outline: none;
-        cursor: pointer;
-    }
-
-    .parameter-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #1d9bf0;
-        cursor: pointer;
-        transition: transform 0.1s;
-    }
-    
-    .parameter-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.2);
-    }
-
-    /* Section styles */
-    .section-title {
-        font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 8px;
-        color: #e7e9ea;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 14px;
-    }
-    
-    .section-title:first-child {
-        margin-top: 0;
-    }
-
-    .section-description {
-        font-size: 12px;
-        margin-bottom: 8px;
-        opacity: 0.8;
-        line-height: 1.4;
-    }
-    
-    /* Advanced options section */
-    .advanced-options {
-        margin-top: 5px;
-        margin-bottom: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 12px;
-        background-color: rgba(255, 255, 255, 0.03);
-        overflow: hidden;
-    }
-    
-    .advanced-toggle {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        margin-bottom: 5px;
-    }
-    
-    .advanced-toggle-title {
-        font-weight: bold;
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-    
-    .advanced-toggle-icon {
-        transition: transform 0.3s;
-    }
-    
-    .advanced-toggle-icon.expanded {
-        transform: rotate(180deg);
-    }
-    
-    .advanced-content {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease-in-out;
-    }
-    
-    .advanced-content.expanded {
-        max-height: none;
-    }
-
-    /* Special handling for instructions history */
-    #instructions-history-content.expanded {
-        max-height: none !important;
-    }
-
-    #instructions-history .instructions-list {
-        max-height: 400px;
-        overflow-y: auto;
-        margin-bottom: 10px;
-    }
-
-    /* Handle list styling */
-    .handle-list {
-        margin-top: 10px;
-        max-height: 120px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 5px;
-    }
-
-    .handle-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 6px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
-        transition: background-color 0.2s;
-    }
-    
-    .handle-item:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .handle-item:last-child {
-        border-bottom: none;
-    }
-
-    .handle-text {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-    }
-
-    .remove-handle {
-        background: none;
-        border: none;
-        color: #ff5c5c;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 0 3px;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-    }
-    
-    .remove-handle:hover {
-        opacity: 1;
-    }
-
-    .add-handle-btn {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 7px 10px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 12px;
-        margin-left: 5px;
-        transition: background-color 0.2s;
-    }
-    
-    .add-handle-btn:hover {
-        background-color: #1a8cd8;
-    }
-
-    /* Button styling */
-    .settings-button {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: background-color 0.2s;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        margin-top: 8px;
-        width: 100%;
-        font-size: 13px;
-    }
-
-    .settings-button:hover {
-        background-color: #1a8cd8;
-    }
-
-    .settings-button.secondary {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    .settings-button.secondary:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .settings-button.danger {
-        background-color: #ff5c5c;
-    }
-
-    .settings-button.danger:hover {
-        background-color: #e53935;
-    }
-    
-    /* For smaller buttons that sit side by side */
-    .button-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-    }
-    
-    .button-row .settings-button {
-        margin-top: 0;
-    }
-    
-    /* Stats display */
-    .stats-container {
-        background-color: rgba(255, 255, 255, 0.05);
-        padding: 10px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-    }
-    
-    .stats-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 5px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .stats-row:last-child {
-        border-bottom: none;
-    }
-    
-    .stats-label {
-        font-size: 12px;
-        opacity: 0.8;
-    }
-    
-    .stats-value {
-        font-weight: bold;
-    }
-
-    /* Rating indicator shown on tweets */ 
-    .score-indicator {
-        position: absolute;
-        top: 10px;
-        right: 10.5%;
-        background-color: rgba(22, 24, 28, 0.9);
-        color: #e7e9ea;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        font-weight: bold;
-        z-index: 100;
-        cursor: pointer;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        min-width: 20px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        transition: transform 0.15s ease;
-    }
-    
-    .score-indicator:hover {
-        transform: scale(1.05);
-    }
-
-    /* Mobile indicator positioning */
-    .score-indicator.mobile-indicator {
-        position: absolute !important;
-        bottom: 3% !important;
-        right: 10px !important;
-        top: auto !important;
-    }
-
-    /* Base description box styles */
-    .score-description {
-        display: none;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 0 20px 16px 20px; /* Remove top padding */
-        border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 16px;
-        line-height: 1.5;
-        z-index: 99999999;
-        position: absolute;
-        width: 550px !important;
-        max-width: 80vw !important;
-        max-height: 60vh;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        word-wrap: break-word;
-        box-sizing: border-box !important;
-    }
-
-    .score-description.pinned {
-        border: 2px solid #1d9bf0 !important;
-    }
-
-    /* Tooltip controls */
-    .tooltip-controls {
-        display: flex !important;
-        justify-content: flex-end !important;
-        margin: 0 -20px 15px -20px !important;
-        position: sticky !important;
-        top: 0 !important;
-        background-color: rgba(39, 44, 48, 0.95) !important;
-        padding: 12px 15px !important;
-        z-index: 2 !important;
-        border-top-left-radius: 12px !important;
-        border-top-right-radius: 12px !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-        backdrop-filter: blur(5px) !important;
-    }
-
-    .tooltip-pin-button,
-    .tooltip-copy-button {
-        background: none !important;
-        border: none !important;
-        color: #8899a6 !important;
-        cursor: pointer !important;
-        font-size: 16px !important;
-        padding: 4px 8px !important;
-        margin-left: 8px !important;
-        border-radius: 4px !important;
-        transition: all 0.2s !important;
-    }
-
-    .tooltip-pin-button:hover,
-    .tooltip-copy-button:hover {
-        background-color: rgba(29, 155, 240, 0.1) !important;
-        color: #1d9bf0 !important;
-    }
-
-    .tooltip-pin-button:active,
-    .tooltip-copy-button:active {
-        transform: scale(0.95) !important;
-    }
-
-    /* Description text container needs padding to account for sticky header */
-    .description-text {
-        margin: 0 0 25px 0 !important;
-        font-size: 15px !important;
-        line-height: 1.6 !important;
-        max-width: 100% !important;
-        overflow-wrap: break-word !important;
-        padding: 5px 0 !important;
-    }
-
-    .tooltip-bottom-spacer {
-        height: 30px !important;
-        width: 100% !important;
-        margin-bottom: 10px !important;
-    }
-
-    /* Reasoning dropdown */
-    .reasoning-dropdown {
-        margin-top: 15px !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-        padding-top: 10px !important;
-    }
-
-    .reasoning-toggle {
-        display: flex !important;
-        align-items: center !important;
-        color: #1d9bf0 !important;
-        cursor: pointer !important;
-        font-weight: bold !important;
-        padding: 5px !important;
-        user-select: none !important;
-    }
-
-    .reasoning-toggle:hover {
-        background-color: rgba(29, 155, 240, 0.1) !important;
-        border-radius: 4px !important;
-    }
-
-    .reasoning-arrow {
-        display: inline-block !important;
-        margin-right: 5px !important;
-        transition: transform 0.2s ease !important;
-    }
-
-    .reasoning-content {
-        max-height: 0 !important;
-        overflow: hidden !important;
-        transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;
-        background-color: rgba(0, 0, 0, 0.15) !important;
-        border-radius: 5px !important;
-        margin-top: 5px !important;
-        padding: 0 !important;
-    }
-
-    .reasoning-dropdown.expanded .reasoning-content {
-        max-height: 350px !important;
-        overflow-y: auto !important;
-        padding: 10px !important;
-    }
-
-    .reasoning-dropdown.expanded .reasoning-arrow {
-        transform: rotate(90deg) !important;
-    }
-
-    .reasoning-text {
-        font-size: 14px !important;
-        line-height: 1.4 !important;
-        color: #ccc !important;
-        margin: 0 !important;
-        padding: 5px !important;
-    }
-
-    /* Scroll to bottom button */
-    .scroll-to-bottom-button {
-        position: sticky;
-        bottom: 0;
-        width: 100%;
-        background-color: rgba(29, 155, 240, 0.9);
-        color: white;
-        text-align: center;
-        padding: 8px 0;
-        cursor: pointer;
-        font-weight: bold;
-        border-top: 1px solid rgba(255, 255, 255, 0.2);
-        margin-top: 10px;
-        z-index: 100;
-        transition: background-color 0.2s;
-    }
-
-    .scroll-to-bottom-button:hover {
-        background-color: rgba(29, 155, 240, 1);
-    }
-
-    /* Mobile specific styles */
-    @media (max-width: 600px) {
-        .score-indicator {
-            position: absolute !important;
-            bottom: 3% !important;
-            right: 10px !important;
-            top: auto !important;
-        }
-
-        .score-description {
-            position: fixed !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            max-height: 80vh !important;
-            left: 0 !important;
-            right: 0 !important;
-            margin: 10vh auto 0 !important;
-            padding: 12px !important;
-            box-sizing: border-box !important;
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-            -webkit-overflow-scrolling: touch !important;
-            overscroll-behavior: contain !important;
-            transform: translateZ(0) !important; /* Force GPU acceleration */
-            border-radius: 16px 16px 0 0 !important;
-        }
-
-        .reasoning-dropdown.expanded .reasoning-content {
-            max-height: 200px !important;
-        }
-
-        .close-button {
-            width: 32px;
-            height: 32px;
-            min-width: 32px;
-            min-height: 32px;
-            font-size: 18px;
-            padding: 8px;
-            margin: -4px;  /* Compensate for larger padding while maintaining alignment */
-        }
-        
-        /* Ensure header close button is properly positioned */
-        .settings-header .close-button {
-            position: relative;
-            right: 0;
-        }
-    }
-
-    /* Existing styles */
-    
-    /* Sort container styles */
-    .sort-container {
-        margin: 10px 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        justify-content: space-between;
-    }
-    
-    .sort-container label {
-        font-size: 14px;
-        color: var(--text-color);
-        white-space: nowrap;
-    }
-
-    .sort-container .controls-group {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-    
-    .sort-container select {
-        padding: 5px 10px;
-        border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-size: 14px;
-        cursor: pointer;
-        min-width: 120px;
-    }
-    
-    .sort-container select:hover {
-        border-color: #1d9bf0;
-    }
-    
-    .sort-container select:focus {
-        outline: none;
-        border-color: #1d9bf0;
-        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
-    }
-
-    .sort-toggle {
-        padding: 5px 10px;
-        border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .sort-toggle:hover {
-        border-color: #1d9bf0;
-        background-color: rgba(29, 155, 240, 0.1);
-    }
-
-    .sort-toggle.active {
-        background-color: rgba(29, 155, 240, 0.2);
-        border-color: #1d9bf0;
-    }
-
-    /* Dropdown option styling */
-    .sort-container select option {
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-    }
-
-    /* Desktop-specific width */
-    @media (min-width: 601px) {
-        #settings-container {
-            width: 480px;
-            max-width: 480px;
-        }
-    }
-
-    /* Handle input styling */
-    #handle-input {
-        flex: 1;
-        padding: 8px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        transition: border-color 0.2s;
-        min-width: 200px;
-    }
-
-    #handle-input:focus {
-        outline: none;
-        border-color: #1d9bf0;
-        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
-    }
-
-    #handle-input::placeholder {
-        color: rgba(231, 233, 234, 0.5);
-    }
-
-    .handle-input-container {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 10px;
-        padding: 5px;
-        border-radius: 8px;
-        background-color: rgba(255, 255, 255, 0.03);
-    }
-
-    .add-handle-btn {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 14px;
-        transition: background-color 0.2s;
-        white-space: nowrap;
-    }
-    
-    .add-handle-btn:hover {
-        background-color: #1a8cd8;
-    }
-
-    /* Instructions history styles */
-    .instructions-list {
-        margin-top: 10px;
-        max-height: 200px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 5px;
-    }
-
-    .instruction-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
-        transition: background-color 0.2s;
-    }
-    
-    .instruction-item:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .instruction-item:last-child {
-        border-bottom: none;
-    }
-
-    .instruction-text {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-        flex: 1;
-        margin-right: 10px;
-    }
-
-    .instruction-buttons {
-        display: flex;
-        gap: 5px;
-    }
-
-    .use-instruction {
-        background: none;
-        border: none;
-        color: #1d9bf0;
-        cursor: pointer;
-        font-size: 12px;
-        padding: 3px 8px;
-        border-radius: 4px;
-        transition: all 0.2s;
-    }
-    
-    .use-instruction:hover {
-        background-color: rgba(29, 155, 240, 0.1);
-    }
-
-    .remove-instruction {
-        background: none;
-        border: none;
-        color: #ff5c5c;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 0 3px;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-        border-radius: 4px;
-    }
-    
-    .remove-instruction:hover {
-        opacity: 1;
-        background-color: rgba(255, 92, 92, 0.1);
-    }
-</style>
-<div id="tweetfilter-root-container">
-    <button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button>
-    <div id="tweet-filter-container">
-        <button class="close-button" data-action="close-filter">×</button>
-        <label for="tweet-filter-slider">SlopScore:</label>
-        <input type="range" id="tweet-filter-slider" min="0" max="10" step="1">
-        <span id="tweet-filter-value">5</span>
-    </div>
-
-    <button id="settings-toggle" class="toggle-button">
-        <span style="font-size: 14px;">⚙️</span> Settings
-    </button>
-    <div id="settings-container" class="hidden">
-        <div class="settings-header">
-            <div class="settings-title">Twitter De-Sloppifier</div>
-            <button class="close-button" data-action="close-settings">×</button>
-        </div>
-        <div class="settings-content">
-            <div class="tab-navigation">
-                <button class="tab-button active" data-tab="general">General</button>
-                <button class="tab-button" data-tab="models">Models</button>
-                <button class="tab-button" data-tab="instructions">Instructions</button>
-            </div>
-            <div id="general-tab" class="tab-content active">
-                <div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/" target="_blank">Get one here</a></div>
-                <input id="openrouter-api-key" placeholder="Enter your OpenRouter API key">
-                <button class="settings-button" data-action="save-api-key">Save API Key</button>
-                <div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div>
-                <div class="stats-container">
-                    <div class="stats-row">
-                        <div class="stats-label">Cached Tweet Ratings</div>
-                        <div class="stats-value" id="cached-ratings-count">0</div>
-                    </div>
-                    <div class="stats-row">
-                        <div class="stats-label">Whitelisted Handles</div>
-                        <div class="stats-value" id="whitelisted-handles-count">0</div>
-                    </div>
-                </div>
-                <button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button>
-                <div class="section-title" style="margin-top: 20px;">
-                    <span style="font-size: 14px;">💾</span> Backup &amp; Restore
-                </div>
-                <div class="section-description">
-                    Export your settings and cached ratings to a file for backup, or import previously saved settings.
-                </div>
-                <button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button>
-                <div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div>
-            </div>
-            <div id="models-tab" class="tab-content">
-                <div class="section-title">
-                    <span style="font-size: 14px;">🧠</span> Tweet Rating Model
-                </div>
-                <div class="section-description">
-                    The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.
-                </div>
-                <div class="select-container" id="model-select-container">
-                </div>
-
-                <div class="advanced-options">
-                    <div class="advanced-toggle" data-toggle="model-options-content">
-                        <div class="advanced-toggle-title">Options</div>
-                        <div class="advanced-toggle-icon">▼</div>
-                    </div>
-                    <div class="advanced-content" id="model-options-content">
-                        <div class="sort-container">
-                            <label for="model-sort-order">Sort models by: </label>
-                            <div class="controls-group">
-                                <select id="model-sort-order" data-setting="modelSortOrder">
-                                    <option value="pricing-low-to-high">Price</option>
-                                    <option value="latency-low-to-high">Latency</option>
-                                    <option value="throughput-high-to-low">Throughput</option>
-                                    <option value="top-weekly">Popularity</option>
-                                    <option value="">Age</option>
-                                </select>
-                                <button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button>
-                            </div>
-                        </div>
-                        <div class="sort-container">
-                            <label for="provider-sort">API Endpoint Priority: </label>
-                            <select id="provider-sort" data-setting="providerSort">
-                                <option value="">Default (load-balanced)</option>
-                                <option value="throughput">Throughput</option>
-                                <option value="latency">Latency</option>
-                                <option value="price">Price</option>
-                            </select>
-                        </div>
-                        <div class="sort-container">
-                            <label>
-                                <input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>
-                                Show Free Models
-                            </label>
-                        </div>
-
-                        <div class="parameter-row" data-param-name="modelTemperature">
-                            <div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div>
-                            <div class="parameter-control">
-                                <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;">
-                            </div>
-                        </div>
-                        <div class="parameter-row" data-param-name="modelTopP">
-                            <div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div>
-                            <div class="parameter-control">
-                                <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
-                                <input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;">
-                            </div>
-                        </div>
-                        <div class="parameter-row" data-param-name="maxTokens">
-                            <div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div>
-                            <div class="parameter-control">
-                                <input type="range" class="parameter-slider" min="0" max="2000" step="100">
-                                <input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;">
-                            </div>
-                        </div>
-                        
-                        <div class="toggle-row">
-                            <div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" data-setting="enableStreaming">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div>
-                <div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div>
-                <div class="toggle-row">
-                    <div class="toggle-label">Enable Image Descriptions</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" data-setting="enableImageDescriptions">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <div id="image-model-container" style="display: none;">
-                    <div class="select-container" id="image-model-select-container">
-                    </div>
-                    <div class="advanced-options" id="image-advanced-options">
-                        <div class="advanced-toggle" data-toggle="image-advanced-content">
-                            <div class="advanced-toggle-title">Options</div>
-                            <div class="advanced-toggle-icon">▼</div>
-                        </div>
-                        <div class="advanced-content" id="image-advanced-content">
-                            <div class="parameter-row" data-param-name="imageModelTemperature">
-                                <div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div>
-                                <div class="parameter-control">
-                                    <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
-                                    <input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;">
-                                </div>
-                            </div>
-                            <div class="parameter-row" data-param-name="imageModelTopP">
-                                <div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div>
-                                <div class="parameter-control">
-                                    <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
-                                    <input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div id="instructions-tab" class="tab-content">
-                <div class="section-title">Custom Instructions</div>
-                <div class="section-description">Add custom instructions for how the model should score tweets:</div>
-                <textarea id="user-instructions" placeholder="Examples:
-                - Give high scores to tweets about technology
-                - Penalize clickbait-style tweets
-                - Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea>
-                <button class="settings-button" data-action="save-instructions">Save Instructions</button>
-
-                <div class="advanced-options" id="instructions-history">
-                    <div class="advanced-toggle" data-toggle="instructions-history-content">
-                        <div class="advanced-toggle-title">Custom Instructions History</div>
-                        <div class="advanced-toggle-icon">▼</div>
-                    </div>
-                    <div class="advanced-content" id="instructions-history-content">
-                        <div class="instructions-list" id="instructions-list">
-                            <!-- Instructions entries will be added here dynamically -->
-                        </div>
-                        <button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button>
-                    </div>
-                </div>
-
-                <div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div>
-                <div class="section-description">Add Twitter handles to automatically rate as 10/10:</div>
-                <div class="handle-input-container">
-                    <input id="handle-input" type="text" placeholder="Twitter handle (without @)">
-                    <button class="add-handle-btn" data-action="add-handle">Add</button>
-                </div>
-                <div class="handle-list" id="handle-list">
-                </div>
-            </div>
-        </div>
-        <div id="status-indicator" class=""></div>
-    </div>
-</div>`;
+    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">×</button><label for="tweet-filter-slider">SlopScore:</label><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><span id="tweet-filter-value">5</span></div><button id="settings-toggle" class="toggle-button"><span style="font-size: 14px;">⚙️</span> Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">Twitter De-Sloppifier</div><button class="close-button" data-action="close-settings">×</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/" target="_blank">Get one here</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Cached Tweet Ratings</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Whitelisted Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">💾</span> Backup &amp; Restore</div><div class="section-description">Export your settings and cached ratings to a file for backup, or import previously saved settings.</div><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div></div><div id="models-tab" class="tab-content"><div class="section-title"><span style="font-size: 14px;">🧠</span> Tweet Rating Model</div><div class="section-description">The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-sort-order">Sort models by: </label><div class="controls-group"><select id="model-sort-order" data-setting="modelSortOrder"><option value="pricing-low-to-high">Price</option><option value="latency-low-to-high">Latency</option><option value="throughput-high-to-low">Throughput</option><option value="top-weekly">Popularity</option><option value="">Age</option></select><button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button></div></div><div class="sort-container"><label for="provider-sort">API Endpoint Priority: </label><select id="provider-sort" data-setting="providerSort"><option value="">Default (load-balanced)</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show Free Models</label></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div><div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div><div class="toggle-row"><div class="toggle-label">Enable Image Descriptions</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Custom Instructions</div><div class="section-description">Add custom instructions for how the model should score tweets:</div><textarea id="user-instructions" placeholder="Examples:- Give high scores to tweets about technology- Penalize clickbait-style tweets- Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Custom Instructions History</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"><!-- Instructions entries will be added here dynamically --></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button></div></div><div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div><div class="section-description">Add Twitter handles to automatically rate as 10/10:</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Twitter handle (without @)"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div></div>`;
 
     // Embedded style.css
-    const STYLE = `/*
-        Modern X-Inspired Styles - Enhanced
-        ---------------------------------
-    */
-
-    /* Main tweet filter container */
-    #tweet-filter-container {
-        position: fixed;
-        top: 70px;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 12px;
-        border-radius: 12px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* Close button styles */
-    .close-button {
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-size: 16px;
-        cursor: pointer;
-        padding: 0;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0.8;
-        transition: opacity 0.2s;
-        border-radius: 50%;
-    }
-
-    .close-button:hover {
-        opacity: 1;
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    /* Hidden state */
-    .hidden {
-        display: none !important;
-    }
-
-    /* Show/hide button */
-    .toggle-button {
-        position: fixed;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 8px 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
-        z-index: 9999;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s ease;
-    }
-    
-    .toggle-button:hover {
-        background-color: rgba(29, 155, 240, 0.2);
-    }
-
-    #filter-toggle {
-        top: 70px;
-    }
-
-    #settings-toggle {
-        top: 120px;
-    }
-
-    #tweet-filter-container label {
-        margin: 0;
-        font-weight: bold;
-    }
-
-    #tweet-filter-slider {
-        cursor: pointer;
-        width: 120px;
-        vertical-align: middle;
-        accent-color: #1d9bf0;
-    }
-
-    #tweet-filter-value {
-        min-width: 20px;
-        text-align: center;
-        font-weight: bold;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 2px 5px;
-        border-radius: 4px;
-    }
-
-    /* Settings UI with Tabs */
-    #settings-container {
-        position: fixed;
-        top: 70px;
-        right: 15px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 0; /* Remove padding to accommodate sticky header */
-        border-radius: 16px;
-        z-index: 9999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
-        display: flex;
-        flex-direction: column;
-        width: 380px;
-        max-height: 85vh;
-        overflow: hidden; /* Hide overflow to make the sticky header work properly */
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        line-height: 1.3;
-        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        transform-origin: top right;
-    }
-    
-    #settings-container.hidden {
-        opacity: 0;
-        transform: scale(0.9);
-        pointer-events: none;
-    }
-    
-    /* Header section */
-    .settings-header {
-        padding: 12px 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: sticky;
-        top: 0;
-        background-color: rgba(22, 24, 28, 0.98);
-        z-index: 20;
-        border-radius: 16px 16px 0 0;
-    }
-    
-    .settings-title {
-        font-weight: bold;
-        font-size: 16px;
-    }
-    
-    /* Content area with scrolling */
-    .settings-content {
-        overflow-y: auto;
-        max-height: calc(85vh - 110px); /* Account for header and tabs */
-        padding: 0;
-    }
-    
-    /* Scrollbar styling for settings container */
-    .settings-content::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .settings-content::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-
-    .settings-content::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-
-    .settings-content::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-
-    /* Tab Navigation */
-    .tab-navigation {
-        display: flex;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        position: sticky;
-        top: 0;
-        background-color: rgba(22, 24, 28, 0.98);
-        z-index: 10;
-        padding: 10px 15px;
-        gap: 8px;
-    }
-
-    .tab-button {
-        padding: 6px 10px;
-        background: none;
-        border: none;
-        color: #e7e9ea;
-        font-weight: bold;
-        cursor: pointer;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        flex: 1;
-        text-align: center;
-    }
-
-    .tab-button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .tab-button.active {
-        color: #1d9bf0;
-        background-color: rgba(29, 155, 240, 0.1);
-        border-bottom: 2px solid #1d9bf0;
-    }
-
-    /* Tab Content */
-    .tab-content {
-        display: none;
-        animation: fadeIn 0.3s ease;
-        padding: 15px;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    .tab-content.active {
-        display: block;
-    }
-
-    /* Enhanced dropdowns */
-    .select-container {
-        position: relative;
-        margin-bottom: 15px;
-    }
-    
-    .select-container .search-field {
-        position: sticky;
-        top: 0;
-        background-color: rgba(39, 44, 48, 0.95);
-        padding: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        z-index: 1;
-    }
-    
-    .select-container .search-input {
-        width: 100%;
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.9);
-        color: #e7e9ea;
-        font-size: 12px;
-        transition: border-color 0.2s;
-    }
-    
-    .select-container .search-input:focus {
-        border-color: #1d9bf0;
-        outline: none;
-    }
-    
-    .custom-select {
-        position: relative;
-        display: inline-block;
-        width: 100%;
-    }
-    
-    .select-selected {
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        padding: 10px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        cursor: pointer;
-        user-select: none;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 13px;
-        transition: border-color 0.2s;
-    }
-    
-    .select-selected:hover {
-        border-color: rgba(255, 255, 255, 0.4);
-    }
-    
-    .select-selected:after {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border: 2px solid #e7e9ea;
-        border-width: 0 2px 2px 0;
-        display: inline-block;
-        transform: rotate(45deg);
-        margin-left: 10px;
-        transition: transform 0.2s;
-    }
-    
-    .select-selected.select-arrow-active:after {
-        transform: rotate(-135deg);
-    }
-    
-    .select-items {
-        position: absolute;
-        background-color: rgba(39, 44, 48, 0.98);
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 99;
-        max-height: 300px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        margin-top: 5px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        display: none;
-    }
-    
-    .select-items div {
-        color: #e7e9ea;
-        padding: 10px 12px;
-        cursor: pointer;
-        user-select: none;
-        transition: background-color 0.2s;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    
-    .select-items div:hover {
-        background-color: rgba(29, 155, 240, 0.1);
-    }
-    
-    .select-items div.same-as-selected {
-        background-color: rgba(29, 155, 240, 0.2);
-    }
-    
-    /* Scrollbar for select items */
-    .select-items::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .select-items::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
-    .select-items::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-    
-    .select-items::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-    
-    /* Form elements */
-    #openrouter-api-key,
-    #user-instructions {
-        width: 100%;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        margin-bottom: 12px;
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 13px;
-        transition: border-color 0.2s;
-    }
-    
-    #openrouter-api-key:focus,
-    #user-instructions:focus {
-        border-color: #1d9bf0;
-        outline: none;
-    }
-
-    #user-instructions {
-        height: 120px;
-        resize: vertical;
-    }
-
-    /* Parameter controls */
-    .parameter-row {
-        display: flex;
-        align-items: center;
-        margin-bottom: 12px;
-        gap: 8px;
-        padding: 6px;
-        border-radius: 8px;
-        transition: background-color 0.2s;
-    }
-    
-    .parameter-row:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .parameter-label {
-        flex: 1;
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-
-    .parameter-control {
-        flex: 1.5;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .parameter-value {
-        min-width: 28px;
-        text-align: center;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 3px 5px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    .parameter-slider {
-        flex: 1;
-        -webkit-appearance: none;
-        height: 4px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.2);
-        outline: none;
-        cursor: pointer;
-    }
-
-    .parameter-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #1d9bf0;
-        cursor: pointer;
-        transition: transform 0.1s;
-    }
-    
-    .parameter-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.2);
-    }
-
-    /* Section styles */
-    .section-title {
-        font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 8px;
-        color: #e7e9ea;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 14px;
-    }
-    
-    .section-title:first-child {
-        margin-top: 0;
-    }
-
-    .section-description {
-        font-size: 12px;
-        margin-bottom: 8px;
-        opacity: 0.8;
-        line-height: 1.4;
-    }
-    
-    /* Advanced options section */
-    .advanced-options {
-        margin-top: 5px;
-        margin-bottom: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 12px;
-        background-color: rgba(255, 255, 255, 0.03);
-        overflow: hidden;
-    }
-    
-    .advanced-toggle {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        margin-bottom: 5px;
-    }
-    
-    .advanced-toggle-title {
-        font-weight: bold;
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-    
-    .advanced-toggle-icon {
-        transition: transform 0.3s;
-    }
-    
-    .advanced-toggle-icon.expanded {
-        transform: rotate(180deg);
-    }
-    
-    .advanced-content {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease-in-out;
-    }
-    
-    .advanced-content.expanded {
-        max-height: 300px;
-    }
-
-    /* Handle list styling */
-    .handle-list {
-        margin-top: 10px;
-        max-height: 120px;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 5px;
-    }
-
-    .handle-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 6px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 4px;
-        transition: background-color 0.2s;
-    }
-    
-    .handle-item:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-
-    .handle-item:last-child {
-        border-bottom: none;
-    }
-
-    .handle-text {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-    }
-
-    .remove-handle {
-        background: none;
-        border: none;
-        color: #ff5c5c;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 0 3px;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-    }
-    
-    .remove-handle:hover {
-        opacity: 1;
-    }
-
-    .add-handle-btn {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        padding: 7px 10px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 12px;
-        margin-left: 5px;
-        transition: background-color 0.2s;
-    }
-    
-    .add-handle-btn:hover {
-        background-color: #1a8cd8;
-    }
-
-    /* Button styling */
-    .settings-button {
-        background-color: #1d9bf0;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: background-color 0.2s;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        margin-top: 8px;
-        width: 100%;
-        font-size: 13px;
-    }
-
-    .settings-button:hover {
-        background-color: #1a8cd8;
-    }
-
-    .settings-button.secondary {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    .settings-button.secondary:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .settings-button.danger {
-        background-color: #ff5c5c;
-    }
-
-    .settings-button.danger:hover {
-        background-color: #e53935;
-    }
-    
-    /* For smaller buttons that sit side by side */
-    .button-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-    }
-    
-    .button-row .settings-button {
-        margin-top: 0;
-    }
-    
-    /* Stats display */
-    .stats-container {
-        background-color: rgba(255, 255, 255, 0.05);
-        padding: 10px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-    }
-    
-    .stats-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 5px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .stats-row:last-child {
-        border-bottom: none;
-    }
-    
-    .stats-label {
-        font-size: 12px;
-        opacity: 0.8;
-    }
-    
-    .stats-value {
-        font-weight: bold;
-    }
-
-    /* Rating indicator shown on tweets */ 
-    .score-indicator {
-        position: absolute;
-        top: 10px;
-        right: 10.5%;
-        background-color: rgba(22, 24, 28, 0.9);
-        color: #e7e9ea;
-        padding: 4px 10px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        font-weight: bold;
-        z-index: 100;
-        cursor: pointer;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        min-width: 20px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        transition: transform 0.15s ease;
-    }
-    
-    .score-indicator:hover {
-        transform: scale(1.05);
-    }
-
-    /* Refresh animation */
-    .refreshing {
-        animation: spin 1s infinite linear;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* The description box for ratings */
-    .score-description {
-        display: none;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 16px 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 16px;
-        line-height: 1.5;
-        z-index: 99999999;
-        position: fixed;
-        width: clamp(300px, 30vw, 500px);
-        max-height: 60vh;
-        overflow-y: auto;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        word-wrap: break-word;
-    }
-    
-    /* Ensure the tooltip scrolls to the bottom during streaming */
-    .score-description.streaming-tooltip {
-        scroll-behavior: smooth;
-        border-left: 3px solid #1d9bf0;
-        background-color: rgba(25, 30, 35, 0.98);
-    }
-    
-    /* Add a small badge to indicate streaming status */
-    .score-description.streaming-tooltip::before {
-        content: 'Live';
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background-color: #1d9bf0;
-        color: white;
-        font-size: 11px;
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-weight: bold;
-    }
-    
-    /* Add scrollbars to tooltip for better UX */
-    .score-description::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .score-description::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 3px;
-    }
-    
-    .score-description::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 3px;
-    }
-    
-    .score-description::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-    }
-    
-    /* Add animated cursor to the streaming tooltip content */
-    .score-description.streaming-tooltip p::after {
-        content: '|';
-        display: inline-block;
-        color: #1d9bf0;
-        animation: blink 0.7s infinite;
-        font-weight: bold;
-        margin-left: 2px;
-    }
-    
-    @keyframes blink {
-        0%, 100% { opacity: 0; }
-        50% { opacity: 1; }
-    }
-    
-    .streaming-rating {
-        background-color: rgba(33, 150, 243, 0.9) !important;
-        color: white !important;
-        animation: pulse 1.5s infinite alternate; /* Add pulsing animation for live updates */
-        position: relative;
-    }
-    
-    /* Add a small dot to indicate streaming in progress */
-    .streaming-rating::after {
-        content: '';
-        position: absolute;
-        top: -2px;
-        right: -2px;
-        width: 6px;
-        height: 6px;
-        background-color: #1d9bf0;
-        border-radius: 50%;
-        animation: blink 0.7s infinite;
-        box-shadow: 0 0 4px #1d9bf0;
-    }
-
-    /* Rating status classes */
-    .cached-rating {
-        background-color: rgba(76, 175, 80, 0.9) !important;
-        color: white !important;
-    }
-    
-    .rated-rating {
-        background-color: rgba(33, 33, 33, 0.9) !important;
-        color: white !important;
-    }
-
-    .blacklisted-rating {
-        background-color: rgba(255, 193, 7, 0.9) !important;
-        color: black !important;
-    }
-
-    .pending-rating {
-        background-color: rgba(255, 152, 0, 0.9) !important;
-        color: white !important;
-    }
-    
-    @keyframes pulse {
-        0% { opacity: 0.8; }
-        100% { opacity: 1; }
-    }
-
-    .error-rating {
-        background-color: rgba(244, 67, 54, 0.9) !important;
-        color: white !important;
-    }
-
-    /* Status indicator at bottom-right */
-    #status-indicator {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: rgba(22, 24, 28, 0.95);
-        color: #e7e9ea;
-        padding: 10px 15px;
-        border-radius: 8px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        font-size: 12px;
-        z-index: 9999;
-        display: none;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-        transform: translateY(100px);
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-
-    #status-indicator.active {
-        display: block;
-        transform: translateY(0);
-    }
-    
-    /* Toggle switch styling */
-    .toggle-switch {
-        position: relative;
-        display: inline-block;
-        width: 36px;
-        height: 20px;
-    }
-    
-    .toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-    
-    .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(255, 255, 255, 0.2);
-        transition: .3s;
-        border-radius: 34px;
-    }
-    
-    .toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        left: 2px;
-        bottom: 2px;
-        background-color: white;
-        transition: .3s;
-        border-radius: 50%;
-    }
-    
-    input:checked + .toggle-slider {
-        background-color: #1d9bf0;
-    }
-    
-    input:checked + .toggle-slider:before {
-        transform: translateX(16px);
-    }
-    
-    .toggle-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 8px 10px;
-        margin-bottom: 12px;
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        transition: background-color 0.2s;
-    }
-    
-    .toggle-row:hover {
-        background-color: rgba(255, 255, 255, 0.08);
-    }
-    
-    .toggle-label {
-        font-size: 13px;
-        color: #e7e9ea;
-    }
-
-    /* Existing styles */
-    
-    /* Sort container styles */
-    .sort-container {
-        margin: 10px 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .sort-container label {
-        font-size: 14px;
-        color: var(--text-color);
-    }
-    
-    .sort-container select {
-        padding: 5px 10px;
-        border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-        font-size: 14px;
-        cursor: pointer;
-    }
-    
-    .sort-container select:hover {
-        border-color: #1d9bf0;
-    }
-    
-    .sort-container select:focus {
-        outline: none;
-        border-color: #1d9bf0;
-        box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);
-    }
-    
-    /* Dropdown option styling */
-    .sort-container select option {
-        background-color: rgba(39, 44, 48, 0.95);
-        color: #e7e9ea;
-    }`;
+    const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;/* Twitter blue */color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {/* Add specific mobile tooltip styles if needed */max-width: 90vw;/* Example */}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 6px;}.score-description::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 16px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);display: flex;flex-direction: column;width: 90vw;max-width: 380px;max-height: 85vh;overflow: hidden;border: 1px solid rgba(255, 255, 255, 0.1);line-height: 1.3;transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);transform-origin: top right;}#settings-container.hidden {opacity: 0;transform: scale(0.9);pointer-events: none;}.settings-header {padding: 12px 15px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 20;border-radius: 16px 16px 0 0;}.settings-title {font-weight: bold;font-size: 16px;}.settings-content {overflow-y: auto;max-height: calc(85vh - 110px);padding: 0;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(255, 255, 255, 0.1);position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 10;padding: 10px 15px;gap: 8px;}.tab-button {padding: 6px 10px;background: none;border: none;color: #e7e9ea;font-weight: bold;cursor: pointer;border-radius: 8px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(255, 255, 255, 0.1);}.tab-button.active {color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);border-bottom: 2px solid #1d9bf0;}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 15px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 15px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(39, 44, 48, 0.95);padding: 8px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);z-index: 1;}.select-container .search-input {width: 100%;padding: 8px 10px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 12px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;padding: 10px 12px;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(39, 44, 48, 0.98);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;margin-top: 5px;box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(255, 255, 255, 0.05);}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: bold;margin-top: 20px;margin-bottom: 8px;color: #e7e9ea;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12px;margin-bottom: 8px;opacity: 0.8;line-height: 1.4;}.advanced-options {margin-top: 5px;margin-bottom: 15px;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 12px;background-color: rgba(255, 255, 255, 0.03);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: bold;font-size: 13px;color: #e7e9ea;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: none;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0 20px 16px 20px;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 550px !important;max-width: 80vw !important;max-height: 60vh;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;margin: 0 -20px 15px -20px !important;position: sticky !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.description-text {margin: 0 0 25px 0 !important;font-size: 15px !important;line-height: 1.6 !important;max-width: 100% !important;overflow-wrap: break-word !important;padding: 5px 0 !important;}.tooltip-bottom-spacer {height: 30px !important;width: 100% !important;margin-bottom: 10px !important;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: sticky;bottom: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);margin-top: 10px;z-index: 100;transition: background-color 0.2s;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;max-height: 80vh !important;left: 0 !important;right: 0 !important;margin: 10vh auto 0 !important;padding: 12px !important;box-sizing: border-box !important;overflow-y: auto !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}}.sort-container {margin: 10px 0;display: flex;align-items: center;gap: 10px;justify-content: space-between;}.sort-container label {font-size: 14px;color: var(--text-color);white-space: nowrap;}.sort-container .controls-group {display: flex;gap: 8px;align-items: center;}.sort-container select {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;min-width: 120px;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}@media (min-width: 601px) {#settings-container {width: 480px;max-width: 480px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}`;
 
     // Apply CSS
     GM_addStyle(STYLE);
@@ -2325,6 +31,7 @@
     GM_setValue('menuHTML', MENU);
 
     // ----- helpers/browserStorage.js -----
+
 
 
 
@@ -2346,126 +53,8 @@ function browserSet(key, value) {
     }
 }
 
-    // ----- helpers/TweetCache.js -----
-
-class TweetCache {
-    constructor() {
-        this.cache = {};
-        this.loadFromStorage();
-    }
-
-    
-    loadFromStorage() {
-        try {
-            const storedCache = browserGet('tweetRatings', '{}');
-            this.cache = JSON.parse(storedCache);
-            for (const tweetId in this.cache) {
-                this.cache[tweetId].fromStorage = true;
-            }
-        } catch (error) {
-
-            this.cache = {};
-        }
-    }
-
-    
-    saveToStorage() {
-        browserSet('tweetRatings', JSON.stringify(this.cache));
-        updateCacheStatsUI();
-    }
-
-    
-    get(tweetId) {
-        return this.cache[tweetId] || null;
-    }
-
-    
-    set(tweetId, rating, saveImmediately = true) {
-
-        this.cache[tweetId] = {
-            score: rating.score,
-            description: rating.description || '',
-            reasoning: rating.reasoning || '',
-            timestamp: rating.timestamp || Date.now(),
-            streaming: rating.streaming || false,
-            blacklisted: rating.blacklisted || false,
-            fromStorage: rating.fromStorage || false
-        };
-
-        if (saveImmediately) {
-            this.saveToStorage();
-        }
-    }
-    has(tweetId) {
-        return this.cache[tweetId] !== undefined;
-    }
-    
-    delete(tweetId, saveImmediately = true) {
-        delete this.cache[tweetId];
-        if (saveImmediately) {
-            this.saveToStorage();
-        }
-    }
-
-    
-    clear(saveImmediately = true) {
-        this.cache = {};
-        if (saveImmediately) {
-            this.saveToStorage();
-        }
-    }
-
-    
-    get size() {
-        return Object.keys(this.cache).length;
-    }
-
-    
-    cleanup(saveImmediately = true) {
-        const beforeCount = this.size;
-        let deletedCount = 0;
-        let streamingDeletedCount = 0;
-        let undefinedScoreCount = 0;
-
-        for (const tweetId in this.cache) {
-            const entry = this.cache[tweetId];
-            if (entry.score === undefined || entry.score === null) {
-                if (entry.streaming === true) {
-                    streamingDeletedCount++;
-                } else {
-                    undefinedScoreCount++;
-                }
-                delete this.cache[tweetId];
-                deletedCount++;
-            }
-        }
-
-        if (saveImmediately && deletedCount > 0) {
-            this.saveToStorage();
-        }
-
-        return {
-            beforeCount,
-            afterCount: this.size,
-            deletedCount,
-            streamingDeletedCount,
-            undefinedScoreCount
-        };
-    }
-}
-
-const tweetCache = new TweetCache();
-
-
     // ----- helpers/cache.js -----
 
-
-
-
-
-function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
-    return tweetCache.cleanup(saveAfterCleanup);
-}
 
 
 function updateCacheStatsUI() {
@@ -2486,7 +75,142 @@ function updateCacheStatsUI() {
 }
 
 
+    // ----- backends/TweetCache.js -----
+
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func.apply(this, args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
+
+
+class TweetCache {
+
+    static DEBOUNCE_DELAY = 1500;
+
+    constructor() {
+        this.cache = {};
+        this.loadFromStorage();
+
+        this.debouncedSaveToStorage = debounce(this.#saveToStorageInternal.bind(this), TweetCache.DEBOUNCE_DELAY);
+    }
+
+    
+    loadFromStorage() {
+        try {
+            const storedCache = browserGet('tweetRatings', '{}');
+            this.cache = JSON.parse(storedCache);
+            for (const tweetId in this.cache) {
+                this.cache[tweetId].fromStorage = true;
+            }
+        } catch (error) {
+
+            this.cache = {};
+        }
+    }
+
+    
+    #saveToStorageInternal() {
+        try {
+            console.log(`Saving ${Object.keys(this.cache).length} tweet ratings to storage.`); // Log saving action
+            browserSet('tweetRatings', JSON.stringify(this.cache));
+            updateCacheStatsUI(); // Update UI after saving
+        } catch (error) {
+
+        }
+    }
+
+    
+    get(tweetId) {
+        return this.cache[tweetId] || null;
+    }
+
+    
+    set(tweetId, rating, saveImmediately = true) { // saveImmediately is now ignored
+
+        this.cache[tweetId] = {
+            score: rating.score,
+            description: rating.description || '',
+            reasoning: rating.reasoning || '',
+            timestamp: rating.timestamp || Date.now(),
+            streaming: rating.streaming || false,
+            blacklisted: rating.blacklisted || false,
+            fromStorage: rating.fromStorage || false
+        };
+
+        this.debouncedSaveToStorage();
+    }
+    has(tweetId) {
+        return this.cache[tweetId] !== undefined;
+    }
+    
+    delete(tweetId, saveImmediately = true) { // saveImmediately is now ignored
+        if (this.has(tweetId)) {
+            delete this.cache[tweetId];
+
+            this.debouncedSaveToStorage();
+        }
+    }
+
+    
+    clear(saveImmediately = true) { // saveImmediately is now ignored
+        this.cache = {};
+
+        this.debouncedSaveToStorage();
+    }
+
+    
+    get size() {
+        return Object.keys(this.cache).length;
+    }
+
+    
+    cleanup(saveImmediately = true) { // saveImmediately is now ignored
+        const beforeCount = this.size;
+        let deletedCount = 0;
+        let streamingDeletedCount = 0;
+        let undefinedScoreCount = 0;
+
+        for (const tweetId in this.cache) {
+            const entry = this.cache[tweetId];
+            if (entry.score === undefined || entry.score === null) {
+                if (entry.streaming === true) {
+                    streamingDeletedCount++;
+                } else {
+                    undefinedScoreCount++;
+                }
+                delete this.cache[tweetId];
+                deletedCount++;
+            }
+        }
+
+        if (deletedCount > 0) {
+
+            this.debouncedSaveToStorage();
+        }
+
+        return {
+            beforeCount,
+            afterCount: this.size,
+            deletedCount,
+            streamingDeletedCount,
+            undefinedScoreCount
+        };
+    }
+}
+
+const tweetCache = new TweetCache();
+
+
     // ----- backends/InstructionsHistory.js -----
+
 
 class InstructionsHistory {
     constructor() {
@@ -2610,18 +334,10 @@ const instructionsHistory = new InstructionsHistory();
 
 
     // ----- config.js -----
+
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 
-
-
-
-
-
-function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
-    return tweetCache.cleanup(saveAfterCleanup);
-}
-
-const PROCESSING_DELAY_MS = 50; // Delay before processing a tweet (ms)
+const PROCESSING_DELAY_MS = 250; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
 let USER_DEFINED_INSTRUCTIONS = browserGet('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
 - Give low scores to clickbait, fearmongering, and ragebait
@@ -2630,7 +346,7 @@ let currentFilterThreshold = browserGet('filterThreshold', 1); // Filter thresho
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 let availableModels = []; // List of models fetched from API
 let listedModels = []; // Filtered list of models actually shown in UI
 let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
@@ -2645,36 +361,7 @@ let threadHist = "";
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 
-const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.
-You will be given a Tweet, structured like this:
-_______TWEET SCHEMA_______
-_______BEGIN TWEET_______
-[TWEET {TweetID}]
-{the text of the tweet being replied to}
-[MEDIA_DESCRIPTION]:
-[IMAGE 1]: {description}, [IMAGE 2]: {description}, etc.
-[REPLY] (if the author is replying to another tweet)
-[TWEET {TweetID}]: (the tweet which you are to review)
-@{the author of the tweet}
-{the text of the tweet}
-[MEDIA_DESCRIPTION]:
-[IMAGE 1]: {description}, [IMAGE 2]: {description}, etc.
-[QUOTED_TWEET]: (if the author is quoting another tweet)
-{the text of the quoted tweet}
-[QUOTED_TWEET_MEDIA_DESCRIPTION]:
-[IMAGE 1]: {description}, [IMAGE 2]: {description}, etc.
-_______END TWEET_______
-_______END TWEET SCHEMA_______
-
-You are to review and provide a rating for the tweet with the specified tweet ID.
-Ensure that you consider the user-defined instructions in your analysis and scoring.
-Follow the user-defined instructions exactly, and do not deviate from them. Then, on a new line, provide a score between 0 and 10.
-Output your final rating in the exact format:
-(Response to user defined instructions)
-SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)
-for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
-If one of the above is not present, the program will not be able to parse the response and will return an error.
-`
+const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.You will be given a Tweet and user defined instructions to rate the tweet. You are to review and provide a rating for the tweet with the specified tweet ID.Ensure that you consider the user-defined instructions in your analysis and scoring.Follow the user-defined instructions exactly, and do not deviate from them. Then, on a new line, provide a score between 0 and 10.Output your analysis first. Then, on a new line, provide a score between 0 and 10. in this exact format:SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.If one of the above is not present, the program will not be able to parse the response and will return an error.`
 let modelTemperature = browserGet('modelTemperature', 1);
 let modelTopP = browserGet('modelTopP', 1);
 let imageModelTemperature = browserGet('imageModelTemperature', 1);
@@ -2705,6 +392,7 @@ function modelSupportsImages(modelId) {
 }
 
     // ----- domScraper.js -----
+
 
 function getElementText(elements) {
     if (!elements) return '';
@@ -2774,19 +462,28 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 
-
-function extractMediaLinks(scopeElement) {
+async function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
     
     const mediaLinks = new Set();
 
     const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
     const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    const combinedSelector = `${imgSelector}, ${videoSelector}`;
 
-    let mediaElements = scopeElement.querySelectorAll(`${imgSelector}, ${videoSelector}`);
+    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
+    const RETRY_DELAY = 100; // ms
+    let retries = 0;
+
+    while (mediaElements.length === 0 && retries < MAX_RETRIES) {
+        retries++;
+
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        mediaElements = scopeElement.querySelectorAll(combinedSelector);
+    }
+
 
     if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
-
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
     
@@ -2803,7 +500,6 @@ function extractMediaLinks(scopeElement) {
         try {
 
             const url = new URL(sourceUrl);
-            const format = url.searchParams.get('format');
             const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
 
             let finalUrl = sourceUrl;
@@ -2842,7 +538,6 @@ function handleMutations(mutationsList) {
     let needsCleanup = false; // Add flag to track if cleanup is needed
 
     for (const mutation of mutationsList) {
-        handleThreads();
         if (mutation.type === 'childList') {
 
             if (mutation.addedNodes.length > 0) {
@@ -2852,10 +547,10 @@ function handleMutations(mutationsList) {
                             scheduleTweetProcessing(node);
                             tweetsAdded = true;
                         }
-                        else if (node.querySelectorAll) {
-                            const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                            if (tweetsInside.length > 0) {
-                                tweetsInside.forEach(scheduleTweetProcessing);
+                        else if (node.querySelector) {
+                            const tweetsInside = node.querySelector(TWEET_ARTICLE_SELECTOR);
+                            if (tweetsInside) {
+                                scheduleTweetProcessing(tweetsInside);
                                 tweetsAdded = true;
                             }
                         }
@@ -2918,7 +613,6 @@ function handleMutations(mutationsList) {
     }
 
     if (needsCleanup) {
-
         ScoreIndicatorRegistry.cleanupOrphaned();
     }
 }
@@ -2979,15 +673,6 @@ function injectUI() {
     uiContainer = document.createElement('div');
     uiContainer.id = containerId;
     uiContainer.innerHTML = menuHTML;
-
-    const stylesheet = uiContainer.querySelector('style');
-    if (stylesheet) {
-        GM_addStyle(stylesheet.textContent);
-
-        stylesheet.remove(); // Remove style tag after injecting
-    } else {
-
-    }
 
     document.body.appendChild(uiContainer);
 
@@ -3205,8 +890,16 @@ function clearTweetRatingsAndRefreshUI() {
                     indicator.remove();
                 }
 
-                processedTweets.delete(getTweetID(tweet));
-                scheduleTweetProcessing(tweet);
+                const tweetId = getTweetID(tweet); // Get ID *before* potential errors
+                if (tweetId) { // Ensure we have an ID
+                    processedTweets.delete(tweetId);
+
+                    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+                    if (indicatorInstance) {
+                        indicatorInstance.destroy();
+                    }
+                    scheduleTweetProcessing(tweet); // Now schedule processing
+                }
             });
         }
 
@@ -3322,7 +1015,7 @@ function addHandleFromInput() {
     const handle = handleInput.value.trim();
     if (handle) {
         addHandleToBlacklist(handle);
-        handleInput.value = ''; // Clear input after adding
+        handleInput.value = ''; 
     }
 }
 
@@ -3888,6 +1581,7 @@ function clearInstructionsHistory() {
 
     // ----- ui/ScoreIndicator.js -----
 
+
 class ScoreIndicator {
     
     constructor(tweetArticle) {
@@ -3896,7 +1590,7 @@ class ScoreIndicator {
         }
         this.tweetArticle = tweetArticle;
 
-        this.tweetId = getTweetID(this.tweetArticle); 
+        this.tweetId = getTweetID(this.tweetArticle);
 
         this.indicatorElement = null;
         this.tooltipElement = null;
@@ -3927,11 +1621,11 @@ class ScoreIndicator {
 
             ScoreIndicatorRegistry.add(this.tweetId, this);
 
-             this.updateDatasetAttributes(tweetArticle);
+            this.updateDatasetAttributes(tweetArticle);
         } catch (error) {
 
-             this.destroy();
-             throw error; // Re-throw error after cleanup attempt
+            this.destroy();
+            throw error; // Re-throw error after cleanup attempt
         }
     }
 
@@ -3945,7 +1639,7 @@ class ScoreIndicator {
 
         const currentPosition = window.getComputedStyle(initialTweetArticle).position;
         if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
-             initialTweetArticle.style.position = 'relative';
+            initialTweetArticle.style.position = 'relative';
         }
         initialTweetArticle.appendChild(this.indicatorElement);
 
@@ -4040,22 +1734,22 @@ class ScoreIndicator {
         this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
     }
 
-     
-     updateDatasetAttributes(currentTweetArticle) {
-         const article = currentTweetArticle || this.findCurrentArticleElement();
-         if (!article) {
+    
+    updateDatasetAttributes(currentTweetArticle) {
+        const article = currentTweetArticle || this.findCurrentArticleElement();
+        if (!article) {
 
-              return; 
-         }
-         article.dataset.ratingStatus = this.status;
-         article.dataset.sloppinessScore = this.score !== null ? String(this.score) : '';
-         article.dataset.ratingDescription = this.description;
-         article.dataset.ratingReasoning = this.reasoning;
-         article.dataset.blacklisted = String(this.status === 'blacklisted');
-         article.dataset.cachedRating = String(this.status === 'cached');
+            return;
+        }
+        article.dataset.ratingStatus = this.status;
+        article.dataset.sloppinessScore = this.score !== null ? String(this.score) : '';
+        article.dataset.ratingDescription = this.description;
+        article.dataset.ratingReasoning = this.reasoning;
+        article.dataset.blacklisted = String(this.status === 'blacklisted');
+        article.dataset.cachedRating = String(this.status === 'cached');
 
 
-     }
+    }
 
     
     _updateIndicatorUI() {
@@ -4111,7 +1805,7 @@ class ScoreIndicator {
         const formatted = formatTooltipDescription(this.description, this.reasoning);
 
         const contentChanged = this.descriptionElement.innerHTML !== formatted.description ||
-                               this.reasoningTextElement.innerHTML !== formatted.reasoning;
+            this.reasoningTextElement.innerHTML !== formatted.reasoning;
 
         this.descriptionElement.innerHTML = formatted.description;
         this.reasoningTextElement.innerHTML = formatted.reasoning;
@@ -4121,7 +1815,7 @@ class ScoreIndicator {
         this.tooltipElement.classList.toggle('streaming-tooltip', this.status === 'streaming');
 
         if (this.isVisible && contentChanged && this.autoScroll) {
-             this._performAutoScroll();
+            this._performAutoScroll();
         }
 
         this._updateScrollButtonVisibility();
@@ -4130,28 +1824,28 @@ class ScoreIndicator {
     _performAutoScroll() {
         if (!this.tooltipElement || !this.autoScroll) return;
 
-         requestAnimationFrame(() => {
-             requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
 
-                 if (this.tooltipElement && this.autoScroll && this.isVisible) {
-                     const targetScroll = this.tooltipElement.scrollHeight;
-                     this.tooltipElement.scrollTo({
-                         top: targetScroll,
-                         behavior: 'instant'
-                     });
+                if (this.tooltipElement && this.autoScroll && this.isVisible) {
+                    const targetScroll = this.tooltipElement.scrollHeight;
+                    this.tooltipElement.scrollTo({
+                        top: targetScroll,
+                        behavior: 'instant'
+                    });
 
-                     setTimeout(() => {
-                          if (this.tooltipElement && this.autoScroll && this.isVisible) {
+                    setTimeout(() => {
+                        if (this.tooltipElement && this.autoScroll && this.isVisible) {
 
-                              const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < 5; // Use a small tolerance
-                              if (!isNearBottom) {
-                                 this.tooltipElement.scrollTop = this.tooltipElement.scrollHeight;
-                              }
-                          }
-                     }, 50);
-                 }
-             });
-         });
+                            const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < 5; // Use a small tolerance
+                            if (!isNearBottom) {
+                                this.tooltipElement.scrollTop = this.tooltipElement.scrollHeight;
+                            }
+                        }
+                    }, 50);
+                }
+            });
+        });
     }
 
     
@@ -4196,7 +1890,7 @@ class ScoreIndicator {
 
             top = Math.max(margin, (viewportHeight - tooltipHeight) / 2);
             if (top + tooltipHeight > safeAreaHeight) {
-                 top = safeAreaHeight - tooltipHeight;
+                top = safeAreaHeight - tooltipHeight;
             }
 
         } else { // Desktop Positioning
@@ -4230,18 +1924,18 @@ class ScoreIndicator {
             }
 
             if (top < margin) {
-                 top = margin;
+                top = margin;
             }
             if (top + tooltipHeight > safeAreaHeight) {
 
-                 if (tooltipHeight > safeAreaHeight - margin) {
-                     top = margin;
-                     finalMaxHeight = `${safeAreaHeight - margin}px`;
-                     finalOverflowY = 'scroll';
-                 } else {
+                if (tooltipHeight > safeAreaHeight - margin) {
+                    top = margin;
+                    finalMaxHeight = `${safeAreaHeight - margin}px`;
+                    finalOverflowY = 'scroll';
+                } else {
 
-                     top = safeAreaHeight - tooltipHeight;
-                 }
+                    top = safeAreaHeight - tooltipHeight;
+                }
             }
         }
 
@@ -4263,30 +1957,30 @@ class ScoreIndicator {
         if (!this.tooltipElement || !this.scrollButton) return;
         const isStreaming = this.status === 'streaming';
         if (!isStreaming) {
-             this.scrollButton.style.display = 'none';
-             return;
+            this.scrollButton.style.display = 'none';
+            return;
         }
 
-         const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
-         this.scrollButton.style.display = isNearBottom ? 'none' : 'block';
+        const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        this.scrollButton.style.display = isNearBottom ? 'none' : 'block';
     }
 
 
     _handleMouseEnter(event) {
-         if (isMobileDevice()) return;
-         this.show();
+        if (isMobileDevice()) return;
+        this.show();
     }
 
     _handleMouseLeave(event) {
-         if (isMobileDevice()) return;
+        if (isMobileDevice()) return;
 
-         setTimeout(() => {
+        setTimeout(() => {
 
             if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
                 this.hide();
             }
-         }, 100);
+        }, 100);
     }
 
     _handleIndicatorClick(event) {
@@ -4295,27 +1989,26 @@ class ScoreIndicator {
         this.toggle();
     }
 
-     _handleTooltipMouseEnter() {
+    _handleTooltipMouseEnter() {
 
-         if (!this.isPinned) {
-             this.show(); // Re-affirm visibility
-         }
-     }
+        if (!this.isPinned) {
+            this.show(); // Re-affirm visibility
+        }
+    }
 
-     _handleTooltipMouseLeave() {
+    _handleTooltipMouseLeave() {
 
-         if (!this.isPinned) {
-             this.hide();
-         }
-     }
+        if (!this.isPinned) {
+            this.hide();
+        }
+    }
 
     _handleTooltipClick(event) {
 
         if (!this.isPinned &&
             !event.target.closest('.tooltip-controls button') &&
             !event.target.closest('.reasoning-toggle') &&
-            !event.target.closest('.scroll-to-bottom-button'))
-        {
+            !event.target.closest('.scroll-to-bottom-button')) {
             this.hide();
         }
 
@@ -4323,28 +2016,28 @@ class ScoreIndicator {
     }
 
     _handleTooltipScroll() {
-         if (!this.tooltipElement) return;
+        if (!this.tooltipElement) return;
 
-         const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
 
-         if (!isNearBottom) {
+        if (!isNearBottom) {
 
-             if (this.autoScroll) {
-                 this.autoScroll = false;
-                 this.tooltipElement.dataset.autoScroll = 'false';
-                  this.userInitiatedScroll = true; // Mark that user took control
+            if (this.autoScroll) {
+                this.autoScroll = false;
+                this.tooltipElement.dataset.autoScroll = 'false';
+                this.userInitiatedScroll = true; // Mark that user took control
 
-                  setTimeout(() => { this.userInitiatedScroll = false; }, 100);
-             }
-         } else {
+                setTimeout(() => { this.userInitiatedScroll = false; }, 100);
+            }
+        } else {
 
 
-             if (this.userInitiatedScroll) {
-                 this.autoScroll = true;
-                 this.tooltipElement.dataset.autoScroll = 'true';
-             }
-         }
-         this._updateScrollButtonVisibility();
+            if (this.userInitiatedScroll) {
+                this.autoScroll = true;
+                this.tooltipElement.dataset.autoScroll = 'true';
+            }
+        }
+        this._updateScrollButtonVisibility();
     }
 
     _handlePinClick(e) {
@@ -4357,52 +2050,52 @@ class ScoreIndicator {
     }
 
     _handleCopyClick(e) {
-         e.stopPropagation();
-         if (!this.descriptionElement || !this.reasoningTextElement || !this.copyButton) return;
+        e.stopPropagation();
+        if (!this.descriptionElement || !this.reasoningTextElement || !this.copyButton) return;
 
-         let textToCopy = this.descriptionElement.textContent || ''; // Use textContent to avoid HTML
-         const reasoningContent = this.reasoningTextElement.textContent || '';
-         if (reasoningContent) {
-             textToCopy += '\n\nReasoning:\n' + reasoningContent;
-         }
+        let textToCopy = this.descriptionElement.textContent || ''; // Use textContent to avoid HTML
+        const reasoningContent = this.reasoningTextElement.textContent || '';
+        if (reasoningContent) {
+            textToCopy += '\n\nReasoning:\n' + reasoningContent;
+        }
 
-         navigator.clipboard.writeText(textToCopy).then(() => {
-             const originalText = this.copyButton.innerHTML;
-             this.copyButton.innerHTML = '✓';
-             this.copyButton.disabled = true;
-             setTimeout(() => {
-                 this.copyButton.innerHTML = originalText;
-                 this.copyButton.disabled = false;
-             }, 1500);
-         }).catch(err => {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const originalText = this.copyButton.innerHTML;
+            this.copyButton.innerHTML = '✓';
+            this.copyButton.disabled = true;
+            setTimeout(() => {
+                this.copyButton.innerHTML = originalText;
+                this.copyButton.disabled = false;
+            }, 1500);
+        }).catch(err => {
 
-         });
+        });
     }
 
-     _handleReasoningToggleClick(e) {
-         e.stopPropagation();
-         if (!this.reasoningDropdown || !this.reasoningContent || !this.reasoningArrow) return;
+    _handleReasoningToggleClick(e) {
+        e.stopPropagation();
+        if (!this.reasoningDropdown || !this.reasoningContent || !this.reasoningArrow) return;
 
-         const isExpanded = this.reasoningDropdown.classList.toggle('expanded');
-         this.reasoningArrow.textContent = isExpanded ? '▼' : '▶';
+        const isExpanded = this.reasoningDropdown.classList.toggle('expanded');
+        this.reasoningArrow.textContent = isExpanded ? '▼' : '▶';
 
-         if (isExpanded) {
-             this.reasoningContent.style.maxHeight = '300px'; // Allow height transition
-             this.reasoningContent.style.padding = '10px';
-         } else {
-             this.reasoningContent.style.maxHeight = '0';
-             this.reasoningContent.style.padding = '0 10px'; // Keep horizontal padding
-         }
-     }
+        if (isExpanded) {
+            this.reasoningContent.style.maxHeight = '300px'; // Allow height transition
+            this.reasoningContent.style.padding = '10px';
+        } else {
+            this.reasoningContent.style.maxHeight = '0';
+            this.reasoningContent.style.padding = '0 10px'; // Keep horizontal padding
+        }
+    }
 
     _handleScrollButtonClick(e) {
         e.stopPropagation();
         if (!this.tooltipElement) return;
 
-         this.autoScroll = true;
-         this.tooltipElement.dataset.autoScroll = 'true';
-         this._performAutoScroll();
-         this._updateScrollButtonVisibility(); // Should hide the button now
+        this.autoScroll = true;
+        this.tooltipElement.dataset.autoScroll = 'true';
+        this._performAutoScroll();
+        this._updateScrollButtonVisibility(); // Should hide the button now
     }
 
 
@@ -4416,38 +2109,38 @@ class ScoreIndicator {
 
         if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged) {
 
-             return;
+            return;
         }
 
         this.status = status;
 
         this.score = (status === 'pending' || status === 'error') ? score : // Allow score display for error state if provided
-                       (status === 'streaming' && score === null) ? this.score : // Keep existing score during streaming if new one is null
-                       score;
+            (status === 'streaming' && score === null) ? this.score : // Keep existing score during streaming if new one is null
+                score;
         this.description = description;
         this.reasoning = reasoning;
 
-         const shouldAutoScroll = (this.status === 'pending' || this.status === 'streaming');
-         if (this.autoScroll !== shouldAutoScroll) {
-             this.autoScroll = shouldAutoScroll;
+        const shouldAutoScroll = (this.status === 'pending' || this.status === 'streaming');
+        if (this.autoScroll !== shouldAutoScroll) {
+            this.autoScroll = shouldAutoScroll;
 
-             if (this.tooltipElement) { 
-                 this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
-             }
-         }
+            if (this.tooltipElement) {
+                this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+            }
+        }
 
         if (statusChanged || scoreChanged) {
             this._updateIndicatorUI();
         }
 
         if (descriptionChanged || reasoningChanged || statusChanged) {
-             this._updateTooltipUI(); // This handles content and auto-scroll if visible
+            this._updateTooltipUI(); // This handles content and auto-scroll if visible
         } else {
 
-             this._updateScrollButtonVisibility();
+            this._updateScrollButtonVisibility();
         }
 
-         this.updateDatasetAttributes();
+        this.updateDatasetAttributes();
     }
 
     
@@ -4459,7 +2152,7 @@ class ScoreIndicator {
         this._setPosition(); // Calculate and apply position
 
         if (this.autoScroll && (this.status === 'streaming' || this.status === 'pending')) {
-           this._performAutoScroll();
+            this._performAutoScroll();
         }
 
         this._updateScrollButtonVisibility();
@@ -4499,55 +2192,54 @@ class ScoreIndicator {
 
     
     unpin() {
-         if (!this.tooltipElement || !this.pinButton) return;
+        if (!this.tooltipElement || !this.pinButton) return;
 
         this.isPinned = false;
         this.tooltipElement.classList.remove('pinned');
         this.pinButton.innerHTML = '📌'; // Use the outline pin icon
         this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
 
-         setTimeout(() => {
-             if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
-                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
-                 this.hide();
-             }
-         }, 0);
+        setTimeout(() => {
+            if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
+                this.indicatorElement && !this.indicatorElement.matches(':hover')) {
+                this.hide();
+            }
+        }, 0);
     }
 
     
     destroy() {
 
-         this.indicatorElement?.removeEventListener('mouseenter', this._handleMouseEnter);
-         this.indicatorElement?.removeEventListener('mouseleave', this._handleMouseLeave);
-         this.indicatorElement?.removeEventListener('click', this._handleIndicatorClick);
-         this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
-         this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
-         this.tooltipElement?.removeEventListener('click', this._handleTooltipClick);
-         this.tooltipElement?.removeEventListener('scroll', this._handleTooltipScroll);
-         this.pinButton?.removeEventListener('click', this._handlePinClick);
-         this.copyButton?.removeEventListener('click', this._handleCopyClick);
-         this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick);
-         this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick);
+        this.indicatorElement?.removeEventListener('mouseenter', this._handleMouseEnter);
+        this.indicatorElement?.removeEventListener('mouseleave', this._handleMouseLeave);
+        this.indicatorElement?.removeEventListener('click', this._handleIndicatorClick);
+        this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
+        this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
+        this.tooltipElement?.removeEventListener('click', this._handleTooltipClick);
+        this.tooltipElement?.removeEventListener('scroll', this._handleTooltipScroll);
+        this.pinButton?.removeEventListener('click', this._handlePinClick);
+        this.copyButton?.removeEventListener('click', this._handleCopyClick);
+        this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick);
+        this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick);
 
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
 
         ScoreIndicatorRegistry.remove(this.tweetId);
 
-         const currentArticle = this.findCurrentArticleElement(); // Find before nullifying
-         if (currentArticle) {
-             delete currentArticle.dataset.hasScoreIndicator;
+        const currentArticle = this.findCurrentArticleElement(); // Find before nullifying
+        if (currentArticle) {
+            delete currentArticle.dataset.hasScoreIndicator;
 
-         }
+        }
 
         this.tweetArticle = null;
         this.indicatorElement = null;
         this.tooltipElement = null;
         this.pinButton = null;
         this.copyButton = null;
-         this.reasoningToggle = null;
-         this.scrollButton = null;
-
+        this.reasoningToggle = null;
+        this.scrollButton = null;
     }
 
     
@@ -4555,35 +2247,30 @@ class ScoreIndicator {
         if (!this.indicatorElement) return; // Nothing to attach
         const currentArticle = this.findCurrentArticleElement();
         if (!currentArticle) {
-
-
             return;
         }
 
         if (this.indicatorElement.parentElement !== currentArticle) {
 
-             const currentPosition = window.getComputedStyle(currentArticle).position;
-             if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
-                  currentArticle.style.position = 'relative';
-             }
-             currentArticle.appendChild(this.indicatorElement);
+            const currentPosition = window.getComputedStyle(currentArticle).position;
+            if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
+                currentArticle.style.position = 'relative';
+            }
+            currentArticle.appendChild(this.indicatorElement);
         }
 
-         this.updateDatasetAttributes(currentArticle);
+        this.updateDatasetAttributes(currentArticle);
     }
 
     
     findCurrentArticleElement() {
-
-
-
         const timeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (!timeline) return null;
 
         const linkSelector = `a[href*="/status/${this.tweetId}"]`;
         const linkElement = timeline.querySelector(linkSelector);
         const article = linkElement?.closest('article[data-testid="tweet"]');
-        
+
         if (article) {
 
             if (getTweetID(article) === this.tweetId) {
@@ -4598,7 +2285,7 @@ class ScoreIndicator {
                 return art;
             }
         }
-        
+
         return null; // Not found
     }
 }
@@ -4611,29 +2298,29 @@ const ScoreIndicatorRegistry = {
     get(tweetId, tweetArticle = null) {
         if (!tweetId) {
 
-             return null;
+            return null;
         }
 
         if (this.managers.has(tweetId)) {
-             const existingManager = this.managers.get(tweetId);
+            const existingManager = this.managers.get(tweetId);
 
-             if (tweetArticle && existingManager.tweetArticle !== tweetArticle) {
+            if (tweetArticle && existingManager.tweetArticle !== tweetArticle) {
 
 
-             }
-             return existingManager;
+            }
+            return existingManager;
         } else if (tweetArticle) {
             try {
 
 
-                 const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
-                 const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
+                const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
+                const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
 
-                 if (existingIndicator || existingTooltip) {
+                if (existingIndicator || existingTooltip) {
 
-                      existingIndicator?.remove();
-                      existingTooltip?.remove();
-                 }
+                    existingIndicator?.remove();
+                    existingTooltip?.remove();
+                }
 
                 return new ScoreIndicator(tweetArticle);
             } catch (e) {
@@ -4648,9 +2335,9 @@ const ScoreIndicatorRegistry = {
 
     
     add(tweetId, instance) {
-         if (this.managers.has(tweetId)) {
+        if (this.managers.has(tweetId)) {
 
-         }
+        }
         this.managers.set(tweetId, instance);
 
     },
@@ -4659,7 +2346,6 @@ const ScoreIndicatorRegistry = {
     remove(tweetId) {
         if (this.managers.has(tweetId)) {
             this.managers.delete(tweetId);
-
         }
     },
 
@@ -4668,10 +2354,7 @@ const ScoreIndicatorRegistry = {
         let removedCount = 0;
         const observedTimeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
 
-        if (!observedTimeline) {
-
-             return; // Cannot determine which tweets are visible/valid
-        }
+        if (!observedTimeline) return;
 
         const visibleTweetIds = new Set();
         observedTimeline.querySelectorAll('article[data-testid="tweet"]').forEach(article => {
@@ -4680,97 +2363,57 @@ const ScoreIndicatorRegistry = {
         });
 
         for (const [tweetId, manager] of this.managers.entries()) {
-
-
-
             const isConnected = manager.indicatorElement?.isConnected;
-
             const isVisible = visibleTweetIds.has(tweetId);
-
             if (!isConnected || !isVisible) {
-
-                 manager.destroy(); // Destroy calls remove()
-                 removedCount++;
-             }
+                manager.destroy(); // Destroy calls remove()
+                removedCount++;
+            }
         }
-
-
     },
 
     
-     destroyAll() {
+    destroyAll() {
 
-         [...this.managers.values()].forEach(manager => manager.destroy());
-         this.managers.clear(); // Ensure map is empty
-     }
+        [...this.managers.values()].forEach(manager => manager.destroy());
+        this.managers.clear(); // Ensure map is empty
+    }
 };
 
 
 
 
 function formatTooltipDescription(description = "", reasoning = "") {
-     description = description || "*waiting for content...*";
+    description = description || "*waiting for content...*";
 
-     description = description
-         .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape HTML tags first
-         .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-         .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-         .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-         .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
-         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-         .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
-         .replace(/`([^`]+)`/g, '<code>$1</code>')   // Inline code
-         .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Score highlight class
-         .replace(/\n\n/g, '<br><br>') // Paragraph breaks
-         .replace(/\n/g, '<br>');      // Line breaks
+    description = description
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape HTML tags first
+        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+        .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
+        .replace(/`([^`]+)`/g, '<code>$1</code>')   // Inline code
+        .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Score highlight class
+        .replace(/\n\n/g, '<br><br>') // Paragraph breaks
+        .replace(/\n/g, '<br>');      // Line breaks
 
-     let formattedReasoning = '';
-     if (reasoning && reasoning.trim()) {
-         formattedReasoning = reasoning
-             .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-             .replace(/\*(.*?)\*/g, '<em>$1</em>')
-             .replace(/`([^`]+)`/g, '<code>$1</code>')
-             .replace(/\n\n/g, '<br><br>')
-             .replace(/\n/g, '<br>');
-     }
-     return { description, reasoning: formattedReasoning };
- }
-
- GM_addStyle(`
-     .score-highlight {
-         display: inline-block;
-         background-color: #1d9bf0; 
-         color: white;
-         padding: 3px 10px;
-         border-radius: 9999px;
-         margin: 8px 0;
-         font-weight: bold;
-         font-size: 0.9em;
-     }
-     .mobile-tooltip {
-         
-         max-width: 90vw; 
-     }
- `);
-
-    // ----- ui/tooltipManager.js -----
-
-
-
-
-
-
-
-
-
-
-function cleanupOrphanedTooltips() {
-
-    ScoreIndicatorRegistry.cleanupOrphaned();
+    let formattedReasoning = '';
+    if (reasoning && reasoning.trim()) {
+        formattedReasoning = reasoning
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+    }
+    return { description, reasoning: formattedReasoning };
 }
 
     // ----- ratingEngine.js -----
+
 
 function filterSingleTweet(tweetArticle) {
     const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
@@ -4778,19 +2421,9 @@ function filterSingleTweet(tweetArticle) {
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId); // Get instance (don't create here)
 
 
-    if (!indicatorInstance) {
-
-
-        return; 
-    }
+    if (!indicatorInstance) return;
 
     indicatorInstance.ensureIndicatorAttached();
-
-
-
-
-
-
     const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     const ratingStatus = tweetArticle.dataset.ratingStatus;
     const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
@@ -4802,8 +2435,7 @@ function filterSingleTweet(tweetArticle) {
     if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
         cell.style.display = '';
     } else if (isNaN(score) || score < currentFilterThreshold) {
-
-        cell.style.display = 'none';
+        cell.innerHTML = '';
     } else {
 
         cell.style.display = '';
@@ -4898,7 +2530,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         tweetArticle.dataset.ratingDescription = "No API key";
         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
             status: 'error',
-            score: null, // Or a default error score like 9?
+            score: 9, // Or a default error score like 9?
             description: "No API key"
         });
         filterSingleTweet(tweetArticle);
@@ -4912,55 +2544,22 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
     let processingSuccessful = false;
     let reasoning = "";
     try {
-
-        const handles = getUserHandles(tweetArticle);
-        const userHandle = handles.length > 0 ? handles[0] : '';
-        const quotedHandle = handles.length > 1 ? handles[1] : '';
-
-        if (userHandle && isUserBlacklisted(userHandle)) {
-            tweetArticle.dataset.sloppinessScore = '10';
-            tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'blacklisted';
-            tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'blacklisted',
-                score: 10,
-                description: "User is blacklisted"
-            });
-            filterSingleTweet(tweetArticle);
-            processingSuccessful = true;
-            
-        }
-
-
         const cachedRating = tweetCache.get(tweetId);
         if (cachedRating) {
-            const isValidCacheEntry =
-                cachedRating.score !== undefined &&
-                cachedRating.score !== null &&
-                !(cachedRating.streaming === true && cachedRating.score === undefined);
 
-            if (isValidCacheEntry) {
-                const cacheApplied = applyTweetCachedRating(tweetArticle);
-                if (cacheApplied) {
+            if (cachedRating.streaming === true &&
+               (cachedRating.score === undefined || cachedRating.score === null)) {
+
+            }
 
 
-
-
-                        processingSuccessful = true;
-
-                    return;
-                }
-            } else if (cachedRating.streaming === true) {
-
-
-
-            } else {
+            else if (!cachedRating.streaming && (cachedRating.score === undefined || cachedRating.score === null)) {
 
 
                 tweetCache.delete(tweetId);
             }
         }
+
 
         const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
         if (!fullContextWithImageDescription) {
@@ -4968,6 +2567,7 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         }
         let mediaURLs = [];
 
+        if (document.querySelector('div[aria-label="Timeline: Conversation"]')) {
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
 
@@ -4982,10 +2582,18 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     isRoot: false
                 };
             }
+            }
         }
 
-        const allMediaMatches = fullContextWithImageDescription.matchAll(/(?:MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-        for (const match of allMediaMatches) {
+        const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+        const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+
+        for (const match of mediaMatches1) {
+            if (match[1]) {
+                mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
+            }
+        }
+        for (const match of mediaMatches2) {
             if (match[1]) {
                 mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
             }
@@ -4993,12 +2601,33 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
 
         mediaURLs = [...new Set(mediaURLs.filter(url => url.trim()))];
 
-        if (apiKey && fullContextWithImageDescription) {
+        if (fullContextWithImageDescription) {
             try {
 
-                const isCached = tweetCache.has(tweetId) &&
-                    !tweetCache.get(tweetId).streaming &&
-                    tweetCache.get(tweetId).score !== undefined;
+
+                const currentCache = tweetCache.get(tweetId); // Re-fetch fresh cache state
+                const isCached = currentCache &&
+                    !currentCache.streaming &&
+                    currentCache.score !== undefined &&
+                    currentCache.score !== null;
+
+                if (isCached) {
+
+                     score = currentCache.score;
+                     description = currentCache.description || "";
+                     reasoning = currentCache.reasoning || "";
+                     processingSuccessful = true;
+
+                     ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                         status: currentCache.fromStorage ? 'cached' : 'rated', // Determine status based on cache source
+                         score: score,
+                         description: description,
+                         reasoning: reasoning
+                     });
+                     filterSingleTweet(tweetArticle);
+                     return; // Exit after using cache
+                }
+
                 const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs, 3, tweetArticle);
                 score = rating.score;
                 description = rating.content;
@@ -5027,7 +2656,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                 });
 
                 processingSuccessful = !rating.error;
-
                 if (tweetCache.has(tweetId)) {
                     const entry = tweetCache.get(tweetId);
                     entry.score = score;
@@ -5037,7 +2665,6 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     entry.streaming = false; // Mark as complete
                     if (rating.error) entry.error = true; // Mark error in cache
                 } else if (!rating.error) {
-
                     tweetCache.set(tweetId, {
                         score: score,
                         description: description,
@@ -5063,46 +2690,15 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     score: score,
                     description: description
                 });
-
-
                 if (tweetCache.has(tweetId)) {
                      tweetCache.get(tweetId).streaming = false;
-
-
                 }
 
                  filterSingleTweet(tweetArticle);
 
                  return;
             }
-        } else if (fullContextWithImageDescription) {
-
-            score = 5; // Or some other default/error score
-            description = "No API key provided";
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = description;
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'error',
-                score: score,
-                description: description
-            });
-            processingSuccessful = false; // Consider this unsuccessful for retry logic
-        } else {
-
-            score = 5; // Default error score
-            description = "Could not retrieve tweet content";
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = description;
-             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'error',
-                score: score,
-                description: description
-            });
-            processingSuccessful = false; // Unsuccessful
         }
-
-
-        
         filterSingleTweet(tweetArticle);
 
     } catch (error) {
@@ -5134,26 +2730,15 @@ function scheduleTweetProcessing(tweetArticle) {
         return;
     }
 
-
-
-
-
-
-
-
     const existingInstance = ScoreIndicatorRegistry.get(tweetId);
     if (existingInstance) {
-
          existingInstance.ensureIndicatorAttached();
 
          filterSingleTweet(tweetArticle);
 
          if (existingInstance.status !== 'error' && existingInstance.status !== 'pending') {
-
-              return; // Already handled
+              return; 
          }
-
-
     }
 
     const handles = getUserHandles(tweetArticle);
@@ -5180,22 +2765,11 @@ function scheduleTweetProcessing(tweetArticle) {
         
         if (!isIncompleteStreaming) {
             const wasApplied = applyTweetCachedRating(tweetArticle);
-            if (wasApplied) {
-
-                filterSingleTweet(tweetArticle);
-                return;
-            }
+            
         }
     }
 
     if (processedTweets.has(tweetId)) {
-
-
-
-
-
-
-
             const instance = ScoreIndicatorRegistry.get(tweetId);
             if (instance) {
                  instance.ensureIndicatorAttached();
@@ -5207,13 +2781,6 @@ function scheduleTweetProcessing(tweetArticle) {
 
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     if (indicatorInstance) {
-
-
-
-
-
-
-
          if (indicatorInstance.status !== 'blacklisted' && indicatorInstance.status !== 'cached' && indicatorInstance.status !== 'rated') {
             indicatorInstance.update({ status: 'pending', score: null, description: 'Rating scheduled...' });
         } else {
@@ -5244,8 +2811,8 @@ function scheduleTweetProcessing(tweetArticle) {
 
 
 let threadRelationships = {};
-let lastThreadCheck = 0;
-const THREAD_CHECK_INTERVAL = 2000; // 2 seconds between thread checks
+const THREAD_CHECK_INTERVAL = 2500; // 2 seconds between thread checks
+const SWEEP_INTERVAL = 1000; // 2.5 seconds between full sweeps
 let threadMappingInProgress = false; // Add a memory-based flag for more reliable state tracking
 
 function loadThreadRelationships() {
@@ -5314,10 +2881,8 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     const quotedHandle = handles.length > 1 ? handles[1] : '';
 
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-
-    await new Promise(resolve => setTimeout(resolve, 10));
     
-    let allMediaLinks = extractMediaLinks(tweetArticle);
+    let allMediaLinks = await extractMediaLinks(tweetArticle);
 
     let quotedText = "";
     let quotedMediaLinks = [];
@@ -5337,8 +2902,8 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
         
         quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
 
-        await new Promise(resolve => setTimeout(resolve, 20));
-        quotedMediaLinks = extractMediaLinks(quoteContainer);
+
+        quotedMediaLinks = await extractMediaLinks(quoteContainer);
     }
 
     const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') || 
@@ -5357,9 +2922,9 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
         }
     }
-
+    
     let allAvailableMediaLinks = [...allMediaLinks];
-
+    
     let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
 
     let fullContextWithImageDescription = `[TWEET ${tweetId}]
@@ -5411,6 +2976,7 @@ ${quotedMediaLinksDescription}`;
 ${quotedMediaLinks.join(", ")}`;
         }
     }
+    if(document.querySelector('div[aria-label="Timeline: Conversation"]', 'div[aria-label^="Timeline: Conversation"]')){
 
     const replyChain = await buildReplyChain(tweetId);
 
@@ -5440,7 +3006,7 @@ ${quotedMediaLinks.join(", ")}`;
     if (replyInfo && replyInfo.replyTo && !threadHistoryIncluded && replyChain.length === 0) {
         fullContextWithImageDescription = `[REPLY TO TWEET ${replyInfo.replyTo}]\n` + fullContextWithImageDescription;
     }
-    
+}
     tweetArticle.dataset.fullContext = fullContextWithImageDescription;
     return fullContextWithImageDescription;
 }
@@ -5458,43 +3024,23 @@ function ensureAllTweetsRated() {
 
     if (tweets.length > 0) {
 
-        let unreatedCount = 0;
-
         tweets.forEach(tweet => {
             const tweetId = getTweetID(tweet);
-            if (!tweetId) return; // Skip tweets without a valid ID
-
-
-
+            if (!tweetId) return; 
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
             const needsProcessing = !indicatorInstance || indicatorInstance.status === 'error';
-
             if (needsProcessing && !processedTweets.has(tweetId)) {
-                unreatedCount++;
-                const reason = !indicatorInstance ? 'missing indicator instance' :
-                                (indicatorInstance.status === 'error' ? 'error state' : 'unknown issue');
-
-                scheduleTweetProcessing(tweet); // scheduleTweetProcessing now handles instance creation/pending state
+                
+                scheduleTweetProcessing(tweet);
             } else if (indicatorInstance && indicatorInstance.status !== 'pending' && indicatorInstance.status !== 'streaming') {
-
                  filterSingleTweet(tweet);
             }
         });
-
-        if (unreatedCount > 0) {
-
-        }
     }
 }
 
 async function handleThreads() {
     try {
-
-        const now = Date.now();
-        if (now - lastThreadCheck < THREAD_CHECK_INTERVAL) {
-            return;
-        }
-        lastThreadCheck = now;
 
         let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
         if (!conversation) {
@@ -5510,7 +3056,7 @@ async function handleThreads() {
         if (conversation.dataset.threadMappedAt) {
             const lastMappedTime = parseInt(conversation.dataset.threadMappedAt, 10);
 
-            if (now - lastMappedTime < 10000) {
+            if (Date.now() - lastMappedTime < 10000) {
                 return;
             }
         }
@@ -5553,7 +3099,7 @@ async function handleThreads() {
 
                     setTimeout(() => {
                         mapThreadStructure(conversation, localRootTweetId);
-                    }, 500);
+                    }, 10);
                 } catch (error) {
 
                     threadMappingInProgress = false;
@@ -5583,7 +3129,7 @@ async function handleThreads() {
                         threadHist = threadHist + "\n[REPLY]\n" + tweetCache.get(tweetId).tweetContent;
                     } else {
                         const apiKey = browserGet('openrouter-api-key', '');
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                        await new Promise(resolve => setTimeout(resolve, 10));
                         const newContext = await getFullContext(nextArticle, tweetId, apiKey);
                         if (!newContext) {
                             throw new Error("Failed to get context for next article");
@@ -5609,7 +3155,7 @@ async function handleThreads() {
             
             setTimeout(() => {
                 mapThreadStructure(conversation, localRootTweetId);
-            }, 500);
+            }, 250);
         }
     } catch (error) {
 
@@ -5667,12 +3213,12 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     let tweetTextSpan = article.querySelector('[data-testid="tweetText"]');
                     let text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
 
-                    let mediaLinks = extractMediaLinks(article);
+                    let mediaLinks = await extractMediaLinks(article);
 
                     let quotedMediaLinks = [];
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {
-                        quotedMediaLinks = extractMediaLinks(quoteContainer);
+                        quotedMediaLinks = await extractMediaLinks(quoteContainer);
                     }
 
                     let prevCell = cellDivs[idx - 1] || null;
@@ -5859,7 +3405,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             const index = replyDocs.findIndex(doc => doc.tweetId === tweetId);
             
             if (index > 0) {
-
                 for (let i = 0; i < index; i++) {
                     if (replyDocs[i].mediaLinks && replyDocs[i].mediaLinks.length) {
                         allMediaUrls.push(...replyDocs[i].mediaLinks);
@@ -5890,13 +3435,11 @@ function getTweetReplyInfo(tweetId) {
     return null;
 }
 
+setInterval(handleThreads, THREAD_CHECK_INTERVAL);
+setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
+setInterval(applyFilteringToAll, SWEEP_INTERVAL);
 
     // ----- api.js -----
-
-
-
-
-
 
 
 async function getCompletion(request, apiKey, timeout = 30000) {
@@ -6519,10 +4062,10 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning
                 });
-
-                 if (tweetArticle) {
-                     filterSingleTweet(tweetArticle);
-                 }
+                
+                if (tweetArticle) {
+                    filterSingleTweet(tweetArticle);
+                }
 
                 resolve({
                     score: finalScore,
@@ -6550,10 +4093,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                      entry.score = 5; // Store default error score in cache too
                      entry.description = `Stream Error: ${errorData.message}`; // Store error message
                 }
-
-                 if (tweetArticle) {
-                     filterSingleTweet(tweetArticle);
-                 }
 
                 reject(new Error(errorData.message)); // Reject the promise
             },
@@ -6693,14 +4232,11 @@ const VERSION = '1.3.9';
                 showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
-
             observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
-
             applyFilteringToAll();
 
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
-            ensureAllTweetsRated();
             window.addEventListener('beforeunload', () => {
                 observer.disconnect();
                 const sliderUI = document.getElementById('tweet-filter-container');

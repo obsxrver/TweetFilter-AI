@@ -1,40 +1,4 @@
-/**
- * @typedef {Object} CompletionResponse
- * @property {string} id - Response ID from OpenRouter
- * @property {string} model - Model used for completion
- * @property {Array<{
- *   message: {
- *     role: string,
- *     content: string
- *   },
- *   finish_reason: string,
- *   index: number
- * }>} choices - Array of completion choices
- * @property {Object} usage - Token usage statistics
- * @property {number} usage.prompt_tokens - Number of tokens in prompt
- * @property {number} usage.completion_tokens - Number of tokens in completion
- * @property {number} usage.total_tokens - Total tokens used
- */
-
-/**
- * @typedef {Object} CompletionRequest
- * @property {string} model - Model ID to use
- * @property {Array<{role: string, content: Array<{type: string, text?: string, image_url?: {url: string}}>}>} messages - Messages for completion
- * @property {number} temperature - Temperature for sampling
- * @property {number} top_p - Top P for sampling
- * @property {number} max_tokens - Maximum tokens to generate
- * @property {Object} provider - Provider settings
- * @property {string} provider.sort - Sort order for models
- * @property {boolean} provider.allow_fallbacks - Whether to allow fallback models
- */
-
-/**
- * @typedef {Object} CompletionResult
- * @property {boolean} error - Whether an error occurred
- * @property {string} message - Error or success message
- * @property {CompletionResponse|null} data - The completion response data if successful
- */
-
+//src/api.js
 /**
  * Gets a completion from OpenRouter API
  * 
@@ -750,10 +714,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning
                 });
                 
-                 // Re-apply filtering after completion
-                 if (tweetArticle) {
-                     filterSingleTweet(tweetArticle);
-                 }
+                if (tweetArticle) {
+                    filterSingleTweet(tweetArticle);
+                }
 
                 resolve({
                     score: finalScore,
@@ -784,10 +747,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                      entry.description = `Stream Error: ${errorData.message}`; // Store error message
                 }
                 
-                 // Re-apply filtering after error
-                 if (tweetArticle) {
-                     filterSingleTweet(tweetArticle);
-                 }
 
                 reject(new Error(errorData.message)); // Reject the promise
             },

@@ -1,3 +1,4 @@
+//src/ui/ScoreIndicator.js
 /**
  * Manages the state and UI for a single score indicator and its associated tooltip.
  */
@@ -875,14 +876,8 @@ const ScoreIndicatorRegistry = {
         });
 
         for (const [tweetId, manager] of this.managers.entries()) {
-            // Check if the manager's indicator element is still connected to the document
-            // AND if the tweet ID is still present in the visible timeline.
-            // This handles cases where the element might be detached but the tweet *should* still be there.
             const isConnected = manager.indicatorElement?.isConnected;
-            // const isInTimeline = isConnected && observedTimeline.contains(manager.tweetArticle);
             const isVisible = visibleTweetIds.has(tweetId);
-
-            // Destroy if indicator isn't connected OR if the tweet ID is no longer visible
             if (!isConnected || !isVisible) {
                 manager.destroy(); // Destroy calls remove()
                 removedCount++;
@@ -935,21 +930,3 @@ function formatTooltipDescription(description = "", reasoning = "") {
     }
     return { description, reasoning: formattedReasoning };
 }
-
-// Add necessary CSS for .score-highlight if not already present
-GM_addStyle(`
-     .score-highlight {
-         display: inline-block;
-         background-color: #1d9bf0; /* Twitter blue */
-         color: white;
-         padding: 3px 10px;
-         border-radius: 9999px;
-         margin: 8px 0;
-         font-weight: bold;
-         font-size: 0.9em;
-     }
-     .mobile-tooltip {
-         /* Add specific mobile tooltip styles if needed */
-         max-width: 90vw; /* Example */
-     }
- `);

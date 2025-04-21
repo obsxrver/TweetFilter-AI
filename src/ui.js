@@ -1,4 +1,4 @@
-// --- Utility Functions ---
+//src/ui.js
 
 /**
  * Displays a temporary status message on the screen.
@@ -68,16 +68,6 @@ function injectUI() {
     uiContainer = document.createElement('div');
     uiContainer.id = containerId;
     uiContainer.innerHTML = menuHTML;
-
-    // Inject styles
-    const stylesheet = uiContainer.querySelector('style');
-    if (stylesheet) {
-        GM_addStyle(stylesheet.textContent);
-        console.log('Injected styles from Menu.html');
-        stylesheet.remove(); // Remove style tag after injecting
-    } else {
-        console.warn('No <style> tag found in Menu.html');
-    }
 
     // Append the rest of the UI elements
     document.body.appendChild(uiContainer);
@@ -301,7 +291,6 @@ function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear all ratings
         tweetCache.clear();
-        
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};
@@ -324,8 +313,16 @@ function clearTweetRatingsAndRefreshUI() {
                     indicator.remove();
                 }
                 // Remove from processed set and schedule reprocessing
-                processedTweets.delete(getTweetID(tweet));
-                scheduleTweetProcessing(tweet);
+                const tweetId = getTweetID(tweet); // Get ID *before* potential errors
+                if (tweetId) { // Ensure we have an ID
+                    processedTweets.delete(tweetId);
+                    // Explicitly destroy the old ScoreIndicator instance from the registry
+                    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+                    if (indicatorInstance) {
+                        indicatorInstance.destroy();
+                    }
+                    scheduleTweetProcessing(tweet); // Now schedule processing
+                }
             });
         }
 
@@ -454,7 +451,7 @@ function addHandleFromInput() {
     const handle = handleInput.value.trim();
     if (handle) {
         addHandleToBlacklist(handle);
-        handleInput.value = ''; // Clear input after adding
+        handleInput.value = ''; 
     }
 }
 
@@ -470,15 +467,12 @@ function handleSettingChange(target, settingName) {
     } else {
         value = target.value;
     }
-
     // Update global variable if it exists
     if (window[settingName] !== undefined) {
         window[settingName] = value;
     }
-
     // Save to GM storage
     browserSet(settingName, value);
-
     // Special UI updates for specific settings
     if (settingName === 'enableImageDescriptions') {
         const imageModelContainer = document.getElementById('image-model-container');

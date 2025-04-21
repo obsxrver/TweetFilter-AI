@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.3.9
+// @version      Version 1.3.9.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -12,24 +12,17 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceText
 // @connect      openrouter.ai
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/config.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/api.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/domScraper.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ratingEngine.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui/tooltipManager.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/ui/ScoreIndicator.js
-// @require      https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/backends/InstructionsHistory.js
 // @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
 // @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-const VERSION = '1.3.9'; 
+//src/twitter-desloppifier.js
+const VERSION = '1.3.9.1'; 
 (function () {
     
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.9- Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.3.9.1- Enhanced)");
 
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
@@ -71,15 +64,11 @@ const VERSION = '1.3.9';
                 showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
-            // Process all currently visible tweets
             observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
-
-            // Apply filtering based on current threshold
             applyFilteringToAll();
 
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
-            ensureAllTweetsRated();
             window.addEventListener('beforeunload', () => {
                 observer.disconnect();
                 const sliderUI = document.getElementById('tweet-filter-container');

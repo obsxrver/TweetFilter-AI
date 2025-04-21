@@ -1,16 +1,5 @@
-//MODULE
-//Helper functions and wiring for the cache
-// Import the TweetCache instance
+//src/helpers/cache.js
 
-/**
- * Removes invalid entries from the cache.
- * @param {boolean} saveAfterCleanup - Whether to save the cache after cleanup
- * @returns {Object} - Statistics about the cleanup operation
- * @deprecated Use tweetCache.cleanup() instead.
- */
-function cleanupInvalidCacheEntries(saveAfterCleanup = true) {
-    return tweetCache.cleanup(saveAfterCleanup);
-}
 
 /** Updates the cache statistics display in the General tab. */
 function updateCacheStatsUI() {
