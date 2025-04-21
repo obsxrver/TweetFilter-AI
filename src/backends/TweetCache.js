@@ -1,10 +1,29 @@
+//src/backends/TweetCache.js
+// Helper function for debouncing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func.apply(this, args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
+
 /**
  * Class to manage the tweet rating cache with standardized data structure and centralized persistence.
  */
 class TweetCache {
+    // Debounce delay in milliseconds
+    static DEBOUNCE_DELAY = 1500;
+
     constructor() {
         this.cache = {};
         this.loadFromStorage();
+        // Create a debounced version of the internal save method
+        this.debouncedSaveToStorage = debounce(this.#saveToStorageInternal.bind(this), TweetCache.DEBOUNCE_DELAY);
     }
 
     /**
@@ -24,11 +43,17 @@ class TweetCache {
     }
 
     /**
-     * Saves the current cache to browser storage.
+     * Saves the current cache to browser storage. (Internal, synchronous implementation)
      */
-    saveToStorage() {
-        browserSet('tweetRatings', JSON.stringify(this.cache));
-        updateCacheStatsUI();
+    #saveToStorageInternal() {
+        try {
+            console.log(`Saving ${Object.keys(this.cache).length} tweet ratings to storage.`); // Log saving action
+            browserSet('tweetRatings', JSON.stringify(this.cache));
+            updateCacheStatsUI(); // Update UI after saving
+        } catch (error) {
+            console.error("Error saving tweet cache to storage:", error);
+            // Optionally, handle the error, e.g., notify the user, retry later
+        }
     }
 
     /**
@@ -44,9 +69,9 @@ class TweetCache {
      * Sets a tweet rating in the cache.
      * @param {string} tweetId - The ID of the tweet.
      * @param {Object} rating - The rating object: {score(required), description, reasoning, timestamp, streaming, blacklisted,fromStorage}
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      */
-    set(tweetId, rating, saveImmediately = true) {
+    set(tweetId, rating, saveImmediately = true) { // saveImmediately is now ignored
         // Standardize the rating object structure
         this.cache[tweetId] = {
             score: rating.score,
@@ -58,9 +83,8 @@ class TweetCache {
             fromStorage: rating.fromStorage || false
         };
 
-        if (saveImmediately) {
-            this.saveToStorage();
-        }
+        // Always use the debounced save
+        this.debouncedSaveToStorage();
     }
     has(tweetId) {
         return this.cache[tweetId] !== undefined;
@@ -68,24 +92,24 @@ class TweetCache {
     /**
      * Removes a tweet rating from the cache.
      * @param {string} tweetId - The ID of the tweet to remove.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      */
-    delete(tweetId, saveImmediately = true) {
-        delete this.cache[tweetId];
-        if (saveImmediately) {
-            this.saveToStorage();
+    delete(tweetId, saveImmediately = true) { // saveImmediately is now ignored
+        if (this.has(tweetId)) {
+            delete this.cache[tweetId];
+            // Use the debounced save
+            this.debouncedSaveToStorage();
         }
     }
 
     /**
      * Clears all ratings from the cache.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      */
-    clear(saveImmediately = true) {
+    clear(saveImmediately = true) { // saveImmediately is now ignored
         this.cache = {};
-        if (saveImmediately) {
-            this.saveToStorage();
-        }
+        // Use the debounced save
+        this.debouncedSaveToStorage();
     }
 
     /**
@@ -98,10 +122,10 @@ class TweetCache {
 
     /**
      * Cleans up invalid entries in the cache.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      * @returns {Object} Statistics about the cleanup operation.
      */
-    cleanup(saveImmediately = true) {
+    cleanup(saveImmediately = true) { // saveImmediately is now ignored
         const beforeCount = this.size;
         let deletedCount = 0;
         let streamingDeletedCount = 0;
@@ -120,8 +144,9 @@ class TweetCache {
             }
         }
 
-        if (saveImmediately && deletedCount > 0) {
-            this.saveToStorage();
+        if (deletedCount > 0) {
+            // Use the debounced save if changes were made
+            this.debouncedSaveToStorage();
         }
 
         return {

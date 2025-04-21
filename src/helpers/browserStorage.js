@@ -1,3 +1,4 @@
+//src/helpers/browserStorage.js
 /**
  * Browser storage wrapper functions for userscript compatibility
  */

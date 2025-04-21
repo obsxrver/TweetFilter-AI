@@ -1,3 +1,4 @@
+//src/ratingEngine.js
 /**
  * Applies filtering to a single tweet by hiding it if its score is below the threshold.
  * Also updates the rating indicator.
@@ -5,20 +6,31 @@
  */
 function filterSingleTweet(tweetArticle) {
     const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
-    // Update the indicator based on the tweet's rating status
-    setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus || 'rated', tweetArticle.dataset.ratingDescription);
-    // If the tweet is still pending a rating, keep it visible
-    // Always get the latest threshold directly from storage
+    const tweetId = getTweetID(tweetArticle);
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId); // Get instance (don't create here)
+
+    // If no instance exists, we can't filter reliably based on status yet.
+    // We could potentially hide it by default, but let's assume scheduleTweetProcessing handles creation.
+    if (!indicatorInstance) return;
+
+    // Ensure the indicator is attached to *this specific* article element
+    indicatorInstance.ensureIndicatorAttached();
     const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
-    if (tweetArticle.dataset.ratingStatus === 'pending' || tweetArticle.dataset.ratingStatus === 'streaming') {
-        //tweetArticle.style.display = '';
-        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display = '';
+    const ratingStatus = tweetArticle.dataset.ratingStatus;
+    const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
+    if (!cell) {
+         console.warn("Couldn't find cellInnerDiv for tweet:", tweetId);
+         return;
+    }
+
+    // If the tweet is still pending/streaming a rating, keep it visible
+    if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
+        cell.style.display = '';
     } else if (isNaN(score) || score < currentFilterThreshold) {
-        //tweetArticle.style.display = 'none';
-        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display = 'none';
+        cell.innerHTML = '';
     } else {
-        //tweetArticle.style.display = '';
-        tweetArticle.closest('div[data-testid="cellInnerDiv"]').style.display = '';
+        // Show otherwise
+        cell.style.display = '';
     }
 }
 
@@ -39,7 +51,12 @@ function applyTweetCachedRating(tweetArticle) {
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
         tweetArticle.dataset.ratingDescription = 'Whitelisted user';
-        setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is whitelisted");
+        // Use the ScoreIndicator instance to update UI
+        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+            status: 'blacklisted',
+            score: 10,
+            description: "User is whitelisted"
+        });
         filterSingleTweet(tweetArticle);
         return true;
     }
@@ -65,25 +82,27 @@ function applyTweetCachedRating(tweetArticle) {
                 tweetArticle.dataset.ratingReasoning = reasoning;
             }
 
+            let status = 'rated'; // Default status
             // If it's a streaming entry that's not complete, mark as streaming instead of cached
-            if (cachedRating.streaming === true) {
-                tweetArticle.dataset.ratingStatus = 'streaming';
-                setScoreIndicator(tweetArticle, score, 'streaming', desc);
+            if (cachedRating.streaming === true && !cachedRating.score) {
+                status = 'streaming';
+                // No need to update indicator yet if still streaming incomplete data
+                 console.log(`Tweet ${tweetId} has incomplete streaming cache, skipping immediate indicator update.`);
+                 return false; // Don't treat as successfully applied cache yet
             } else {
                 // Check if this rating is from storage (cached) or newly created
                 const isFromStorage = cachedRating.fromStorage === true;
-
-                // Set status based on source
-                if (isFromStorage) {
-                    tweetArticle.dataset.ratingStatus = 'cached';
-                    setScoreIndicator(tweetArticle, score, 'cached', desc);
-                } else {
-                    tweetArticle.dataset.ratingStatus = 'rated';
-                    setScoreIndicator(tweetArticle, score, 'rated', desc);
-                }
+                status = isFromStorage ? 'cached' : 'rated';
             }
+            
+            // Update the indicator via the registry
+            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                 status: status,
+                 score: score,
+                 description: desc,
+                 reasoning: reasoning
+            });
 
-            tweetArticle.dataset.ratingDescription = desc;
             filterSingleTweet(tweetArticle);
             return true;
         } else if (!cachedRating.streaming) {
@@ -116,15 +135,11 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
     if (!apiKey) {
         tweetArticle.dataset.ratingStatus = 'error';
         tweetArticle.dataset.ratingDescription = "No API key";
-        try {
-            setScoreIndicator(tweetArticle, 9, 'error', "No API key");
-            // Verify indicator was actually created
-            if (!tweetArticle.querySelector('.score-indicator')) {
-                console.error(`Failed to create score indicator for tweet ${tweetId}`);
-            }
-        } catch (e) {
-            console.error(`Error setting score indicator for tweet ${tweetId}:`, e);
-        }
+        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+            status: 'error',
+            score: 9, // Or a default error score like 9?
+            description: "No API key"
+        });
         filterSingleTweet(tweetArticle);
         // Remove from processedTweets to allow retrying
         processedTweets.delete(tweetId);
@@ -134,64 +149,24 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
     let score = 5; // Default score if rating fails
     let description = "";
     let processingSuccessful = false;
-
+    let reasoning = "";
     try {
-        // Get user handle
-        const handles = getUserHandles(tweetArticle);
-        const userHandle = handles.length > 0 ? handles[0] : '';
-        const quotedHandle = handles.length > 1 ? handles[1] : '';
-        // Check if tweet's author is blacklisted (fast path)
-        if (userHandle && isUserBlacklisted(userHandle)) {
-            tweetArticle.dataset.sloppinessScore = '10';
-            tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'blacklisted';
-            tweetArticle.dataset.ratingDescription = "Blacklisted user";
-            try {
-                setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is blacklisted");
-                // Verify indicator was actually created
-                if (!tweetArticle.querySelector('.score-indicator')) {
-                    throw new Error("Failed to create score indicator");
-                }
-            } catch (e) {
-                console.error(`Error setting blacklist indicator for tweet ${tweetId}:`, e);
-                // Even if indicator fails, we've set the dataset properties
-            }
-            filterSingleTweet(tweetArticle);
-            processingSuccessful = true;
-            
-        }
-
-        // Check for a cached rating, but only use it if it has a valid score
-        // and is not an incomplete streaming entry
         const cachedRating = tweetCache.get(tweetId);
         if (cachedRating) {
-            const isValidCacheEntry =
-                cachedRating.score !== undefined &&
-                cachedRating.score !== null &&
-                !(cachedRating.streaming === true && cachedRating.score === undefined);
-
-            if (isValidCacheEntry) {
-                const cacheApplied = applyTweetCachedRating(tweetArticle);
-                if (cacheApplied) {
-                    // Verify the indicator exists after applying cached rating
-                    if (!tweetArticle.querySelector('.score-indicator')) {
-                        console.error(`Missing indicator after applying cached rating to tweet ${tweetId}`);
-                        processingSuccessful = false;
-                    } else {
-                        processingSuccessful = true;
-                    }
-                    return;
-                }
-            } else if (cachedRating.streaming === true) {
-                // This is a streaming entry that's still in progress
-                // Don't delete it, but don't use it either
+            // Handle incomplete streaming entries specifically
+            if (cachedRating.streaming === true &&
+               (cachedRating.score === undefined || cachedRating.score === null)) {
                 console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
-            } else {
-                // Invalid cache entry, delete it
+            }
+            // REDUNDANT CACHE APPLICATION REMOVED: applyTweetCachedRating was already called in scheduleTweetProcessing
+            // We will check cache again *before* the API call below.
+            else if (!cachedRating.streaming && (cachedRating.score === undefined || cachedRating.score === null)) {
+                // Invalid cache entry (non-streaming but missing score), delete it
                 console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
                 tweetCache.delete(tweetId);
             }
         }
+        // END REMOVED/MODIFIED BLOCK
 
         const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
         if (!fullContextWithImageDescription) {
@@ -199,7 +174,8 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
         }
         let mediaURLs = [];
         
-        // Add thread relationship context
+        // Add thread relationship context only if is conversation
+        if (document.querySelector('div[aria-label="Timeline: Conversation"]')) {
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo) {
             // Add thread context to cache entry if we process this tweet
@@ -214,143 +190,144 @@ async function delayedProcessTweet(tweetArticle, tweetId) {
                     isRoot: false
                 };
             }
+            }
         }
-
         // Get all media URLs from any section in one go
-        const allMediaMatches = fullContextWithImageDescription.matchAll(/(?:MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-        for (const match of allMediaMatches) {
+        const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+        const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+
+        for (const match of mediaMatches1) {
             if (match[1]) {
                 mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
             }
         }
-
+        for (const match of mediaMatches2) {
+            if (match[1]) {
+                mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
+            }
+        }
         // Remove duplicates and empty URLs
         mediaURLs = [...new Set(mediaURLs.filter(url => url.trim()))];
         
         // --- API Call or Fallback ---
-        if (apiKey && fullContextWithImageDescription) {
+        if (fullContextWithImageDescription) {
             try {
                 // Check if there's already a complete entry in the cache before calling the API
-                const isCached = tweetCache.has(tweetId) &&
-                    !tweetCache.get(tweetId).streaming &&
-                    tweetCache.get(tweetId).score !== undefined;
-                const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs);
+                // This handles cases where cache appeared/completed *after* scheduling
+                const currentCache = tweetCache.get(tweetId); // Re-fetch fresh cache state
+                const isCached = currentCache &&
+                    !currentCache.streaming &&
+                    currentCache.score !== undefined &&
+                    currentCache.score !== null;
+
+                if (isCached) {
+                     // Use cached data instead of calling API
+                     score = currentCache.score;
+                     description = currentCache.description || "";
+                     reasoning = currentCache.reasoning || "";
+                     processingSuccessful = true;
+                     console.log(`Using valid cache entry found for ${tweetId} before API call.`);
+
+                     // Update UI using cached data
+                     ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                         status: currentCache.fromStorage ? 'cached' : 'rated', // Determine status based on cache source
+                         score: score,
+                         description: description,
+                         reasoning: reasoning
+                     });
+                     filterSingleTweet(tweetArticle);
+                     return; // Exit after using cache
+                }
+
+                // If not cached, proceed with API call
+                const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs, 3, tweetArticle);
                 score = rating.score;
                 description = rating.content;
+                reasoning = rating.reasoning || ''; // Get reasoning from result
 
-                // Check if this rating was loaded from storage
-                if (tweetCache.has(tweetId) && tweetCache.get(tweetId).fromStorage === true) {
-                    // If it was loaded from storage, mark it as cached
-                    tweetArticle.dataset.ratingStatus = 'cached';
-                } else {
-                    // Otherwise use the normal logic
-                    tweetArticle.dataset.ratingStatus = rating.error ? 'error' : (isCached || rating.cached ? 'cached' : 'rated');
-                }
-                tweetArticle.dataset.ratingDescription = description || "not available";
-                tweetArticle.dataset.sloppinessScore = score.toString();
-
-                if (!isUserBlacklisted(userHandle)){
-                try {
-                    setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription);
-                    // Verify the indicator exists
-                    if (!tweetArticle.querySelector('.score-indicator')) {
-                        throw new Error("Failed to create score indicator");
+                // Determine status based on cache/error state
+                let finalStatus = rating.error ? 'error' : 'rated';
+                if (!rating.error) {
+                    const cacheEntry = tweetCache.get(tweetId);
+                    if (cacheEntry && cacheEntry.fromStorage) {
+                        finalStatus = 'cached';
+                    } else if (rating.cached) { // Check if the API function itself marked it as cached
+                         finalStatus = 'cached';
                     }
-                    // Log indicator classes after setting
+                }
 
-                } catch (e) {
-                    console.error(`Error setting rated indicator for tweet ${tweetId}:`, e);
-                    // Continue even if indicator fails - we've set the dataset properties
+                // Update tweet dataset (might still be useful for debugging/other features)
+                tweetArticle.dataset.ratingStatus = finalStatus;
+                tweetArticle.dataset.ratingDescription = description || "not available";
+                tweetArticle.dataset.sloppinessScore = score?.toString() || '';
+                tweetArticle.dataset.ratingReasoning = reasoning;
+
+                // Update UI via ScoreIndicator
+                ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                    status: finalStatus,
+                    score: score,
+                    description: description,
+                    reasoning: reasoning
+                });
+
+                processingSuccessful = !rating.error;
+                if (tweetCache.has(tweetId)) {
+                    const entry = tweetCache.get(tweetId);
+                    entry.score = score;
+                    entry.description = description;
+                    entry.reasoning = reasoning; // Store reasoning in cache
+                    entry.tweetContent = fullContextWithImageDescription;
+                    entry.streaming = false; // Mark as complete
+                    if (rating.error) entry.error = true; // Mark error in cache
+                } else if (!rating.error) {
+                    tweetCache.set(tweetId, {
+                        score: score,
+                        description: description,
+                        reasoning: reasoning,
+                        tweetContent: fullContextWithImageDescription,
+                        streaming: false // Mark as complete
+                    });
                 }
 
                 filterSingleTweet(tweetArticle);
-            }
-                processingSuccessful = !rating.error;
-                // Store the full context after rating is complete
-                if (!rating.error) {
-                    if (tweetCache.has(tweetId)) {
-                        tweetCache.get(tweetId).score = score;
-                        tweetCache.get(tweetId).description = description;
-                        tweetCache.get(tweetId).tweetContent = fullContextWithImageDescription;
-                        tweetCache.get(tweetId).streaming = false; // Mark as complete
-                    } else {
-                        tweetCache.set(tweetId, {
-                            score: score,
-                            description: description,
-                            tweetContent: fullContextWithImageDescription,
-                            streaming: false // Mark as complete
-                        });
-                    }
-                } else {
-                    // On error, remove any existing cache entry to allow retry
-                    if (tweetCache.has(tweetId)) {
-                        tweetCache.delete(tweetId);
-                    }
-                }
+                // Return after API call attempt
+                return;
 
             } catch (apiError) {
-                score = 10; // Fallback to a random score
-                tweetArticle.dataset.ratingStatus = 'error';
-                tweetArticle.dataset.ratingDescription = "API error";
-                // Don't consider API errors as successful processing
+                console.error(`API error processing tweet ${tweetId}:`, apiError);
+                score = 5; // Fallback score on API error
+                description = `API Error: ${apiError.message}`;
+                reasoning = '';
                 processingSuccessful = false;
+                // Update UI to reflect API error state
+                ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                    status: 'error',
+                    score: score,
+                    description: description
+                });
+                if (tweetCache.has(tweetId)) {
+                     tweetCache.get(tweetId).streaming = false;
+                }
+                // Need to filter after error state update
+                 filterSingleTweet(tweetArticle);
+                 // Return after API error handling
+                 return;
             }
-        } else if (fullContextWithImageDescription) {
-            score = 10;
-            //show all tweets that errored
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = "No API key";
-            processingSuccessful = true;
-        } else {
-            //show all tweets that errored
-            score = 10;
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = "No content";
-            processingSuccessful = true;
-        }
-
-        // Always ensure a valid score is set
-        if (score === undefined || score === null) {
-            score = 5;
-        }
-
-        tweetArticle.dataset.sloppinessScore = score.toString();
-        try {
-            //group should default to closed
-            console.groupCollapsed(`Tweet Rating ${tweetId} by ${userHandle} Score: ${score}`);
-            console.log(`Tweet ${tweetId}`);
-            console.log(`${fullContextWithImageDescription}`);
-            console.log(`Status ${tweetArticle.dataset.ratingStatus}`);
-            console.log(`Score ${score}`);
-            console.log(`Model ${browserGet('selectedModel', '')}`);console.log(`Description ${description}`);
-            console.groupEnd();
-            setScoreIndicator(tweetArticle, score, tweetArticle.dataset.ratingStatus, tweetArticle.dataset.ratingDescription || "");
-            // Final verification of indicator
-            if (!tweetArticle.querySelector('.score-indicator')) {
-                processingSuccessful = false;
-            }
-        } catch (e) {
-            console.error(`Final error setting indicator for tweet ${tweetId}:`, e);
-            processingSuccessful = false;
         }
         filterSingleTweet(tweetArticle);
+
     } catch (error) {
-        console.error(`Error processing tweet ${tweetId}: ${error}`);
-        if (!tweetArticle.dataset.sloppinessScore) {
-            tweetArticle.dataset.sloppinessScore = '5';
-            tweetArticle.dataset.ratingStatus = 'error';
-            tweetArticle.dataset.ratingDescription = "error processing tweet";
-            try {
-                setScoreIndicator(tweetArticle, 5, 'error', 'Error processing tweet');
-                // Verify indicator exists
-                if (!tweetArticle.querySelector('.score-indicator')) {
-                    console.error(`Failed to create error indicator for tweet ${tweetId}`);
-                }
-            } catch (e) {
-                console.error(`Error setting error indicator for tweet ${tweetId}:`, e);
-            }
-            filterSingleTweet(tweetArticle);
+        console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
+        // Ensure some error state is shown if processing fails unexpectedly
+         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+         if (indicatorInstance && indicatorInstance.status !== 'error') {
+            indicatorInstance.update({
+                status: 'error',
+                score: 5, // Default error score
+                description: "Error during processing: " + error.message
+            });
         }
+        filterSingleTweet(tweetArticle); // Apply filtering even on generic error
         processingSuccessful = false;
     } finally {
         // If processing was not successful, remove from processedTweets
@@ -372,6 +349,17 @@ function scheduleTweetProcessing(tweetArticle) {
         return;
     }
 
+    const existingInstance = ScoreIndicatorRegistry.get(tweetId);
+    if (existingInstance) {
+         existingInstance.ensureIndicatorAttached();
+         // Re-apply filtering just in case
+         filterSingleTweet(tweetArticle);
+         // Don't proceed with scheduling if already processed/rated/cached/blacklisted
+         if (existingInstance.status !== 'error' && existingInstance.status !== 'pending') {
+              return; 
+         }
+    }
+
     // Fast-path: if author is blacklisted, assign score immediately
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
@@ -380,7 +368,11 @@ function scheduleTweetProcessing(tweetArticle) {
         tweetArticle.dataset.blacklisted = 'true';
         tweetArticle.dataset.ratingStatus = 'blacklisted';
         tweetArticle.dataset.ratingDescription = "Whitelisted user";
-        setScoreIndicator(tweetArticle, 10, 'blacklisted', "User is whitelisted");
+        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+            status: 'blacklisted',
+            score: 10,
+            description: "User is whitelisted"
+        });
         filterSingleTweet(tweetArticle);
         return;
     }
@@ -394,37 +386,42 @@ function scheduleTweetProcessing(tweetArticle) {
         
         if (!isIncompleteStreaming) {
             const wasApplied = applyTweetCachedRating(tweetArticle);
-            if (wasApplied) {
-                // Force redraw filter to ensure the tweet is properly filtered
-                filterSingleTweet(tweetArticle);
-                return;
-            }
+            
         }
     }
 
     // Skip if already processed in this session
     if (processedTweets.has(tweetId)) {
-        // Verify that the tweet actually has an indicator - if not, remove from processed
-        const hasIndicator = !!tweetArticle.querySelector('.score-indicator');
-        if (!hasIndicator) {
-            console.warn(`Tweet ${tweetId} was marked as processed but has no indicator, reprocessing`);
-            processedTweets.delete(tweetId);
-        } else {
+            const instance = ScoreIndicatorRegistry.get(tweetId);
+            if (instance) {
+                 instance.ensureIndicatorAttached();
+                 filterSingleTweet(tweetArticle);
+            }
             return;
-        }
+        // }
     }
 
     // Immediately mark as pending before scheduling actual processing
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+    if (indicatorInstance) {
+         if (indicatorInstance.status !== 'blacklisted' && indicatorInstance.status !== 'cached' && indicatorInstance.status !== 'rated') {
+            indicatorInstance.update({ status: 'pending', score: null, description: 'Rating scheduled...' });
+        } else {
+             // If already in a final state, ensure it's attached and filtered
+             indicatorInstance.ensureIndicatorAttached();
+             filterSingleTweet(tweetArticle);
+             // Don't add to processedTweets or schedule API call if already rated/cached/blacklisted
+             return;
+        }
+    } else {
+        // If get failed, something is wrong, log error but don't stop everything
+        console.error(`Failed to get/create indicator instance for tweet ${tweetId} during scheduling.`);
+        // We might still add to processedTweets to avoid infinite loops, but ideally creation works
+    }
+    
+    // Add to processed set *after* successfully getting/creating instance
     if (!processedTweets.has(tweetId)) {
         processedTweets.add(tweetId);
-    }
-    tweetArticle.dataset.ratingStatus = 'pending';
-
-    // Ensure indicator is set
-    try {
-        setScoreIndicator(tweetArticle, null, 'pending');
-    } catch (e) {
-        console.error(`Failed to set indicator for tweet ${tweetId}:`, e);
     }
 
     // Now schedule the actual rating processing
@@ -441,8 +438,8 @@ function scheduleTweetProcessing(tweetArticle) {
 // Add this near the beginning of the file with other global variables
 // Store reply relationships across sessions
 let threadRelationships = {};
-let lastThreadCheck = 0;
-const THREAD_CHECK_INTERVAL = 2000; // 2 seconds between thread checks
+const THREAD_CHECK_INTERVAL = 2500; // 2 seconds between thread checks
+const SWEEP_INTERVAL = 1000; // 2.5 seconds between full sweeps
 let threadMappingInProgress = false; // Add a memory-based flag for more reliable state tracking
 
 // Load thread relationships from storage on script initialization
@@ -539,10 +536,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
     // --- Extract Main Tweet Content ---
     const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
     
-    // Allow a small delay for images to load
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
-    let allMediaLinks = extractMediaLinks(tweetArticle);
+    let allMediaLinks = await extractMediaLinks(tweetArticle);
 
     // --- Extract Quoted Tweet Content (if any) ---
     let quotedText = "";
@@ -562,9 +556,9 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
         }
         
         quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-        // Short delay to ensure quoted tweet images are loaded
-        await new Promise(resolve => setTimeout(resolve, 20));
-        quotedMediaLinks = extractMediaLinks(quoteContainer);
+        // No need to wait for image load just to get URLs
+        // await waitForImagesToLoad(quoteContainer);
+        quotedMediaLinks = await extractMediaLinks(quoteContainer);
     }
     
     // Get thread media URLs from cache if available
@@ -585,10 +579,8 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
         }
     }
     
-    // Combine all media URLs: current tweet + quoted tweet + thread context
     let allAvailableMediaLinks = [...allMediaLinks];
     
-    // Remove any media links from the main tweet that also appear in the quoted tweet
     let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
     
     // Start building the context
@@ -644,7 +636,7 @@ ${quotedMediaLinksDescription}`;
 ${quotedMediaLinks.join(", ")}`;
         }
     }
-    
+    if(document.querySelector('div[aria-label="Timeline: Conversation"]', 'div[aria-label^="Timeline: Conversation"]')){
     // --- Get complete reply chain using persistent relationships ---
     const replyChain = await buildReplyChain(tweetId);
     
@@ -677,7 +669,7 @@ ${quotedMediaLinks.join(", ")}`;
     if (replyInfo && replyInfo.replyTo && !threadHistoryIncluded && replyChain.length === 0) {
         fullContextWithImageDescription = `[REPLY TO TWEET ${replyInfo.replyTo}]\n` + fullContextWithImageDescription;
     }
-    
+}
     tweetArticle.dataset.fullContext = fullContextWithImageDescription;
     return fullContextWithImageDescription;
 }
@@ -699,55 +691,25 @@ function ensureAllTweetsRated() {
 
     if (tweets.length > 0) {
         console.log(`Checking ${tweets.length} tweets to ensure all are rated...`);
-        let unreatedCount = 0;
+        
 
         tweets.forEach(tweet => {
             const tweetId = getTweetID(tweet);
-            if (!tweetId) return; // Skip tweets without a valid ID
-
-            // Check for any issues that would require processing:
-            // 1. No score data attribute
-            // 2. Error status
-            // 3. Missing indicator element (even if in processedTweets)
-            const hasScore = !!tweet.dataset.sloppinessScore;
-            const hasError = tweet.dataset.ratingStatus === 'error';
-            const hasIndicator = !!tweet.querySelector('.score-indicator');
-            const isStreaming = tweet.dataset.ratingStatus === 'streaming';
-
-            // If tweet is in processedTweets but missing indicator, remove it from processed
-            if (processedTweets.has(tweetId) && !hasIndicator) {
-                console.warn(`Tweet ${tweetId} in processedTweets but missing indicator, removing`);
-                processedTweets.delete(tweetId);
-            }
-
-            // Schedule processing if needed and not already in progress
-            const needsProcessing = (!hasScore && !isStreaming) || hasError || !hasIndicator;
+            if (!tweetId) return; 
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+            const needsProcessing = !indicatorInstance || indicatorInstance.status === 'error';
             if (needsProcessing && !processedTweets.has(tweetId)) {
-                unreatedCount++;
-                const status = !hasIndicator ? 'missing indicator' :
-                    !hasScore ? 'unrated' :
-                        hasError ? 'error' : 'unknown issue';
-
-                //console.log(`Found tweet ${tweetId} with ${status}, scheduling processing`);
+                
                 scheduleTweetProcessing(tweet);
+            } else if (indicatorInstance && indicatorInstance.status !== 'pending' && indicatorInstance.status !== 'streaming') {
+                 filterSingleTweet(tweet);
             }
         });
-
-        if (unreatedCount > 0) {
-            //console.log(`Scheduled ${unreatedCount} tweets for processing`);
-        }
     }
 }
 
 async function handleThreads() {
     try {
-        // Don't check too frequently
-        const now = Date.now();
-        if (now - lastThreadCheck < THREAD_CHECK_INTERVAL) {
-            return;
-        }
-        lastThreadCheck = now;
-        
         // Find the conversation timeline using a more specific selector
         let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
         if (!conversation) {
@@ -765,7 +727,7 @@ async function handleThreads() {
         if (conversation.dataset.threadMappedAt) {
             const lastMappedTime = parseInt(conversation.dataset.threadMappedAt, 10);
             // If we've mapped this thread in the last 10 seconds, skip
-            if (now - lastMappedTime < 10000) {
+            if (Date.now() - lastMappedTime < 10000) {
                 return;
             }
         }
@@ -813,7 +775,7 @@ async function handleThreads() {
                     // Use improved thread detection to map the structure
                     setTimeout(() => {
                         mapThreadStructure(conversation, localRootTweetId);
-                    }, 500);
+                    }, 10);
                 } catch (error) {
                     console.error("Error initializing thread history:", error);
                     // Clean up on error
@@ -844,7 +806,7 @@ async function handleThreads() {
                         threadHist = threadHist + "\n[REPLY]\n" + tweetCache.get(tweetId).tweetContent;
                     } else {
                         const apiKey = browserGet('openrouter-api-key', '');
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                        await new Promise(resolve => setTimeout(resolve, 10));
                         const newContext = await getFullContext(nextArticle, tweetId, apiKey);
                         if (!newContext) {
                             throw new Error("Failed to get context for next article");
@@ -872,7 +834,7 @@ async function handleThreads() {
             
             setTimeout(() => {
                 mapThreadStructure(conversation, localRootTweetId);
-            }, 500);
+            }, 250);
         }
     } catch (error) {
         console.error("Error in handleThreads:", error);
@@ -940,13 +902,13 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     let text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
                     
                     // Extract media links from this tweet
-                    let mediaLinks = extractMediaLinks(article);
+                    let mediaLinks = await extractMediaLinks(article);
                     
                     // Extract quoted tweet media if any
                     let quotedMediaLinks = [];
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {
-                        quotedMediaLinks = extractMediaLinks(quoteContainer);
+                        quotedMediaLinks = await extractMediaLinks(quoteContainer);
                     }
                     
                     // Detect reply structure based on DOM
@@ -1154,7 +1116,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             const index = replyDocs.findIndex(doc => doc.tweetId === tweetId);
             
             if (index > 0) {
-                // Get all media URLs from tweets before this one in the thread
                 for (let i = 0; i < index; i++) {
                     if (replyDocs[i].mediaLinks && replyDocs[i].mediaLinks.length) {
                         allMediaUrls.push(...replyDocs[i].mediaLinks);
@@ -1188,3 +1149,7 @@ function getTweetReplyInfo(tweetId) {
     return null;
 }
 
+// Add the setInterval call at the end of the file or in an init function
+setInterval(handleThreads, THREAD_CHECK_INTERVAL);
+setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
+setInterval(applyFilteringToAll, SWEEP_INTERVAL);

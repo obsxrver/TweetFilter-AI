@@ -1,3 +1,4 @@
+//src/domScraper.js
 /**
      * Extracts and returns trimmed text content from the given element(s).
      * @param {Node|NodeList} elements - A DOM element or a NodeList.
@@ -83,14 +84,12 @@ function getUserHandles(tweetArticle) {
     // Return non-empty array or [''] if no handles found
     return handles.length > 0 ? handles : [''];
 }
-
-
 /**
  * Extracts and returns an array of media URLs from the tweet element.
  * @param {Element} scopeElement - The tweet element.
  * @returns {string[]} An array of media URLs.
  */
-function extractMediaLinks(scopeElement) {
+async function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
     
     const mediaLinks = new Set();
@@ -98,13 +97,23 @@ function extractMediaLinks(scopeElement) {
     // Find all images and videos in the tweet
     const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
     const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    const combinedSelector = `${imgSelector}, ${videoSelector}`;
     
-    // First try the standard selectors
-    let mediaElements = scopeElement.querySelectorAll(`${imgSelector}, ${videoSelector}`);
+    // --- Retry Logic --- 
+    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
+    const RETRY_DELAY = 100; // ms
+    let retries = 0;
+
+    while (mediaElements.length === 0 && retries < MAX_RETRIES) {
+        retries++;
+        // console.log(`[extractMediaLinks] Retry ${retries}/${MAX_RETRIES} for media in:`, scopeElement); 
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        mediaElements = scopeElement.querySelectorAll(combinedSelector);
+    }
+    // --- End Retry Logic ---
     
-    // If no media found and this is a quoted tweet, try more aggressive selectors
+    // If no media found after retries and this is a quoted tweet, try more aggressive selectors
     if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
-        // Try to find any image within the quoted tweet
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
     
@@ -122,7 +131,6 @@ function extractMediaLinks(scopeElement) {
         try {
             // Parse the URL to handle format parameters
             const url = new URL(sourceUrl);
-            const format = url.searchParams.get('format');
             const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
             
             // Create the final URL with the right format and size
@@ -168,16 +176,16 @@ function isOriginalTweet(tweetArticle) {
 }
 
 
-// ----- MutationObserver Setup -----
+
 /**
  * Handles DOM mutations to detect new tweets added to the timeline.
  * @param {MutationRecord[]} mutationsList - List of observed mutations.
  */
 function handleMutations(mutationsList) {
     let tweetsAdded = false;
+    let needsCleanup = false; // Add flag to track if cleanup is needed
 
     for (const mutation of mutationsList) {
-        handleThreads();
         if (mutation.type === 'childList') {
             // Process added nodes
             if (mutation.addedNodes.length > 0) {
@@ -187,10 +195,10 @@ function handleMutations(mutationsList) {
                             scheduleTweetProcessing(node);
                             tweetsAdded = true;
                         }
-                        else if (node.querySelectorAll) {
-                            const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                            if (tweetsInside.length > 0) {
-                                tweetsInside.forEach(scheduleTweetProcessing);
+                        else if (node.querySelector) {
+                            const tweetsInside = node.querySelector(TWEET_ARTICLE_SELECTOR);
+                            if (tweetsInside) {
+                                scheduleTweetProcessing(tweetsInside);
                                 tweetsAdded = true;
                             }
                         }
@@ -202,22 +210,45 @@ function handleMutations(mutationsList) {
             if (mutation.removedNodes.length > 0) {
                 mutation.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        // Check if the removed node is a tweet article or contains tweet articles
-                        const isTweet = node.matches && node.matches(TWEET_ARTICLE_SELECTOR);
-                        const removedTweets = isTweet ? [node] :
-                            (node.querySelectorAll ? Array.from(node.querySelectorAll(TWEET_ARTICLE_SELECTOR)) : []);
-
-                        // For each removed tweet, find and remove its description element
-                        removedTweets.forEach(tweet => {
-                            const indicator = tweet.querySelector('.score-indicator');
-                            if (indicator && indicator.dataset.id) {
-                                const descId = 'desc-' + indicator.dataset.id;
-                                const descBox = document.getElementById(descId);
-                                if (descBox) {
-                                    descBox.remove();
-                                }
-                            }
-                        });
+                        // Check if the removed node is a tweet article
+                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                             const tweetId = getTweetID(node);
+                             if (tweetId) {
+                                 // Destroy the corresponding ScoreIndicator instance, if it exists
+                                 ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                 needsCleanup = true; // Mark that registry cleanup might be needed
+                             }
+                        }
+                        // Check if the removed node *contains* a tweet article 
+                        // (e.g., a cell wrapper removed)
+                        else if (node.querySelectorAll) {
+                             const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                             removedTweets.forEach(tweet => {
+                                 const tweetId = getTweetID(tweet);
+                                 if (tweetId) {
+                                     ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                     needsCleanup = true;
+                                 }
+                             });
+                        }
+                        
+                        // Direct check if an indicator itself was removed (less likely but possible)
+                        if (node.matches && node.matches('.score-indicator')) {
+                             const tweetId = node.dataset.tweetId;
+                             if (tweetId) {
+                                  ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                  needsCleanup = true;
+                             }
+                        }
+                         // Check if the removed node *contains* an indicator
+                        else if (node.querySelector && node.querySelector('.score-indicator')) {
+                             const indicator = node.querySelector('.score-indicator');
+                             const tweetId = indicator.dataset.tweetId;
+                             if (tweetId) {
+                                  ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                  needsCleanup = true;
+                             }
+                        }
                     }
                 });
             }
@@ -230,5 +261,10 @@ function handleMutations(mutationsList) {
         setTimeout(() => {
             applyFilteringToAll();
         }, 100);
+    }
+
+    // If cleanup is needed, call the registry cleanup function
+    if (needsCleanup) {
+        ScoreIndicatorRegistry.cleanupOrphaned();
     }
 }
