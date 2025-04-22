@@ -340,7 +340,7 @@ input:checked+.toggle-slider:before {
     border-radius: 15px;
     font-size: 12px;
     z-index: 9999;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     transition: opacity 0.3s;
     cursor: pointer;
     display: flex;

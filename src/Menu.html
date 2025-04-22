@@ -1,4 +1,5 @@
 <div id="tweetfilter-root-container">
+    
     <button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button>
     <div id="tweet-filter-container">
         <button class="close-button" data-action="close-filter">×</button>
@@ -9,13 +10,13 @@
         </div>
     </div>
 
-    <button id="settings-toggle" class="toggle-button">
+    <button id="settings-toggle" class="toggle-button" data-action="toggle-settings">
         <span style="font-size: 14px;">⚙️</span> Settings
     </button>
     <div id="settings-container" class="hidden">
         <div class="settings-header">
             <div class="settings-title">Twitter De-Sloppifier</div>
-            <button class="close-button" data-action="close-settings">×</button>
+            <button class="close-button" data-action="toggle-settings">×</button>
         </div>
         <div class="settings-content">
             <div class="tab-navigation">
@@ -195,4 +196,5 @@
         </div>
         <div id="status-indicator" class=""></div>
     </div>
+    <div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div>
 </div>

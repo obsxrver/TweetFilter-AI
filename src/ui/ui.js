@@ -1,20 +1,3 @@
-//src/ui.js
-
-/**
- * Displays a temporary status message on the screen.
- * @param {string} message - The message to display.
- */
-function showStatus(message) {
-    const indicator = document.getElementById('status-indicator');
-    if (!indicator) {
-        console.error('#status-indicator element not found.');
-        return;
-    }
-    indicator.textContent = message;
-    indicator.classList.add('active');
-    setTimeout(() => { indicator.classList.remove('active'); }, 3000);
-}
-
 /**
  * Toggles the visibility of an element and updates the corresponding toggle button text.
  * @param {HTMLElement} element - The element to toggle.
@@ -45,12 +28,11 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
 function injectUI() {
     //combined userscript has a const named MENU. If it exists, use it.
     let menuHTML;
-    if(MENU){
+    if (MENU) {
         menuHTML = MENU;
-    }else{
+    } else {
         menuHTML = browserGet('menuHTML');
     }
-    
     if (!menuHTML) {
         console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
@@ -102,7 +84,8 @@ function initializeEventListeners(uiContainer) {
     // --- Delegated Event Listener for Clicks ---
     uiContainer.addEventListener('click', (event) => {
         const target = event.target;
-        const action = target.dataset.action;
+        const actionElement = target.closest('[data-action]');
+        const action = actionElement?.dataset.action;
         const setting = target.dataset.setting;
         const paramName = target.closest('.parameter-row')?.dataset.paramName;
         const tab = target.dataset.tab;
@@ -114,6 +97,7 @@ function initializeEventListeners(uiContainer) {
                 case 'close-filter':
                     toggleElementVisibility(filterContainer, filterToggleBtn, 'Filter Slider', 'Filter Slider');
                     break;
+                case 'toggle-settings':
                 case 'close-settings':
                     toggleElementVisibility(settingsContainer, settingsToggleBtn, '<span style="font-size: 14px;">✕</span> Close', '<span style="font-size: 14px;">⚙️</span> Settings');
                     break;
@@ -179,39 +163,35 @@ function initializeEventListeners(uiContainer) {
         if (target.id === 'tweet-filter-slider') {
             handleFilterSliderChange(target);
         }
+        if (target.id === 'tweet-filter-value') {
+            handleFilterValueInput(target);
+        }
     });
 
     uiContainer.addEventListener('change', (event) => {
         const target = event.target;
         const setting = target.dataset.setting;
 
-         // Settings Inputs / Toggles (for selects like sort order)
-         if (setting === 'modelSortOrder') {
+        // Settings Inputs / Toggles (for selects like sort order)
+        if (setting === 'modelSortOrder') {
             handleSettingChange(target, setting);
             fetchAvailableModels(); // Refresh models on sort change
-         }
+        }
 
-          // Settings Checkbox toggle (need change event for checkboxes)
-          if (setting === 'enableImageDescriptions') {
-             handleSettingChange(target, setting);
-          }
+        // Settings Checkbox toggle (need change event for checkboxes)
+        if (setting === 'enableImageDescriptions') {
+            handleSettingChange(target, setting);
+        }
     });
 
     // --- Direct Event Listeners (Less common cases) ---
 
-    // Settings Toggle Button
-    if (settingsToggleBtn) {
-        settingsToggleBtn.onclick = () => {
-            toggleElementVisibility(settingsContainer, settingsToggleBtn, '<span style="font-size: 14px;">✕</span> Close', '<span style="font-size: 14px;">⚙️</span> Settings');
-        };
-    }
-
     // Filter Toggle Button
     if (filterToggleBtn) {
         filterToggleBtn.onclick = () => {
-             // Ensure filter container is shown and button is hidden
-             if (filterContainer) filterContainer.classList.remove('hidden');
-             filterToggleBtn.style.display = 'none';
+            // Ensure filter container is shown and button is hidden
+            if (filterContainer) filterContainer.classList.remove('hidden');
+            filterToggleBtn.style.display = 'none';
         };
     }
 
@@ -221,7 +201,7 @@ function initializeEventListeners(uiContainer) {
     // Add handlers for new controls
     const showFreeModelsCheckbox = uiContainer.querySelector('#show-free-models');
     if (showFreeModelsCheckbox) {
-        showFreeModelsCheckbox.addEventListener('change', function() {
+        showFreeModelsCheckbox.addEventListener('change', function () {
             showFreeModels = this.checked;
             browserSet('showFreeModels', showFreeModels);
             refreshModelsUI();
@@ -230,7 +210,7 @@ function initializeEventListeners(uiContainer) {
 
     const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
     if (sortDirectionBtn) {
-        sortDirectionBtn.addEventListener('click', function() {
+        sortDirectionBtn.addEventListener('click', function () {
             const currentDirection = browserGet('sortDirection', 'default');
             const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
             browserSet('sortDirection', newDirection);
@@ -241,7 +221,7 @@ function initializeEventListeners(uiContainer) {
 
     const modelSortSelect = uiContainer.querySelector('#model-sort-order');
     if (modelSortSelect) {
-        modelSortSelect.addEventListener('change', function() {
+        modelSortSelect.addEventListener('change', function () {
             browserSet('modelSortOrder', this.value);
             // Set default direction for latency and age
             if (this.value === 'latency-low-to-high') {
@@ -255,7 +235,7 @@ function initializeEventListeners(uiContainer) {
 
     const providerSortSelect = uiContainer.querySelector('#provider-sort');
     if (providerSortSelect) {
-        providerSortSelect.addEventListener('change', function() {
+        providerSortSelect.addEventListener('change', function () {
             providerSort = this.value;
             browserSet('providerSort', providerSort);
         });
@@ -270,9 +250,9 @@ function initializeEventListeners(uiContainer) {
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
-    let previousAPIKey = browserGet('openrouter-api-key', '').length>0?true:false;
+    let previousAPIKey = browserGet('openrouter-api-key', '').length > 0 ? true : false;
     if (apiKey) {
-        if (!previousAPIKey){
+        if (!previousAPIKey) {
             resetSettings(true);
             //jank hack to get the UI defaults to load correctly
         }
@@ -290,14 +270,14 @@ function saveApiKey() {
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear all ratings
-        tweetCache.clear();
+        tweetCache.clear(true);
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};
             browserSet('threadRelationships', '{}');
             console.log('Cleared thread relationships cache');
         }
-        
+
         showStatus('All cached ratings and thread relationships cleared!');
         console.log('Cleared all tweet ratings and thread relationships');
 
@@ -335,113 +315,6 @@ function clearTweetRatingsAndRefreshUI() {
             delete conversation.dataset.threadMediaUrls;
         });
 
-        // Update UI elements
-        updateCacheStatsUI();
-    }
-}
-
-/** Saves the custom instructions from the textarea. */
-async function saveInstructions() {
-    const instructionsTextarea = document.getElementById('user-instructions');
-    const instructions = instructionsTextarea.value.trim();
-    if (!instructions) {
-        showStatus('Instructions cannot be empty');
-        return;
-    }
-
-    USER_DEFINED_INSTRUCTIONS = instructions;
-    browserSet('userDefinedInstructions', USER_DEFINED_INSTRUCTIONS);
-
-    // Get 5-word summary for the instructions
-    const summary = await getCustomInstructionsDescription(instructions);
-    if (!summary.error) {
-        // Add to history using the singleton
-        await instructionsHistory.add(instructions, summary.content);
-        
-        // Refresh the history list
-        refreshInstructionsHistory();
-    }
-
-    showStatus('Scoring instructions saved! New tweets will use these instructions.');
-    if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
-        clearTweetRatingsAndRefreshUI();
-    }
-}
-
-/**
- * Refreshes the instructions history list in the UI.
- */
-function refreshInstructionsHistory() {
-    const listElement = document.getElementById('instructions-list');
-    if (!listElement) return;
-
-    // Get history from singleton
-    const history = instructionsHistory.getAll();
-    listElement.innerHTML = ''; // Clear existing list
-
-    if (history.length === 0) {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.style.cssText = 'padding: 8px; opacity: 0.7; font-style: italic;';
-        emptyMsg.textContent = 'No saved instructions yet';
-        listElement.appendChild(emptyMsg);
-        return;
-    }
-
-    history.forEach((entry, index) => {
-        const item = document.createElement('div');
-        item.className = 'instruction-item';
-        item.dataset.index = index;
-
-        const text = document.createElement('div');
-        text.className = 'instruction-text';
-        text.textContent = entry.summary;
-        text.title = entry.instructions; // Show full instructions on hover
-        item.appendChild(text);
-
-        const buttons = document.createElement('div');
-        buttons.className = 'instruction-buttons';
-
-        const useBtn = document.createElement('button');
-        useBtn.className = 'use-instruction';
-        useBtn.textContent = 'Use';
-        useBtn.title = 'Use these instructions';
-        useBtn.onclick = () => useInstructions(entry.instructions);
-        buttons.appendChild(useBtn);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'remove-instruction';
-        removeBtn.textContent = '×';
-        removeBtn.title = 'Remove from history';
-        removeBtn.onclick = () => removeInstructions(index);
-        buttons.appendChild(removeBtn);
-
-        item.appendChild(buttons);
-        listElement.appendChild(item);
-    });
-}
-
-/**
- * Uses the selected instructions from history.
- * @param {string} instructions - The instructions to use.
- */
-function useInstructions(instructions) {
-    const textarea = document.getElementById('user-instructions');
-    if (textarea) {
-        textarea.value = instructions;
-        saveInstructions();
-    }
-}
-
-/**
- * Removes instructions from history at the specified index.
- * @param {number} index - The index of the instructions to remove.
- */
-function removeInstructions(index) {
-    if (instructionsHistory.remove(index)) {
-        refreshInstructionsHistory();
-        showStatus('Instructions removed from history');
-    } else {
-        showStatus('Error removing instructions');
     }
 }
 
@@ -451,7 +324,7 @@ function addHandleFromInput() {
     const handle = handleInput.value.trim();
     if (handle) {
         addHandleToBlacklist(handle);
-        handleInput.value = ''; 
+        handleInput.value = '';
     }
 }
 
@@ -505,7 +378,7 @@ function handleParameterChange(target, paramName) {
 
     // Update both slider and input
     if (slider && valueInput) {
-            slider.value = newValue;
+        slider.value = newValue;
         valueInput.value = newValue;
     }
 
@@ -528,11 +401,11 @@ function handleFilterSliderChange(slider) {
     if (valueInput) {
         valueInput.value = currentFilterThreshold.toString();
     }
-    
+
     // Update the gradient position based on the slider value
     const percentage = (currentFilterThreshold / 10) * 100;
     slider.style.setProperty('--slider-percent', `${percentage}%`);
-    
+
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
@@ -546,7 +419,7 @@ function handleFilterValueInput(input) {
     // Clamp value between 0 and 10
     value = Math.max(0, Math.min(10, value));
     input.value = value.toString(); // Update input to clamped value
-    
+
     const slider = document.getElementById('tweet-filter-slider');
     if (slider) {
         slider.value = value.toString();
@@ -554,7 +427,7 @@ function handleFilterValueInput(input) {
         const percentage = (value / 10) * 100;
         slider.style.setProperty('--slider-percent', `${percentage}%`);
     }
-    
+
     currentFilterThreshold = value;
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
@@ -638,7 +511,7 @@ function refreshSettingsUI() {
     const filterSlider = document.getElementById('tweet-filter-slider');
     const filterValueInput = document.getElementById('tweet-filter-value');
     const currentThreshold = browserGet('filterThreshold', '5');
-    
+
     if (filterSlider && filterValueInput) {
         filterSlider.value = currentThreshold;
         filterValueInput.value = currentThreshold;
@@ -714,7 +587,7 @@ function refreshModelsUI() {
 
     // Filter and sort models
     listedModels = [...availableModels];
-    
+
     // Filter free models if needed
     if (!showFreeModels) {
         listedModels = listedModels.filter(model => !model.slug.endsWith(':free'));
@@ -723,11 +596,11 @@ function refreshModelsUI() {
     // Sort models based on current sort order and direction
     const sortDirection = browserGet('sortDirection', 'default');
     const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
-    
+
     // Update toggle button text based on sort order
     const toggleBtn = document.getElementById('sort-direction');
     if (toggleBtn) {
-        switch(sortOrder) {
+        switch (sortOrder) {
             case 'latency-low-to-high':
                 toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
                 if (sortDirection === 'reverse') listedModels.reverse();
@@ -803,20 +676,20 @@ function formatModelLabel(model) {
         const completionPrice = parseFloat(pricing.completion);
 
         if (!isNaN(promptPrice)) {
-            pricingInfo += ` - $${(promptPrice*1e6).toFixed(4)}/mil. tok.-in`;
+            pricingInfo += ` - $${(promptPrice * 1e6).toFixed(4)}/mil. tok.-in`;
             if (!isNaN(completionPrice) && completionPrice !== promptPrice) {
-                pricingInfo += ` $${(completionPrice*1e6).toFixed(4)}/mil. tok.-out`;
+                pricingInfo += ` $${(completionPrice * 1e6).toFixed(4)}/mil. tok.-out`;
             }
         } else if (!isNaN(completionPrice)) {
             // Handle case where only completion price is available (less common)
-            pricingInfo += ` - $${(completionPrice*1e6).toFixed(4)}/mil. tok.-out`;
+            pricingInfo += ` - $${(completionPrice * 1e6).toFixed(4)}/mil. tok.-out`;
         }
     }
 
     // Add vision icon
     const isVision = model.input_modalities?.includes('image') ||
-                     model.architecture?.input_modalities?.includes('image') ||
-                     model.architecture?.modality?.includes('image');
+        model.architecture?.input_modalities?.includes('image') ||
+        model.architecture?.modality?.includes('image');
     if (isVision) {
         label = '🖼️ ' + label;
     }
@@ -894,7 +767,7 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
                 // Update classes for all items
                 selectItems.querySelectorAll('div[data-value]').forEach(div => {
                     div.classList.toggle('same-as-selected', div.dataset.value === currentSelectedValue);
-            });
+                });
 
                 onChange(currentSelectedValue);
             });
@@ -942,25 +815,16 @@ function closeAllSelectBoxes(exceptThisOne = null) {
     });
 }
 
-// --- Rating Indicator Logic (Simplified, assuming CSS handles most styling) ---
 
-/**
- * Detects if the user is on a mobile device
- * @returns {boolean} true if mobile device detected
- */
-function isMobileDevice() {
-    return (window.innerWidth <= 600 || 
-            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-}
 
 
 /**
  * Resets all configurable settings to their default values.
  */
-function resetSettings(noconfirm=false) {
+function resetSettings(noconfirm = false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
         tweetCache.clear();
-        
+
         // Define defaults (should match config.js ideally)
         const defaults = {
             selectedModel: 'openai/gpt-4.1-nano',
@@ -1001,8 +865,8 @@ function addHandleToBlacklist(handle) {
     handle = handle.trim().replace(/^@/, ''); // Clean handle
     if (handle === '' || blacklistedHandles.includes(handle)) {
         showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
-            return;
-        }
+        return;
+    }
     blacklistedHandles.push(handle);
     browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
     refreshHandleList(document.getElementById('handle-list'));
@@ -1020,9 +884,8 @@ function removeHandleFromBlacklist(handle) {
         browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
         refreshHandleList(document.getElementById('handle-list'));
         showStatus(`Removed @${handle} from auto-rate list.`);
-                } else {
-        console.warn(`Attempted to remove non-existent handle: ${handle}`);
-    }
+    } else console.warn(`Attempted to remove non-existent handle: ${handle}`);
+
 }
 
 // --- Initialization ---
@@ -1037,95 +900,55 @@ function initialiseUI() {
     initializeEventListeners(uiContainer);
     refreshSettingsUI();
     fetchAvailableModels();
-    
+
     // Initialize the floating cache stats badge
     initializeFloatingCacheStats();
-    
+
     setInterval(updateCacheStatsUI, 3000);
-    
+
     // Initialize tracking object for streaming requests if it doesn't exist
-    if (!window.activeStreamingRequests) {
-        window.activeStreamingRequests = {};
-    }
+    if (!window.activeStreamingRequests) window.activeStreamingRequests = {};
 }
 
 /**
- * Creates or updates a floating badge showing the current cache statistics
+ * Initializes event listeners and functionality for the floating cache stats badge.
  * This provides real-time feedback when tweets are rated and cached,
  * even when the settings panel is not open.
  */
 function initializeFloatingCacheStats() {
-    let statsBadge = document.getElementById('tweet-filter-stats-badge');
-    
-    if (!statsBadge) {
-        statsBadge = document.createElement('div');
-        statsBadge.id = 'tweet-filter-stats-badge';
-        statsBadge.className = 'tweet-filter-stats-badge';
-        statsBadge.style.cssText = `
-            position: fixed;
-            bottom: 50px;
-            right: 20px;
-            background-color: rgba(29, 155, 240, 0.9);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            z-index: 9999;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            transition: opacity 0.3s;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-        `;
-        
-        // Add tooltip functionality
-        statsBadge.title = 'Click to open settings';
-        
-        // Add click event to open settings
-        statsBadge.addEventListener('click', () => {
-            const settingsToggle = document.getElementById('settings-toggle');
-            if (settingsToggle) {
-                settingsToggle.click();
-            }
-        });
-        
-        document.body.appendChild(statsBadge);
-        
-        // Auto-hide after 5 seconds of inactivity
-        let fadeTimeout;
-        const resetFadeTimeout = () => {
-            clearTimeout(fadeTimeout);
-            statsBadge.style.opacity = '1';
-            fadeTimeout = setTimeout(() => {
-                statsBadge.style.opacity = '0.3';
-            }, 5000);
-        };
-        
-        statsBadge.addEventListener('mouseenter', () => {
-            statsBadge.style.opacity = '1';
-            clearTimeout(fadeTimeout);
-        });
-        
-        statsBadge.addEventListener('mouseleave', resetFadeTimeout);
-        
-        resetFadeTimeout();
-    }
-    
+    const statsBadge = document.getElementById('tweet-filter-stats-badge');
+    if (!statsBadge) return;
+
+    // Add tooltip functionality
+    statsBadge.title = 'Click to open settings';
+
+    // Add click event to open settings
+    statsBadge.addEventListener('click', () => {
+        const settingsToggle = document.getElementById('settings-toggle');
+        if (settingsToggle) {
+            settingsToggle.click();
+        }
+    });
+
+    // Auto-hide after 5 seconds of inactivity
+    let fadeTimeout;
+    const resetFadeTimeout = () => {
+        clearTimeout(fadeTimeout);
+        statsBadge.style.opacity = '1';
+        fadeTimeout = setTimeout(() => {
+            statsBadge.style.opacity = '0.3';
+        }, 5000);
+    };
+
+    statsBadge.addEventListener('mouseenter', () => {
+        statsBadge.style.opacity = '1';
+        clearTimeout(fadeTimeout);
+    });
+
+    statsBadge.addEventListener('mouseleave', resetFadeTimeout);
+
+    resetFadeTimeout();
     updateCacheStatsUI();
-    // Make it visible and reset the timeout
-    statsBadge.style.opacity = '1';
-    clearTimeout(statsBadge.fadeTimeout);
-    statsBadge.fadeTimeout = setTimeout(() => {
-        statsBadge.style.opacity = '0.3';
-    }, 5000);
 }
 
-/** Clears all instructions history after confirmation */
-function clearInstructionsHistory() {
-    if (isMobileDevice() || confirm('Are you sure you want to clear all instruction history?')) {
-        instructionsHistory.clear();
-        refreshInstructionsHistory();
-        showStatus('Instructions history cleared');
-    }
-}
 
