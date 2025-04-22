@@ -780,7 +780,19 @@ input:checked+.toggle-slider:before {
     opacity: 0.8;
     line-height: 1.4;
 }
+.section-title a {
+    color: #1d9bf0;
+    text-decoration: none;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 3px 6px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
 
+.section-title a:hover {
+    background-color: rgba(29, 155, 240, 0.2);
+    text-decoration: underline;
+}
 
 .advanced-options {
     margin-top: 5px;
@@ -1418,4 +1430,50 @@ input:checked+.toggle-slider:before {
 .remove-instruction:hover {
     opacity: 1;
     background-color: rgba(255, 92, 92, 0.1);
+}
+
+.tweet-filtered {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    /* Ensure it stays hidden even if Twitter tries to show it */
+    position: absolute !important;
+    z-index: -9999 !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 5px 0;
+}
+
+.filter-controls input[type="range"] {
+    flex: 1;
+    min-width: 100px;
+}
+
+.filter-controls input[type="number"] {
+    width: 50px;
+    padding: 2px 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* Hide number input spinners */
+.filter-controls input[type="number"]::-webkit-inner-spin-button,
+.filter-controls input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.filter-controls input[type="number"] {
+    -moz-appearance: textfield;
 }

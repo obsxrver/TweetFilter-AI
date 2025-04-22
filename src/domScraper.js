@@ -175,15 +175,52 @@ function isOriginalTweet(tweetArticle) {
     return false;
 }
 
-
-
 /**
  * Handles DOM mutations to detect new tweets added to the timeline.
  * @param {MutationRecord[]} mutationsList - List of observed mutations.
  */
 function handleMutations(mutationsList) {
     let tweetsAdded = false;
-    let needsCleanup = false; // Add flag to track if cleanup is needed
+    let needsCleanup = false;
+
+    
+
+    const shouldSkipProcessing = (element) => {
+        if (!element) return true;
+        
+        // Skip if the element itself is marked as filtered or ad
+        if (element.dataset?.filtered === 'true' || element.dataset?.isAd === 'true') {
+            return true;
+        }
+
+        // Skip if the cell is marked as filtered or ad
+        const cell = element.closest('div[data-testid="cellInnerDiv"]');
+        if (cell?.dataset?.filtered === 'true' || cell?.dataset?.isAd === 'true') {
+            return true;
+        }
+
+        // Skip if it's an ad
+        if (isAd(element)) {
+            // Mark it as an ad and filter it
+            if (cell) {
+                cell.dataset.isAd = 'true';
+                cell.classList.add('tweet-filtered');
+            }
+            element.dataset.isAd = 'true';
+            return true;
+        }
+
+        // Skip if it's already in processedTweets and not an error
+        const tweetId = getTweetID(element);
+        if (processedTweets.has(tweetId)) {
+            const indicator = ScoreIndicatorRegistry.get(tweetId);
+            if (indicator && indicator.status !== 'error') {
+                return true;
+            }
+        }
+
+        return false;
+    };
 
     for (const mutation of mutationsList) {
         if (mutation.type === 'childList') {
@@ -192,15 +229,19 @@ function handleMutations(mutationsList) {
                 mutation.addedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
-                            scheduleTweetProcessing(node);
-                            tweetsAdded = true;
-                        }
-                        else if (node.querySelector) {
-                            const tweetsInside = node.querySelector(TWEET_ARTICLE_SELECTOR);
-                            if (tweetsInside) {
-                                scheduleTweetProcessing(tweetsInside);
+                            if (!shouldSkipProcessing(node)) {
+                                scheduleTweetProcessing(node);
                                 tweetsAdded = true;
                             }
+                        }
+                        else if (node.querySelector) {
+                            const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                            tweetsInside.forEach(tweet => {
+                                if (!shouldSkipProcessing(tweet)) {
+                                    scheduleTweetProcessing(tweet);
+                                    tweetsAdded = true;
+                                }
+                            });
                         }
                     }
                 });
@@ -210,44 +251,32 @@ function handleMutations(mutationsList) {
             if (mutation.removedNodes.length > 0) {
                 mutation.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        // Check if the removed node is a tweet article
-                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
-                             const tweetId = getTweetID(node);
-                             if (tweetId) {
-                                 // Destroy the corresponding ScoreIndicator instance, if it exists
-                                 ScoreIndicatorRegistry.get(tweetId)?.destroy();
-                                 needsCleanup = true; // Mark that registry cleanup might be needed
-                             }
-                        }
-                        // Check if the removed node *contains* a tweet article 
-                        // (e.g., a cell wrapper removed)
-                        else if (node.querySelectorAll) {
-                             const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                             removedTweets.forEach(tweet => {
-                                 const tweetId = getTweetID(tweet);
-                                 if (tweetId) {
-                                     ScoreIndicatorRegistry.get(tweetId)?.destroy();
-                                     needsCleanup = true;
-                                 }
-                             });
+                        // Skip cleanup for filtered tweets and ads
+                        if (node.dataset?.filtered === 'true' || node.dataset?.isAd === 'true') {
+                            return;
                         }
                         
-                        // Direct check if an indicator itself was removed (less likely but possible)
-                        if (node.matches && node.matches('.score-indicator')) {
-                             const tweetId = node.dataset.tweetId;
-                             if (tweetId) {
-                                  ScoreIndicatorRegistry.get(tweetId)?.destroy();
-                                  needsCleanup = true;
-                             }
+                        // Check if the removed node is a tweet article
+                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                            const tweetId = getTweetID(node);
+                            if (tweetId) {
+                                ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                needsCleanup = true;
+                            }
                         }
-                         // Check if the removed node *contains* an indicator
-                        else if (node.querySelector && node.querySelector('.score-indicator')) {
-                             const indicator = node.querySelector('.score-indicator');
-                             const tweetId = indicator.dataset.tweetId;
-                             if (tweetId) {
-                                  ScoreIndicatorRegistry.get(tweetId)?.destroy();
-                                  needsCleanup = true;
-                             }
+                        // Check if the removed node contains tweet articles
+                        else if (node.querySelectorAll) {
+                            const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                            removedTweets.forEach(tweet => {
+                                if (tweet.dataset?.filtered === 'true' || tweet.dataset?.isAd === 'true') {
+                                    return;
+                                }
+                                const tweetId = getTweetID(tweet);
+                                if (tweetId) {
+                                    ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                    needsCleanup = true;
+                                }
+                            });
                         }
                     }
                 });
@@ -257,7 +286,6 @@ function handleMutations(mutationsList) {
     
     // If any tweets were added, ensure filtering is applied
     if (tweetsAdded) {
-        // Apply a small delay to allow processing to start first
         setTimeout(() => {
             applyFilteringToAll();
         }, 100);
@@ -267,4 +295,21 @@ function handleMutations(mutationsList) {
     if (needsCleanup) {
         ScoreIndicatorRegistry.cleanupOrphaned();
     }
+}
+
+/**
+ * Checks if a tweet article is an advertisement.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {boolean} True if the tweet is an ad.
+ */
+function isAd(tweetArticle) {
+    if (!tweetArticle) return false;
+    // Look for any span that contains exactly "Ad" and nothing else
+    const spans = tweetArticle.querySelectorAll('div[dir="ltr"] span');
+    for (const span of spans) {
+        if (span.textContent.trim() === 'Ad' && !span.children.length) {
+            return true;
+        }
+    }
+    return false;
 }

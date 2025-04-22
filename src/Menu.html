@@ -3,8 +3,10 @@
     <div id="tweet-filter-container">
         <button class="close-button" data-action="close-filter">×</button>
         <label for="tweet-filter-slider">SlopScore:</label>
-        <input type="range" id="tweet-filter-slider" min="0" max="10" step="1">
-        <span id="tweet-filter-value">5</span>
+        <div class="filter-controls">
+            <input type="range" id="tweet-filter-slider" min="0" max="10" step="1">
+            <input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5">
+        </div>
     </div>
 
     <button id="settings-toggle" class="toggle-button">
@@ -22,7 +24,7 @@
                 <button class="tab-button" data-tab="instructions">Instructions</button>
             </div>
             <div id="general-tab" class="tab-content active">
-                <div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/" target="_blank">Get one here</a></div>
+                <div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/settings/keys" target="_blank">Get one here</a></div>
                 <input id="openrouter-api-key" placeholder="Enter your OpenRouter API key">
                 <button class="settings-button" data-action="save-api-key">Save API Key</button>
                 <div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div>

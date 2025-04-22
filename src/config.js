@@ -1,5 +1,6 @@
 //src/config.js
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
+const adAuthorCache = new Set(); // Cache of handles that post ads
 
 const PROCESSING_DELAY_MS = 250; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)

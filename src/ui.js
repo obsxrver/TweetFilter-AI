@@ -523,16 +523,39 @@ function handleParameterChange(target, paramName) {
  * @param {HTMLElement} slider - The filter slider element.
  */
 function handleFilterSliderChange(slider) {
-    const valueDisplay = document.getElementById('tweet-filter-value');
+    const valueInput = document.getElementById('tweet-filter-value');
     currentFilterThreshold = parseInt(slider.value, 10);
-    if (valueDisplay) {
-        valueDisplay.textContent = currentFilterThreshold.toString();
+    if (valueInput) {
+        valueInput.value = currentFilterThreshold.toString();
     }
     
     // Update the gradient position based on the slider value
     const percentage = (currentFilterThreshold / 10) * 100;
     slider.style.setProperty('--slider-percent', `${percentage}%`);
     
+    browserSet('filterThreshold', currentFilterThreshold);
+    applyFilteringToAll();
+}
+
+/**
+ * Handles changes to the numeric input for filter threshold.
+ * @param {HTMLElement} input - The numeric input element.
+ */
+function handleFilterValueInput(input) {
+    let value = parseInt(input.value, 10);
+    // Clamp value between 0 and 10
+    value = Math.max(0, Math.min(10, value));
+    input.value = value.toString(); // Update input to clamped value
+    
+    const slider = document.getElementById('tweet-filter-slider');
+    if (slider) {
+        slider.value = value.toString();
+        // Update the gradient position
+        const percentage = (value / 10) * 100;
+        slider.style.setProperty('--slider-percent', `${percentage}%`);
+    }
+    
+    currentFilterThreshold = value;
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
@@ -611,14 +634,16 @@ function refreshSettingsUI() {
         if (valueInput) valueInput.value = value;
     });
 
-    // Update filter slider
+    // Update filter slider and value input
     const filterSlider = document.getElementById('tweet-filter-slider');
-    const filterValueDisplay = document.getElementById('tweet-filter-value');
-    if (filterSlider && filterValueDisplay) {
-        filterSlider.value = currentFilterThreshold.toString();
-        filterValueDisplay.textContent = currentFilterThreshold.toString();
+    const filterValueInput = document.getElementById('tweet-filter-value');
+    const currentThreshold = browserGet('filterThreshold', '5');
+    
+    if (filterSlider && filterValueInput) {
+        filterSlider.value = currentThreshold;
+        filterValueInput.value = currentThreshold;
         // Initialize the gradient position
-        const percentage = (currentFilterThreshold / 10) * 100;
+        const percentage = (parseInt(currentThreshold, 10) / 10) * 100;
         filterSlider.style.setProperty('--slider-percent', `${percentage}%`);
     }
 
