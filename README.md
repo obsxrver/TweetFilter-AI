@@ -2,6 +2,14 @@
 
 A powerful AI-powered userscript that rates and filters tweets to enhance your Twitter/X experience.
 
+<div align="center">
+  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-General.jpg" width="800" alt="General UI"/>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-SlopScore.jpg" width="800" alt="Slop Score Display" style="margin-top: 10px;"/>
+</div>
+
 ## Key Features
 
 - 🧠 **AI-Powered Rating**: Rates tweets from 1-10 based on quality
@@ -12,20 +20,6 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
 - 🧵 **Thread Context**: Understands full conversation context
 - ⭐ **Handle Management**: Auto-whitelist your favorite accounts
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-General.jpg" width="400" alt="General UI" style="margin-right: 10px;"/>
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Models.jpg" width="400" alt="Model Selection" style="margin-left: 10px;"/>
-</div>
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Instructions.jpg" width="400" alt="Custom Instructions" style="margin-right: 10px;"/>
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-SlopScore.jpg" width="400" alt="Slop Score Display" style="margin-left: 10px;"/>
-</div>
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/Streaming-Description.jpg" width="800" alt="Live Streaming Analysis" style="margin-top: 10px;"/>
-</div>
-
 ## Quick Start
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/)
@@ -34,12 +28,23 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
 4. Configure the script with your API key
 5. Enjoy a cleaner Twitter experience!
 
+## Configuration
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Instructions.jpg" width="400" alt="Custom Instructions" style="margin-right: 10px;"/>
+  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Models.jpg" width="400" alt="Model Selection" style="margin-left: 10px;"/>
+</div>
+
 ## Features in Detail
 
 ### AI Rating System
 - Uses advanced language models to evaluate tweet quality
 - Considers text, images, and full conversation context
 - Live streaming shows the AI's thought process in real-time
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/Streaming-Description.jpg" width="800" alt="Live Streaming Analysis"/>
+</div>
 
 ### Customization
 - Choose from multiple AI models
