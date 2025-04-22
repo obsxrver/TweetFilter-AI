@@ -47,12 +47,10 @@ class TweetCache {
      */
     #saveToStorageInternal() {
         try {
-            console.log(`Saving ${Object.keys(this.cache).length} tweet ratings to storage.`); // Log saving action
             browserSet('tweetRatings', JSON.stringify(this.cache));
             updateCacheStatsUI(); // Update UI after saving
         } catch (error) {
             console.error("Error saving tweet cache to storage:", error);
-            // Optionally, handle the error, e.g., notify the user, retry later
         }
     }
 

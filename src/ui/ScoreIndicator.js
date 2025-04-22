@@ -247,6 +247,11 @@ class ScoreIndicator {
     _updateTooltipUI() {
         if (!this.tooltipElement || !this.descriptionElement || !this.reasoningTextElement || !this.reasoningDropdown) return;
 
+        // Store current scroll position and whether we were at bottom before update
+        const wasNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        const previousScrollTop = this.tooltipElement.scrollTop;
+        const previousScrollHeight = this.tooltipElement.scrollHeight;
+
         // Assume formatTooltipDescription is globally available
         const formatted = formatTooltipDescription(this.description, this.reasoning);
 
@@ -263,13 +268,23 @@ class ScoreIndicator {
         // Add/remove streaming class
         this.tooltipElement.classList.toggle('streaming-tooltip', this.status === 'streaming');
 
-        // Handle auto-scrolling if visible and content changed
-        if (this.isVisible && contentChanged && this.autoScroll) {
-            this._performAutoScroll();
+        // Handle scrolling after content update
+        if (contentChanged) {
+            requestAnimationFrame(() => {
+                // If auto-scroll is enabled and we were at bottom, or if this is first content
+                if (this.autoScroll && (wasNearBottom || !previousScrollHeight)) {
+                    this._performAutoScroll();
+                } else if (!this.autoScroll && previousScrollHeight > 0) {
+                    // Maintain relative scroll position for user-scrolled content
+                    const newScrollHeight = this.tooltipElement.scrollHeight;
+                    const scrollDiff = newScrollHeight - previousScrollHeight;
+                    this.tooltipElement.scrollTop = previousScrollTop + scrollDiff;
+                }
+                this._updateScrollButtonVisibility();
+            });
+        } else {
+            this._updateScrollButtonVisibility();
         }
-
-        // Update scroll button visibility after potential content change
-        this._updateScrollButtonVisibility();
     }
 
     _performAutoScroll() {
@@ -486,21 +501,19 @@ class ScoreIndicator {
         // Check if we're near the bottom BEFORE potentially disabling autoScroll
         const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
 
+        // If user is scrolling up or away from bottom
         if (!isNearBottom) {
-            // User has scrolled up
             if (this.autoScroll) {
                 this.autoScroll = false;
                 this.tooltipElement.dataset.autoScroll = 'false';
-                this.userInitiatedScroll = true; // Mark that user took control
-                // Clear flag after short delay
-                setTimeout(() => { this.userInitiatedScroll = false; }, 100);
+                this.userInitiatedScroll = true;
             }
         } else {
-            // User has scrolled to bottom
-            // Re-enable auto-scroll ONLY if user initiated the scroll to the bottom
+            // Only re-enable auto-scroll if user explicitly scrolled to bottom
             if (this.userInitiatedScroll) {
                 this.autoScroll = true;
                 this.tooltipElement.dataset.autoScroll = 'true';
+                this.userInitiatedScroll = false;
             }
         }
         this._updateScrollButtonVisibility();
@@ -693,6 +706,13 @@ class ScoreIndicator {
     /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
     destroy() {
         // console.log(`[ScoreIndicator ${this.tweetId}] Destroying...`);
+
+        // Clean up any active streaming request for this tweet
+        if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
+            console.log(`Cleaning up active streaming request for tweet ${this.tweetId}`);
+            window.activeStreamingRequests[this.tweetId].abort();
+            delete window.activeStreamingRequests[this.tweetId];
+        }
 
         // Remove event listeners first to prevent errors during removal
         this.indicatorElement?.removeEventListener('mouseenter', this._handleMouseEnter);

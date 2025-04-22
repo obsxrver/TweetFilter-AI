@@ -359,7 +359,16 @@ const safetySettings = [
  * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
-async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null) {
+async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
+    if (adAuthorCache.has(authorHandle)) {
+        return {
+            score: 0,
+            content: "This tweet is from an ad author.",
+            reasoning: "",
+            error: false,
+            cached: false,
+        };
+    }
     console.log(`Given Tweet Text: 
         ${tweetText}
         And Media URLS:`);
@@ -389,7 +398,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             }]
         }]
     };
-
+    
     if (selectedModel.includes('gemini')) {
         request.config = {
             safetySettings: safetySettings,
@@ -606,14 +615,21 @@ async function rateTweet(request, apiKey) {
  * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
  */
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
+    // Check if there's already an active streaming request for this tweet
+    if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
+        console.log(`Aborting existing streaming request for tweet ${tweetId}`);
+        window.activeStreamingRequests[tweetId].abort();
+        delete window.activeStreamingRequests[tweetId];
+    }
+
     // Store initial streaming entry only if not already cached with a score
     const existingCache = tweetCache.get(tweetId);
     if (!existingCache || existingCache.score === undefined || existingCache.score === null) {
         tweetCache.set(tweetId, {
             streaming: true,
             timestamp: Date.now(),
-            tweetContent: tweetText, // Store context early
-            description: "", // Initialize fields
+            tweetContent: tweetText,
+            description: "",
             reasoning: "",
             score: null
         });

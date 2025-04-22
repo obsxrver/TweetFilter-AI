@@ -6,7 +6,7 @@ import argparse
 # Set up command line arguments
 parser = argparse.ArgumentParser(description='Combine TweetFilter-AI source files into a single userscript.')
 parser.add_argument('--nolog', action='store_true', help='Remove console.* logging statements')
-parser.add_argument('--nocomments', action='store_true', help='Remove JavaScript comments')
+parser.add_argument('--nocomment', action='store_true', help='Remove JavaScript comments')
 args = parser.parse_args()
 
 # Define the files to combine in the correct order
@@ -64,7 +64,12 @@ def remove_comments(text):
     # Remove multi-line comments /* ... */ first
     # Use [\s\S] to match any character including newline, non-greedily
     text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+    # Remove full-line comments
     text = re.sub(r'^\s*//.*$', '', text, flags=re.MULTILINE)
+    # Remove inline comments after semicolons
+    text = re.sub(r';\s*//.*$', ';', text, flags=re.MULTILINE)
+    # Remove inline comments after opening curly braces
+    text = re.sub(r'\{\s*//.*$', '{', text, flags=re.MULTILINE)
     text = re.sub(r'^\\s*\\n', '', text, flags=re.MULTILINE)
     return text
 
@@ -134,8 +139,8 @@ for js_file in files_to_combine:
         if args.nolog:
             content = remove_console_logs(content)
         
-        # Remove comments if --nocomments is specified
-        if args.nocomments:
+        # Remove comments if --nocomment is specified
+        if args.nocomment:
             content = remove_comments(content)
         
         combined_lines.append(content)
@@ -145,12 +150,16 @@ for js_file in files_to_combine:
 # Close IIFE
 combined_lines.append("})();\n")
 
+# Join all lines into a single string and remove empty lines
+combined_content = ''.join(combined_lines)
+combined_content = re.sub(r'\n\s*\n', '\n', combined_content)
+
 # Write the combined script to file
 with open(output_file, 'w', encoding='utf-8') as f:
-    f.writelines(combined_lines)
+    f.write(combined_content)
 
 status_message = f"Successfully created {output_file}"
 log_status = " (without console logs)" if args.nolog else ""
-comment_status = " (without comments)" if args.nocomments else ""
+comment_status = " (without comments)" if args.nocomment else ""
 
 print(status_message + log_status + comment_status)
