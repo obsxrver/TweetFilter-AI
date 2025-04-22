@@ -44,6 +44,7 @@ function filterSingleTweet(tweetArticle) {
         cell.classList.add('tweet-filtered');
         cell.dataset.filtered = 'true';
         tweetArticle.dataset.filtered = 'true';
+
     } else {
         // Show tweets with scores greater than threshold
         cell.classList.remove('tweet-filtered');

@@ -1929,6 +1929,7 @@ function filterSingleTweet(tweetArticle) {
         cell.classList.add('tweet-filtered');
         cell.dataset.filtered = 'true';
         tweetArticle.dataset.filtered = 'true';
+
     } else {
         cell.classList.remove('tweet-filtered');
         delete cell.dataset.filtered;
