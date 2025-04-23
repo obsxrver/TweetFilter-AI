@@ -270,7 +270,7 @@ function saveApiKey() {
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear all ratings
-        tweetCache.clear();
+        tweetCache.clear(true);
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};

@@ -1479,7 +1479,7 @@ function saveApiKey() {
 }
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
-        tweetCache.clear();
+        tweetCache.clear(true);
         if (window.threadRelationships) {
             window.threadRelationships = {};
             browserSet('threadRelationships', '{}');
