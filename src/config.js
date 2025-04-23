@@ -3,11 +3,9 @@ const processedTweets = new Set(); // Set of tweet IDs already processed in this
 const adAuthorCache = new Set(); // Cache of handles that post ads
 
 const PROCESSING_DELAY_MS = 250; // Delay before processing a tweet (ms)
-const API_CALL_DELAY_MS = 20; // Minimum delay between API calls (ms)
-let USER_DEFINED_INSTRUCTIONS = browserGet('userDefinedInstructions', `- Give high scores to insightful and impactful tweets
-- Give low scores to clickbait, fearmongering, and ragebait
-- Give high scores to high-effort content and artistic content`);
-let currentFilterThreshold = browserGet('filterThreshold', 1); // Filter threshold for tweet visibility
+const API_CALL_DELAY_MS = 25; // Minimum delay between API calls
+let USER_DEFINED_INSTRUCTIONS = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
+let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5')); // Filter threshold for tweet visibility
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
@@ -26,14 +24,13 @@ let threadHist = "";
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 
-
 // Model parameters
 const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.You will be given a Tweet and user defined instructions to rate the tweet. You are to review and provide a rating for the tweet with the specified tweet ID.Ensure that you consider the user-defined instructions in your analysis and scoring.Follow the user-defined instructions exactly, and do not deviate from them. Then, on a new line, provide a score between 0 and 10.Output your analysis first. Then, on a new line, provide a score between 0 and 10. in this exact format:SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.If one of the above is not present, the program will not be able to parse the response and will return an error.`
-let modelTemperature = browserGet('modelTemperature', 1);
-let modelTopP = browserGet('modelTopP', 1);
-let imageModelTemperature = browserGet('imageModelTemperature', 1);
-let imageModelTopP = browserGet('imageModelTopP', 1);
-let maxTokens = browserGet('maxTokens', 0); // Maximum number of tokens for API requests, 0 means no limit
+let modelTemperature = parseFloat(browserGet('modelTemperature', '0.5'));
+let modelTopP = parseFloat(browserGet('modelTopP', '0.9'));
+let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '0.5'));
+let imageModelTopP = parseFloat(browserGet('imageModelTopP', '0.9'));
+let maxTokens = parseInt(browserGet('maxTokens', '0')); // Maximum number of tokens for API requests, 0 means no limit
 // ----- DOM Selectors (for tweet elements) -----
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';

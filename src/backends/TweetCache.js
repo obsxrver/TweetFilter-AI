@@ -102,12 +102,16 @@ class TweetCache {
 
     /**
      * Clears all ratings from the cache.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or debounce.
      */
-    clear(saveImmediately = true) { // saveImmediately is now ignored
+    clear(saveImmediately = false) {
         this.cache = {};
         // Use the debounced save
-        this.debouncedSaveToStorage();
+        if (saveImmediately) {
+            this.#saveToStorageInternal();
+        } else {
+            this.debouncedSaveToStorage();
+        }
     }
 
     /**

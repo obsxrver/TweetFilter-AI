@@ -1,6 +1,6 @@
 //src/backends/InstructionsHistory.js
 /**
- * Singleton class to manage the history of custom instructions
+ * Manages the history of custom instructions
  */
 class InstructionsHistory {
     constructor() {
@@ -16,6 +16,7 @@ class InstructionsHistory {
 
     /**
      * Generates a simple hash of a string
+     * @private
      * @param {string} str - String to hash
      * @returns {string} - Hash of the string
      */
@@ -31,15 +32,18 @@ class InstructionsHistory {
 
     /**
      * Loads the history from browser storage
+     * @private
      */
     loadFromStorage() {
         try {
             const stored = browserGet('instructionsHistory', '[]');
             this.history = JSON.parse(stored);
+            
             // Ensure it's an array
             if (!Array.isArray(this.history)) {
-                this.history = [];
+                throw new Error('Stored history is not an array');
             }
+
             // Add hashes to existing entries if they don't have them
             this.history = this.history.map(entry => ({
                 ...entry,
@@ -53,56 +57,62 @@ class InstructionsHistory {
 
     /**
      * Saves the current history to browser storage
+     * @private
      */
-    saveToStorage() {
+    #saveToStorage() {
         try {
             browserSet('instructionsHistory', JSON.stringify(this.history));
         } catch (e) {
             console.error('Error saving instructions history:', e);
+            throw new Error('Failed to save instructions history');
         }
     }
 
     /**
      * Adds new instructions to the history
      * @param {string} instructions - The instructions text
-     * @param {string} summary - The 5-word summary of the instructions
+     * @param {string} summary - The summary of the instructions
      * @returns {Promise<boolean>} - Whether the operation was successful
      */
     async add(instructions, summary) {
-        if (!instructions || !summary) return false;
+        try {
+            if (!instructions?.trim() || !summary?.trim()) {
+                throw new Error('Invalid instructions or summary');
+            }
 
-        const hash = this.#hashString(instructions);
-        
-        // Check if these instructions already exist
-        const existingIndex = this.history.findIndex(entry => entry.hash === hash);
-        if (existingIndex !== -1) {
-            // Update the existing entry's timestamp and summary
-            this.history[existingIndex].timestamp = Date.now();
-            this.history[existingIndex].summary = summary;
+            const hash = this.#hashString(instructions.trim());
             
-            // Move it to the top of the list
-            const entry = this.history.splice(existingIndex, 1)[0];
-            this.history.unshift(entry);
-            
-            this.saveToStorage();
+            // Check if these instructions already exist
+            const existingIndex = this.history.findIndex(entry => entry.hash === hash);
+            if (existingIndex !== -1) {
+                // Update the existing entry's timestamp and summary
+                this.history[existingIndex].timestamp = Date.now();
+                this.history[existingIndex].summary = summary;
+                
+                // Move it to the top of the list
+                const entry = this.history.splice(existingIndex, 1)[0];
+                this.history.unshift(entry);
+            } else {
+                // Add new entry
+                this.history.unshift({
+                    instructions: instructions.trim(),
+                    summary: summary.trim(),
+                    timestamp: Date.now(),
+                    hash
+                });
+
+                // Keep only the most recent entries
+                if (this.history.length > this.maxEntries) {
+                    this.history = this.history.slice(0, this.maxEntries);
+                }
+            }
+
+            this.#saveToStorage();
             return true;
+        } catch (e) {
+            console.error('Error adding instructions to history:', e);
+            return false;
         }
-
-        // Add new entry
-        this.history.unshift({
-            instructions,
-            summary,
-            timestamp: Date.now(),
-            hash
-        });
-
-        // Keep only the most recent entries
-        if (this.history.length > this.maxEntries) {
-            this.history = this.history.slice(0, this.maxEntries);
-        }
-
-        this.saveToStorage();
-        return true;
     }
 
     /**
@@ -111,11 +121,18 @@ class InstructionsHistory {
      * @returns {boolean} - Whether the operation was successful
      */
     remove(index) {
-        if (index < 0 || index >= this.history.length) return false;
+        try {
+            if (index < 0 || index >= this.history.length) {
+                throw new Error('Invalid history index');
+            }
 
-        this.history.splice(index, 1);
-        this.saveToStorage();
-        return true;
+            this.history.splice(index, 1);
+            this.#saveToStorage();
+            return true;
+        } catch (e) {
+            console.error('Error removing instructions from history:', e);
+            return false;
+        }
     }
 
     /**
@@ -132,16 +149,28 @@ class InstructionsHistory {
      * @returns {Object|null} The history entry or null if not found
      */
     get(index) {
-        if (index < 0 || index >= this.history.length) return null;
-        return { ...this.history[index] };
+        try {
+            if (index < 0 || index >= this.history.length) {
+                return null;
+            }
+            return { ...this.history[index] };
+        } catch (e) {
+            console.error('Error getting history entry:', e);
+            return null;
+        }
     }
 
     /**
      * Clears all history
      */
     clear() {
-        this.history = [];
-        this.saveToStorage();
+        try {
+            this.history = [];
+            this.#saveToStorage();
+        } catch (e) {
+            console.error('Error clearing instructions history:', e);
+            throw new Error('Failed to clear instructions history');
+        }
     }
 
     /**
@@ -153,6 +182,3 @@ class InstructionsHistory {
     }
 }
 
-// Create and export the singleton instance
-const instructionsHistory = new InstructionsHistory();
-//export { instructionsHistory };
