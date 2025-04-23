@@ -41,7 +41,7 @@ const safetySettings = [
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
-    if (adAuthorCache.has(authorHandle)) {
+    if (window.adAuthorCache.has(authorHandle)) {
         return {
             score: 0,
             content: "This tweet is from an ad author.",
@@ -56,17 +56,17 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     console.log(mediaUrls);
     
     // Get current instructions from the manager
-    const currentInstructions = instructionsManager.getCurrentInstructions();
+    const currentInstructions = window.instructionsManager.getCurrentInstructions();
     
     // Create the request body
     const request = {
-        model: selectedModel,
+        model: window.selectedModel,
         messages: [{
             role: "system",
             content: [{
                 type: "text",
                 text: `
-                ${SYSTEM_PROMPT}`
+                ${window.SYSTEM_PROMPT}`
             },]
         },
         {
@@ -84,14 +84,14 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         }]
     };
     
-    if (selectedModel.includes('gemini')) {
+    if (window.selectedModel.includes('gemini')) {
         request.config = {
             safetySettings: safetySettings,
         };
     }
 
     // Add image URLs if present and supported
-    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
+    if (mediaUrls?.length > 0 && window.modelSupportsImages(window.selectedModel)) {
         for (const url of mediaUrls) {
             request.messages[1].content.push({
                 type: "image_url",
@@ -100,22 +100,22 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         }
     }
     // Add model parameters
-    request.temperature = modelTemperature;
-    request.top_p = modelTopP;
-    request.max_tokens = maxTokens;
+    request.temperature = window.modelTemperature;
+    request.top_p = window.modelTopP;
+    request.max_tokens = window.maxTokens;
 
     // Add provider settings only if a specific sort is selected
-    if (providerSort) {
+    if (window.providerSort) {
         request.provider = {
-            sort: providerSort,
+            sort: window.providerSort,
             allow_fallbacks: true
         };
     }
     // Check if streaming is enabled
-    const useStreaming = browserGet('enableStreaming', false);
+    const useStreaming = await window.browserGet('enableStreaming', false);
     
     // Store the streaming entry in cache
-    tweetCache.set(tweetId, {
+    window.tweetCache.set(tweetId, {
         streaming: true,
         timestamp: Date.now()
     });
@@ -127,15 +127,15 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
         // Rate limiting
         const now = Date.now();
-        const timeElapsed = now - lastAPICallTime;
-        if (timeElapsed < API_CALL_DELAY_MS) {
-            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
+        const timeElapsed = now - window.lastAPICallTime;
+        if (timeElapsed < window.API_CALL_DELAY_MS) {
+            await new Promise(resolve => setTimeout(resolve, window.API_CALL_DELAY_MS - timeElapsed));
         }
-        lastAPICallTime = now;
+        window.lastAPICallTime = now;
 
         // Update status
-        pendingRequests++;
-        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+        window.pendingRequests++;
+        window.showStatus(`Rating tweet... (${window.pendingRequests} pending)`);
         
         try {
             let result;
@@ -147,8 +147,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 result = await rateTweet(request, apiKey);
             }
             
-            pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            window.pendingRequests--;
+            window.showStatus(`Rating tweet... (${window.pendingRequests} pending)`);
             
             // Parse the result for score
             if (!result.error && result.content) {
@@ -158,7 +158,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     const score = parseInt(scoreMatch[1], 10);
                     
                     // Store the rating in cache
-                    tweetCache.set(tweetId, {
+                    window.tweetCache.set(tweetId, {
                         score: score,
                         description: result.content,
                         tweetContent: tweetText,
@@ -181,8 +181,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         } catch (error) {
-            pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            window.pendingRequests--;
+            window.showStatus(`Rating tweet... (${window.pendingRequests} pending)`);
             console.error(`API error during attempt ${attempt}:`, error);
             
             if (attempt < maxRetries) {
@@ -211,7 +211,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
  */
 async function getCustomInstructionsDescription(instructions) {
     const request={
-        model: selectedModel,
+        model: window.selectedModel,
         messages: [{
             role: "system",
             content: [{
@@ -232,8 +232,8 @@ async function getCustomInstructionsDescription(instructions) {
         }]
     }]
 }
-    let key = browserGet('openrouter-api-key');
-    const result = await getCompletion(request,key);
+    let key = await window.browserGet('openrouter-api-key');
+    const result = await window.getCompletion(request,key);
     
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
@@ -260,9 +260,9 @@ async function getCustomInstructionsDescription(instructions) {
  */
 async function rateTweet(request, apiKey) {
     const tweetId = request.tweetId;
-    const existingScore = tweetCache.get(tweetId)?.score;
+    const existingScore = window.tweetCache.get(tweetId)?.score;
 
-    const result = await getCompletion(request, apiKey);
+    const result = await window.getCompletion(request, apiKey);
     
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
@@ -270,7 +270,7 @@ async function rateTweet(request, apiKey) {
         
         // Store the rating in cache
         const scoreMatch = content.match(/SCORE_(\d+)/);
-        tweetCache.set(tweetId, {
+        window.tweetCache.set(tweetId, {
             score: existingScore || (scoreMatch ? parseInt(scoreMatch[1], 10) : null),
             description: content,
             tweetContent: request.tweetText,
@@ -310,9 +310,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
     }
 
     // Store initial streaming entry only if not already cached with a score
-    const existingCache = tweetCache.get(tweetId);
+    const existingCache = window.tweetCache.get(tweetId);
     if (!existingCache || existingCache.score === undefined || existingCache.score === null) {
-        tweetCache.set(tweetId, {
+        window.tweetCache.set(tweetId, {
             streaming: true,
             timestamp: Date.now(),
             tweetContent: tweetText,
@@ -325,13 +325,13 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
     return new Promise((resolve, reject) => {
         // Get or create the indicator instance *once*
         // Use the passed-in tweetArticle
-        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        const indicatorInstance = window.ScoreIndicatorRegistry.get(tweetId, tweetArticle);
         if (!indicatorInstance) {
              console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
              // Update cache to reflect error/non-streaming state
-             if (tweetCache.has(tweetId)) {
-                 tweetCache.get(tweetId).streaming = false;
-                 tweetCache.get(tweetId).error = "Indicator initialization failed";
+             if (window.tweetCache.has(tweetId)) {
+                 window.tweetCache.get(tweetId).streaming = false;
+                 window.tweetCache.get(tweetId).error = "Indicator initialization failed";
              }
              return reject(new Error(`ScoreIndicator instance could not be initialized for tweet ${tweetId}`));
         }
@@ -341,7 +341,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         let finalData = null;
         let finalScore = existingCache?.score || null;
         
-        getCompletionStreaming(
+        window.getCompletionStreaming(
             request,
             apiKey,
             // onChunk callback - update the ScoreIndicator instance
@@ -365,8 +365,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 });
                 
                 // Update cache with partial data during streaming
-                if (tweetCache.has(tweetId)) {
-                    const entry = tweetCache.get(tweetId);
+                if (window.tweetCache.has(tweetId)) {
+                    const entry = window.tweetCache.get(tweetId);
                     entry.description = aggregatedContent;
                     entry.reasoning = aggregatedReasoning;
                     entry.score = finalScore;
@@ -395,7 +395,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 }
 
                 // Update cache with final result (non-streaming)
-                tweetCache.set(tweetId, {
+                window.tweetCache.set(tweetId, {
                     tweetContent: tweetText,
                     score: finalScore,
                     description: aggregatedContent,
@@ -414,7 +414,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 });
                 
                 if (tweetArticle) {
-                    filterSingleTweet(tweetArticle);
+                    window.filterSingleTweet(tweetArticle);
                 }
 
                 resolve({
@@ -438,8 +438,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 });
 
                 // Update cache to reflect error
-                if (tweetCache.has(tweetId)) {
-                     const entry = tweetCache.get(tweetId);
+                if (window.tweetCache.has(tweetId)) {
+                     const entry = window.tweetCache.get(tweetId);
                      entry.streaming = false;
                      entry.error = errorData.message;
                      entry.score = 5; // Store default error score in cache too
@@ -463,4 +463,10 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
 //     rateTweet,
 //     rateTweetStreaming
 // };
+
+// Attach functions to window object
+window.rateTweetWithOpenRouter = rateTweetWithOpenRouter;
+window.getCustomInstructionsDescription = getCustomInstructionsDescription;
+window.rateTweet = rateTweet;
+window.rateTweetStreaming = rateTweetStreaming;
 

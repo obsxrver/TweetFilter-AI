@@ -1,80 +1,44 @@
-# X/Twitter De-Sloppifier
+# TweetFilter AI Chrome Extension
 
-A powerful AI-powered userscript that rates and filters tweets to enhance your Twitter/X experience.
+A highly customizable AI that rates tweets 1-10 and removes all the slop, saving your braincells!
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-General.jpg" width="800" alt="General UI"/>
-</div>
+## Features
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-SlopScore.jpg" width="800" alt="Slop Score Display" style="margin-top: 10px;"/>
-</div>
+- Rate tweets on a scale of 1-10 using AI
+- Customizable filtering threshold
+- Support for multiple AI models via OpenRouter
+- Image description capabilities
+- Custom instructions for tweet rating
+- Cached ratings for performance
+- Beautiful and intuitive UI
 
-## Key Features
+## Installation
 
-- 🧠 **AI-Powered Rating**: Rates tweets from 1-10 based on quality
-- 🎯 **Smart Filtering**: Hides low-quality content based on your threshold
-- 🖼️ **Image Analysis**: Understands images and media in tweets
-- 📝 **Custom Instructions**: Define your own rating criteria
-- 🔄 **Live Streaming**: Watch AI analyze tweets in real-time
-- 🧵 **Thread Context**: Understands full conversation context
-- ⭐ **Handle Management**: Auto-whitelist your favorite accounts
+1. Clone this repository or download the latest release
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable "Developer mode" in the top right
+4. Click "Load unpacked" and select the extension directory
 
-## Quick Start
+## Setup
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/)
-2. Install De-Sloppifier from [GreasyFork](https://greasyfork.org/en/scripts/532459-tweetfilter-ai)
-3. Get an API key from [OpenRouter](https://openrouter.ai/)
-4. Configure the script with your API key
-5. Enjoy a cleaner Twitter experience!
+1. Get an API key from [OpenRouter](https://openrouter.ai/settings/keys)
+2. Click the extension settings icon (⚙️) on Twitter/X
+3. Enter your API key in the General tab
+4. Customize your settings and start filtering!
 
-## Configuration
+## Development
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Instructions.jpg" width="400" alt="Custom Instructions" style="margin-right: 10px;"/>
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Models.jpg" width="400" alt="Model Selection" style="margin-left: 10px;"/>
-</div>
+```bash
+# Install dependencies
+npm install
 
-## Features in Detail
+# Build the extension
+npm run build
 
-### AI Rating System
-- Uses advanced language models to evaluate tweet quality
-- Considers text, images, and full conversation context
-- Live streaming shows the AI's thought process in real-time
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/Streaming-Description.jpg" width="800" alt="Live Streaming Analysis"/>
-</div>
-
-### Customization
-- Choose from multiple AI models
-- Set custom rating criteria
-- Adjust filtering threshold
-- Fine-tune model parameters
-- Whitelist favorite accounts
-
-### Thread Analysis
-- Maps conversation hierarchies
-- Analyzes full context of replies
-- Processes all media in threads
-- Optimized for performance
-
-## Requirements
-
-- Twitter/X web interface
-- Userscript manager extension
-- OpenRouter API key
-
-## Limitations
-
-- API usage based on OpenRouter plan
-- Web interface only (no mobile app support)
-- Processing time varies by model choice
+# Package for distribution
+npm run package
+```
 
 ## License
 
-MIT License
-
----
-
-Made with ❤️ for a better social media experience
+MIT License - See LICENSE file for details

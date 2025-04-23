@@ -55,7 +55,7 @@ async function injectUI() {
     // Set version number
     const versionInfo = uiContainer.querySelector('#version-info');
     if (versionInfo) {
-        versionInfo.textContent = `Twitter De-Sloppifier v${window.VERSION}`;
+        versionInfo.textContent = `Twitter De-Sloppifier v${VERSION}`;
     }
 
     return uiContainer; // Return the newly created container
@@ -104,16 +104,16 @@ function initializeEventListeners(uiContainer) {
                     clearTweetRatingsAndRefreshUI();
                     break;
                 case 'reset-settings':
-                    resetSettings(window.isMobileDevice());
+                    resetSettings(isMobileDevice());
                     break;
                 case 'save-instructions':
-                    window.saveInstructions();
+                    saveInstructions();
                     break;
                 case 'add-handle':
                     addHandleFromInput();
                     break;
                 case 'clear-instructions-history':
-                    window.clearInstructionsHistory();
+                    clearInstructionsHistory();
                     break;
             }
         }
@@ -171,7 +171,7 @@ function initializeEventListeners(uiContainer) {
         // Settings Inputs / Toggles (for selects like sort order)
         if (setting === 'modelSortOrder') {
             handleSettingChange(target, setting);
-            window.fetchAvailableModels();
+            fetchAvailableModels(); // Refresh models on sort change
         }
 
         // Settings Checkbox toggle (need change event for checkboxes)
@@ -198,8 +198,8 @@ function initializeEventListeners(uiContainer) {
     const showFreeModelsCheckbox = uiContainer.querySelector('#show-free-models');
     if (showFreeModelsCheckbox) {
         showFreeModelsCheckbox.addEventListener('change', function () {
-            window.showFreeModels = this.checked;
-            window.browserSet('showFreeModels', window.showFreeModels);
+            showFreeModels = this.checked;
+            browserSet('showFreeModels', showFreeModels);
             refreshModelsUI();
         });
     }
@@ -207,9 +207,9 @@ function initializeEventListeners(uiContainer) {
     const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
     if (sortDirectionBtn) {
         sortDirectionBtn.addEventListener('click', function () {
-            const currentDirection = window.browserGet('sortDirection', 'default');
+            const currentDirection = browserGet('sortDirection', 'default');
             const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
-            window.browserSet('sortDirection', newDirection);
+            browserSet('sortDirection', newDirection);
             this.dataset.value = newDirection;
             refreshModelsUI();
         });
@@ -218,12 +218,12 @@ function initializeEventListeners(uiContainer) {
     const modelSortSelect = uiContainer.querySelector('#model-sort-order');
     if (modelSortSelect) {
         modelSortSelect.addEventListener('change', function () {
-            window.browserSet('modelSortOrder', this.value);
+            browserSet('modelSortOrder', this.value);
             // Set default direction for latency and age
             if (this.value === 'latency-low-to-high') {
-                window.browserSet('sortDirection', 'default');
+                browserSet('sortDirection', 'default'); // Show lowest latency first
             } else if (this.value === '') { // Age
-                window.browserSet('sortDirection', 'default');
+                browserSet('sortDirection', 'default'); // Show newest first
             }
             refreshModelsUI();
         });
@@ -232,8 +232,8 @@ function initializeEventListeners(uiContainer) {
     const providerSortSelect = uiContainer.querySelector('#provider-sort');
     if (providerSortSelect) {
         providerSortSelect.addEventListener('change', function () {
-            window.providerSort = this.value;
-            window.browserSet('providerSort', window.providerSort);
+            providerSort = this.value;
+            browserSet('providerSort', providerSort);
         });
     }
 
@@ -246,15 +246,15 @@ function initializeEventListeners(uiContainer) {
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
-    let previousAPIKey = window.browserGet('openrouter-api-key', '').length > 0 ? true : false;
+    let previousAPIKey = browserGet('openrouter-api-key', '').length > 0 ? true : false;
     if (apiKey) {
         if (!previousAPIKey) {
             resetSettings(true);
             //jank hack to get the UI defaults to load correctly
         }
-        window.browserSet('openrouter-api-key', apiKey);
+        browserSet('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
-        window.fetchAvailableModels();
+        fetchAvailableModels(); // Refresh model list
         //refresh the website
         location.reload();
     } else {
@@ -264,13 +264,13 @@ function saveApiKey() {
 
 /** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
-    if (window.isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
+    if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear all ratings
-        window.tweetCache.clear();
+        tweetCache.clear();
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};
-            window.browserSet('threadRelationships', '{}');
+            browserSet('threadRelationships', '{}');
             console.log('Cleared thread relationships cache');
         }
 
@@ -278,8 +278,8 @@ function clearTweetRatingsAndRefreshUI() {
         console.log('Cleared all tweet ratings and thread relationships');
 
         // Reset all tweet elements to unrated state and reprocess them
-        if (window.observedTargetNode) {
-            window.observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
+        if (observedTargetNode) {
+            observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
                 tweet.removeAttribute('data-sloppiness-score');
                 tweet.removeAttribute('data-rating-status');
                 tweet.removeAttribute('data-rating-description');
@@ -289,15 +289,15 @@ function clearTweetRatingsAndRefreshUI() {
                     indicator.remove();
                 }
                 // Remove from processed set and schedule reprocessing
-                const tweetId = window.getTweetID(tweet);
-                if (tweetId) {
-                    window.processedTweets.delete(tweetId);
+                const tweetId = getTweetID(tweet); // Get ID *before* potential errors
+                if (tweetId) { // Ensure we have an ID
+                    processedTweets.delete(tweetId);
                     // Explicitly destroy the old ScoreIndicator instance from the registry
-                    const indicatorInstance = window.ScoreIndicatorRegistry.get(tweetId);
+                    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
                     if (indicatorInstance) {
                         indicatorInstance.destroy();
                     }
-                    window.scheduleTweetProcessing(tweet);
+                    scheduleTweetProcessing(tweet); // Now schedule processing
                 }
             });
         }
@@ -341,7 +341,7 @@ function handleSettingChange(target, settingName) {
         window[settingName] = value;
     }
     // Save to GM storage
-    window.browserSet(settingName, value);
+    browserSet(settingName, value);
     // Special UI updates for specific settings
     if (settingName === 'enableImageDescriptions') {
         const imageModelContainer = document.getElementById('image-model-container');
@@ -384,7 +384,7 @@ function handleParameterChange(target, paramName) {
     }
 
     // Save to GM storage
-    window.browserSet(paramName, newValue);
+    browserSet(paramName, newValue);
 }
 
 /**
@@ -393,17 +393,17 @@ function handleParameterChange(target, paramName) {
  */
 function handleFilterSliderChange(slider) {
     const valueInput = document.getElementById('tweet-filter-value');
-    window.currentFilterThreshold = parseInt(slider.value, 10);
+    currentFilterThreshold = parseInt(slider.value, 10);
     if (valueInput) {
-        valueInput.value = window.currentFilterThreshold.toString();
+        valueInput.value = currentFilterThreshold.toString();
     }
 
     // Update the gradient position based on the slider value
-    const percentage = (window.currentFilterThreshold / 10) * 100;
+    const percentage = (currentFilterThreshold / 10) * 100;
     slider.style.setProperty('--slider-percent', `${percentage}%`);
 
-    window.browserSet('filterThreshold', window.currentFilterThreshold);
-    window.applyFilteringToAll();
+    browserSet('filterThreshold', currentFilterThreshold);
+    applyFilteringToAll();
 }
 
 /**
@@ -424,9 +424,9 @@ function handleFilterValueInput(input) {
         slider.style.setProperty('--slider-percent', `${percentage}%`);
     }
 
-    window.currentFilterThreshold = value;
-    window.browserSet('filterThreshold', window.currentFilterThreshold);
-    window.applyFilteringToAll();
+    currentFilterThreshold = value;
+    browserSet('filterThreshold', currentFilterThreshold);
+    applyFilteringToAll();
 }
 
 /**
@@ -482,7 +482,7 @@ function refreshSettingsUI() {
     // Update general settings inputs/toggles
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
-        const value = window.browserGet(settingName, window[settingName]);
+        const value = browserGet(settingName, window[settingName]); // Get saved or default value
         if (input.type === 'checkbox') {
             input.checked = value;
             // Trigger change handler for side effects (like hiding/showing image model section)
@@ -497,7 +497,7 @@ function refreshSettingsUI() {
         const paramName = row.dataset.paramName;
         const slider = row.querySelector('.parameter-slider');
         const valueInput = row.querySelector('.parameter-value');
-        const value = window.browserGet(paramName, window[paramName]);
+        const value = browserGet(paramName, window[paramName]);
 
         if (slider) slider.value = value;
         if (valueInput) valueInput.value = value;
@@ -506,7 +506,7 @@ function refreshSettingsUI() {
     // Update filter slider and value input
     const filterSlider = document.getElementById('tweet-filter-slider');
     const filterValueInput = document.getElementById('tweet-filter-value');
-    const currentThreshold = window.browserGet('filterThreshold', '5');
+    const currentThreshold = browserGet('filterThreshold', '5');
 
     if (filterSlider && filterValueInput) {
         filterSlider.value = currentThreshold;
@@ -518,7 +518,7 @@ function refreshSettingsUI() {
 
     // Refresh dynamically populated lists/dropdowns
     refreshHandleList(document.getElementById('handle-list'));
-    refreshModelsUI();
+    refreshModelsUI(); // Refreshes model dropdowns
 
     // Set initial state for advanced sections (collapsed by default unless CSS specifies otherwise)
     document.querySelectorAll('.advanced-content').forEach(content => {
@@ -546,7 +546,7 @@ function refreshHandleList(listElement) {
 
     listElement.innerHTML = ''; // Clear existing list
 
-    if (window.blacklistedHandles.length === 0) {
+    if (blacklistedHandles.length === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.style.cssText = 'padding: 8px; opacity: 0.7; font-style: italic;';
         emptyMsg.textContent = 'No handles added yet';
@@ -554,7 +554,7 @@ function refreshHandleList(listElement) {
         return;
     }
 
-    window.blacklistedHandles.forEach(handle => {
+    blacklistedHandles.forEach(handle => {
         const item = document.createElement('div');
         item.className = 'handle-item';
 
@@ -582,16 +582,16 @@ function refreshModelsUI() {
     const imageModelSelectContainer = document.getElementById('image-model-select-container');
 
     // Filter and sort models
-    window.listedModels = [...window.availableModels];
+    listedModels = [...availableModels];
 
     // Filter free models if needed
-    if (!window.showFreeModels) {
-        window.listedModels = window.listedModels.filter(model => !model.slug.endsWith(':free'));
+    if (!showFreeModels) {
+        listedModels = listedModels.filter(model => !model.slug.endsWith(':free'));
     }
 
     // Sort models based on current sort order and direction
-    const sortDirection = window.browserGet('sortDirection', 'default');
-    const sortOrder = window.browserGet('modelSortOrder', 'throughput-high-to-low');
+    const sortDirection = browserGet('sortDirection', 'default');
+    const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
 
     // Update toggle button text based on sort order
     const toggleBtn = document.getElementById('sort-direction');
@@ -599,19 +599,19 @@ function refreshModelsUI() {
         switch (sortOrder) {
             case 'latency-low-to-high':
                 toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
-                if (sortDirection === 'reverse') window.listedModels.reverse();
+                if (sortDirection === 'reverse') listedModels.reverse();
                 break;
             case '': // Age
                 toggleBtn.textContent = sortDirection === 'default' ? 'New-Old' : 'Old-New';
-                if (sortDirection === 'reverse') window.listedModels.reverse();
+                if (sortDirection === 'reverse') listedModels.reverse();
                 break;
             case 'top-weekly':
                 toggleBtn.textContent = sortDirection === 'default' ? 'Most Popular' : 'Least Popular';
-                if (sortDirection === 'reverse') window.listedModels.reverse();
+                if (sortDirection === 'reverse') listedModels.reverse();
                 break;
             default:
                 toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
-                if (sortDirection === 'reverse') window.listedModels.reverse();
+                if (sortDirection === 'reverse') listedModels.reverse();
         }
     }
 
@@ -621,11 +621,11 @@ function refreshModelsUI() {
         createCustomSelect(
             modelSelectContainer,
             'model-selector',
-            window.listedModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
-            window.selectedModel,
+            listedModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            selectedModel,
             (newValue) => {
-                window.selectedModel = newValue;
-                window.browserSet('selectedModel', window.selectedModel);
+                selectedModel = newValue;
+                browserSet('selectedModel', selectedModel);
                 showStatus('Rating model updated');
             },
             'Search rating models...'
@@ -634,7 +634,7 @@ function refreshModelsUI() {
 
     // Update image model selector
     if (imageModelSelectContainer) {
-        const visionModels = window.listedModels.filter(model =>
+        const visionModels = listedModels.filter(model =>
             model.input_modalities?.includes('image') ||
             model.architecture?.input_modalities?.includes('image') ||
             model.architecture?.modality?.includes('image')
@@ -645,10 +645,10 @@ function refreshModelsUI() {
             imageModelSelectContainer,
             'image-model-selector',
             visionModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
-            window.selectedImageModel,
+            selectedImageModel,
             (newValue) => {
-                window.selectedImageModel = newValue;
-                window.browserSet('selectedImageModel', window.selectedImageModel);
+                selectedImageModel = newValue;
+                browserSet('selectedImageModel', selectedImageModel);
                 showStatus('Image model updated');
             },
             'Search vision models...'
@@ -819,7 +819,7 @@ function closeAllSelectBoxes(exceptThisOne = null) {
  */
 function resetSettings(noconfirm = false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
-        window.tweetCache.clear();
+        tweetCache.clear();
 
         // Define defaults (should match config.js ideally)
         const defaults = {
@@ -842,11 +842,11 @@ function resetSettings(noconfirm = false) {
             if (window[key] !== undefined) {
                 window[key] = defaults[key];
             }
-            window.browserSet(key, defaults[key]);
+            browserSet(key, defaults[key]);
         }
 
         refreshSettingsUI();
-        window.fetchAvailableModels();
+        fetchAvailableModels();
         showStatus('Settings reset to defaults');
     }
 }
@@ -859,12 +859,12 @@ function resetSettings(noconfirm = false) {
  */
 function addHandleToBlacklist(handle) {
     handle = handle.trim().replace(/^@/, ''); // Clean handle
-    if (handle === '' || window.blacklistedHandles.includes(handle)) {
+    if (handle === '' || blacklistedHandles.includes(handle)) {
         showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
         return;
     }
-    window.blacklistedHandles.push(handle);
-    window.browserSet('blacklistedHandles', window.blacklistedHandles.join('\n'));
+    blacklistedHandles.push(handle);
+    browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
     refreshHandleList(document.getElementById('handle-list'));
     showStatus(`Added @${handle} to auto-rate list.`);
 }
@@ -874,10 +874,10 @@ function addHandleToBlacklist(handle) {
  * @param {string} handle - The Twitter handle to remove (without @).
  */
 function removeHandleFromBlacklist(handle) {
-    const index = window.blacklistedHandles.indexOf(handle);
+    const index = blacklistedHandles.indexOf(handle);
     if (index > -1) {
-        window.blacklistedHandles.splice(index, 1);
-        window.browserSet('blacklistedHandles', window.blacklistedHandles.join('\n'));
+        blacklistedHandles.splice(index, 1);
+        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
         refreshHandleList(document.getElementById('handle-list'));
         showStatus(`Removed @${handle} from auto-rate list.`);
     } else console.warn(`Attempted to remove non-existent handle: ${handle}`);
@@ -895,7 +895,7 @@ function initialiseUI() {
 
     initializeEventListeners(uiContainer);
     refreshSettingsUI();
-    window.fetchAvailableModels();
+    fetchAvailableModels();
 
     // Initialize the floating cache stats badge
     initializeFloatingCacheStats();

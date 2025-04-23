@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "TweetFilter AI",
+  "version": "1.4",
+  "description": "Filter and rate tweets using AI to improve your X/Twitter experience",
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://twitter.com/*",
+    "https://x.com/*",
+    "https://openrouter.ai/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://openrouter.ai/;"
+  },
+  "action": {
+    "default_popup": "src/Menu.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://twitter.com/*", "https://x.com/*"],
+      "css": ["src/style.css"],
+      "js": [
+        "src/helpers/browserStorage.js",
+        "src/helpers/cache.js",
+        "src/backends/TweetCache.js",
+        "src/backends/InstructionsHistory.js",
+        "src/backends/InstructionsManager.js",
+        "src/config.js",
+        "src/domScraper.js",
+        "src/ui/utils.js",
+        "src/ui/InstructionsUI.js",
+        "src/ui/ScoreIndicator.js",
+        "src/ui/ui.js",
+        "src/ratingEngine.js",
+        "src/content.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [{
+    "resources": ["src/Menu.html"],
+    "matches": ["https://twitter.com/*", "https://x.com/*"]
+  }]
+} 

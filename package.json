@@ -1,0 +1,12 @@
+{
+  "name": "tweetfilter-ai",
+  "version": "1.4.0",
+  "description": "A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!",
+  "author": "Obsxrver(3than)",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "if not exist dist mkdir dist && xcopy src dist\\src /E /I /Y && copy manifest.json dist\\manifest.json /Y",
+    "package": "cd dist && zip -r ../tweetfilter-ai.zip ."
+  }
+} 

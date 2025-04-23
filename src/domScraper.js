@@ -1,9 +1,12 @@
 //src/domScraper.js
+
+// --- Global Helper Functions ---
+
 /**
-     * Extracts and returns trimmed text content from the given element(s).
-     * @param {Node|NodeList} elements - A DOM element or a NodeList.
-     * @returns {string} The trimmed text content.
-     */
+ * Extracts and returns trimmed text content from the given element(s).
+ * @param {Node|NodeList} elements - A DOM element or a NodeList.
+ * @returns {string} The trimmed text content.
+ */
 function getElementText(elements) {
     if (!elements) return '';
     const elementList = elements instanceof NodeList ? Array.from(elements) : [elements];
@@ -13,23 +16,34 @@ function getElementText(elements) {
     }
     return '';
 }
+window.getElementText = getElementText;
+
 /**
  * Extracts the tweet ID from a tweet article element.
  * @param {Element} tweetArticle - The tweet article element.
  * @returns {string} The tweet ID.
  */
 function getTweetID(tweetArticle) {
-    const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
+    const timeEl = tweetArticle.querySelector(window.PERMALINK_SELECTOR);
     let tweetId = timeEl?.parentElement?.href;
     if (tweetId && tweetId.includes('/status/')) {
         const match = tweetId.match(/\/status\/(\d+)/);
         if (match && match[1]) {
             return match[1];
         }
-        return tweetId.substring(tweetId.indexOf('/status/') + 1);
+        // Fallback if regex fails but /status/ is present
+        const statusIndex = tweetId.indexOf('/status/');
+        if (statusIndex !== -1) {
+            const potentialId = tweetId.substring(statusIndex + 8);
+            if (/^\d+$/.test(potentialId)) {
+                return potentialId;
+            }
+        }
     }
+    // Generate a unique ID if extraction fails
     return `tweet-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
 }
+window.getTweetID = getTweetID;
 
 /**
  * Extracts the Twitter handle from a tweet article element.
@@ -40,7 +54,7 @@ function getUserHandles(tweetArticle) {
     let handles = [];
     
     // Extract the main author's handle - take only the first one
-    const handleElement = tweetArticle.querySelector(USER_HANDLE_SELECTOR);
+    const handleElement = tweetArticle.querySelector(window.USER_HANDLE_SELECTOR);
     if (handleElement) {
         const href = handleElement.getAttribute('href');
         if (href && href.startsWith('/')) {
@@ -50,7 +64,7 @@ function getUserHandles(tweetArticle) {
     
     // If we have the main author's handle, try to get the quoted author
     if (handles.length > 0) {
-        const quoteContainer = tweetArticle.querySelector('div[role="link"][tabindex="0"]');
+        const quoteContainer = tweetArticle.querySelector(window.QUOTE_CONTAINER_SELECTOR);
         if (quoteContainer) {
             // Look for a div with data-testid="UserAvatar-Container-username"
             const userAvatarDiv = quoteContainer.querySelector('div[data-testid^="UserAvatar-Container-"]');
@@ -84,10 +98,12 @@ function getUserHandles(tweetArticle) {
     // Return non-empty array or [''] if no handles found
     return handles.length > 0 ? handles : [''];
 }
+window.getUserHandles = getUserHandles;
+
 /**
  * Extracts and returns an array of media URLs from the tweet element.
  * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs.
+ * @returns {Promise<string[]>} An array of media URLs.
  */
 async function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
@@ -95,8 +111,8 @@ async function extractMediaLinks(scopeElement) {
     const mediaLinks = new Set();
     
     // Find all images and videos in the tweet
-    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
-    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    const imgSelector = `${window.MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
+    const videoSelector = `${window.MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
     const combinedSelector = `${imgSelector}, ${videoSelector}`;
     
     // --- Retry Logic --- 
@@ -104,16 +120,14 @@ async function extractMediaLinks(scopeElement) {
     const RETRY_DELAY = 100; // ms
     let retries = 0;
 
-    while (mediaElements.length === 0 && retries < MAX_RETRIES) {
+    while (mediaElements.length === 0 && retries < window.MAX_RETRIES) {
         retries++;
-        // console.log(`[extractMediaLinks] Retry ${retries}/${MAX_RETRIES} for media in:`, scopeElement); 
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         mediaElements = scopeElement.querySelectorAll(combinedSelector);
     }
-    // --- End Retry Logic ---
     
     // If no media found after retries and this is a quoted tweet, try more aggressive selectors
-    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
+    if (mediaElements.length === 0 && scopeElement.matches(window.QUOTE_CONTAINER_SELECTOR)) {
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
     
@@ -151,19 +165,13 @@ async function extractMediaLinks(scopeElement) {
     
     return Array.from(mediaLinks);
 }
-
-// ----- Rating Indicator Functions -----
+window.extractMediaLinks = extractMediaLinks;
 
 /**
- * Processes a single tweet after a delay.
- * It first sets a pending indicator, then either applies a cached rating,
- * or calls the API to rate the tweet (with retry logic).
- * Finally, it applies the filtering logic.
+ * Helper function to determine if a tweet is the original tweet in a conversation.
  * @param {Element} tweetArticle - The tweet element.
- * @param {string} tweetId - The tweet ID.
+ * @returns {boolean} Whether the tweet is the original in a conversation.
  */
-// Helper function to determine if a tweet is the original tweet in a conversation.
-// We check if the tweet article has a following sibling with data-testid="inline_reply_offscreen".
 function isOriginalTweet(tweetArticle) {
     let sibling = tweetArticle.nextElementSibling;
     while (sibling) {
@@ -174,142 +182,141 @@ function isOriginalTweet(tweetArticle) {
     }
     return false;
 }
+window.isOriginalTweet = isOriginalTweet;
 
 /**
- * Handles DOM mutations to detect new tweets added to the timeline.
- * @param {MutationRecord[]} mutationsList - List of observed mutations.
- */
-function handleMutations(mutationsList) {
-    let tweetsAdded = false;
-    let needsCleanup = false;
-
-    
-
-    const shouldSkipProcessing = (element) => {
-        if (!element) return true;
-        
-        // Skip if the element itself is marked as filtered or ad
-        if (element.dataset?.filtered === 'true' || element.dataset?.isAd === 'true') {
-            return true;
-        }
-
-        // Skip if the cell is marked as filtered or ad
-        const cell = element.closest('div[data-testid="cellInnerDiv"]');
-        if (cell?.dataset?.filtered === 'true' || cell?.dataset?.isAd === 'true') {
-            return true;
-        }
-
-        // Skip if it's an ad
-        if (isAd(element)) {
-            // Mark it as an ad and filter it
-            if (cell) {
-                cell.dataset.isAd = 'true';
-                cell.classList.add('tweet-filtered');
-            }
-            element.dataset.isAd = 'true';
-            return true;
-        }
-
-        // Skip if it's already in processedTweets and not an error
-        const tweetId = getTweetID(element);
-        if (processedTweets.has(tweetId)) {
-            const indicator = ScoreIndicatorRegistry.get(tweetId);
-            if (indicator && indicator.status !== 'error') {
-                return true;
-            }
-        }
-
-        return false;
-    };
-
-    for (const mutation of mutationsList) {
-        if (mutation.type === 'childList') {
-            // Process added nodes
-            if (mutation.addedNodes.length > 0) {
-                mutation.addedNodes.forEach(node => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
-                            if (!shouldSkipProcessing(node)) {
-                                scheduleTweetProcessing(node);
-                                tweetsAdded = true;
-                            }
-                        }
-                        else if (node.querySelector) {
-                            const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                            tweetsInside.forEach(tweet => {
-                                if (!shouldSkipProcessing(tweet)) {
-                                    scheduleTweetProcessing(tweet);
-                                    tweetsAdded = true;
-                                }
-                            });
-                        }
-                    }
-                });
-            }
-
-            // Process removed nodes to clean up description elements
-            if (mutation.removedNodes.length > 0) {
-                mutation.removedNodes.forEach(node => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        // Skip cleanup for filtered tweets and ads
-                        if (node.dataset?.filtered === 'true' || node.dataset?.isAd === 'true') {
-                            return;
-                        }
-                        
-                        // Check if the removed node is a tweet article
-                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
-                            const tweetId = getTweetID(node);
-                            if (tweetId) {
-                                ScoreIndicatorRegistry.get(tweetId)?.destroy();
-                                needsCleanup = true;
-                            }
-                        }
-                        // Check if the removed node contains tweet articles
-                        else if (node.querySelectorAll) {
-                            const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-                            removedTweets.forEach(tweet => {
-                                if (tweet.dataset?.filtered === 'true' || tweet.dataset?.isAd === 'true') {
-                                    return;
-                                }
-                                const tweetId = getTweetID(tweet);
-                                if (tweetId) {
-                                    ScoreIndicatorRegistry.get(tweetId)?.destroy();
-                                    needsCleanup = true;
-                                }
-                            });
-                        }
-                    }
-                });
-            }
-        }
-    }
-    
-    // If any tweets were added, ensure filtering is applied
-    if (tweetsAdded) {
-        setTimeout(() => {
-            applyFilteringToAll();
-        }, 100);
-    }
-
-    // If cleanup is needed, call the registry cleanup function
-    if (needsCleanup) {
-        ScoreIndicatorRegistry.cleanupOrphaned();
-    }
-}
-
-/**
- * Checks if a tweet article is an advertisement.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {boolean} True if the tweet is an ad.
+ * Checks if a tweet is an advertisement.
+ * @param {Element} tweetArticle - The tweet element.
+ * @returns {boolean} Whether the tweet is an ad.
  */
 function isAd(tweetArticle) {
-    if (!tweetArticle) return false;
-    // Look for any span that contains exactly "Ad" and nothing else
-    const spans = tweetArticle.querySelectorAll('div[dir="ltr"] span');
-    for (const span of spans) {
-        if (span.textContent.trim() === 'Ad' && !span.children.length) {
-            return true;
+    // Check for promoted tweet indicator
+    const promotedSpan = tweetArticle.querySelector('span[data-testid="promotedIndicator"]');
+    if (promotedSpan) return true;
+
+    // Check for ad author in cache
+    const handles = window.getUserHandles(tweetArticle); // Use global
+    return handles.some(handle => window.adAuthorCache.has(handle));
+}
+window.isAd = isAd;
+
+// --- Scraper Setup ---
+
+/**
+ * Sets up the DOM scraper with the given rating engine
+ * @param {Object} ratingEngine - The rating engine instance
+ * @returns {Object} - The scraper interface
+ */
+function setupDOMScraper(ratingEngine) {
+    /**
+     * Handles DOM mutations to detect new tweets added to the timeline.
+     * @param {MutationRecord[]} mutationsList - List of observed mutations.
+     */
+    function handleMutations(mutationsList) {
+        let tweetsAdded = false;
+        let needsCleanup = false;
+
+        const shouldSkipProcessing = (element) => {
+            if (!element) return true;
+            
+            // Skip if the element itself is marked as filtered or ad
+            if (element.dataset?.filtered === 'true' || element.dataset?.isAd === 'true') {
+                return true;
+            }
+
+            // Skip if the cell is marked as filtered or ad
+            const cell = element.closest('div[data-testid="cellInnerDiv"]');
+            if (cell?.dataset?.filtered === 'true' || cell?.dataset?.isAd === 'true') {
+                return true;
+            }
+
+            return false;
+        };
+
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'childList') {
+                // Process added nodes
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check for tweet articles
+                        const tweets = node.matches(window.TWEET_ARTICLE_SELECTOR) ? 
+                            [node] : 
+                            Array.from(node.querySelectorAll(window.TWEET_ARTICLE_SELECTOR));
+                        
+                        tweets.forEach(tweet => {
+                            if (!shouldSkipProcessing(tweet)) {
+                                const tweetId = window.getTweetID(tweet); // Use global
+                                if (!window.processedTweets.has(tweetId)) {
+                                    window.processedTweets.add(tweetId);
+                                    ratingEngine.processTweet(tweet, tweetId);
+                                    tweetsAdded = true;
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // Check for removed nodes
+                mutation.removedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        needsCleanup = true;
+                    }
+                });
+            }
+        }
+
+        // If tweets were added, ensure all are rated
+        if (tweetsAdded) {
+            ratingEngine.ensureAllTweetsRated();
+        }
+
+        // If nodes were removed, clean up filtered tweets
+        if (needsCleanup) {
+            ratingEngine.applyFilteringToAll();
         }
     }
-    return false;
+
+    /**
+     * Starts monitoring the DOM for new tweets
+     */
+    function startMonitoring() {
+        // Create an observer instance
+        const observer = new MutationObserver(handleMutations);
+
+        // Start observing the target node for configured mutations
+        const config = { childList: true, subtree: true };
+        
+        // Find the main timeline element
+        const timeline = document.querySelector('div[data-testid="primaryColumn"]');
+        if (timeline) {
+            window.observedTargetNode = timeline;
+            observer.observe(timeline, config);
+            
+            // Process any existing tweets
+            const existingTweets = timeline.querySelectorAll(window.TWEET_ARTICLE_SELECTOR);
+            existingTweets.forEach(tweet => {
+                const tweetId = window.getTweetID(tweet); // Use global
+                if (!window.processedTweets.has(tweetId)) {
+                    window.processedTweets.add(tweetId);
+                    ratingEngine.processTweet(tweet, tweetId);
+                }
+            });
+        }
+    }
+
+    // Return the public interface (still includes them for potential future refactoring)
+    return {
+        startMonitoring,
+        getTweetID: window.getTweetID,
+        getUserHandles: window.getUserHandles,
+        extractMediaLinks: window.extractMediaLinks,
+        isOriginalTweet: window.isOriginalTweet,
+        isAd: window.isAd,
+        getElementText: window.getElementText
+    };
 }
+
+// Expose setup function to window object
+window.setupDOMScraper = setupDOMScraper;
+
+console.log("!!! domScraper.js finished attaching globals !!!");

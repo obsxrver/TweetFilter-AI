@@ -56,7 +56,6 @@ async function getCompletion(request, apiKey, timeout = 30000) {
         };
     }
 }
-window.getCompletion = getCompletion;
 
 /**
  * Gets a streaming completion from OpenRouter API
@@ -240,21 +239,20 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
         }
     };
 }
-window.getCompletionStreaming = getCompletionStreaming;
 
 /**
  * Fetches the list of available models from the OpenRouter API.
  * Uses the stored API key, and updates the model selector upon success.
  */
 async function fetchAvailableModels() {
-    const apiKey = await window.browserGet('openrouter-api-key', '');
+    const apiKey = await browserGet('openrouter-api-key', '');
     if (!apiKey) {
-        window.showStatus('Please enter your OpenRouter API key');
+        showStatus('Please enter your OpenRouter API key');
         return;
     }
     
-    window.showStatus('Fetching available models...');
-    const sortOrder = await window.browserGet('modelSortOrder', 'throughput-high-to-low');
+    showStatus('Fetching available models...');
+    const sortOrder = await browserGet('modelSortOrder', 'throughput-high-to-low');
     
     try {
         const response = await fetch(`https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`, {
@@ -280,15 +278,14 @@ async function fetchAvailableModels() {
             }
             availableModels = filteredModels || [];
             listedModels = [...availableModels]; // Initialize listedModels
-            window.refreshModelsUI();
-            window.showStatus('Models updated!');
+            refreshModelsUI();
+            showStatus('Models updated!');
         }
     } catch (error) {
         console.error('Error fetching models:', error);
-        window.showStatus('Error fetching models!');
+        showStatus('Error fetching models!');
     }
 }
-window.fetchAvailableModels = fetchAvailableModels;
 
 /**
  * Gets descriptions for images using the OpenRouter API
@@ -300,14 +297,14 @@ window.fetchAvailableModels = fetchAvailableModels;
  * @returns {Promise<string>} Combined image descriptions
  */
 async function getImageDescription(urls, apiKey, tweetId, userHandle) {
-    if (!urls?.length || !window.enableImageDescriptions) {
-        return !window.enableImageDescriptions ? '[Image descriptions disabled]' : '';
+    if (!urls?.length || !enableImageDescriptions) {
+        return !enableImageDescriptions ? '[Image descriptions disabled]' : '';
     }
 
     let descriptions = [];
     for (const url of urls) {
         const request = {
-            model: window.selectedImageModel,
+            model: selectedImageModel,
             messages: [{
                 role: "user",
                 content: [
@@ -321,18 +318,18 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                     }
                 ]
             }],
-            temperature: window.imageModelTemperature,
-            top_p: window.imageModelTopP,
-            max_tokens: window.maxTokens,
+            temperature: imageModelTemperature,
+            top_p: imageModelTopP,
+            max_tokens: maxTokens,
         };
-        if (window.selectedImageModel.includes('gemini')) {
+        if (selectedImageModel.includes('gemini')) {
             request.config = {
-                safetySettings: window.safetySettings,
+                safetySettings: safetySettings,
             }
         }
-        if (window.providerSort) {
+        if (providerSort) {
             request.provider = {
-                sort: window.providerSort,
+                sort: providerSort,
                 allow_fallbacks: true
             };
         }
@@ -346,4 +343,11 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
 
     return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
 }
-window.getImageDescription = getImageDescription; 
+
+// Export the functions
+export {
+    getCompletion,
+    getCompletionStreaming,
+    fetchAvailableModels,
+    getImageDescription
+}; 
