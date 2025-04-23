@@ -292,7 +292,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
 
                         // Update UI using cached data
                         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                            status: currentCache.fromStorage ? 'cached' : 'rated', // Determine status based on cache source
+                            status: currentCache.fromStorage ? 'cached' : 'rated',
                             score: score,
                             description: description,
                             reasoning: reasoning
@@ -385,7 +385,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             if (indicatorInstance && indicatorInstance.status !== 'error') {
                 indicatorInstance.update({
                     status: 'error',
-                    score: 5, // Default error score
+                    score: 5,
                     description: "Error during processing: " + error.message
                 });
             }

@@ -18,15 +18,19 @@ files_to_combine = [
     "backends/TweetCache.js",
     # Backend logic
     "backends/InstructionsHistory.js",
+    "backends/InstructionsManager.js",
+
     # Configuration
     "config.js",
     # Core DOM/UI definitions needed by ScoreIndicator
     "domScraper.js",
-    "ui.js", 
-    # The new class definition
+    "ui/utils.js",
+    "ui/InstructionsUI.js",
     "ui/ScoreIndicator.js",
+    "ui/ui.js", 
     "ratingEngine.js",
-    "api.js", 
+    "api/api_requests.js",
+    "api/api.js", 
     # Main script file (header excluded, contains initialization)
     "twitter-desloppifier.js", 
 ]
