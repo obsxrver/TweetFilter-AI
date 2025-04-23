@@ -2,11 +2,13 @@
 import os
 import re
 import argparse
+import requests
 
 # Set up command line arguments
 parser = argparse.ArgumentParser(description='Combine TweetFilter-AI source files into a single userscript.')
 parser.add_argument('--nolog', action='store_true', help='Remove console.* logging statements')
 parser.add_argument('--nocomment', action='store_true', help='Remove JavaScript comments')
+parser.add_argument('--minify', action='store_true', help='Create an additional minified version of the script')
 args = parser.parse_args()
 
 # Define the files to combine in the correct order
@@ -91,6 +93,9 @@ for line in header_lines:
     if not line.strip().startswith("// @require") and not line.strip().startswith("// @resource"):
         filtered_header.append(line)
 
+# Store header for later use
+userscript_header = ''.join(filtered_header)
+
 # Start building the combined script
 combined_lines = filtered_header
 
@@ -158,12 +163,36 @@ combined_lines.append("})();\n")
 combined_content = ''.join(combined_lines)
 combined_content = re.sub(r'\n\s*\n', '\n', combined_content)
 
-# Write the combined script to file
+# Always write the non-minified version
+output_file = "TweetFilter-AI.user.js"
 with open(output_file, 'w', encoding='utf-8') as f:
     f.write(combined_content)
 
 status_message = f"Successfully created {output_file}"
 log_status = " (without console logs)" if args.nolog else ""
 comment_status = " (without comments)" if args.nocomment else ""
+
+# Create minified version if requested
+if args.minify:
+    try:
+        print("Minifying JavaScript code...")
+        # Remove header before minifying
+        code_without_header = combined_content[len(userscript_header):]
+        
+        response = requests.post(
+            'https://www.toptal.com/developers/javascript-minifier/api/raw',
+            data=dict(input=code_without_header)
+        )
+        if response.status_code == 200:
+            minified_output = "TweetFilter-AI.minified.user.js"
+            with open(minified_output, 'w', encoding='utf-8') as f:
+                # Write header first, then minified code
+                f.write(userscript_header)
+                f.write(response.text)
+            print(f"Successfully created {minified_output} (minified)")
+        else:
+            print(f"Warning: Minification failed with status code {response.status_code}")
+    except Exception as e:
+        print(f"Warning: Minification failed with error: {str(e)}")
 
 print(status_message + log_status + comment_status)

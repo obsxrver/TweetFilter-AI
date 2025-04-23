@@ -1338,7 +1338,8 @@ function initializeEventListeners(uiContainer) {
     const filterToggleBtn = uiContainer.querySelector('#filter-toggle');
     uiContainer.addEventListener('click', (event) => {
         const target = event.target;
-        const action = target.dataset.action;
+        const actionElement = target.closest('[data-action]');
+        const action = actionElement?.dataset.action;
         const setting = target.dataset.setting;
         const paramName = target.closest('.parameter-row')?.dataset.paramName;
         const tab = target.dataset.tab;
