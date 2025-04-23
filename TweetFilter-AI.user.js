@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.4
+// @version      Version 1.4.1
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -3491,7 +3491,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
     });
 }
     // ----- twitter-desloppifier.js -----
-const VERSION = '1.4'; 
+const VERSION = '1.4.1'; 
 (function () {
     'use strict';
     let menuhtml = GM_getResourceText("MENU_HTML");
