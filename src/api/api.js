@@ -41,6 +41,12 @@ const safetySettings = [
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
+    // Add a cleanup function to ensure pendingRequests is always decremented
+    const cleanupRequest = () => {
+        pendingRequests = Math.max(0, pendingRequests - 1); // Ensure it never goes below 0
+        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+    };
+
     if (adAuthorCache.has(authorHandle)) {
         return {
             score: 0,
@@ -147,15 +153,15 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 result = await rateTweet(request, apiKey);
             }
             
-            pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            cleanupRequest(); // Use cleanup function instead of direct decrement
             
             // Parse the result for score
             if (!result.error && result.content) {
-                const scoreMatch = result.content.match(/SCORE_(\d+)/);
+                const scoreMatches = result.content.match(/SCORE_(\d+)/g);
                 
-                if (scoreMatch) {
-                    const score = parseInt(scoreMatch[1], 10);
+                if (scoreMatches && scoreMatches.length > 0) {
+                    const lastScore = scoreMatches[scoreMatches.length - 1];
+                    const score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                     
                     // Store the rating in cache
                     tweetCache.set(tweetId, {
@@ -181,8 +187,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
         } catch (error) {
-            pendingRequests--;
-            showStatus(`Rating tweet... (${pendingRequests} pending)`);
+            cleanupRequest(); // Use cleanup function instead of direct decrement
             console.error(`API error during attempt ${attempt}:`, error);
             
             if (attempt < maxRetries) {
@@ -193,6 +198,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     }
     
     // If we get here, all retries failed
+    cleanupRequest(); // Ensure we cleanup even if all retries fail
     return {
         score: 5,
         content: "Failed to get valid rating after multiple attempts",
@@ -269,9 +275,13 @@ async function rateTweet(request, apiKey) {
         const reasoning = result.data.choices[0].message.reasoning || "";
         
         // Store the rating in cache
-        const scoreMatch = content.match(/SCORE_(\d+)/);
+        const scoreMatches = content.match(/SCORE_(\d+)/g);
+        const score = existingScore || (scoreMatches && scoreMatches.length > 0 
+            ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10) 
+            : null);
+            
         tweetCache.set(tweetId, {
-            score: existingScore || (scoreMatch ? parseInt(scoreMatch[1], 10) : null),
+            score: score,
             description: content,
             tweetContent: request.tweetText,
             streaming: false
@@ -308,7 +318,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         window.activeStreamingRequests[tweetId].abort();
         delete window.activeStreamingRequests[tweetId];
     }
-
     // Store initial streaming entry only if not already cached with a score
     const existingCache = tweetCache.get(tweetId);
     if (!existingCache || existingCache.score === undefined || existingCache.score === null) {
@@ -339,7 +348,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         let aggregatedContent = existingCache?.description || "";
         let aggregatedReasoning = existingCache?.reasoning || ""; // Track reasoning traces
         let finalData = null;
-        let finalScore = existingCache?.score || null;
+        let score = existingCache?.score || null;
         
         getCompletionStreaming(
             request,
@@ -350,16 +359,17 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
                 
                 // Look for a score in the accumulated content so far
-                const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/g); // Use global flag to get all matches
-                // Use the *last* score found in the stream
-                if (scoreMatch) {
-                    finalScore = parseInt(scoreMatch[scoreMatch.length - 1].match(/SCORE_(\d+)/)[1], 10);
+                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g); // Use global flag to get all matches
+                // Always use the last score found in the stream
+                if (scoreMatches && scoreMatches.length > 0) {
+                    const score = scoreMatches[scoreMatches.length - 1];
+                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
                 
                 // Update the instance
                  indicatorInstance.update({
                     status: 'streaming',
-                    score: finalScore,
+                    score: score,
                     description: aggregatedContent || "Rating in progress...",
                     reasoning: aggregatedReasoning
                 });
@@ -369,7 +379,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     const entry = tweetCache.get(tweetId);
                     entry.description = aggregatedContent;
                     entry.reasoning = aggregatedReasoning;
-                    entry.score = finalScore;
+                    entry.score = score;
                     entry.streaming = true; // Still streaming
                 }
             },
@@ -380,24 +390,25 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 finalData = finalResult.data;
                 
                 // Final check for score
-                const scoreMatch = aggregatedContent.match(/SCORE_(\d+)/g);
-                if (scoreMatch) {
-                    finalScore = parseInt(scoreMatch[scoreMatch.length - 1].match(/SCORE_(\d+)/)[1], 10);
+                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
+                if (scoreMatches && scoreMatches.length > 0) {
+                    const lastScore = scoreMatches[scoreMatches.length - 1];
+                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
 
                 let finalStatus = 'rated';
                 // If no score was found anywhere, mark as error
-                if (finalScore === null || finalScore === undefined) {
+                if (score === null || score === undefined) {
                     console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
                     finalStatus = 'error';
-                    finalScore = 5; // Assign default error score
+                    score = 5; // Assign default error score
                     aggregatedContent += "\n[No score detected - Error]";
                 }
 
                 // Update cache with final result (non-streaming)
                 tweetCache.set(tweetId, {
                     tweetContent: tweetText,
-                    score: finalScore,
+                    score: score,
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning,
                     streaming: false,
@@ -408,7 +419,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 // Finalize UI update via instance
                 indicatorInstance.update({
                     status: finalStatus,
-                    score: finalScore,
+                    score: score,
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning
                 });
@@ -418,7 +429,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 }
 
                 resolve({
-                    score: finalScore,
+                    score: score,
                     content: aggregatedContent,
                     reasoning: aggregatedReasoning,
                     error: finalStatus === 'error',

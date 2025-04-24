@@ -2,13 +2,13 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const adAuthorCache = new Set(); // Cache of handles that post ads
 
-const PROCESSING_DELAY_MS = 250; // Delay before processing a tweet (ms)
+const PROCESSING_DELAY_MS = 150; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 25; // Minimum delay between API calls
 let USER_DEFINED_INSTRUCTIONS = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
 let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5')); // Filter threshold for tweet visibility
 let observedTargetNode = null;
 let lastAPICallTime = 0;
-let pendingRequests = 0;
+let pendingRequests = 0; // Global counter for pending API requests
 const MAX_RETRIES = 5;
 let availableModels = []; // List of models fetched from API
 let listedModels = []; // Filtered list of models actually shown in UI

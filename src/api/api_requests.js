@@ -301,6 +301,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     const streamingRequestObj = {
         abort: function() {
             streamComplete = true; // Set flag to prevent further processing
+            pendingRequests--;
             try {
                 reqObj.abort(); // Attempt to abort the XHR request
             } catch (e) {
@@ -310,6 +311,15 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             // Remove from active requests tracking
             if (tweetId && window.activeStreamingRequests) {
                 delete window.activeStreamingRequests[tweetId];
+            }
+
+            // Remove incomplete entry from cache
+            if (tweetId && tweetCache.has(tweetId)) {
+                const entry = tweetCache.get(tweetId);
+                // Only delete if it's a streaming entry without a score
+                if (entry.streaming && (entry.score === undefined || entry.score === null)) {
+                    tweetCache.delete(tweetId);
+                }
             }
         }
     };
