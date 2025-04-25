@@ -362,7 +362,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g); // Use global flag to get all matches
                 // Always use the last score found in the stream
                 if (scoreMatches && scoreMatches.length > 0) {
-                    const score = scoreMatches[scoreMatches.length - 1];
+                    const lastScore = scoreMatches[scoreMatches.length - 1];
                     score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
                 
@@ -388,7 +388,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
-                
+                console.log(finalData);
                 // Final check for score
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
                 if (scoreMatches && scoreMatches.length > 0) {
