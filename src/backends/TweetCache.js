@@ -66,7 +66,7 @@ class TweetCache {
     /**
      * Sets a tweet rating in the cache.
      * @param {string} tweetId - The ID of the tweet.
-     * @param {Object} rating - The rating object: {score(required), description, reasoning, timestamp, streaming, blacklisted,fromStorage}
+     * @param {Object} rating - The rating object: {score(required), description, reasoning, timestamp, streaming, blacklisted, fromStorage, metadata: {model, promptTokens, completionTokens, latency, mediaInputs, price}}
      * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      */
     set(tweetId, rating, saveImmediately = true) { // saveImmediately is now ignored
@@ -78,7 +78,15 @@ class TweetCache {
             timestamp: rating.timestamp || Date.now(),
             streaming: rating.streaming || false,
             blacklisted: rating.blacklisted || false,
-            fromStorage: rating.fromStorage || false
+            fromStorage: rating.fromStorage || false,
+            metadata: {
+                model: rating.metadata?.model || null,
+                promptTokens: rating.metadata?.promptTokens || null,
+                completionTokens: rating.metadata?.completionTokens || null,
+                latency: rating.metadata?.latency || null,
+                mediaInputs: rating.metadata?.mediaInputs || null,
+                price: rating.metadata?.price || null
+            }
         };
 
         // Always use the debounced save

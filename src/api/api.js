@@ -388,7 +388,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
-                console.log(finalData);
+                // console.log("Final stream data:", finalData);
+
                 // Final check for score
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
                 if (scoreMatches && scoreMatches.length > 0) {
@@ -405,28 +406,38 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     aggregatedContent += "\n[No score detected - Error]";
                 }
 
-                // Update cache with final result (non-streaming)
-                tweetCache.set(tweetId, {
+                // Store final result in cache (non-streaming)
+                const finalCacheData = {
                     tweetContent: tweetText,
                     score: score,
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning,
                     streaming: false,
                     timestamp: Date.now(),
-                    error: finalStatus === 'error' ? "No score detected" : undefined
-                });
-                
+                    error: finalStatus === 'error' ? "No score detected" : undefined,
+                    metadata: null // Placeholder for metadata
+                };
+                tweetCache.set(tweetId, finalCacheData);
+
                 // Finalize UI update via instance
                 indicatorInstance.update({
                     status: finalStatus,
                     score: score,
                     description: aggregatedContent,
-                    reasoning: aggregatedReasoning
+                    reasoning: aggregatedReasoning,
+                    metadata: null // Pass null metadata initially
                 });
-                
+
                 if (tweetArticle) {
                     filterSingleTweet(tweetArticle);
                 }
+
+                // --- Fetch Generation Metadata (New) ---
+                const generationId = finalData?.id;
+                if (generationId && apiKey) {
+                    fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance);
+                }
+                // --- End Fetch Generation Metadata ---
 
                 resolve({
                     score: score,
@@ -464,6 +475,70 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             tweetId  // Pass the tweet ID to associate with this request
         );
     });
+}
+
+/**
+ * Fetches generation metadata with retry logic and updates cache/UI.
+ * @param {string} tweetId
+ * @param {string} generationId
+ * @param {string} apiKey
+ * @param {ScoreIndicator} indicatorInstance - The indicator instance to update.
+ * @param {number} [attempt=0]
+ * @param {number[]} [delays=[1000, 500, 2000, 4000, 8000]]
+ */
+async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt = 0, delays = [1000, 500, 2000, 4000, 8000]) {
+    if (attempt >= delays.length) {
+        console.warn(`[Metadata Fetch ${tweetId}] Max retries reached for generation ${generationId}.`);
+        return;
+    }
+
+    const delay = delays[attempt];
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    try {
+        // console.log(`[Metadata Fetch ${tweetId}] Attempt ${attempt + 1} for generation ${generationId} after ${delay}ms`);
+        const metadataResult = await getGenerationMetadata(generationId, apiKey);
+
+        if (!metadataResult.error && metadataResult.data?.data) {
+            const meta = metadataResult.data.data;
+            // console.log(`[Metadata Fetch ${tweetId}] Success for generation ${generationId}`, meta);
+
+            const extractedMetadata = {
+                model: meta.model || 'N/A',
+                promptTokens: meta.tokens_prompt || 0,
+                completionTokens: meta.tokens_completion || 0, // Use this for total completion output
+                reasoningTokens: meta.native_tokens_reasoning || 0, // Specific reasoning tokens if available
+                latency: meta.latency !== undefined ? (meta.latency / 1000).toFixed(2) + 's' : 'N/A', // Convert ms to s
+                mediaInputs: meta.num_media_prompt || 0,
+                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A' // Add total cost
+            };
+
+            // Update the cache
+            const currentCache = tweetCache.get(tweetId);
+            if (currentCache) {
+                currentCache.metadata = extractedMetadata;
+                tweetCache.set(tweetId, currentCache); // Save updated cache entry
+
+                // Update the ScoreIndicator instance
+                indicatorInstance.update({ metadata: extractedMetadata });
+                console.log(`[Metadata Fetch ${tweetId}] Stored metadata and updated UI for generation ${generationId}`);
+            } else {
+                console.warn(`[Metadata Fetch ${tweetId}] Cache entry disappeared before metadata could be stored for generation ${generationId}.`);
+            }
+            return; // Success, stop retrying
+        } else if (metadataResult.status === 404) {
+            // console.log(`[Metadata Fetch ${tweetId}] Generation ${generationId} not found yet (404), retrying...`);
+            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
+        } else {
+            console.warn(`[Metadata Fetch ${tweetId}] Error fetching metadata (Attempt ${attempt + 1}) for ${generationId}: ${metadataResult.message}`);
+            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays); // Retry on other errors too
+        }
+    } catch (error) {
+        console.error(`[Metadata Fetch ${tweetId}] Unexpected error during fetch (Attempt ${attempt + 1}) for ${generationId}:`, error);
+        // Still retry on unexpected errors
+        fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
+    }
 }
 
 // Export all functions

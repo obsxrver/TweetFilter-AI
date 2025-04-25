@@ -112,12 +112,16 @@ function applyTweetCachedRating(tweetArticle) {
                 status = isFromStorage ? 'cached' : 'rated';
             }
 
+            // Get metadata from cache if it exists
+            const metadata = cachedRating.metadata || null;
+
             // Update the indicator via the registry
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: status,
                 score: score,
                 description: desc,
-                reasoning: reasoning
+                reasoning: reasoning,
+                metadata: metadata // Pass metadata to indicator
             });
 
             filterSingleTweet(tweetArticle);

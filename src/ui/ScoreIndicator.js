@@ -28,11 +28,13 @@ class ScoreIndicator {
         this.reasoningTextElement = null;
         this.descriptionElement = null;
         this.scrollButton = null;
+        this.metadataElement = null; // Add element for metadata
 
         this.status = 'pending'; // Initial status
         this.score = null;
         this.description = '';
         this.reasoning = '';
+        this.metadata = null; // Add property to store metadata
         this.isPinned = false;
         this.isVisible = false;
         this.autoScroll = true; // Default to true for pending/streaming
@@ -125,6 +127,12 @@ class ScoreIndicator {
         this.descriptionElement = document.createElement('p');
         this.descriptionElement.className = 'description-text';
         this.tooltipElement.appendChild(this.descriptionElement);
+
+        // --- Metadata Area ---
+        this.metadataElement = document.createElement('div');
+        this.metadataElement.className = 'tooltip-metadata';
+        this.metadataElement.style.display = 'none'; // Hide initially
+        this.tooltipElement.appendChild(this.metadataElement);
 
         // --- Scroll-to-Bottom Button ---
         this.scrollButton = document.createElement('div');
@@ -264,6 +272,31 @@ class ScoreIndicator {
 
         // Show/hide reasoning dropdown
         this.reasoningDropdown.style.display = (formatted.reasoning) ? 'block' : 'none';
+
+        // --- Update Metadata Display (New) ---
+        if (this.metadataElement) {
+            if (this.metadata && Object.keys(this.metadata).length > 0 && this.metadata.model) { // Check if model exists
+                // Format with clearer labels and line breaks
+                let metadataHTML = '<hr class="metadata-separator">';
+                metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
+                metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+                if (this.metadata.reasoningTokens > 0) {
+                     metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`; // Add reasoning tokens if available
+                }
+                metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+                if (this.metadata.mediaInputs > 0) {
+                    metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+                }
+                metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+
+                this.metadataElement.innerHTML = metadataHTML;
+                this.metadataElement.style.display = 'block';
+            } else {
+                this.metadataElement.innerHTML = ''; // Clear if no metadata or model
+                this.metadataElement.style.display = 'none';
+            }
+        }
+        // --- End Metadata Display Update ---
 
         // Add/remove streaming class
         this.tooltipElement.classList.toggle('streaming-tooltip', this.status === 'streaming');
@@ -584,39 +617,46 @@ class ScoreIndicator {
     /**
      * Updates the indicator's state and refreshes the UI.
      * @param {object} options
-     * @param {string} options.status - New status ('pending', 'streaming', 'rated', 'error', 'cached', 'blacklisted').
+     * @param {string} [options.status] - New status ('pending', 'streaming', 'rated', 'error', 'cached', 'blacklisted').
      * @param {number|null} [options.score] - New score.
      * @param {string} [options.description] - New description text.
      * @param {string} [options.reasoning] - New reasoning text.
+     * @param {object|null} [options.metadata] - New metadata object.
      */
-    update({ status, score = null, description = '', reasoning = '' }) {
+    update({ status, score = null, description = '', reasoning = '', metadata = null }) {
         // console.log(`[ScoreIndicator ${this.tweetId}] Updating state - Status: ${status}, Score: ${score}`);
-        const statusChanged = this.status !== status;
-        const scoreChanged = this.score !== score;
-        const descriptionChanged = this.description !== description;
-        const reasoningChanged = this.reasoning !== reasoning;
+        const statusChanged = status !== undefined && this.status !== status;
+        const scoreChanged = score !== null && this.score !== score;
+        const descriptionChanged = description !== '' && this.description !== description;
+        const reasoningChanged = reasoning !== '' && this.reasoning !== reasoning;
+        const metadataChanged = metadata !== null && JSON.stringify(this.metadata) !== JSON.stringify(metadata);
 
         // Only update if something actually changed
-        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged) {
+        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged) {
             // console.log(`[ScoreIndicator ${this.tweetId}] No state change detected.`);
             return;
         }
 
-        this.status = status;
+        if (statusChanged) this.status = status;
         // Ensure score is null if status implies it (e.g., pending without previous score)
-        this.score = (status === 'pending' || status === 'error') ? score : // Allow score display for error state if provided
-            (status === 'streaming' && score === null) ? this.score : // Keep existing score during streaming if new one is null
-                score;
-        this.description = description;
-        this.reasoning = reasoning;
+        if (scoreChanged || statusChanged) {
+            this.score = (this.status === 'pending' || this.status === 'error') ? score : // Allow score display for error state if provided
+                (this.status === 'streaming' && score === null) ? this.score : // Keep existing score during streaming if new one is null
+                    score;
+        }
+        if (descriptionChanged) this.description = description;
+        if (reasoningChanged) this.reasoning = reasoning;
+        if (metadataChanged) this.metadata = metadata;
 
         // Update autoScroll state based on new status BEFORE UI updates
-        const shouldAutoScroll = (this.status === 'pending' || this.status === 'streaming');
-        if (this.autoScroll !== shouldAutoScroll) {
-            this.autoScroll = shouldAutoScroll;
-            // Add null check before accessing dataset
-            if (this.tooltipElement) {
-                this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+        if (statusChanged) {
+            const shouldAutoScroll = (this.status === 'pending' || this.status === 'streaming');
+            if (this.autoScroll !== shouldAutoScroll) {
+                this.autoScroll = shouldAutoScroll;
+                // Add null check before accessing dataset
+                if (this.tooltipElement) {
+                    this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+                }
             }
         }
 
@@ -625,7 +665,7 @@ class ScoreIndicator {
             this._updateIndicatorUI();
         }
         // Update tooltip if content changed or if visibility/scrolling might need adjustment
-        if (descriptionChanged || reasoningChanged || statusChanged) {
+        if (descriptionChanged || reasoningChanged || statusChanged || metadataChanged) {
             this._updateTooltipUI(); // This handles content and auto-scroll if visible
         } else {
             // If only score changed, ensure scroll button visibility is correct

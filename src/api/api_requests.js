@@ -436,6 +436,75 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
 }
 
+/**
+ * Fetches generation metadata from OpenRouter API by ID.
+ *
+ * @param {string} generationId - The ID of the generation to fetch metadata for.
+ * @param {string} apiKey - OpenRouter API key.
+ * @param {number} [timeout=10000] - Request timeout in milliseconds.
+ * @returns {Promise<CompletionResult>} The result containing metadata or an error.
+ */
+async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
+    return new Promise((resolve) => {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: `https://openrouter.ai/api/v1/generation?id=${generationId}`,
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai", // Use your script's URL
+                "X-Title": "TweetFilter-AI" // Replace with your script's name
+            },
+            timeout: timeout,
+            onload: function(response) {
+                if (response.status >= 200 && response.status < 300) {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        resolve({
+                            error: false,
+                            message: "Metadata fetched successfully",
+                            data: data // The structure is { data: { ...metadata... } }
+                        });
+                    } catch (error) {
+                        resolve({
+                            error: true,
+                            message: `Failed to parse metadata response: ${error.message}`,
+                            data: null
+                        });
+                    }
+                } else if (response.status === 404) {
+                     resolve({
+                         error: true,
+                         status: 404, // Indicate not found specifically for retry logic
+                         message: `Generation metadata not found (404): ${response.responseText}`,
+                         data: null
+                     });
+                } else {
+                    resolve({
+                        error: true,
+                        status: response.status,
+                        message: `Metadata request failed with status ${response.status}: ${response.responseText}`,
+                        data: null
+                    });
+                }
+            },
+            onerror: function(error) {
+                resolve({
+                    error: true,
+                    message: `Metadata request error: ${error.toString()}`,
+                    data: null
+                });
+            },
+            ontimeout: function() {
+                resolve({
+                    error: true,
+                    message: `Metadata request timed out after ${timeout}ms`,
+                    data: null
+                });
+            }
+        });
+    });
+}
+
 // Export the functions
 // export {
 //     getCompletion,
