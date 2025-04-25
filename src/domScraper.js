@@ -138,8 +138,8 @@ async function extractMediaLinks(scopeElement) {
             
             // Try to get the original size by removing size indicator
             if (name && name !== 'orig') {
-                // Replace format=jpg&name=small with format=jpg&name=orig
-                finalUrl = sourceUrl.replace(`name=${name}`, 'name=orig');
+                // Replace format=jpg&name=x with format=jpg&name=small
+                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
             }
             
             mediaLinks.add(finalUrl);

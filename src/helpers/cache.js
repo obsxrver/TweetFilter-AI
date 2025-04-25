@@ -15,6 +15,7 @@ function updateCacheStatsUI() {
     if (statsBadge) statsBadge.innerHTML = `
             <span style="margin-right: 5px;">🧠</span>
             <span data-cached-count>${cachedCount} rated</span>
+            <span data-pending-count> | ${pendingRequests} pending</span>
             ${wlCount > 0 ? `<span style="margin-left: 5px;"> | ${wlCount} whitelisted</span>` : ''}
         `;
 }

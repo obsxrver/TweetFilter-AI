@@ -1,6 +1,6 @@
 //src/ratingEngine.js
 /**
- * Applies filtering to a single tweet by hiding it if its score is below the threshold.
+ * Applies filtering to a single tweet by replacing its contents with a minimal placeholder.
  * Also updates the rating indicator.
  * @param {Element} tweetArticle - The tweet element.
  */
@@ -18,11 +18,13 @@ function filterSingleTweet(tweetArticle) {
 
     // If it's already a known ad author, hide it immediately
     if (authorHandle && adAuthorCache.has(authorHandle)) {
-        cell.classList.add('tweet-filtered');
+        const tweetId = getTweetID(tweetArticle);
+        if (tweetId) {
+            ScoreIndicatorRegistry.get(tweetId)?.destroy();
+        }
+        cell.innerHTML = '';
         cell.dataset.filtered = 'true';
         cell.dataset.isAd = 'true';
-        tweetArticle.dataset.filtered = 'true';
-        tweetArticle.dataset.isAd = 'true';
         return;
     }
 
@@ -37,21 +39,17 @@ function filterSingleTweet(tweetArticle) {
 
     // If the tweet is still pending/streaming a rating, keep it visible
     if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
-        cell.classList.remove('tweet-filtered');
+        // Do nothing - let it stay visible
         delete cell.dataset.filtered;
-        delete tweetArticle.dataset.filtered;
-    } else if (isNaN(score) || score < currentFilterThreshold) {  // Changed < to <= to hide tweets with scores equal to threshold
-        cell.classList.add('tweet-filtered');
+    } else if (isNaN(score) || score < currentFilterThreshold) {
+        if (tweetId) {
+            ScoreIndicatorRegistry.get(tweetId)?.destroy();
+        }
+        cell.innerHTML = '';
         cell.dataset.filtered = 'true';
-        tweetArticle.dataset.filtered = 'true';
-
-    } else {
-        // Show tweets with scores greater than threshold
-        cell.classList.remove('tweet-filtered');
-        delete cell.dataset.filtered;
-        delete tweetArticle.dataset.filtered;
     }
 }
+
 
 /**
  * Applies a cached rating (if available) to a tweet article.
@@ -114,12 +112,16 @@ function applyTweetCachedRating(tweetArticle) {
                 status = isFromStorage ? 'cached' : 'rated';
             }
 
+            // Get metadata from cache if it exists
+            const metadata = cachedRating.metadata || null;
+
             // Update the indicator via the registry
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: status,
                 score: score,
                 description: desc,
-                reasoning: reasoning
+                reasoning: reasoning,
+                metadata: metadata // Pass metadata to indicator
             });
 
             filterSingleTweet(tweetArticle);

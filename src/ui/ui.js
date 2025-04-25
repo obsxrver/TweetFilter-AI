@@ -8,14 +8,39 @@
 function toggleElementVisibility(element, toggleButton, openText, closedText) {
     if (!element || !toggleButton) return;
 
-    const isHidden = element.classList.toggle('hidden');
-    toggleButton.innerHTML = isHidden ? closedText : openText;
+    const isCurrentlyHidden = element.classList.contains('hidden');
+    
+    // Update button text immediately
+    toggleButton.innerHTML = isCurrentlyHidden ? openText : closedText;
 
-    // Special case for filter slider button (hide it when panel is shown)
+    if (isCurrentlyHidden) {
+        // Opening
+        element.style.display = 'flex';
+        // Force reflow
+        element.offsetHeight;
+        element.classList.remove('hidden');
+    } else {
+        // Closing
+        element.classList.add('hidden');
+        // Wait for animation to complete before changing display
+        setTimeout(() => {
+            if (element.classList.contains('hidden')) {
+                element.style.display = 'none';
+            }
+        }, 500); // Match the CSS transition duration
+    }
+
+    // Special case for filter slider button
     if (element.id === 'tweet-filter-container') {
         const filterToggle = document.getElementById('filter-toggle');
         if (filterToggle) {
-            filterToggle.style.display = isHidden ? 'block' : 'none';
+            if (!isCurrentlyHidden) { // We're closing the filter
+                setTimeout(() => {
+                    filterToggle.style.display = 'block';
+                }, 500); // Match the CSS transition duration
+            } else {
+                filterToggle.style.display = 'none';
+            }
         }
     }
 }
@@ -189,8 +214,12 @@ function initializeEventListeners(uiContainer) {
     // Filter Toggle Button
     if (filterToggleBtn) {
         filterToggleBtn.onclick = () => {
-            // Ensure filter container is shown and button is hidden
-            if (filterContainer) filterContainer.classList.remove('hidden');
+            if (filterContainer) {
+                filterContainer.style.display = 'flex';
+                // Force a reflow
+                filterContainer.offsetHeight;
+                filterContainer.classList.remove('hidden');
+            }
             filterToggleBtn.style.display = 'none';
         };
     }
@@ -271,6 +300,8 @@ function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         // Clear all ratings
         tweetCache.clear(true);
+        // Reset pending requests counter
+        pendingRequests = 0;
         // Clear thread relationships cache
         if (window.threadRelationships) {
             window.threadRelationships = {};

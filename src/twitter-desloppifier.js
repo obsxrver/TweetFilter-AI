@@ -18,11 +18,11 @@
 // @license      MIT
 // ==/UserScript==
 //src/twitter-desloppifier.js
-const VERSION = '1.4.1'; 
+const VERSION = '1.4.2'; 
 (function () {
     
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.4.1- Enhanced)");
+    console.log("X/Twitter Tweet De-Sloppification Activated (v1.4.2- Enhanced)");
 
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
