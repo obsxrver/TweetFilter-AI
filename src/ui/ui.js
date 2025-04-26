@@ -144,6 +144,9 @@ function initializeEventListeners(uiContainer) {
                 case 'clear-instructions-history':
                     clearInstructionsHistory();
                     break;
+                case 'export-cache':
+                    exportCacheToJson();
+                    break;
             }
         }
 
@@ -292,6 +295,43 @@ function saveApiKey() {
         location.reload();
     } else {
         showStatus('Please enter a valid API key');
+    }
+}
+
+/**
+ * Exports the current tweet cache to a JSON file.
+ */
+function exportCacheToJson() {
+    if (!tweetCache) {
+        showStatus('Error: Tweet cache not found.', 'error');
+        return;
+    }
+
+    try {
+        const cacheData = tweetCache.cache; // Access the raw cache object
+        if (!cacheData || Object.keys(cacheData).length === 0) {
+            showStatus('Cache is empty. Nothing to export.', 'warning');
+            return;
+        }
+
+        const jsonString = JSON.stringify(cacheData, null, 2); // Pretty print JSON
+        const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.setAttribute('download', `tweet-filter-cache-${timestamp}.json`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showStatus(`Cache exported successfully (${Object.keys(cacheData).length} items).`);
+    } catch (error) {
+        console.error('Error exporting cache:', error);
+        showStatus('Error exporting cache. Check console for details.', 'error');
     }
 }
 

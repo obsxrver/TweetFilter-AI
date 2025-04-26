@@ -85,7 +85,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 _______BEGIN TWEET_______
                 ${tweetText}
                 _______END TWEET_______
-                Make sure your response ends with SCORE_0, SCORE_1, SCORE_2, SCORE_3, SCORE_4, SCORE_5, SCORE_6, SCORE_7, SCORE_8, SCORE_9, or SCORE_10.`
+                Make sure your response ends with SCORE_X, where X is a number between 0 and 10.`
             }]
         }]
     };
@@ -101,7 +101,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         for (const url of mediaUrls) {
             request.messages[1].content.push({
                 type: "image_url",
-                image_url: { url }
+                image_url: { "url": url }
             });
         }
     }

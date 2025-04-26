@@ -228,6 +228,21 @@ function handleMutations(mutationsList) {
             if (mutation.addedNodes.length > 0) {
                 mutation.addedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
+                        // Check if the added node IS or CONTAINS the conversation timeline
+                        let conversationTimeline = null;
+                        if (node.matches && node.matches('div[aria-label^="Timeline: Conversation"]')) {
+                            conversationTimeline = node;
+                        } else if (node.querySelector) {
+                            conversationTimeline = node.querySelector('div[aria-label^="Timeline: Conversation"]');
+                        }
+
+                        if (conversationTimeline) {
+                            console.log("[handleMutations] Conversation timeline detected. Triggering handleThreads.");
+                            // Call handleThreads immediately. The internal checks within handleThreads
+                            // should prevent redundant processing if it's already running.
+                            setTimeout(handleThreads, 50); // Short delay to potentially allow elements to settle
+                        }
+
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
                             if (!shouldSkipProcessing(node)) {
                                 scheduleTweetProcessing(node);

@@ -94,7 +94,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     let reasoning = ""; // Add a variable to track reasoning content
     let responseObj = null;
     let streamComplete = false;
-    
+    console.log(streamingRequest);
     const reqObj = GM_xmlhttpRequest({
         method: "POST",
         url: "https://openrouter.ai/api/v1/chat/completions",

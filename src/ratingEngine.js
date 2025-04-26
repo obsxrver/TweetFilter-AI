@@ -714,6 +714,13 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
     let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
 
+    // --- Extract Engagement Stats ---
+    let engagementStats = "";
+    const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
+    if (engagementDiv) {
+        engagementStats = engagementDiv.getAttribute('aria-label')?.trim() || "";
+    }
+
     // Start building the context
     let fullContextWithImageDescription = `[TWEET ${tweetId}]
  Author:@${userHandle}:
@@ -732,6 +739,13 @@ ${mainMediaLinksDescription}`;
         fullContextWithImageDescription += `
 [MEDIA_URLS]:
 ${mainMediaLinks.join(", ")}`;
+    }
+
+    // Add engagement stats if found
+    if (engagementStats) {
+        fullContextWithImageDescription += `
+[ENGAGEMENT_STATS]:
+${engagementStats}`;
     }
 
     // Add thread media URLs if this is a reply and we have previous media
@@ -785,17 +799,27 @@ ${quotedMediaLinks.join(", ")}`;
 
         // Add recursive reply chain information if available and not already included in thread history
         if (replyChain.length > 0 && !threadHistoryIncluded) {
-            let replyChainText = '\n[REPLY CHAIN]\n';
-
+            // Build the context by fetching parent tweets from cache
+            let parentContexts = "";
             for (let i = replyChain.length - 1; i >= 0; i--) {
                 const link = replyChain[i];
-                replyChainText += `Tweet ${link.fromId} by @${link.from || 'unknown'} is a reply to tweet ${link.toId} by @${link.to || 'unknown'}\n`;
-            }
+                const parentId = link.toId;
+                const parentCache = tweetCache.get(parentId);
+                const parentContent = parentCache?.tweetContent; // Get the stored context
 
-            fullContextWithImageDescription = replyChainText + fullContextWithImageDescription;
+                if (parentContent) {
+                    // Prepend the parent context, followed by the [REPLY] marker
+                    parentContexts = parentContent + "\n[REPLY]\n" + parentContexts;
+                } else {
+                    // Add a placeholder if parent context is not in cache
+                    parentContexts = `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${link.to || 'unknown'}]\n[REPLY]\n` + parentContexts;
+                }
+            }
+            // Prepend the constructed parent contexts to the current tweet's context
+            fullContextWithImageDescription = parentContexts + fullContextWithImageDescription;
         }
 
-        // Individual reply marker if needed
+        // Individual reply marker if needed (only if no chain and no history)
         const replyInfo = getTweetReplyInfo(tweetId);
         if (replyInfo && replyInfo.replyTo && !threadHistoryIncluded && replyChain.length === 0) {
             fullContextWithImageDescription = `[REPLY TO TWEET ${replyInfo.replyTo}]\n` + fullContextWithImageDescription;
@@ -1095,18 +1119,34 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             // Second pass: build the reply structure with the right relationship chain
             for (let i = 0; i < tweetCells.length; ++i) {
                 let tw = tweetCells[i];
+                const persistentRelation = threadRelationships[tw.tweetId];
+
                 if (tw.tweetId === localRootTweetId) {
                     tw.replyTo = null;
+                    tw.replyToId = null; // Explicitly set null
                     tw.isRoot = true;
+                } else if (persistentRelation && persistentRelation.replyTo) {
+                    // Prioritize persistent relationship data if it exists
+                    tw.replyTo = persistentRelation.to;
+                    tw.replyToId = persistentRelation.replyTo;
+                    tw.isRoot = false;
                 } else if (tw.isReplyToRoot) {
+                    // Fallback: Use DOM structure if persistent data is missing
                     let root = tweetCells.find(tk => tk.tweetId === localRootTweetId);
                     tw.replyTo = root ? root.username : null;
                     tw.replyToId = root ? root.tweetId : null;
                     tw.isRoot = false;
                 } else if (i > 0) {
+                    // Fallback: Assume previous tweet in DOM is parent if persistent data is missing
                     tw.replyTo = tweetCells[i - 1].username;
                     tw.replyToId = tweetCells[i - 1].tweetId;
                     tw.isRoot = false;
+                } else {
+                    // If it's the first tweet seen but not the root and no persistent data,
+                    // we can't determine parent from current view
+                    tw.replyTo = null;
+                    tw.replyToId = null;
+                    tw.isRoot = false; // Cannot assume it's root
                 }
             }
 
