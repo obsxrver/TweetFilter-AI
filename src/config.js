@@ -25,7 +25,21 @@ let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 
 // Model parameters
-const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.You will be given a Tweet and user defined instructions to rate the tweet. You are to review and provide a rating for the tweet with the specified tweet ID.Ensure that you consider the user-defined instructions in your analysis and scoring.Follow the user-defined instructions exactly, and do not deviate from them. Then, on a new line, provide a score between 0 and 10.Output your analysis first. Then, on a new line, provide a score between 0 and 10. in this exact format:SCORE_X (where X is a number from 0 (lowest quality) to 10 (highest quality).)for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.If one of the above is not present, the program will not be able to parse the response and will return an error.`
+const SYSTEM_PROMPT=`You are a tweet filtering AI. Your task is to rate tweets on a scale of 0 to 10 based on user-defined instructions.
+You will be given a Tweet and user defined instructions to rate the tweet. Review and provide a rating for the tweet with the specified tweet ID. 
+Basse your analysis and scoring on the user-defined instructions. Follow the user-defined instructions exactly, and do not deviate from them. 
+Then, on a new line, provide a score between 0 and 10 based on the user-defined instructions, such that a low score doesn't follow the instructions, and a high score does. 
+Then, provide 3 newline-separated follow up questions that the user might be curious about, based on the tweet.
+Follow this format exactly:
+[ANALYSIS]
+[SCORE]
+SCORE_X (where X is a number from 0 to 10)
+[3 FOLLOW UP Questions]
+Q_1. [Question 1]
+Q_2. [Question 2]
+Q_3. [Question 3]
+for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc.
+If the format above is not present, the program will not be able to parse the response and will return an error.`
 let modelTemperature = parseFloat(browserGet('modelTemperature', '0.5'));
 let modelTopP = parseFloat(browserGet('modelTopP', '0.9'));
 let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '0.5'));

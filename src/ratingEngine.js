@@ -72,9 +72,11 @@ function applyTweetCachedRating(tweetArticle) {
         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
             status: 'blacklisted',
             score: 10,
-            description: "User is whitelisted"
+            description: "User is whitelisted",
+            questions: [], // No questions for blacklist
+            lastAnswer: "" // No answer for blacklist
         });
-        filterSingleTweet(tweetArticle);
+        filterSingleTweet(tweetArticle); // Apply filtering immediately
         return true;
     }
 
@@ -84,6 +86,7 @@ function applyTweetCachedRating(tweetArticle) {
         // Skip incomplete streaming entries that don't have a score yet
         if (cachedRating.streaming === true &&
             (cachedRating.score === undefined || cachedRating.score === null)) {
+            // console.log(`Skipping incomplete streaming cache for ${tweetId}`);
             return false;
         }
 
@@ -92,25 +95,23 @@ function applyTweetCachedRating(tweetArticle) {
             const score = cachedRating.score;
             const desc = cachedRating.description;
             const reasoning = cachedRating.reasoning || "";
+            const questions = cachedRating.questions || []; // Get cached questions
+            const lastAnswer = cachedRating.lastAnswer || ""; // Get cached answer
+            const mediaUrls = cachedRating.mediaUrls || []; // Get cached media URLs
 
             tweetArticle.dataset.sloppinessScore = score.toString();
             tweetArticle.dataset.cachedRating = 'true';
             if (reasoning) {
                 tweetArticle.dataset.ratingReasoning = reasoning;
             }
+            // Optionally store questions/answer in dataset if needed for debugging
+            // tweetArticle.dataset.ratingQuestions = JSON.stringify(questions);
+            // tweetArticle.dataset.ratingLastAnswer = lastAnswer;
 
             let status = 'rated'; // Default status
-            // If it's a streaming entry that's not complete, mark as streaming instead of cached
-            if (cachedRating.streaming === true && !cachedRating.score) {
-                status = 'streaming';
-                // No need to update indicator yet if still streaming incomplete data
-                console.log(`Tweet ${tweetId} has incomplete streaming cache, skipping immediate indicator update.`);
-                return false; // Don't treat as successfully applied cache yet
-            } else {
-                // Check if this rating is from storage (cached) or newly created
-                const isFromStorage = cachedRating.fromStorage === true;
-                status = isFromStorage ? 'cached' : 'rated';
-            }
+            // Check if this rating is from storage (cached) or newly created
+            const isFromStorage = cachedRating.fromStorage === true;
+            status = isFromStorage ? 'cached' : 'rated';
 
             // Get metadata from cache if it exists
             const metadata = cachedRating.metadata || null;
@@ -121,7 +122,10 @@ function applyTweetCachedRating(tweetArticle) {
                 score: score,
                 description: desc,
                 reasoning: reasoning,
-                metadata: metadata // Pass metadata to indicator
+                questions: questions, // Pass questions to indicator
+                lastAnswer: lastAnswer, // Pass answer to indicator
+                metadata: metadata, // Pass metadata to indicator
+                mediaUrls: mediaUrls // Pass mediaUrls to indicator
             });
 
             filterSingleTweet(tweetArticle);
@@ -174,7 +178,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: 'error',
                 score: 9,
-                description: "No API key"
+                description: "No API key",
+                questions: [],
+                lastAnswer: ""
             });
             filterSingleTweet(tweetArticle);
             // Don't remove from processedTweets - we don't want to reprocess until they add a key and refresh
@@ -189,7 +195,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: 'rated',
                 score: 0,
-                description: "Advertisement from known ad author"
+                description: "Advertisement from known ad author",
+                questions: [],
+                lastAnswer: ""
             });
             filterSingleTweet(tweetArticle);
             processingSuccessful = true;
@@ -207,7 +215,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: 'rated',
                 score: 0,
-                description: "Advertisement"
+                description: "Advertisement",
+                questions: [],
+                lastAnswer: ""
             });
             filterSingleTweet(tweetArticle);
             processingSuccessful = true;
@@ -217,6 +227,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
         let score = 5; // Default score if rating fails
         let description = "";
         let reasoning = "";
+        let questions = []; // Initialize questions
+        let lastAnswer = ""; // Initialize lastAnswer
+
         try {
             const cachedRating = tweetCache.get(tweetId);
             if (cachedRating) {
@@ -289,6 +302,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         score = currentCache.score;
                         description = currentCache.description || "";
                         reasoning = currentCache.reasoning || "";
+                        questions = currentCache.questions || []; // Get questions from cache
+                        lastAnswer = currentCache.lastAnswer || ""; // Get answer from cache
+                        const mediaUrls = currentCache.mediaUrls || []; // Get mediaUrls from cache
                         processingSuccessful = true;
                         console.log(`Using valid cache entry found for ${tweetId} before API call.`);
 
@@ -297,17 +313,24 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             status: currentCache.fromStorage ? 'cached' : 'rated',
                             score: score,
                             description: description,
-                            reasoning: reasoning
+                            reasoning: reasoning,
+                            questions: questions,
+                            lastAnswer: lastAnswer,
+                            metadata: currentCache.metadata || null,
+                            mediaUrls: mediaUrls // Pass mediaUrls to indicator
                         });
                         filterSingleTweet(tweetArticle);
                         return; // Exit after using cache
                     }
 
                     // If not cached, proceed with API call
+                    // rateTweetWithOpenRouter now returns questions as well
                     const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs, 3, tweetArticle, authorHandle);
                     score = rating.score;
                     description = rating.content;
-                    reasoning = rating.reasoning || ''; // Get reasoning from result
+                    reasoning = rating.reasoning || '';
+                    questions = rating.questions || []; // Get questions from API result
+                    lastAnswer = ""; // Reset lastAnswer on new rating
 
                     // Determine status based on cache/error state
                     let finalStatus = rating.error ? 'error' : 'rated';
@@ -315,67 +338,72 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         const cacheEntry = tweetCache.get(tweetId);
                         if (cacheEntry && cacheEntry.fromStorage) {
                             finalStatus = 'cached';
-                        } else if (rating.cached) { // Check if the API function itself marked it as cached
+                        } else if (rating.cached) {
                             finalStatus = 'cached';
                         }
                     }
 
-                    // Update tweet dataset (might still be useful for debugging/other features)
+                    // Update tweet dataset
                     tweetArticle.dataset.ratingStatus = finalStatus;
                     tweetArticle.dataset.ratingDescription = description || "not available";
                     tweetArticle.dataset.sloppinessScore = score?.toString() || '';
                     tweetArticle.dataset.ratingReasoning = reasoning;
+                    // Optionally store questions/answer in dataset if needed
+                    // tweetArticle.dataset.ratingQuestions = JSON.stringify(questions);
+                    // tweetArticle.dataset.ratingLastAnswer = lastAnswer;
 
                     // Update UI via ScoreIndicator
                     ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                         status: finalStatus,
                         score: score,
                         description: description,
-                        reasoning: reasoning
+                        reasoning: reasoning,
+                        questions: questions,
+                        lastAnswer: lastAnswer,
+                        metadata: rating.data?.id ? { generationId: rating.data.id } : null, // Pass metadata
+                        mediaUrls: mediaURLs // Pass mediaUrls to indicator
                     });
 
                     processingSuccessful = !rating.error;
-                    if (tweetCache.has(tweetId)) {
-                        const entry = tweetCache.get(tweetId);
-                        entry.score = score;
-                        entry.description = description;
-                        entry.reasoning = reasoning; // Store reasoning in cache
-                        entry.tweetContent = fullContextWithImageDescription;
-                        entry.streaming = false; // Mark as complete
-                        if (rating.error) entry.error = true; // Mark error in cache
-                    } else if (!rating.error) {
-                        tweetCache.set(tweetId, {
-                            score: score,
-                            description: description,
-                            reasoning: reasoning,
-                            tweetContent: fullContextWithImageDescription,
-                            streaming: false // Mark as complete
-                        });
-                    }
+
+                    // Cache is already updated by rateTweetWithOpenRouter, no need to duplicate here
+                    // We rely on rateTweetWithOpenRouter (or its sub-functions) to set the cache correctly,
+                    // including score, description, reasoning, questions, lastAnswer, metadata ID etc.
 
                     filterSingleTweet(tweetArticle);
-                    // Return after API call attempt
-                    return;
+                    return; // Return after API call attempt
 
                 } catch (apiError) {
                     console.error(`API error processing tweet ${tweetId}:`, apiError);
                     score = 5; // Fallback score on API error
                     description = `API Error: ${apiError.message}`;
                     reasoning = '';
+                    questions = []; // Clear questions on error
+                    lastAnswer = ''; // Clear answer on error
                     processingSuccessful = false;
+
                     // Update UI to reflect API error state
                     ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                         status: 'error',
                         score: score,
-                        description: description
+                        description: description,
+                        questions: [],
+                        lastAnswer: ""
                     });
-                    if (tweetCache.has(tweetId)) {
-                        tweetCache.get(tweetId).streaming = false;
-                    }
-                    // Need to filter after error state update
+
+                    // Update cache error state
+                    const errorCacheEntry = tweetCache.get(tweetId) || {};
+                    errorCacheEntry.score = score;
+                    errorCacheEntry.description = description;
+                    errorCacheEntry.reasoning = reasoning;
+                    errorCacheEntry.questions = questions;
+                    errorCacheEntry.lastAnswer = lastAnswer;
+                    errorCacheEntry.error = true;
+                    errorCacheEntry.streaming = false;
+                    tweetCache.set(tweetId, errorCacheEntry);
+
                     filterSingleTweet(tweetArticle);
-                    // Return after API error handling
-                    return;
+                    return; // Return after API error handling
                 }
             }
             filterSingleTweet(tweetArticle);
@@ -383,14 +411,13 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
         } catch (error) {
             console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
             // Ensure some error state is shown if processing fails unexpectedly
-            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
-            if (indicatorInstance && indicatorInstance.status !== 'error') {
-                indicatorInstance.update({
-                    status: 'error',
-                    score: 5,
-                    description: "Error during processing: " + error.message
-                });
-            }
+            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                status: 'error',
+                score: 5,
+                description: "Error during processing: " + error.message,
+                questions: [],
+                lastAnswer: ""
+            });
             filterSingleTweet(tweetArticle); // Apply filtering even on generic error
             processingSuccessful = false;
         } finally {
@@ -407,7 +434,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             indicatorInstance.update({
                 status: 'error',
                 score: 5,
-                description: "Error during processing: " + error.message
+                description: "Error during processing: " + error.message,
+                questions: [],
+                lastAnswer: ""
             });
         }
         filterSingleTweet(tweetArticle);
@@ -497,7 +526,9 @@ function scheduleTweetProcessing(tweetArticle) {
         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
             status: 'blacklisted',
             score: 10,
-            description: "User is whitelisted"
+            description: "User is whitelisted",
+            questions: [],
+            lastAnswer: ""
         });
         filterSingleTweet(tweetArticle);
         return;
@@ -539,7 +570,7 @@ function scheduleTweetProcessing(tweetArticle) {
         if (indicatorInstance.status !== 'blacklisted' &&
             indicatorInstance.status !== 'cached' &&
             indicatorInstance.status !== 'rated') {
-            indicatorInstance.update({ status: 'pending', score: null, description: 'Rating scheduled...' });
+            indicatorInstance.update({ status: 'pending', score: null, description: 'Rating scheduled...', questions: [], lastAnswer: "" });
         } else {
             // If already in a final state, ensure it's attached and filtered
             indicatorInstance.ensureIndicatorAttached();

@@ -1059,6 +1059,8 @@ input:checked+.toggle-slider:before {
     border: 1px solid rgba(255, 255, 255, 0.1);
     word-wrap: break-word;
     box-sizing: border-box !important;
+    max-width: 500px;
+    padding-bottom: 35px;
 }
 
 .score-description.pinned {
@@ -1519,4 +1521,174 @@ input:checked+.toggle-slider:before {
 
 /* --- Specific Indicator Styles --- */
 .score-indicator.pending-rating {
+}
+
+/* --- Tooltip Styles --- */
+.score-description {
+    /* ... existing styles ... */
+    max-width: 500px;
+    padding-bottom: 35px; /* Add padding for scroll button */
+    /* ... existing styles ... */
+}
+
+.score-description.streaming-tooltip {
+    border-color: #ffa500; /* Orange border for streaming */
+}
+
+/* ... existing .tooltip-controls, .tooltip-pin-button, .tooltip-copy-button styles ... */
+
+/* --- Reasoning Dropdown --- */
+.reasoning-dropdown {
+    /* ... existing styles ... */
+}
+
+.reasoning-toggle {
+    /* ... existing styles ... */
+}
+
+.reasoning-arrow {
+    /* ... existing styles ... */
+}
+
+.reasoning-content {
+    /* ... existing styles ... */
+}
+
+.reasoning-text {
+    /* ... existing styles ... */
+}
+
+.description-text {
+    /* ... existing styles ... */
+}
+
+/* --- Last Answer Area --- */
+.tooltip-last-answer {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.05); /* Slightly different background */
+    border-radius: 4px;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.answer-separator {
+    border: none;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    margin: 10px 0;
+}
+
+/* --- Follow-Up Questions Area --- */
+.tooltip-follow-up-questions {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* Spacing between buttons */
+}
+
+.follow-up-question-button {
+    background-color: rgba(60, 160, 240, 0.2); /* Light blue background */
+    border: 1px solid rgba(60, 160, 240, 0.5);
+    color: #e1e8ed; /* Light text */
+    padding: 8px 12px;
+    border-radius: 15px; /* Pill shape */
+    cursor: pointer;
+    font-size: 0.85em;
+    text-align: left;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    white-space: normal; /* Allow wrapping */
+    line-height: 1.3;
+}
+
+.follow-up-question-button:hover {
+    background-color: rgba(60, 160, 240, 0.35);
+    border-color: rgba(60, 160, 240, 0.8);
+}
+
+.follow-up-question-button:active {
+    background-color: rgba(60, 160, 240, 0.5);
+}
+
+
+/* --- Metadata Area --- */
+.tooltip-metadata {
+    margin-top: 12px;
+    padding-top: 8px;
+    font-size: 0.8em;
+    color: #8899a6; /* Muted color */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metadata-separator {
+    border: none;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    margin: 8px 0;
+}
+
+.metadata-line {
+    margin-bottom: 4px;
+}
+
+.metadata-line:last-child {
+    margin-bottom: 0;
+}
+
+/* --- Score Highlight --- */
+.score-highlight {
+    /* ... existing styles ... */
+}
+
+/* --- Scroll Button --- */
+.scroll-to-bottom-button {
+    /* ... existing styles ... */
+}
+
+.tooltip-bottom-spacer {
+    /* ... existing styles ... */
+}
+
+/* --- Custom Question Input Area --- */
+.tooltip-custom-question-container {
+    margin-top: 15px;
+    display: flex;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator */
+}
+
+.tooltip-custom-question-input {
+    flex-grow: 1; /* Take available space */
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(39, 44, 48, 0.9);
+    color: #e7e9ea;
+    font-size: 0.9em;
+}
+
+.tooltip-custom-question-input:focus {
+    border-color: #1d9bf0;
+    outline: none;
+}
+
+.tooltip-custom-question-button {
+    background-color: #1d9bf0;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.tooltip-custom-question-button:hover {
+    background-color: #1a8cd8;
+}
+
+.tooltip-custom-question-button:disabled,
+.tooltip-custom-question-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }

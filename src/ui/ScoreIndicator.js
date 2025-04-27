@@ -29,12 +29,19 @@ class ScoreIndicator {
         this.descriptionElement = null;
         this.scrollButton = null;
         this.metadataElement = null; // Add element for metadata
+        this.followUpQuestionsElement = null; // Element for follow-up questions
+        this.lastAnswerElement = null; // Element for the last answer
+        this.customQuestionContainer = null; // Container for custom question input/button
+        this.customQuestionInput = null;
+        this.customQuestionButton = null;
 
         this.status = 'pending'; // Initial status
         this.score = null;
         this.description = '';
         this.reasoning = '';
         this.metadata = null; // Add property to store metadata
+        this.questions = []; // Add property to store follow-up questions
+        this.lastAnswer = ''; // Add property to store the last answer
         this.isPinned = false;
         this.isVisible = false;
         this.autoScroll = true; // Default to true for pending/streaming
@@ -128,6 +135,35 @@ class ScoreIndicator {
         this.descriptionElement.className = 'description-text';
         this.tooltipElement.appendChild(this.descriptionElement);
 
+        // --- Last Answer Area ---
+        this.lastAnswerElement = document.createElement('div');
+        this.lastAnswerElement.className = 'tooltip-last-answer';
+        this.lastAnswerElement.style.display = 'none'; // Hide initially
+        this.tooltipElement.appendChild(this.lastAnswerElement);
+
+        // --- Follow-Up Questions Area ---
+        this.followUpQuestionsElement = document.createElement('div');
+        this.followUpQuestionsElement.className = 'tooltip-follow-up-questions';
+        this.followUpQuestionsElement.style.display = 'none'; // Hide initially
+        this.tooltipElement.appendChild(this.followUpQuestionsElement);
+
+        // --- Custom Question Area ---
+        this.customQuestionContainer = document.createElement('div');
+        this.customQuestionContainer.className = 'tooltip-custom-question-container';
+
+        this.customQuestionInput = document.createElement('input');
+        this.customQuestionInput.type = 'text';
+        this.customQuestionInput.placeholder = 'Ask your own question...';
+        this.customQuestionInput.className = 'tooltip-custom-question-input';
+
+        this.customQuestionButton = document.createElement('button');
+        this.customQuestionButton.textContent = 'Ask';
+        this.customQuestionButton.className = 'tooltip-custom-question-button';
+
+        this.customQuestionContainer.appendChild(this.customQuestionInput);
+        this.customQuestionContainer.appendChild(this.customQuestionButton);
+        this.tooltipElement.appendChild(this.customQuestionContainer);
+
         // --- Metadata Area ---
         this.metadataElement = document.createElement('div');
         this.metadataElement.className = 'tooltip-metadata';
@@ -180,6 +216,19 @@ class ScoreIndicator {
         this.copyButton?.addEventListener('click', this._handleCopyClick.bind(this));
         this.reasoningToggle?.addEventListener('click', this._handleReasoningToggleClick.bind(this));
         this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
+
+        // Follow-up Questions (using delegation on the container)
+        this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
+
+        // Custom Question Button
+        this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
+        // Allow submitting custom question with Enter key
+        this.customQuestionInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Prevent default form submission/newline
+                this._handleCustomQuestionClick();
+            }
+        });
     }
 
     /** 
@@ -264,7 +313,10 @@ class ScoreIndicator {
         const formatted = formatTooltipDescription(this.description, this.reasoning);
 
         const contentChanged = this.descriptionElement.innerHTML !== formatted.description ||
-            this.reasoningTextElement.innerHTML !== formatted.reasoning;
+            this.reasoningTextElement.innerHTML !== formatted.reasoning ||
+            this.lastAnswerElement.innerHTML !== (this.lastAnswer ? `<hr class="answer-separator"><div>${this.lastAnswer}</div>` : '') || // Check if answer changed
+            // Crude check for question changes - more robust would compare arrays
+            this.followUpQuestionsElement.children.length !== this.questions.length;
 
         // Update description and reasoning text
         this.descriptionElement.innerHTML = formatted.description;
@@ -272,6 +324,42 @@ class ScoreIndicator {
 
         // Show/hide reasoning dropdown
         this.reasoningDropdown.style.display = (formatted.reasoning) ? 'block' : 'none';
+
+        // --- Update Last Answer Display ---
+        if (this.lastAnswerElement) {
+            if (this.lastAnswer && this.lastAnswer.trim()) {
+                // Format answer (simple formatting for now)
+                 const formattedAnswer = this.lastAnswer
+                    .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+                this.lastAnswerElement.innerHTML = `<hr class="answer-separator">${formattedAnswer}`;
+                this.lastAnswerElement.style.display = 'block';
+            } else {
+                this.lastAnswerElement.innerHTML = '';
+                this.lastAnswerElement.style.display = 'none';
+            }
+        }
+
+        // --- Update Follow-Up Questions Display ---
+        if (this.followUpQuestionsElement) {
+            this.followUpQuestionsElement.innerHTML = ''; // Clear previous questions
+            if (this.questions && this.questions.length > 0) {
+                this.questions.forEach((question, index) => {
+                    const questionButton = document.createElement('button');
+                    questionButton.className = 'follow-up-question-button';
+                    questionButton.textContent = `🤔 ${question}`;
+                    questionButton.dataset.questionIndex = index;
+                    questionButton.dataset.questionText = question; // Store text for handler
+                    this.followUpQuestionsElement.appendChild(questionButton);
+                });
+                this.followUpQuestionsElement.style.display = 'block';
+            } else {
+                this.followUpQuestionsElement.style.display = 'none';
+            }
+        }
 
         // --- Update Metadata Display (New) ---
         if (this.metadataElement) {
@@ -517,15 +605,16 @@ class ScoreIndicator {
     }
 
     _handleTooltipClick(event) {
-        // This handler is mainly for clicks *outside* interactive elements within the tooltip
+        // Prevent closing if clicking interactive elements within the tooltip
         if (!this.isPinned &&
             !event.target.closest('.tooltip-controls button') &&
             !event.target.closest('.reasoning-toggle') &&
-            !event.target.closest('.scroll-to-bottom-button')) {
+            !event.target.closest('.scroll-to-bottom-button') &&
+            !event.target.closest('.follow-up-question-button') &&
+            !event.target.closest('.tooltip-custom-question-container')) { // <-- Add this condition
             this.hide();
         }
-        // Clicks on buttons are handled by their specific handlers (_handlePinClick, etc.)
-        // We don't need to stop propagation here unless it causes issues elsewhere.
+        // Clicks on buttons are handled by their specific handlers
     }
 
     _handleTooltipScroll() {
@@ -612,6 +701,122 @@ class ScoreIndicator {
         this._updateScrollButtonVisibility(); // Should hide the button now
     }
 
+    _handleFollowUpQuestionClick(event) {
+        const button = event.target.closest('.follow-up-question-button');
+        if (!button) return;
+
+        event.stopPropagation(); // Prevent tooltip hide
+
+        const questionText = button.dataset.questionText;
+        const apiKey = browserGet('openrouter-api-key', '');
+
+        // Add immediate feedback
+        button.disabled = true;
+        button.textContent = `🤔 Asking: ${questionText}...`;
+        // Optionally disable other question buttons too
+        this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
+        this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+
+        if (!apiKey) {
+            showStatus('API key missing. Cannot answer question.', 'error');
+            this.update({ lastAnswer: "Error: API Key missing." }); // Update UI directly
+            button.disabled = false; // Re-enable button on error
+            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            return;
+        }
+
+        if (!questionText) {
+            console.error("Follow-up question text not found on button.");
+            this.update({ lastAnswer: "Error: Could not identify question." });
+            button.disabled = false; // Re-enable button on error
+            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            return;
+        }
+
+        // Get media URLs from cache
+        const cachedData = tweetCache.get(this.tweetId);
+        const mediaUrls = cachedData?.mediaUrls || [];
+        const currentArticle = this.findCurrentArticleElement();
+        // Use try/finally to ensure buttons are re-enabled
+        try {
+            answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
+        } finally {
+             // Re-enable buttons after the async function is called
+             // Note: The answer function itself will update the UI with the final answer/questions
+             // This might re-enable slightly before the answer appears, which is acceptable.
+            setTimeout(() => { // Use timeout to ensure it happens after current execution context
+                 if (this.followUpQuestionsElement) {
+                    this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
+                         // Find the original text if needed, or just re-enable
+                         // For simplicity, just re-enable. The update() call inside answerFollowUpQuestion
+                         // will redraw the buttons with new text anyway.
+                         btn.disabled = false;
+                         // Restore text if needed (might cause flicker)
+                         // if(btn.dataset.questionText) btn.textContent = `🤔 ${btn.dataset.questionText}`;
+                     });
+                 }
+            }, 100); // Small delay
+        }
+    }
+
+    _handleCustomQuestionClick() {
+        if (!this.customQuestionInput || !this.customQuestionButton) return;
+
+        const questionText = this.customQuestionInput.value.trim();
+        if (!questionText) {
+            showStatus("Please enter a question.", "warning");
+            this.customQuestionInput.focus();
+            return;
+        }
+
+        const apiKey = browserGet('openrouter-api-key', '');
+
+        // --- Add UI Feedback ---
+        this.customQuestionInput.disabled = true;
+        this.customQuestionButton.disabled = true;
+        this.customQuestionButton.textContent = 'Asking...';
+        // Optionally disable suggested question buttons too
+        this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
+        this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+        // --- End UI Feedback ---
+
+        if (!apiKey) {
+            showStatus('API key missing. Cannot answer question.', 'error');
+            this.update({ lastAnswer: "Error: API Key missing." });
+            this.customQuestionInput.disabled = false;
+            this.customQuestionButton.disabled = false;
+            this.customQuestionButton.textContent = 'Ask';
+            this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            return;
+        }
+
+        // Clear the input field
+        this.customQuestionInput.value = '';
+
+        // Get media URLs from cache
+        const cachedData = tweetCache.get(this.tweetId);
+        const mediaUrls = cachedData?.mediaUrls || [];
+        const currentArticle = this.findCurrentArticleElement();
+
+        // Use try/finally to ensure buttons/input are re-enabled
+        try {
+            answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
+        } finally {
+            // Re-enable after the async call starts. The answer function updates UI with the result.
+             setTimeout(() => {
+                if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+                if (this.customQuestionButton) {
+                    this.customQuestionButton.disabled = false;
+                    this.customQuestionButton.textContent = 'Ask';
+                }
+                // Re-enable suggested questions as well (answerFollowUpQuestion will redraw them)
+                 if (this.followUpQuestionsElement) {
+                    this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+                 }
+             }, 100);
+        }
+    }
+
     // --- Public API ---
 
     /**
@@ -622,17 +827,21 @@ class ScoreIndicator {
      * @param {string} [options.description] - New description text.
      * @param {string} [options.reasoning] - New reasoning text.
      * @param {object|null} [options.metadata] - New metadata object.
+     * @param {string[]} [options.questions] - New follow-up questions.
+     * @param {string} [options.lastAnswer] - Last generated answer.
      */
-    update({ status, score = null, description = '', reasoning = '', metadata = null }) {
+    update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined, lastAnswer = undefined }) {
         // console.log(`[ScoreIndicator ${this.tweetId}] Updating state - Status: ${status}, Score: ${score}`);
         const statusChanged = status !== undefined && this.status !== status;
         const scoreChanged = score !== null && this.score !== score;
         const descriptionChanged = description !== '' && this.description !== description;
         const reasoningChanged = reasoning !== '' && this.reasoning !== reasoning;
         const metadataChanged = metadata !== null && JSON.stringify(this.metadata) !== JSON.stringify(metadata);
+        const questionsChanged = questions !== undefined && JSON.stringify(this.questions) !== JSON.stringify(questions);
+        const lastAnswerChanged = lastAnswer !== undefined && this.lastAnswer !== lastAnswer;
 
         // Only update if something actually changed
-        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged) {
+        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged && !questionsChanged && !lastAnswerChanged) {
             // console.log(`[ScoreIndicator ${this.tweetId}] No state change detected.`);
             return;
         }
@@ -647,6 +856,8 @@ class ScoreIndicator {
         if (descriptionChanged) this.description = description;
         if (reasoningChanged) this.reasoning = reasoning;
         if (metadataChanged) this.metadata = metadata;
+        if (questionsChanged) this.questions = questions;
+        if (lastAnswerChanged) this.lastAnswer = lastAnswer;
 
         // Update autoScroll state based on new status BEFORE UI updates
         if (statusChanged) {
@@ -665,7 +876,7 @@ class ScoreIndicator {
             this._updateIndicatorUI();
         }
         // Update tooltip if content changed or if visibility/scrolling might need adjustment
-        if (descriptionChanged || reasoningChanged || statusChanged || metadataChanged) {
+        if (descriptionChanged || reasoningChanged || statusChanged || metadataChanged || questionsChanged || lastAnswerChanged) {
             this._updateTooltipUI(); // This handles content and auto-scroll if visible
         } else {
             // If only score changed, ensure scroll button visibility is correct
@@ -766,6 +977,14 @@ class ScoreIndicator {
         this.copyButton?.removeEventListener('click', this._handleCopyClick);
         this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick);
         this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick);
+        this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick);
+        this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick);
+        this.customQuestionInput?.removeEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Prevent default form submission/newline
+                this._handleCustomQuestionClick();
+            }
+        });
 
 
         this.indicatorElement?.remove();
@@ -789,6 +1008,11 @@ class ScoreIndicator {
         this.copyButton = null;
         this.reasoningToggle = null;
         this.scrollButton = null;
+        this.followUpQuestionsElement = null;
+        this.lastAnswerElement = null;
+        this.customQuestionContainer = null;
+        this.customQuestionInput = null;
+        this.customQuestionButton = null;
     }
 
     /** Ensures the indicator element is attached to the correct current article element. */

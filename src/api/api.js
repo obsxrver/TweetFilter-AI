@@ -30,6 +30,51 @@ const safetySettings = [
 ];
 
 /**
+ * Extracts follow-up questions from the AI response content.
+ * @param {string} content - The full AI response content.
+ * @returns {string[]} An array of 3 questions, or an empty array if not found.
+ */
+function extractFollowUpQuestions(content) {
+    if (!content) return [];
+
+    const questions = [];
+    const q1Marker = "Q_1.";
+    const q2Marker = "Q_2.";
+    const q3Marker = "Q_3.";
+
+    const q1Start = content.indexOf(q1Marker);
+    const q2Start = content.indexOf(q2Marker);
+    const q3Start = content.indexOf(q3Marker);
+
+    // Ensure all markers are present and in the correct order
+    if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
+        // Extract Q1: text between Q_1. and Q_2.
+        const q1Text = content.substring(q1Start + q1Marker.length, q2Start).trim();
+        questions.push(q1Text);
+
+        // Extract Q2: text between Q_2. and Q_3.
+        const q2Text = content.substring(q2Start + q2Marker.length, q3Start).trim();
+        questions.push(q2Text);
+
+        // Extract Q3: text after Q_3. until the end of the content
+        // (Or potentially until the next major marker if the prompt changes later)
+        const q3Text = content.substring(q3Start + q3Marker.length).trim();
+        // Remove any trailing markers from Q3 if necessary
+        // For now, just trim potential whitespace
+        questions.push(q3Text);
+
+        // Basic validation: Ensure questions are not empty
+        if (questions.every(q => q.length > 0)) {
+            return questions;
+        }
+    }
+
+    // If markers aren't found or questions are empty, return empty array
+    console.warn("[extractFollowUpQuestions] Failed to find or parse Q_1/Q_2/Q_3 markers.");
+    return [];
+}
+
+/**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
  * 
  * @param {string} tweetText - The text content of the tweet
@@ -38,7 +83,7 @@ const safetySettings = [
  * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
  * @param {number} [maxRetries=3] - Maximum number of retry attempts
  * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
- * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any}>} The rating result
+ * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
     // Add a cleanup function to ensure pendingRequests is always decremented
@@ -167,14 +212,22 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     tweetCache.set(tweetId, {
                         score: score,
                         description: result.content,
+                        reasoning: result.reasoning,
+                        questions: extractFollowUpQuestions(result.content),
+                        lastAnswer: "",
                         tweetContent: tweetText,
-                        streaming: false
+                        mediaUrls: mediaUrls,
+                        streaming: false,
+                        timestamp: Date.now(),
+                        metadata: result.data?.id ? { generationId: result.data.id } : null
                     });
                     
                     return {
                         score,
                         content: result.content,
                         reasoning: result.reasoning,
+                        questions: extractFollowUpQuestions(result.content),
+                        lastAnswer: "",
                         error: false,
                         cached: false,
                         data: result.data
@@ -203,6 +256,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         score: 5,
         content: "Failed to get valid rating after multiple attempts",
         reasoning: "",
+        questions: [],
+        lastAnswer: "",
         error: true,
         data: null
     };
@@ -309,7 +364,7 @@ async function rateTweet(request, apiKey) {
  * @param {string} tweetId - The tweet ID
  * @param {string} tweetText - The text content of the tweet
  * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
- * @returns {Promise<{content: string, error: boolean, data: any}>} The rating result
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
  */
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
     // Check if there's already an active streaming request for this tweet
@@ -327,6 +382,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             tweetContent: tweetText,
             description: "",
             reasoning: "",
+            questions: [],
+            lastAnswer: "",
             score: null
         });
     }
@@ -346,7 +403,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         }
 
         let aggregatedContent = existingCache?.description || "";
-        let aggregatedReasoning = existingCache?.reasoning || ""; // Track reasoning traces
+        let aggregatedReasoning = existingCache?.reasoning || "";
+        let aggregatedQuestions = existingCache?.questions || [];
         let finalData = null;
         let score = existingCache?.score || null;
         
@@ -371,7 +429,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     status: 'streaming',
                     score: score,
                     description: aggregatedContent || "Rating in progress...",
-                    reasoning: aggregatedReasoning
+                    reasoning: aggregatedReasoning,
+                    questions: [],
+                    lastAnswer: ""
                 });
                 
                 // Update cache with partial data during streaming
@@ -415,7 +475,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     streaming: false,
                     timestamp: Date.now(),
                     error: finalStatus === 'error' ? "No score detected" : undefined,
-                    metadata: null // Placeholder for metadata
+                    metadata: finalData?.id ? { generationId: finalData.id } : null
                 };
                 tweetCache.set(tweetId, finalCacheData);
 
@@ -425,7 +485,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     score: score,
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning,
-                    metadata: null // Pass null metadata initially
+                    questions: extractFollowUpQuestions(aggregatedContent),
+                    lastAnswer: ""
                 });
 
                 if (tweetArticle) {
@@ -456,7 +517,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     status: 'error',
                     score: 5,
                     description: `Stream Error: ${errorData.message}`,
-                    reasoning: ''
+                    reasoning: '',
+                    questions: [],
+                    lastAnswer: ''
                 });
 
                 // Update cache to reflect error
@@ -541,6 +604,208 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
     }
 }
 
+/**
+ * Answers a follow-up question about a tweet and generates new questions.
+ *
+ * @param {string} tweetId - The ID of the tweet being discussed.
+ * @param {string} questionText - The follow-up question being asked.
+ * @param {string} apiKey - The OpenRouter API key.
+ * @param {Element} [tweetArticle=null] - The DOM element for the tweet article.
+ * @param {ScoreIndicator} indicatorInstance - The ScoreIndicator instance to update.
+ * @param {string[]} [mediaUrls=[]] - Optional array of media URLs from the original tweet.
+ * @returns {Promise<void>} Resolves when the answer is generated and UI updated.
+ */
+async function answerFollowUpQuestion(tweetId, questionText, apiKey, tweetArticle, indicatorInstance, mediaUrls = []) {
+    console.log(`[FollowUp] Answering question for ${tweetId}: "${questionText}"`);
+    const useStreaming = browserGet('enableStreaming', false);
+
+    // 1. Get original context from cache
+    const cachedData = tweetCache.get(tweetId);
+    let originalContext = cachedData?.tweetContent || null;
+
+    // If context not in cache, try to re-scrape (less ideal)
+    if (!originalContext && tweetArticle) {
+        try {
+            console.warn(`[FollowUp] Original context not in cache for ${tweetId}. Re-scraping.`);
+            originalContext = await getFullContext(tweetArticle, tweetId, apiKey);
+            // Update cache with the scraped context
+            if (originalContext && cachedData) {
+                cachedData.tweetContent = originalContext;
+                tweetCache.set(tweetId, cachedData);
+            } else if (originalContext && !cachedData) {
+                 tweetCache.set(tweetId, { tweetContent: originalContext, timestamp: Date.now() });
+            }
+        } catch (scrapeError) {
+            console.error(`[FollowUp] Failed to re-scrape context for ${tweetId}:`, scrapeError);
+            indicatorInstance.update({
+                lastAnswer: `Error: Could not retrieve original tweet context to answer question.`
+            });
+            return;
+        }
+    }
+
+    if (!originalContext) {
+        indicatorInstance.update({
+            lastAnswer: `Error: Original tweet context unavailable.`
+        });
+        return;
+    }
+
+     // 2. Construct the prompt for answering the question
+    const followUpPrompt = `
+You are answering a follow-up question about a specific tweet.
+Here is the original tweet context:
+_______BEGIN TWEET CONTEXT_______
+${originalContext}
+_______END TWEET CONTEXT_______
+
+The user's follow-up question is: "${questionText}"
+
+Answer the user's question concisely and accurately.
+After answering, provide 3 new, relevant follow-up questions the user might have based on your answer or the original context.
+
+Follow this format exactly:
+[ANSWER]
+[Your answer here]
+[3 FOLLOW UP Questions]
+Q_1. [New Question 1]
+Q_2. [New Question 2]
+Q_3. [New Question 3]
+`;
+    const request = {
+        model: selectedModel, // Use the same model as the initial rating
+        messages: [
+            // No system prompt needed here as instructions are inline
+            {
+                role: "user",
+                content: [{ type: "text", text: followUpPrompt }]
+            }
+        ],
+        temperature: modelTemperature,
+        top_p: modelTopP,
+        max_tokens: maxTokens,
+        stream: useStreaming // Set stream based on user setting
+    };
+
+    // Add image URLs if present and supported by the *selected rating model*
+    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
+        console.log(`[FollowUp] Adding ${mediaUrls.length} images to follow-up request for ${tweetId}`);
+        for (const url of mediaUrls) {
+            request.messages[0].content.push({
+                type: "image_url",
+                image_url: { "url": url }
+            });
+        }
+    }
+
+    if (selectedModel.includes('gemini')) {
+        request.config = { safetySettings: safetySettings };
+    }
+    if (providerSort) {
+        request.provider = { sort: providerSort, allow_fallbacks: true };
+    }
+
+    // 3. Update UI immediately to show "Thinking..."
+    indicatorInstance.update({
+        lastAnswer: `*Answering "${questionText}"...*`,
+        questions: [] // Temporarily hide old questions
+    });
+
+
+    // 4. Make API call (Streaming or Non-Streaming)
+    try {
+        let finalAnswer = "*Processing...*";
+        let finalQuestions = [];
+
+        if (useStreaming) {
+            await new Promise((resolve, reject) => {
+                 let aggregatedContent = "";
+                 let currentAnswer = "";
+                 let currentQuestions = [];
+
+                 getCompletionStreaming(
+                     request, apiKey,
+                     // onChunk
+                     (chunkData) => {
+                         aggregatedContent = chunkData.content || aggregatedContent;
+                         // Basic parsing for streaming answer part
+                         const answerMatch = aggregatedContent.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
+                         currentAnswer = answerMatch ? answerMatch[1].trim() : "*Processing answer...*";
+
+                         // Update UI with streaming answer
+                         indicatorInstance.update({
+                             lastAnswer: currentAnswer,
+                             questions: [] // Keep questions hidden during stream
+                         });
+                     },
+                     // onComplete
+                     (result) => {
+                         aggregatedContent = result.content || aggregatedContent;
+                         const answerMatch = aggregatedContent.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
+                         finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
+                         finalQuestions = extractFollowUpQuestions(aggregatedContent); // Extract new questions
+
+                         // Update cache
+                         const currentCache = tweetCache.get(tweetId) || {};
+                         currentCache.lastAnswer = finalAnswer;
+                         currentCache.questions = finalQuestions;
+                         currentCache.timestamp = Date.now();
+                         tweetCache.set(tweetId, currentCache);
+
+                         // Final UI update
+                         indicatorInstance.update({ lastAnswer: finalAnswer, questions: finalQuestions });
+                         resolve();
+                     },
+                     // onError
+                     (error) => {
+                         console.error("[FollowUp Stream Error]", error);
+                         finalAnswer = `Error generating answer: ${error.message}`;
+                         indicatorInstance.update({ lastAnswer: finalAnswer, questions: [] });
+                         reject(new Error(error.message));
+                     },
+                     60000, // Longer timeout for follow-up?
+                     `followup-${tweetId}` // Unique ID for follow-up stream
+                 );
+             });
+
+        } else {
+            // Non-streaming follow-up
+            const result = await getCompletion(request, apiKey, 60000);
+             if (result.error || !result.data?.choices?.[0]?.message?.content) {
+                throw new Error(result.message || "Failed to get follow-up answer.");
+            }
+             const content = result.data.choices[0].message.content;
+             const answerMatch = content.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
+             finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
+             finalQuestions = extractFollowUpQuestions(content);
+
+             // Update cache
+             const currentCache = tweetCache.get(tweetId) || {};
+             currentCache.lastAnswer = finalAnswer;
+             currentCache.questions = finalQuestions;
+             currentCache.timestamp = Date.now();
+             tweetCache.set(tweetId, currentCache);
+
+             // Final UI update
+             indicatorInstance.update({ lastAnswer: finalAnswer, questions: finalQuestions });
+        }
+
+    } catch (error) {
+        console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
+        const errorMessage = `Error answering question: ${error.message}`;
+         indicatorInstance.update({
+            lastAnswer: errorMessage,
+            questions: cachedData?.questions || [] // Restore previous questions on error
+         });
+         // Update cache with error message? Maybe not, keep last successful answer?
+         const currentCache = tweetCache.get(tweetId) || {};
+         currentCache.lastAnswer = errorMessage; // Store error in lastAnswer
+         // currentCache.questions = []; // Optionally clear questions on error
+         currentCache.timestamp = Date.now();
+         tweetCache.set(tweetId, currentCache);
+    }
+}
+
 // Export all functions
 // // export {
 //     safetySettings,
@@ -549,4 +814,6 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
 //     rateTweet,
 //     rateTweetStreaming
 // };
+
+
 

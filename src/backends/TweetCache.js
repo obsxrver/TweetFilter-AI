@@ -73,8 +73,12 @@ class TweetCache {
         // Standardize the rating object structure
         this.cache[tweetId] = {
             score: rating.score,
+            fullContext: rating.fullContext || '',
             description: rating.description || '',
             reasoning: rating.reasoning || '',
+            questions: rating.questions || [],
+            lastAnswer: rating.lastAnswer || '',
+            mediaUrls: rating.mediaUrls || [],
             timestamp: rating.timestamp || Date.now(),
             streaming: rating.streaming || false,
             blacklisted: rating.blacklisted || false,
@@ -89,8 +93,11 @@ class TweetCache {
             }
         };
 
-        // Always use the debounced save
-        this.debouncedSaveToStorage();
+        if(!saveImmediately) {
+            this.debouncedSaveToStorage();
+        } else {
+            this.#saveToStorageInternal();
+        }
     }
     has(tweetId) {
         return this.cache[tweetId] !== undefined;
