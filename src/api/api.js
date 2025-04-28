@@ -622,6 +622,8 @@ async function answerFollowUpQuestion(tweetId, questionText, apiKey, tweetArticl
     // 1. Get original context from cache
     const cachedData = tweetCache.get(tweetId);
     let originalContext = cachedData?.tweetContent || null;
+    const originalScore = cachedData?.score; // Get score
+    const originalDescription = cachedData?.description; // Get description
 
     // If context not in cache, try to re-scrape (less ideal)
     if (!originalContext && tweetArticle) {
@@ -659,6 +661,13 @@ _______BEGIN TWEET CONTEXT_______
 ${originalContext}
 _______END TWEET CONTEXT_______
 
+${originalScore !== undefined && originalDescription ? `
+Here is the original AI rating and description for the tweet:
+SCORE: ${originalScore}
+DESCRIPTION:
+${originalDescription}
+---------------------------------
+` : ''}
 The user's follow-up question is: "${questionText}"
 
 Answer the user's question concisely and accurately.
@@ -673,7 +682,7 @@ Q_2. [New Question 2]
 Q_3. [New Question 3]
 `;
     const request = {
-        model: selectedModel, // Use the same model as the initial rating
+        model: `${selectedModel}:online`, // Use the same model as the initial rating
         messages: [
             // No system prompt needed here as instructions are inline
             {
@@ -728,15 +737,8 @@ Q_3. [New Question 3]
                      // onChunk
                      (chunkData) => {
                          aggregatedContent = chunkData.content || aggregatedContent;
-                         // Basic parsing for streaming answer part
-                         const answerMatch = aggregatedContent.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
-                         currentAnswer = answerMatch ? answerMatch[1].trim() : "*Processing answer...*";
-
-                         // Update UI with streaming answer
-                         indicatorInstance.update({
-                             lastAnswer: currentAnswer,
-                             questions: [] // Keep questions hidden during stream
-                         });
+                         // Use the indicator instance method to render the streaming text
+                         indicatorInstance._renderStreamingAnswer(aggregatedContent);
                      },
                      // onComplete
                      (result) => {
@@ -747,20 +749,29 @@ Q_3. [New Question 3]
 
                          // Update cache
                          const currentCache = tweetCache.get(tweetId) || {};
-                         currentCache.lastAnswer = finalAnswer;
+                         // Update history in cache (if needed, depends on cache strategy)
+                         // For simplicity, let's assume cache stores history or last answer
+                         // If storing history: currentCache.conversationHistory = indicatorInstance.conversationHistory;
+                         currentCache.lastAnswer = finalAnswer; // Keep storing last answer for simplicity for now
                          currentCache.questions = finalQuestions;
                          currentCache.timestamp = Date.now();
                          tweetCache.set(tweetId, currentCache);
 
-                         // Final UI update
-                         indicatorInstance.update({ lastAnswer: finalAnswer, questions: finalQuestions });
+                         // Final UI update using the instance helper
+                         indicatorInstance._updateConversationHistory(questionText, finalAnswer);
+                         // Update suggested questions
+                         indicatorInstance.questions = finalQuestions;
+                         indicatorInstance._updateTooltipUI(); // Refresh UI for questions
                          resolve();
                      },
                      // onError
                      (error) => {
                          console.error("[FollowUp Stream Error]", error);
                          finalAnswer = `Error generating answer: ${error.message}`;
-                         indicatorInstance.update({ lastAnswer: finalAnswer, questions: [] });
+                         // Update UI using the instance helper
+                         indicatorInstance._updateConversationHistory(questionText, finalAnswer);
+                         indicatorInstance.questions = []; // Clear questions on error
+                         indicatorInstance._updateTooltipUI(); // Refresh UI
                          reject(new Error(error.message));
                      },
                      60000, // Longer timeout for follow-up?
@@ -781,23 +792,28 @@ Q_3. [New Question 3]
 
              // Update cache
              const currentCache = tweetCache.get(tweetId) || {};
-             currentCache.lastAnswer = finalAnswer;
+             // Update history in cache (if needed)
+             // currentCache.conversationHistory = indicatorInstance.conversationHistory; // Need instance here
+             currentCache.lastAnswer = finalAnswer; // Keep storing last answer for simplicity for now
              currentCache.questions = finalQuestions;
              currentCache.timestamp = Date.now();
              tweetCache.set(tweetId, currentCache);
 
-             // Final UI update
-             indicatorInstance.update({ lastAnswer: finalAnswer, questions: finalQuestions });
+             // Final UI update using instance helper
+             indicatorInstance._updateConversationHistory(questionText, finalAnswer);
+             indicatorInstance.questions = finalQuestions;
+             indicatorInstance._updateTooltipUI(); // Refresh UI
         }
 
     } catch (error) {
         console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
         const errorMessage = `Error answering question: ${error.message}`;
-         indicatorInstance.update({
-            lastAnswer: errorMessage,
-            questions: cachedData?.questions || [] // Restore previous questions on error
-         });
-         // Update cache with error message? Maybe not, keep last successful answer?
+        // Update UI using instance helper
+         indicatorInstance._updateConversationHistory(questionText, errorMessage);
+         indicatorInstance.questions = cachedData?.questions || [] // Restore previous questions on error
+         indicatorInstance._updateTooltipUI(); // Refresh UI
+
+         // Update cache with error message?
          const currentCache = tweetCache.get(tweetId) || {};
          currentCache.lastAnswer = errorMessage; // Store error in lastAnswer
          // currentCache.questions = []; // Optionally clear questions on error

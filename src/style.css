@@ -1692,3 +1692,77 @@ input:checked+.toggle-slider:before {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* --- Conversation History Styling --- */
+.tooltip-conversation-history {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Space between conversation turns */
+}
+
+.conversation-turn {
+    background-color: rgba(255, 255, 255, 0.04);
+    padding: 10px;
+    border-radius: 6px;
+    line-height: 1.4;
+}
+
+.conversation-question {
+    font-size: 0.9em;
+    color: #b0bec5; /* Lighter grey for user question */
+    margin-bottom: 6px;
+}
+
+.conversation-question strong {
+    color: #cfd8dc; /* Slightly brighter for "You:" */
+}
+
+.conversation-answer {
+    font-size: 0.95em;
+    color: #e1e8ed; /* Main text color for AI answer */
+}
+
+.conversation-answer strong {
+    color: #1d9bf0; /* Twitter blue for "AI:" */
+}
+
+.conversation-separator {
+    border: none;
+    border-top: 1px dashed rgba(255, 255, 255, 0.15);
+    margin: 0; /* Reset margin, gap handles spacing */
+}
+
+.pending-answer {
+    color: #ffa726; /* Orange for pending state */
+    font-style: italic;
+}
+
+/* Blinking cursor for streaming answers */
+.pending-cursor {
+    display: inline-block;
+    color: #1d9bf0; /* Twitter blue */
+    animation: blink 0.7s infinite;
+    font-weight: bold;
+    margin-left: 2px;
+    font-style: normal; /* Override italic from pending-answer if nested */
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+
+/* Styling for links generated from markdown in AI answers */
+.ai-generated-link {
+    color: #1d9bf0; /* Twitter blue */
+    text-decoration: underline;
+    transition: color 0.2s ease;
+}
+
+.ai-generated-link:hover {
+    color: #1a8cd8; /* Slightly darker blue on hover */
+    text-decoration: underline;
+}

@@ -29,8 +29,8 @@ class ScoreIndicator {
         this.descriptionElement = null;
         this.scrollButton = null;
         this.metadataElement = null; // Add element for metadata
+        this.conversationContainerElement = null; // Container for Q&A history
         this.followUpQuestionsElement = null; // Element for follow-up questions
-        this.lastAnswerElement = null; // Element for the last answer
         this.customQuestionContainer = null; // Container for custom question input/button
         this.customQuestionInput = null;
         this.customQuestionButton = null;
@@ -40,8 +40,8 @@ class ScoreIndicator {
         this.description = '';
         this.reasoning = '';
         this.metadata = null; // Add property to store metadata
+        this.conversationHistory = []; // Array to store { question, answer } pairs
         this.questions = []; // Add property to store follow-up questions
-        this.lastAnswer = ''; // Add property to store the last answer
         this.isPinned = false;
         this.isVisible = false;
         this.autoScroll = true; // Default to true for pending/streaming
@@ -135,11 +135,10 @@ class ScoreIndicator {
         this.descriptionElement.className = 'description-text';
         this.tooltipElement.appendChild(this.descriptionElement);
 
-        // --- Last Answer Area ---
-        this.lastAnswerElement = document.createElement('div');
-        this.lastAnswerElement.className = 'tooltip-last-answer';
-        this.lastAnswerElement.style.display = 'none'; // Hide initially
-        this.tooltipElement.appendChild(this.lastAnswerElement);
+        // --- Conversation History Area ---
+        this.conversationContainerElement = document.createElement('div');
+        this.conversationContainerElement.className = 'tooltip-conversation-history';
+        this.tooltipElement.appendChild(this.conversationContainerElement);
 
         // --- Follow-Up Questions Area ---
         this.followUpQuestionsElement = document.createElement('div');
@@ -302,7 +301,7 @@ class ScoreIndicator {
 
     /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
-        if (!this.tooltipElement || !this.descriptionElement || !this.reasoningTextElement || !this.reasoningDropdown) return;
+        if (!this.tooltipElement || !this.descriptionElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement) return; // Added conversationContainerElement check
 
         // Store current scroll position and whether we were at bottom before update
         const wasNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
@@ -314,8 +313,8 @@ class ScoreIndicator {
 
         const contentChanged = this.descriptionElement.innerHTML !== formatted.description ||
             this.reasoningTextElement.innerHTML !== formatted.reasoning ||
-            this.lastAnswerElement.innerHTML !== (this.lastAnswer ? `<hr class="answer-separator"><div>${this.lastAnswer}</div>` : '') || // Check if answer changed
-            // Crude check for question changes - more robust would compare arrays
+            // Compare conversation history content instead of last answer
+            this.conversationContainerElement.innerHTML !== this._renderConversationHistory() ||
             this.followUpQuestionsElement.children.length !== this.questions.length;
 
         // Update description and reasoning text
@@ -325,22 +324,10 @@ class ScoreIndicator {
         // Show/hide reasoning dropdown
         this.reasoningDropdown.style.display = (formatted.reasoning) ? 'block' : 'none';
 
-        // --- Update Last Answer Display ---
-        if (this.lastAnswerElement) {
-            if (this.lastAnswer && this.lastAnswer.trim()) {
-                // Format answer (simple formatting for now)
-                 const formattedAnswer = this.lastAnswer
-                    .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/\n/g, '<br>');
-                this.lastAnswerElement.innerHTML = `<hr class="answer-separator">${formattedAnswer}`;
-                this.lastAnswerElement.style.display = 'block';
-            } else {
-                this.lastAnswerElement.innerHTML = '';
-                this.lastAnswerElement.style.display = 'none';
-            }
+        // --- Update Conversation History Display ---
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.innerHTML = this._renderConversationHistory();
+            this.conversationContainerElement.style.display = this.conversationHistory.length > 0 ? 'block' : 'none';
         }
 
         // --- Update Follow-Up Questions Display ---
@@ -406,6 +393,48 @@ class ScoreIndicator {
         } else {
             this._updateScrollButtonVisibility();
         }
+    }
+
+    /** Renders the conversation history into HTML string */
+    _renderConversationHistory() {
+        if (!this.conversationHistory || this.conversationHistory.length === 0) {
+            return '';
+        }
+
+        let historyHtml = '';
+        this.conversationHistory.forEach((turn, index) => {
+            const formattedQuestion = turn.question
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Basic escaping
+
+            let formattedAnswer;
+            if (turn.answer === 'pending') {
+                formattedAnswer = '<em class="pending-answer">Answering...</em>';
+            } else {
+                // Apply formatting similar to the main description/reasoning
+                formattedAnswer = turn.answer
+                    .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
+                    // Format markdown links: [text](url) -> <a href="url">text</a>
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>') // Added class
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+            }
+
+            // Add a separator before each Q&A pair except the first one
+            if (index > 0) {
+                historyHtml += '<hr class="conversation-separator">';
+            }
+
+            historyHtml += `
+                <div class="conversation-turn">
+                    <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
+                </div>
+            `;
+        });
+
+        return historyHtml;
     }
 
     _performAutoScroll() {
@@ -715,11 +744,19 @@ class ScoreIndicator {
         button.textContent = `🤔 Asking: ${questionText}...`;
         // Optionally disable other question buttons too
         this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+        //this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+
+        // << New: Add question to history and update UI
+        this.conversationHistory.push({ question: questionText, answer: 'pending' });
+        this._updateTooltipUI(); // Update UI to show pending state
+        this.questions = []; // Clear suggested questions
+        this._updateTooltipUI(); // Update UI again to remove suggested questions
 
         if (!apiKey) {
             showStatus('API key missing. Cannot answer question.', 'error');
-            this.update({ lastAnswer: "Error: API Key missing." }); // Update UI directly
+            //this.update({ lastAnswer: "Error: API Key missing." }); // Update UI directly
+            // << New: Update the pending history entry with error
+            this._updateConversationHistory(questionText, "Error: API Key missing.");
             button.disabled = false; // Re-enable button on error
             this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
             return;
@@ -727,7 +764,9 @@ class ScoreIndicator {
 
         if (!questionText) {
             console.error("Follow-up question text not found on button.");
-            this.update({ lastAnswer: "Error: Could not identify question." });
+            //this.update({ lastAnswer: "Error: Could not identify question." });
+            // << New: Update the pending history entry with error
+            this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.");
             button.disabled = false; // Re-enable button on error
             this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
             return;
@@ -739,6 +778,7 @@ class ScoreIndicator {
         const currentArticle = this.findCurrentArticleElement();
         // Use try/finally to ensure buttons are re-enabled
         try {
+            // Pass `this` instance so answerFollowUpQuestion can update the history
             answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
         } finally {
              // Re-enable buttons after the async function is called
@@ -777,12 +817,20 @@ class ScoreIndicator {
         this.customQuestionButton.textContent = 'Asking...';
         // Optionally disable suggested question buttons too
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+        //this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+
+        // << New: Add question to history and update UI
+        this.conversationHistory.push({ question: questionText, answer: 'pending' });
+        this.questions = []; // Clear suggested questions
+        this._updateTooltipUI(); // Update UI to show pending state & remove questions
+
         // --- End UI Feedback ---
 
         if (!apiKey) {
             showStatus('API key missing. Cannot answer question.', 'error');
-            this.update({ lastAnswer: "Error: API Key missing." });
+            //this.update({ lastAnswer: "Error: API Key missing." });
+            // << New: Update the pending history entry with error
+            this._updateConversationHistory(questionText, "Error: API Key missing.");
             this.customQuestionInput.disabled = false;
             this.customQuestionButton.disabled = false;
             this.customQuestionButton.textContent = 'Ask';
@@ -800,6 +848,7 @@ class ScoreIndicator {
 
         // Use try/finally to ensure buttons/input are re-enabled
         try {
+            // Pass `this` instance so answerFollowUpQuestion can update the history
             answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
         } finally {
             // Re-enable after the async call starts. The answer function updates UI with the result.
@@ -820,6 +869,64 @@ class ScoreIndicator {
     // --- Public API ---
 
     /**
+     * Finds a pending entry in the conversation history by question text and updates its answer.
+     * Also updates the UI.
+     * @param {string} question - The text of the question that was asked.
+     * @param {string} answer - The new answer (or error message).
+     */
+    _updateConversationHistory(question, answer) {
+        const entryIndex = this.conversationHistory.findIndex(turn => turn.question === question && turn.answer === 'pending');
+        if (entryIndex !== -1) {
+            this.conversationHistory[entryIndex].answer = answer;
+            this._updateTooltipUI(); // Refresh the view to show the updated answer
+        } else {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find pending history entry for question: "${question}"`);
+            // Optionally, append as a new entry if not found, though this might indicate a logic error
+            // this.conversationHistory.push({ question: question, answer: answer });
+            // this._updateTooltipUI();
+        }
+    }
+
+    /**
+     * Updates the visual display of the last answer element during streaming
+     * without changing the underlying conversationHistory state.
+     * @param {string} streamingText - The current aggregated text from the stream.
+     */
+    _renderStreamingAnswer(streamingText) {
+        if (!this.conversationContainerElement) return;
+
+        // Find the last answer element
+        const answerElements = this.conversationContainerElement.querySelectorAll('.conversation-answer');
+        const lastAnswerElement = answerElements.length > 0 ? answerElements[answerElements.length - 1] : null;
+
+        if (lastAnswerElement) {
+            // Ensure the corresponding state is actually pending before updating visuals
+            if (this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].answer === 'pending') {
+                // Format the streaming answer
+                const formattedStreamingAnswer = streamingText
+                    .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
+                    // Format markdown links: [text](url) -> <a href="url">text</a>
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>') // Added class
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+
+                // Update the innerHTML directly, adding the cursor
+                lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
+
+                // Ensure autoscroll if needed
+                if (this.autoScroll) {
+                    this._performAutoScroll();
+                }
+            } else {
+                // Log if we try to render streaming answer but state isn't pending
+                console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
+            }
+        }
+    }
+
+    /**
      * Updates the indicator's state and refreshes the UI.
      * @param {object} options
      * @param {string} [options.status] - New status ('pending', 'streaming', 'rated', 'error', 'cached', 'blacklisted').
@@ -828,9 +935,8 @@ class ScoreIndicator {
      * @param {string} [options.reasoning] - New reasoning text.
      * @param {object|null} [options.metadata] - New metadata object.
      * @param {string[]} [options.questions] - New follow-up questions.
-     * @param {string} [options.lastAnswer] - Last generated answer.
      */
-    update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined, lastAnswer = undefined }) {
+    update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined }) {
         // console.log(`[ScoreIndicator ${this.tweetId}] Updating state - Status: ${status}, Score: ${score}`);
         const statusChanged = status !== undefined && this.status !== status;
         const scoreChanged = score !== null && this.score !== score;
@@ -838,10 +944,10 @@ class ScoreIndicator {
         const reasoningChanged = reasoning !== '' && this.reasoning !== reasoning;
         const metadataChanged = metadata !== null && JSON.stringify(this.metadata) !== JSON.stringify(metadata);
         const questionsChanged = questions !== undefined && JSON.stringify(this.questions) !== JSON.stringify(questions);
-        const lastAnswerChanged = lastAnswer !== undefined && this.lastAnswer !== lastAnswer;
+        // Conversation history updates are handled separately now
 
         // Only update if something actually changed
-        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged && !questionsChanged && !lastAnswerChanged) {
+        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged && !questionsChanged) {
             // console.log(`[ScoreIndicator ${this.tweetId}] No state change detected.`);
             return;
         }
@@ -857,7 +963,6 @@ class ScoreIndicator {
         if (reasoningChanged) this.reasoning = reasoning;
         if (metadataChanged) this.metadata = metadata;
         if (questionsChanged) this.questions = questions;
-        if (lastAnswerChanged) this.lastAnswer = lastAnswer;
 
         // Update autoScroll state based on new status BEFORE UI updates
         if (statusChanged) {
@@ -876,7 +981,7 @@ class ScoreIndicator {
             this._updateIndicatorUI();
         }
         // Update tooltip if content changed or if visibility/scrolling might need adjustment
-        if (descriptionChanged || reasoningChanged || statusChanged || metadataChanged || questionsChanged || lastAnswerChanged) {
+        if (descriptionChanged || reasoningChanged || statusChanged || metadataChanged || questionsChanged) {
             this._updateTooltipUI(); // This handles content and auto-scroll if visible
         } else {
             // If only score changed, ensure scroll button visibility is correct
@@ -1008,8 +1113,8 @@ class ScoreIndicator {
         this.copyButton = null;
         this.reasoningToggle = null;
         this.scrollButton = null;
+        this.conversationContainerElement = null;
         this.followUpQuestionsElement = null;
-        this.lastAnswerElement = null;
         this.customQuestionContainer = null;
         this.customQuestionInput = null;
         this.customQuestionButton = null;
