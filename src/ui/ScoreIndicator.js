@@ -21,6 +21,7 @@ class ScoreIndicator {
         this.tooltipControls = null;
         this.pinButton = null;
         this.copyButton = null;
+        this.tooltipCloseButton = null;
         this.reasoningDropdown = null;
         this.reasoningToggle = null;
         this.reasoningArrow = null;
@@ -91,6 +92,13 @@ class ScoreIndicator {
         this.tooltipControls = document.createElement('div');
         this.tooltipControls.className = 'tooltip-controls';
 
+        // --- New Close Button ---
+        this.tooltipCloseButton = document.createElement('button');
+        this.tooltipCloseButton.className = 'close-button tooltip-close-button'; // Reuse existing style + add specific class
+        this.tooltipCloseButton.innerHTML = '×';
+        this.tooltipCloseButton.title = 'Close tooltip';
+        // --- End New Close Button ---
+
         this.pinButton = document.createElement('button');
         this.pinButton.className = 'tooltip-pin-button';
         this.pinButton.innerHTML = '📌';
@@ -103,6 +111,7 @@ class ScoreIndicator {
 
         this.tooltipControls.appendChild(this.pinButton);
         this.tooltipControls.appendChild(this.copyButton);
+        this.tooltipControls.appendChild(this.tooltipCloseButton); // Add the close button to controls
         this.tooltipElement.appendChild(this.tooltipControls);
 
         // --- Reasoning Dropdown ---
@@ -207,12 +216,12 @@ class ScoreIndicator {
         // Tooltip Events
         this.tooltipElement.addEventListener('mouseenter', this._handleTooltipMouseEnter.bind(this));
         this.tooltipElement.addEventListener('mouseleave', this._handleTooltipMouseLeave.bind(this));
-        this.tooltipElement.addEventListener('click', this._handleTooltipClick.bind(this)); // Handles background clicks
         this.tooltipElement.addEventListener('scroll', this._handleTooltipScroll.bind(this));
 
         // Tooltip Controls Events
         this.pinButton?.addEventListener('click', this._handlePinClick.bind(this));
         this.copyButton?.addEventListener('click', this._handleCopyClick.bind(this));
+        this.tooltipCloseButton?.addEventListener('click', this._handleCloseClick.bind(this));
         this.reasoningToggle?.addEventListener('click', this._handleReasoningToggleClick.bind(this));
         this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
 
@@ -350,13 +359,17 @@ class ScoreIndicator {
 
         // --- Update Metadata Display (New) ---
         if (this.metadataElement) {
-            if (this.metadata && Object.keys(this.metadata).length > 0 && this.metadata.model) { // Check if model exists
-                // Format with clearer labels and line breaks
+            // Check if metadata exists and has more than just the generationId OR just the generationId
+            const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
+            const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
+
+            if (hasFullMetadata) {
+                // Format with clearer labels and line breaks (existing logic)
                 let metadataHTML = '<hr class="metadata-separator">';
                 metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
                 metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
                 if (this.metadata.reasoningTokens > 0) {
-                     metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`; // Add reasoning tokens if available
+                     metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
                 }
                 metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
                 if (this.metadata.mediaInputs > 0) {
@@ -366,8 +379,14 @@ class ScoreIndicator {
 
                 this.metadataElement.innerHTML = metadataHTML;
                 this.metadataElement.style.display = 'block';
+            } else if (hasOnlyGenId) {
+                // Show only the Generation ID while waiting for full details
+                 let metadataHTML = '<hr class="metadata-separator">';
+                 metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
+                 this.metadataElement.innerHTML = metadataHTML;
+                 this.metadataElement.style.display = 'block';
             } else {
-                this.metadataElement.innerHTML = ''; // Clear if no metadata or model
+                this.metadataElement.innerHTML = ''; // Clear if no metadata
                 this.metadataElement.style.display = 'none';
             }
         }
@@ -634,16 +653,29 @@ class ScoreIndicator {
     }
 
     _handleTooltipClick(event) {
-        // Prevent closing if clicking interactive elements within the tooltip
-        if (!this.isPinned &&
-            !event.target.closest('.tooltip-controls button') &&
-            !event.target.closest('.reasoning-toggle') &&
-            !event.target.closest('.scroll-to-bottom-button') &&
-            !event.target.closest('.follow-up-question-button') &&
-            !event.target.closest('.tooltip-custom-question-container')) { // <-- Add this condition
-            this.hide();
+        // If the click is directly on the tooltip background (not its children),
+        // and it's not pinned, maybe hide? Let's disable this for now to rely on the X button.
+        // This prevents accidental closures when selecting text.
+
+        /* --- Removed Background Click Close ---
+        if (!this.isPinned && event.target === this.tooltipElement) {
+             // Check if the click is on interactive elements or their container
+             if (!event.target.closest('.tooltip-controls') &&
+                 !event.target.closest('.reasoning-toggle') &&
+                 !event.target.closest('.scroll-to-bottom-button') &&
+                 !event.target.closest('.follow-up-question-button') &&
+                 !event.target.closest('.tooltip-custom-question-container') &&
+                 !event.target.closest('a') && // Prevent closing when clicking links
+                 window.getSelection().toString().length === 0) // Prevent closing during text selection
+             {
+                 this.hide();
+             }
         }
-        // Clicks on buttons are handled by their specific handlers
+        */
+        // Clicks on specific buttons are handled by their own listeners.
+        // We might still want to stop propagation for clicks inside the tooltip
+        // to prevent them from reaching document-level listeners if any exist.
+        // event.stopPropagation(); // Optional: uncomment if needed
     }
 
     _handleTooltipScroll() {
@@ -1058,6 +1090,12 @@ class ScoreIndicator {
         }, 0);
     }
 
+    // --- New Event Handler for Close Button ---
+    _handleCloseClick(e) {
+        e.stopPropagation();
+        this.hide(); // Simply hide the tooltip
+    }
+    // --- End New Event Handler ---
 
     /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
     destroy() {
@@ -1076,10 +1114,10 @@ class ScoreIndicator {
         this.indicatorElement?.removeEventListener('click', this._handleIndicatorClick);
         this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
         this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
-        this.tooltipElement?.removeEventListener('click', this._handleTooltipClick);
         this.tooltipElement?.removeEventListener('scroll', this._handleTooltipScroll);
         this.pinButton?.removeEventListener('click', this._handlePinClick);
         this.copyButton?.removeEventListener('click', this._handleCopyClick);
+        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick);
         this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick);
         this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick);
         this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick);
@@ -1111,6 +1149,7 @@ class ScoreIndicator {
         this.tooltipElement = null;
         this.pinButton = null;
         this.copyButton = null;
+        this.tooltipCloseButton = null;
         this.reasoningToggle = null;
         this.scrollButton = null;
         this.conversationContainerElement = null;

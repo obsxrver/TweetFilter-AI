@@ -1071,8 +1071,8 @@ input:checked+.toggle-slider:before {
 .tooltip-controls {
     display: flex !important;
     justify-content: flex-end !important;
+    position: relative !important;
     margin: 0 -20px 15px -20px !important;
-    position: sticky !important;
     top: 0 !important;
     background-color: rgba(39, 44, 48, 0.95) !important;
     padding: 12px 15px !important;
@@ -1211,10 +1211,11 @@ input:checked+.toggle-slider:before {
         position: fixed !important;
         width: 100% !important;
         max-width: 100% !important;
-        max-height: 80vh !important;
+        top: 5vh !important;
+        bottom: 5vh !important;
         left: 0 !important;
         right: 0 !important;
-        margin: 10vh auto 0 !important;
+        margin: 0 !important;
         padding: 12px !important;
         box-sizing: border-box !important;
         overflow-y: auto !important;
@@ -1245,6 +1246,16 @@ input:checked+.toggle-slider:before {
     .settings-header .close-button {
         position: relative;
         right: 0;
+    }
+
+    .tooltip-close-button {
+        font-size: 22px !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+
+    .tooltip-controls {
+        padding-right: 40px !important;
     }
 }
 
@@ -1765,4 +1776,48 @@ input:checked+.toggle-slider:before {
 .ai-generated-link:hover {
     color: #1a8cd8; /* Slightly darker blue on hover */
     text-decoration: underline;
+}
+
+/* Style for the new tooltip close button */
+.tooltip-close-button {
+    /* Reuse general close button styles */
+    background: none !important;
+    border: none !important;
+    color: #8899a6 !important; /* Match other control button colors */
+    cursor: pointer !important;
+    font-size: 20px !important; /* Slightly larger for easier tapping */
+    line-height: 1 !important;
+    padding: 4px 8px !important;
+    margin-left: 8px !important; /* Space from other buttons */
+    border-radius: 50% !important; /* Make it round */
+    width: 28px !important; /* Explicit size */
+    height: 28px !important; /* Explicit size */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s !important;
+    order: 3; /* Ensure it comes after pin and copy */
+}
+
+.tooltip-close-button:hover {
+    background-color: rgba(255, 92, 92, 0.1) !important; /* Reddish background on hover */
+    color: #ff5c5c !important; /* Red color on hover */
+}
+
+.tooltip-close-button:active {
+    transform: scale(0.95) !important;
+}
+
+/* Adjust mobile close button specifically if needed */
+@media (max-width: 600px) {
+    .tooltip-close-button {
+        font-size: 22px !important; /* Even larger on mobile */
+        width: 32px !important;
+        height: 32px !important;
+    }
+
+    /* Ensure controls container accommodates button */
+    .tooltip-controls {
+        padding-right: 40px !important; /* Add padding to prevent overlap if button was absolute */
+    }
 }

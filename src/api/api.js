@@ -445,6 +445,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             },
             // onComplete callback - finalize the rating
             (finalResult) => {
+                console.log(finalResult);
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
@@ -486,7 +487,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning,
                     questions: extractFollowUpQuestions(aggregatedContent),
-                    lastAnswer: ""
+                    lastAnswer: "",
+                    metadata: finalData?.id ? { generationId: finalData.id } : null 
                 });
 
                 if (tweetArticle) {
