@@ -1059,6 +1059,8 @@ input:checked+.toggle-slider:before {
     border: 1px solid rgba(255, 255, 255, 0.1);
     word-wrap: break-word;
     box-sizing: border-box !important;
+    max-width: 500px;
+    padding-bottom: 35px;
 }
 
 .score-description.pinned {
@@ -1069,8 +1071,8 @@ input:checked+.toggle-slider:before {
 .tooltip-controls {
     display: flex !important;
     justify-content: flex-end !important;
+    position: relative !important;
     margin: 0 -20px 15px -20px !important;
-    position: sticky !important;
     top: 0 !important;
     background-color: rgba(39, 44, 48, 0.95) !important;
     padding: 12px 15px !important;
@@ -1209,10 +1211,11 @@ input:checked+.toggle-slider:before {
         position: fixed !important;
         width: 100% !important;
         max-width: 100% !important;
-        max-height: 80vh !important;
+        top: 5vh !important;
+        bottom: 5vh !important;
         left: 0 !important;
         right: 0 !important;
-        margin: 10vh auto 0 !important;
+        margin: 0 !important;
         padding: 12px !important;
         box-sizing: border-box !important;
         overflow-y: auto !important;
@@ -1243,6 +1246,16 @@ input:checked+.toggle-slider:before {
     .settings-header .close-button {
         position: relative;
         right: 0;
+    }
+
+    .tooltip-close-button {
+        font-size: 22px !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+
+    .tooltip-controls {
+        padding-right: 40px !important;
     }
 }
 
@@ -1519,4 +1532,292 @@ input:checked+.toggle-slider:before {
 
 /* --- Specific Indicator Styles --- */
 .score-indicator.pending-rating {
+}
+
+/* --- Tooltip Styles --- */
+.score-description {
+    /* ... existing styles ... */
+    max-width: 500px;
+    padding-bottom: 35px; /* Add padding for scroll button */
+    /* ... existing styles ... */
+}
+
+.score-description.streaming-tooltip {
+    border-color: #ffa500; /* Orange border for streaming */
+}
+
+/* ... existing .tooltip-controls, .tooltip-pin-button, .tooltip-copy-button styles ... */
+
+/* --- Reasoning Dropdown --- */
+.reasoning-dropdown {
+    /* ... existing styles ... */
+}
+
+.reasoning-toggle {
+    /* ... existing styles ... */
+}
+
+.reasoning-arrow {
+    /* ... existing styles ... */
+}
+
+.reasoning-content {
+    /* ... existing styles ... */
+}
+
+.reasoning-text {
+    /* ... existing styles ... */
+}
+
+.description-text {
+    /* ... existing styles ... */
+}
+
+/* --- Last Answer Area --- */
+.tooltip-last-answer {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.05); /* Slightly different background */
+    border-radius: 4px;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.answer-separator {
+    border: none;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    margin: 10px 0;
+}
+
+/* --- Follow-Up Questions Area --- */
+.tooltip-follow-up-questions {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* Spacing between buttons */
+}
+
+.follow-up-question-button {
+    background-color: rgba(60, 160, 240, 0.2); /* Light blue background */
+    border: 1px solid rgba(60, 160, 240, 0.5);
+    color: #e1e8ed; /* Light text */
+    padding: 8px 12px;
+    border-radius: 15px; /* Pill shape */
+    cursor: pointer;
+    font-size: 0.85em;
+    text-align: left;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    white-space: normal; /* Allow wrapping */
+    line-height: 1.3;
+}
+
+.follow-up-question-button:hover {
+    background-color: rgba(60, 160, 240, 0.35);
+    border-color: rgba(60, 160, 240, 0.8);
+}
+
+.follow-up-question-button:active {
+    background-color: rgba(60, 160, 240, 0.5);
+}
+
+
+/* --- Metadata Area --- */
+.tooltip-metadata {
+    margin-top: 12px;
+    padding-top: 8px;
+    font-size: 0.8em;
+    color: #8899a6; /* Muted color */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metadata-separator {
+    border: none;
+    border-top: 1px dashed rgba(255, 255, 255, 0.2);
+    margin: 8px 0;
+}
+
+.metadata-line {
+    margin-bottom: 4px;
+}
+
+.metadata-line:last-child {
+    margin-bottom: 0;
+}
+
+/* --- Score Highlight --- */
+.score-highlight {
+    /* ... existing styles ... */
+}
+
+/* --- Scroll Button --- */
+.scroll-to-bottom-button {
+    /* ... existing styles ... */
+}
+
+.tooltip-bottom-spacer {
+    /* ... existing styles ... */
+}
+
+/* --- Custom Question Input Area --- */
+.tooltip-custom-question-container {
+    margin-top: 15px;
+    display: flex;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator */
+}
+
+.tooltip-custom-question-input {
+    flex-grow: 1; /* Take available space */
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(39, 44, 48, 0.9);
+    color: #e7e9ea;
+    font-size: 0.9em;
+}
+
+.tooltip-custom-question-input:focus {
+    border-color: #1d9bf0;
+    outline: none;
+}
+
+.tooltip-custom-question-button {
+    background-color: #1d9bf0;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.tooltip-custom-question-button:hover {
+    background-color: #1a8cd8;
+}
+
+.tooltip-custom-question-button:disabled,
+.tooltip-custom-question-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* --- Conversation History Styling --- */
+.tooltip-conversation-history {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Space between conversation turns */
+}
+
+.conversation-turn {
+    background-color: rgba(255, 255, 255, 0.04);
+    padding: 10px;
+    border-radius: 6px;
+    line-height: 1.4;
+}
+
+.conversation-question {
+    font-size: 0.9em;
+    color: #b0bec5; /* Lighter grey for user question */
+    margin-bottom: 6px;
+}
+
+.conversation-question strong {
+    color: #cfd8dc; /* Slightly brighter for "You:" */
+}
+
+.conversation-answer {
+    font-size: 0.95em;
+    color: #e1e8ed; /* Main text color for AI answer */
+}
+
+.conversation-answer strong {
+    color: #1d9bf0; /* Twitter blue for "AI:" */
+}
+
+.conversation-separator {
+    border: none;
+    border-top: 1px dashed rgba(255, 255, 255, 0.15);
+    margin: 0; /* Reset margin, gap handles spacing */
+}
+
+.pending-answer {
+    color: #ffa726; /* Orange for pending state */
+    font-style: italic;
+}
+
+/* Blinking cursor for streaming answers */
+.pending-cursor {
+    display: inline-block;
+    color: #1d9bf0; /* Twitter blue */
+    animation: blink 0.7s infinite;
+    font-weight: bold;
+    margin-left: 2px;
+    font-style: normal; /* Override italic from pending-answer if nested */
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+
+/* Styling for links generated from markdown in AI answers */
+.ai-generated-link {
+    color: #1d9bf0; /* Twitter blue */
+    text-decoration: underline;
+    transition: color 0.2s ease;
+}
+
+.ai-generated-link:hover {
+    color: #1a8cd8; /* Slightly darker blue on hover */
+    text-decoration: underline;
+}
+
+/* Style for the new tooltip close button */
+.tooltip-close-button {
+    /* Reuse general close button styles */
+    background: none !important;
+    border: none !important;
+    color: #8899a6 !important; /* Match other control button colors */
+    cursor: pointer !important;
+    font-size: 20px !important; /* Slightly larger for easier tapping */
+    line-height: 1 !important;
+    padding: 4px 8px !important;
+    margin-left: 8px !important; /* Space from other buttons */
+    border-radius: 50% !important; /* Make it round */
+    width: 28px !important; /* Explicit size */
+    height: 28px !important; /* Explicit size */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s !important;
+    order: 3; /* Ensure it comes after pin and copy */
+}
+
+.tooltip-close-button:hover {
+    background-color: rgba(255, 92, 92, 0.1) !important; /* Reddish background on hover */
+    color: #ff5c5c !important; /* Red color on hover */
+}
+
+.tooltip-close-button:active {
+    transform: scale(0.95) !important;
+}
+
+/* Adjust mobile close button specifically if needed */
+@media (max-width: 600px) {
+    .tooltip-close-button {
+        font-size: 22px !important; /* Even larger on mobile */
+        width: 32px !important;
+        height: 32px !important;
+    }
+
+    /* Ensure controls container accommodates button */
+    .tooltip-controls {
+        padding-right: 40px !important; /* Add padding to prevent overlap if button was absolute */
+    }
 }
