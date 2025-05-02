@@ -15,6 +15,7 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
 - 🧠 **AI-Powered Rating**: Rates tweets from 1-10 based on quality
 - 🎯 **Smart Filtering**: Hides low-quality content based on your threshold
 - 🖼️ **Image Analysis**: Understands images and media in tweets
+- 💬 **Conversations**: Chat with AI about any tweet to learn more 
 - 📝 **Custom Instructions**: Define your own rating criteria
 - 🔄 **Live Streaming**: Watch AI analyze tweets in real-time
 - 🧵 **Thread Context**: Understands full conversation context
