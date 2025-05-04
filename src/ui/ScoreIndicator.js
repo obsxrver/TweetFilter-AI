@@ -28,6 +28,8 @@ class ScoreIndicator {
         this.reasoningContent = null;
         this.reasoningTextElement = null;
         this.descriptionElement = null;
+        this.scoreTextElement = null;
+        this.followUpQuestionsTextElement = null;
         this.scrollButton = null;
         this.metadataElement = null; // Add element for metadata
         this.conversationContainerElement = null; // Container for Q&A history
@@ -140,9 +142,21 @@ class ScoreIndicator {
         this.tooltipElement.appendChild(this.reasoningDropdown);
 
         // --- Description Area ---
-        this.descriptionElement = document.createElement('p');
+        this.descriptionElement = document.createElement('div');
         this.descriptionElement.className = 'description-text';
         this.tooltipElement.appendChild(this.descriptionElement);
+
+        // --- Score Text Area (from description) ---
+        this.scoreTextElement = document.createElement('div');
+        this.scoreTextElement.className = 'score-text-from-description';
+        this.scoreTextElement.style.display = 'none'; // Hide initially
+        this.tooltipElement.appendChild(this.scoreTextElement);
+
+        // --- Follow-Up Questions Text Area (from description, hidden) ---
+        this.followUpQuestionsTextElement = document.createElement('div');
+        this.followUpQuestionsTextElement.className = 'follow-up-questions-text-from-description';
+        this.followUpQuestionsTextElement.style.display = 'none'; // Always hidden
+        this.tooltipElement.appendChild(this.followUpQuestionsTextElement);
 
         // --- Conversation History Area ---
         this.conversationContainerElement = document.createElement('div');
@@ -310,37 +324,126 @@ class ScoreIndicator {
 
     /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
-        if (!this.tooltipElement || !this.descriptionElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement) return; // Added conversationContainerElement check
+        // Ensure required elements exist
+        if (!this.tooltipElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement) {
+            return;
+        }
 
         // Store current scroll position and whether we were at bottom before update
         const wasNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
         const previousScrollTop = this.tooltipElement.scrollTop;
         const previousScrollHeight = this.tooltipElement.scrollHeight;
 
-        // Assume formatTooltipDescription is globally available
-        const formatted = formatTooltipDescription(this.description, this.reasoning);
+        // --- Parse the description into parts ---
+        const fullDescription = this.description || "";
+        const analysisMatch = fullDescription.match(/\[ANALYSIS\]([^\]]+)\[\/ANALYSIS\]/);
+        const scoreMatch = fullDescription.match(/\[SCORE\]([^\]]+)\[\/SCORE\]/);
+        const questionsMatch = fullDescription.match(/\[FOLLOW_UP_QUESTIONS\]([^\]]+)\[\/FOLLOW_UP_QUESTIONS\]/);
 
-        const contentChanged = this.descriptionElement.innerHTML !== formatted.description ||
-            this.reasoningTextElement.innerHTML !== formatted.reasoning ||
-            // Compare conversation history content instead of last answer
-            this.conversationContainerElement.innerHTML !== this._renderConversationHistory() ||
-            this.followUpQuestionsElement.children.length !== this.questions.length;
+        let analysisContent = "";
+        let scoreContent = "";
+        let questionsContent = "";
 
-        // Update description and reasoning text
-        this.descriptionElement.innerHTML = formatted.description;
-        this.reasoningTextElement.innerHTML = formatted.reasoning;
-
-        // Show/hide reasoning dropdown
-        this.reasoningDropdown.style.display = (formatted.reasoning) ? 'block' : 'none';
-
-        // --- Update Conversation History Display ---
-        if (this.conversationContainerElement) {
-            this.conversationContainerElement.innerHTML = this._renderConversationHistory();
-            this.conversationContainerElement.style.display = this.conversationHistory.length > 0 ? 'block' : 'none';
+        if (analysisMatch && analysisMatch[1] !== undefined) {
+            analysisContent = analysisMatch[1].trim();
+        } else if (!scoreMatch && !questionsMatch) {
+            // Fallback: If no tags found, assume entire description is analysis
+            analysisContent = fullDescription;
+        } else {
+            // If other tags exist but no analysis tag, leave analysis empty
+            analysisContent = "*Waiting for analysis...*"; // Or some placeholder
         }
 
-        // --- Update Follow-Up Questions Display ---
-        if (this.followUpQuestionsElement) {
+        if (scoreMatch && scoreMatch[1] !== undefined) {
+            scoreContent = scoreMatch[1].trim();
+        }
+
+        if (questionsMatch && questionsMatch[1] !== undefined) {
+            questionsContent = questionsMatch[1].trim();
+        }
+        // --- End Parsing ---
+
+        // Use a flag to track if any significant content affecting layout changed
+        let contentChanged = false;
+
+        // Update Analysis display (using descriptionElement)
+        const formattedAnalysis = formatTooltipDescription(analysisContent).description; // Pass only analysis part
+        if (this.descriptionElement.innerHTML !== formattedAnalysis) {
+            this.descriptionElement.innerHTML = formattedAnalysis;
+            contentChanged = true;
+        }
+
+        // Update Score display (using scoreTextElement)
+        if (scoreContent) {
+            // Apply score highlighting specifically here
+            const formattedScoreText = scoreContent
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Basic escaping
+                .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Apply highlighting
+                .replace(/\n/g, '<br>'); // Line breaks
+
+            if (this.scoreTextElement.innerHTML !== formattedScoreText) {
+                this.scoreTextElement.innerHTML = formattedScoreText;
+                contentChanged = true;
+            }
+            this.scoreTextElement.style.display = 'block';
+        } else {
+            if (this.scoreTextElement.style.display !== 'none') {
+                this.scoreTextElement.style.display = 'none';
+                this.scoreTextElement.innerHTML = '';
+                contentChanged = true; // Hiding/showing counts as change
+            }
+        }
+
+        // Update Follow-up Questions display (using followUpQuestionsTextElement - always hidden)
+        if (questionsContent) {
+            const formattedQuestionsText = questionsContent.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if (this.followUpQuestionsTextElement.innerHTML !== formattedQuestionsText) {
+                this.followUpQuestionsTextElement.innerHTML = formattedQuestionsText;
+                // No contentChanged = true needed as it's always hidden
+            }
+        } else {
+            if (this.followUpQuestionsTextElement.innerHTML !== '') {
+                this.followUpQuestionsTextElement.innerHTML = '';
+            }
+        }
+        this.followUpQuestionsTextElement.style.display = 'none'; // Ensure it's always hidden
+
+        // --- Update Reasoning Display ---
+        const formattedReasoning = formatTooltipDescription("", this.reasoning).reasoning;
+        if (this.reasoningTextElement.innerHTML !== formattedReasoning) {
+            this.reasoningTextElement.innerHTML = formattedReasoning;
+            contentChanged = true;
+        }
+        const showReasoning = !!formattedReasoning;
+        if ((this.reasoningDropdown.style.display === 'none') === showReasoning) {
+            this.reasoningDropdown.style.display = showReasoning ? 'block' : 'none';
+            contentChanged = true; // Hiding/showing counts as change
+        }
+
+        // --- Update Conversation History Display ---
+        const renderedHistory = this._renderConversationHistory();
+        if (this.conversationContainerElement.innerHTML !== renderedHistory) {
+            this.conversationContainerElement.innerHTML = renderedHistory;
+            this.conversationContainerElement.style.display = this.conversationHistory.length > 0 ? 'block' : 'none';
+            contentChanged = true;
+        }
+
+        // --- Update Follow-Up Questions Buttons Display ---
+        let questionsButtonsChanged = false;
+        // Simple check: compare number of buttons to number of questions
+        if (this.followUpQuestionsElement.children.length !== (this.questions?.length || 0)) {
+            questionsButtonsChanged = true;
+        } else {
+            // More thorough check: compare text of each question
+            this.questions?.forEach((q, i) => {
+                const button = this.followUpQuestionsElement.children[i];
+                if (!button || button.dataset.questionText !== q) {
+                    questionsButtonsChanged = true;
+                }
+            });
+        }
+
+        if (questionsButtonsChanged) {
             this.followUpQuestionsElement.innerHTML = ''; // Clear previous questions
             if (this.questions && this.questions.length > 0) {
                 this.questions.forEach((question, index) => {
@@ -355,45 +458,50 @@ class ScoreIndicator {
             } else {
                 this.followUpQuestionsElement.style.display = 'none';
             }
+            contentChanged = true;
         }
 
-        // --- Update Metadata Display (New) ---
-        if (this.metadataElement) {
-            // Check if metadata exists and has more than just the generationId OR just the generationId
-            const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
-            const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
+        // --- Update Metadata Display ---
+        let metadataHTML = '';
+        let showMetadata = false;
+        const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
+        const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
 
-            if (hasFullMetadata) {
-                // Format with clearer labels and line breaks (existing logic)
-                let metadataHTML = '<hr class="metadata-separator">';
-                metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
-                metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
-                if (this.metadata.reasoningTokens > 0) {
-                     metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
-                }
-                metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
-                if (this.metadata.mediaInputs > 0) {
-                    metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
-                }
-                metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
-
-                this.metadataElement.innerHTML = metadataHTML;
-                this.metadataElement.style.display = 'block';
-            } else if (hasOnlyGenId) {
-                // Show only the Generation ID while waiting for full details
-                 let metadataHTML = '<hr class="metadata-separator">';
-                 metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
-                 this.metadataElement.innerHTML = metadataHTML;
-                 this.metadataElement.style.display = 'block';
-            } else {
-                this.metadataElement.innerHTML = ''; // Clear if no metadata
-                this.metadataElement.style.display = 'none';
+        if (hasFullMetadata) {
+            metadataHTML += '<hr class="metadata-separator">';
+            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
+            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+            if (this.metadata.reasoningTokens > 0) {
+                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
             }
+            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+            if (this.metadata.mediaInputs > 0) {
+                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+            showMetadata = true;
+        } else if (hasOnlyGenId) {
+            metadataHTML += '<hr class="metadata-separator">';
+            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
+            showMetadata = true;
+        }
+
+        if (this.metadataElement.innerHTML !== metadataHTML) {
+            this.metadataElement.innerHTML = metadataHTML;
+            contentChanged = true;
+        }
+        if ((this.metadataElement.style.display === 'none') === showMetadata) {
+            this.metadataElement.style.display = showMetadata ? 'block' : 'none';
+            contentChanged = true;
         }
         // --- End Metadata Display Update ---
 
         // Add/remove streaming class
-        this.tooltipElement.classList.toggle('streaming-tooltip', this.status === 'streaming');
+        const isStreaming = this.status === 'streaming';
+        if (this.tooltipElement.classList.contains('streaming-tooltip') !== isStreaming) {
+             this.tooltipElement.classList.toggle('streaming-tooltip', isStreaming);
+             contentChanged = true; // Class change might affect layout/appearance
+        }
 
         // Handle scrolling after content update
         if (contentChanged) {
@@ -410,6 +518,7 @@ class ScoreIndicator {
                 this._updateScrollButtonVisibility();
             });
         } else {
+            // Ensure scroll button visibility is correct even if content didn't change significantly
             this._updateScrollButtonVisibility();
         }
     }
@@ -418,6 +527,14 @@ class ScoreIndicator {
     _renderConversationHistory() {
         if (!this.conversationHistory || this.conversationHistory.length === 0) {
             return '';
+        }
+
+        // Store current expanded states before re-rendering
+        const expandedStates = new Map();
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach((dropdown, index) => {
+                expandedStates.set(index, dropdown.classList.contains('expanded'));
+            });
         }
 
         let historyHtml = '';
@@ -445,15 +562,74 @@ class ScoreIndicator {
                 historyHtml += '<hr class="conversation-separator">';
             }
 
+            // --- Add Reasoning Dropdown (if present) ---
+            let reasoningHtml = '';
+            if (turn.reasoning && turn.reasoning.trim() !== '') {
+                const formattedReasoning = formatTooltipDescription("", turn.reasoning).reasoning;
+                // Check if this dropdown was expanded
+                const wasExpanded = expandedStates.get(index);
+                const expandedClass = wasExpanded ? ' expanded' : '';
+                const arrowChar = wasExpanded ? '▼' : '▶';
+                const contentStyle = wasExpanded ? 'style="max-height: 200px; padding: 8px;"' : 'style="max-height: 0; padding: 0 8px;"';
+                
+                reasoningHtml = `
+                    <div class="reasoning-dropdown conversation-reasoning${expandedClass}" data-index="${index}">
+                        <div class="reasoning-toggle" role="button" tabindex="0" aria-expanded="${wasExpanded ? 'true' : 'false'}">
+                            <span class="reasoning-arrow">${arrowChar}</span> Show Reasoning Trace
+                        </div>
+                        <div class="reasoning-content" ${contentStyle}>
+                            <p class="reasoning-text">${formattedReasoning}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
             historyHtml += `
                 <div class="conversation-turn">
                     <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    ${reasoningHtml}
                     <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
                 </div>
             `;
         });
 
+        // Update the conversation container with the new HTML
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.innerHTML = historyHtml;
+            // Attach event listeners after updating the HTML
+            this._attachConversationReasoningListeners();
+        }
+
         return historyHtml;
+    }
+
+    /**
+     * Attaches event listeners to reasoning toggles within the conversation history.
+     * Uses event delegation.
+     */
+    _attachConversationReasoningListeners() {
+        if (!this.conversationContainerElement) return;
+
+        // Remove any existing listener
+        this.conversationContainerElement.removeEventListener('click', this._handleConversationReasoningToggle);
+        // Add the new listener, making sure to bind 'this'
+        this.conversationContainerElement.addEventListener('click', (e) => {
+            const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
+            if (!toggleButton) return;
+
+            e.stopPropagation();
+            const dropdown = toggleButton.closest('.reasoning-dropdown');
+            const content = dropdown?.querySelector('.reasoning-content');
+            const arrow = dropdown?.querySelector('.reasoning-arrow');
+
+            if (!dropdown || !content || !arrow) return;
+
+            const isExpanded = dropdown.classList.toggle('expanded');
+            arrow.textContent = isExpanded ? '▼' : '▶';
+            toggleButton.setAttribute('aria-expanded', isExpanded);
+            content.style.maxHeight = isExpanded ? '200px' : '0';
+            content.style.padding = isExpanded ? '8px' : '0 8px';
+        });
     }
 
     _performAutoScroll() {
@@ -788,7 +964,7 @@ class ScoreIndicator {
             showStatus('API key missing. Cannot answer question.', 'error');
             //this.update({ lastAnswer: "Error: API Key missing." }); // Update UI directly
             // << New: Update the pending history entry with error
-            this._updateConversationHistory(questionText, "Error: API Key missing.");
+            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
             button.disabled = false; // Re-enable button on error
             this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
             return;
@@ -798,7 +974,7 @@ class ScoreIndicator {
             console.error("Follow-up question text not found on button.");
             //this.update({ lastAnswer: "Error: Could not identify question." });
             // << New: Update the pending history entry with error
-            this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.");
+            this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
             button.disabled = false; // Re-enable button on error
             this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
             return;
@@ -862,7 +1038,7 @@ class ScoreIndicator {
             showStatus('API key missing. Cannot answer question.', 'error');
             //this.update({ lastAnswer: "Error: API Key missing." });
             // << New: Update the pending history entry with error
-            this._updateConversationHistory(questionText, "Error: API Key missing.");
+            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
             this.customQuestionInput.disabled = false;
             this.customQuestionButton.disabled = false;
             this.customQuestionButton.textContent = 'Ask';
@@ -905,11 +1081,13 @@ class ScoreIndicator {
      * Also updates the UI.
      * @param {string} question - The text of the question that was asked.
      * @param {string} answer - The new answer (or error message).
+     * @param {string} [reasoning=''] - Optional reasoning text associated with the answer.
      */
-    _updateConversationHistory(question, answer) {
+    _updateConversationHistory(question, answer, reasoning = '') {
         const entryIndex = this.conversationHistory.findIndex(turn => turn.question === question && turn.answer === 'pending');
         if (entryIndex !== -1) {
             this.conversationHistory[entryIndex].answer = answer;
+            this.conversationHistory[entryIndex].reasoning = reasoning; // Store reasoning
             this._updateTooltipUI(); // Refresh the view to show the updated answer
         } else {
             console.warn(`[ScoreIndicator ${this.tweetId}] Could not find pending history entry for question: "${question}"`);
@@ -923,38 +1101,114 @@ class ScoreIndicator {
      * Updates the visual display of the last answer element during streaming
      * without changing the underlying conversationHistory state.
      * @param {string} streamingText - The current aggregated text from the stream.
+     * @param {string} [reasoningText=''] - Optional reasoning text from the stream.
      */
-    _renderStreamingAnswer(streamingText) {
+    _renderStreamingAnswer(streamingText, reasoningText = '') {
         if (!this.conversationContainerElement) return;
 
-        // Find the last answer element
-        const answerElements = this.conversationContainerElement.querySelectorAll('.conversation-answer');
-        const lastAnswerElement = answerElements.length > 0 ? answerElements[answerElements.length - 1] : null;
+        // Find the last conversation turn element
+        const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
+        const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
 
-        if (lastAnswerElement) {
-            // Ensure the corresponding state is actually pending before updating visuals
-            if (this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].answer === 'pending') {
-                // Format the streaming answer
-                const formattedStreamingAnswer = streamingText
-                    .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
-                    // Format markdown links: [text](url) -> <a href="url">text</a>
-                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>') // Added class
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/\n/g, '<br>');
+        if (!lastTurnElement) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find last conversation turn to render streaming answer.`);
+            return;
+        }
 
-                // Update the innerHTML directly, adding the cursor
-                lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
+        // Ensure the corresponding state is actually pending before updating visuals
+        if (!(this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].answer === 'pending')) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
+            return;
+        }
 
-                // Ensure autoscroll if needed
-                if (this.autoScroll) {
-                    this._performAutoScroll();
-                }
+        // --- Handle Reasoning Dropdown ---
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        const hasReasoning = reasoningText && reasoningText.trim() !== '';
+
+        if (hasReasoning && !reasoningDropdown) {
+            // Create reasoning dropdown elements if they don't exist for this turn
+            reasoningDropdown = document.createElement('div');
+            reasoningDropdown.className = 'reasoning-dropdown conversation-reasoning'; // Add specific class
+
+            const reasoningToggle = document.createElement('div');
+            reasoningToggle.className = 'reasoning-toggle';
+
+            const reasoningArrow = document.createElement('span');
+            reasoningArrow.className = 'reasoning-arrow';
+            reasoningArrow.textContent = '▶';
+
+            reasoningToggle.appendChild(reasoningArrow);
+            reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
+
+            const reasoningContent = document.createElement('div');
+            reasoningContent.className = 'reasoning-content';
+            const reasoningTextElement = document.createElement('p');
+            reasoningTextElement.className = 'reasoning-text';
+            reasoningContent.appendChild(reasoningTextElement);
+
+            reasoningDropdown.appendChild(reasoningToggle);
+            reasoningDropdown.appendChild(reasoningContent);
+
+            // Insert the dropdown *before* the answer element within the turn
+            const answerElement = lastTurnElement.querySelector('.conversation-answer');
+            if (answerElement) {
+                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
             } else {
-                // Log if we try to render streaming answer but state isn't pending
-                console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
+                lastTurnElement.appendChild(reasoningDropdown); // Fallback
             }
+
+            // Add toggle listener specifically for this dropdown
+            reasoningToggle.addEventListener('click', (e) => {
+                 e.stopPropagation();
+                 const dropdown = e.target.closest('.reasoning-dropdown');
+                 const content = dropdown?.querySelector('.reasoning-content');
+                 const arrow = dropdown?.querySelector('.reasoning-arrow');
+                 if (!dropdown || !content || !arrow) return;
+
+                 const isExpanded = dropdown.classList.toggle('expanded');
+                 arrow.textContent = isExpanded ? '▼' : '▶';
+                 content.style.maxHeight = isExpanded ? '200px' : '0'; // Adjust max-height as needed
+                 content.style.padding = isExpanded ? '8px' : '0 8px';
+            });
+        }
+
+        // Update reasoning content if dropdown exists and reasoning is present
+        if (reasoningDropdown && hasReasoning) {
+            const reasoningTextElement = reasoningDropdown.querySelector('.reasoning-text');
+            if (reasoningTextElement) {
+                const formattedReasoning = formatTooltipDescription("", reasoningText).reasoning;
+                if (reasoningTextElement.innerHTML !== formattedReasoning) {
+                    reasoningTextElement.innerHTML = formattedReasoning;
+                }
+            }
+            reasoningDropdown.style.display = 'block';
+        } else if (reasoningDropdown) {
+            // Hide dropdown if reasoning disappears (shouldn't normally happen mid-stream)
+            reasoningDropdown.style.display = 'none';
+        }
+
+        // --- Handle Answer Text ---
+        const lastAnswerElement = lastTurnElement.querySelector('.conversation-answer');
+        if (lastAnswerElement) {
+            // Format the streaming answer
+            const formattedStreamingAnswer = streamingText
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+
+            // Update the innerHTML directly, adding the cursor
+            lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
+        } else {
+             console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
+        }
+
+
+        // Ensure autoscroll if needed
+        if (this.autoScroll) {
+            this._performAutoScroll();
         }
     }
 
@@ -1331,20 +1585,20 @@ const ScoreIndicatorRegistry = {
 
 // Helper for formatting description/reasoning (can be kept here or moved)
 function formatTooltipDescription(description = "", reasoning = "") {
-    description = description || "*waiting for content...*";
-    // Enhanced Markdown-like formatting
-    description = description
-        .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape HTML tags first
-        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-        .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
-        .replace(/`([^`]+)`/g, '<code>$1</code>')   // Inline code
-        .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Score highlight class
-        .replace(/\n\n/g, '<br><br>') // Paragraph breaks
-        .replace(/\n/g, '<br>');      // Line breaks
+    // Only format description if it's not the placeholder
+    let formattedDescription = description === "*Waiting for analysis...*" ? description :
+        (description || "*waiting for content...*")
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape HTML tags first
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
+            .replace(/`([^`]+)`/g, '<code>$1</code>')   // Inline code
+            .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Score highlight class
+            .replace(/\n\n/g, '<br><br>') // Paragraph breaks
+            .replace(/\n/g, '<br>');      // Line breaks
 
     let formattedReasoning = '';
     if (reasoning && reasoning.trim()) {
@@ -1356,5 +1610,6 @@ function formatTooltipDescription(description = "", reasoning = "") {
             .replace(/\n\n/g, '<br><br>')
             .replace(/\n/g, '<br>');
     }
-    return { description, reasoning: formattedReasoning };
+    // Return both, even though caller might only use one
+    return { description: formattedDescription, reasoning: formattedReasoning };
 }
