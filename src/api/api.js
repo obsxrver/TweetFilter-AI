@@ -58,9 +58,12 @@ function extractFollowUpQuestions(content) {
 
         // Extract Q3: text after Q_3. until the end of the content
         // (Or potentially until the next major marker if the prompt changes later)
-        const q3Text = content.substring(q3Start + q3Marker.length).trim();
+        let q3Text = content.substring(q3Start + q3Marker.length).trim();
         // Remove any trailing markers from Q3 if necessary
-        // For now, just trim potential whitespace
+        const endMarker = "[/FOLLOW_UP_QUESTIONS]";
+        if (q3Text.endsWith(endMarker)) {
+            q3Text = q3Text.substring(0, q3Text.length - endMarker.length).trim();
+        }
         questions.push(q3Text);
 
         // Basic validation: Ensure questions are not empty
@@ -125,12 +128,31 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             content: [{
                 type: "text",
                 text:
-                    `provide your reasoning, and a rating according to the the following instructions for the tweet with tweet ID ${tweetId}.
-        ${currentInstructions}
-                _______BEGIN TWEET_______
-                ${tweetText}
-                _______END TWEET_______
-                Make sure your response ends with SCORE_X, where X is a number between 0 and 10.`
+                    `<TARGET_TWEET_ID_TO_RATE> 
+                    [${tweetId}].
+                    </TARGET_TWEET_ID_TO_RATE>
+                    <USER_INSTRUCTIONS:>
+                    [${currentInstructions}]
+                    </USER INSTURCTIONS>
+                    <TWEET>
+                _______BEGIN TWEET CONTEXT_______
+                [${tweetText}]
+                </TWEET>
+                <EXPECTED_RESPONSE_FORMAT>
+(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
+[ANALYSIS] 
+(Your analysis of the tweet according to the user defined instructions) 
+[/ANALYSIS]
+[SCORE]
+SCORE_X (where X is a number from 0 to 10 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc)
+[/SCORE]
+[FOLLOW_UP_QUESTIONS]
+Q_1. (Question 1)
+Q_2. (Question 2)
+Q_3. (Question 3)
+[/FOLLOW_UP_QUESTIONS]
+</EXPECTED_RESPONSE_FORMAT>
+                `
             }]
         }]
     };
@@ -637,7 +659,10 @@ async function answerFollowUpQuestion(tweetId, questionText, apiKey, tweetArticl
                 cachedData.tweetContent = originalContext;
                 tweetCache.set(tweetId, cachedData);
             } else if (originalContext && !cachedData) {
-                 tweetCache.set(tweetId, { tweetContent: originalContext, timestamp: Date.now() });
+                tweetCache.set(tweetId, { 
+                    tweetContent: originalContext, 
+                    timestamp: Date.now()
+                });
             }
         } catch (scrapeError) {
             console.error(`[FollowUp] Failed to re-scrape context for ${tweetId}:`, scrapeError);
@@ -655,9 +680,28 @@ async function answerFollowUpQuestion(tweetId, questionText, apiKey, tweetArticl
         return;
     }
 
-     // 2. Construct the prompt for answering the question
+    // Get conversation history from the DOM
+    let conversationHistory = '';
+    // Find the tooltip for this tweet
+    const tooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
+    if (tooltip) {
+        const historyContainer = tooltip.querySelector('.tooltip-conversation-history');
+        if (historyContainer) {
+            const turns = historyContainer.querySelectorAll('.conversation-turn');
+            conversationHistory = Array.from(turns).map((turn, index) => {
+                const question = turn.querySelector('.conversation-question')?.textContent?.replace('You:', '').trim() || '';
+                const answer = turn.querySelector('.conversation-answer')?.textContent?.replace('AI:', '').trim() || '';
+                return `Q${index + 1}: ${question}\nA${index + 1}: ${answer}`;
+            }).join('\n\n');
+        }
+    }
+
+    console.log("Found tooltip:", tooltip);
+    console.log(conversationHistory);
+
     const followUpPrompt = `
 You are answering a follow-up question about a specific tweet.
+
 Here is the original tweet context:
 _______BEGIN TWEET CONTEXT_______
 ${originalContext}
@@ -670,10 +714,17 @@ DESCRIPTION:
 ${originalDescription}
 ---------------------------------
 ` : ''}
-The user's follow-up question is: "${questionText}"
+
+${conversationHistory ? `CONVERSATION HISTORY:
+${conversationHistory}
+---------------------------------
+
+` : ''}Current follow-up question: "${questionText}"
+
+Please consider the ENTIRE conversation history above when formulating your response. Your answer should build upon and be consistent with previous answers, and acknowledge any relevant information that was discussed in earlier exchanges.
 
 Answer the user's question concisely and accurately.
-After answering, provide 3 new, relevant follow-up questions the user might have based on your answer or the original context.
+After answering, provide 3 new, relevant follow-up questions the user might have based on your answer or the ongoing conversation context.
 
 Follow this format exactly:
 [ANSWER]
@@ -733,51 +784,49 @@ Q_3. [New Question 3]
                  let aggregatedContent = "";
                  let currentAnswer = "";
                  let currentQuestions = [];
+                 let aggregatedReasoning = "";
 
                  getCompletionStreaming(
                      request, apiKey,
                      // onChunk
                      (chunkData) => {
                          aggregatedContent = chunkData.content || aggregatedContent;
-                         // Use the indicator instance method to render the streaming text
-                         indicatorInstance._renderStreamingAnswer(aggregatedContent);
+                         aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
+                         indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
                      },
                      // onComplete
                      (result) => {
                          aggregatedContent = result.content || aggregatedContent;
                          const answerMatch = aggregatedContent.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
                          finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
-                         finalQuestions = extractFollowUpQuestions(aggregatedContent); // Extract new questions
+                         finalQuestions = extractFollowUpQuestions(aggregatedContent);
+
+                         // Extract final reasoning (assuming it's complete in aggregatedReasoning)
+                         const finalReasoning = aggregatedReasoning; // Or re-parse if needed
 
                          // Update cache
                          const currentCache = tweetCache.get(tweetId) || {};
-                         // Update history in cache (if needed, depends on cache strategy)
-                         // For simplicity, let's assume cache stores history or last answer
-                         // If storing history: currentCache.conversationHistory = indicatorInstance.conversationHistory;
-                         currentCache.lastAnswer = finalAnswer; // Keep storing last answer for simplicity for now
                          currentCache.questions = finalQuestions;
                          currentCache.timestamp = Date.now();
                          tweetCache.set(tweetId, currentCache);
 
                          // Final UI update using the instance helper
-                         indicatorInstance._updateConversationHistory(questionText, finalAnswer);
-                         // Update suggested questions
+                         indicatorInstance._updateConversationHistory(questionText, finalAnswer, finalReasoning);
                          indicatorInstance.questions = finalQuestions;
-                         indicatorInstance._updateTooltipUI(); // Refresh UI for questions
+                         indicatorInstance._updateTooltipUI();
                          resolve();
                      },
                      // onError
                      (error) => {
                          console.error("[FollowUp Stream Error]", error);
                          finalAnswer = `Error generating answer: ${error.message}`;
-                         // Update UI using the instance helper
                          indicatorInstance._updateConversationHistory(questionText, finalAnswer);
-                         indicatorInstance.questions = []; // Clear questions on error
-                         indicatorInstance._updateTooltipUI(); // Refresh UI
+                         indicatorInstance.questions = [];
+                         indicatorInstance._updateTooltipUI();
                          reject(new Error(error.message));
                      },
-                     60000, // Longer timeout for follow-up?
-                     `followup-${tweetId}` // Unique ID for follow-up stream
+                     60000,
+                     `followup-${tweetId}`
                  );
              });
 
@@ -794,9 +843,7 @@ Q_3. [New Question 3]
 
              // Update cache
              const currentCache = tweetCache.get(tweetId) || {};
-             // Update history in cache (if needed)
-             // currentCache.conversationHistory = indicatorInstance.conversationHistory; // Need instance here
-             currentCache.lastAnswer = finalAnswer; // Keep storing last answer for simplicity for now
+             currentCache.lastAnswer = finalAnswer;
              currentCache.questions = finalQuestions;
              currentCache.timestamp = Date.now();
              tweetCache.set(tweetId, currentCache);
@@ -804,23 +851,20 @@ Q_3. [New Question 3]
              // Final UI update using instance helper
              indicatorInstance._updateConversationHistory(questionText, finalAnswer);
              indicatorInstance.questions = finalQuestions;
-             indicatorInstance._updateTooltipUI(); // Refresh UI
+             indicatorInstance._updateTooltipUI();
         }
 
     } catch (error) {
         console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
         const errorMessage = `Error answering question: ${error.message}`;
-        // Update UI using instance helper
-         indicatorInstance._updateConversationHistory(questionText, errorMessage);
-         indicatorInstance.questions = cachedData?.questions || [] // Restore previous questions on error
-         indicatorInstance._updateTooltipUI(); // Refresh UI
+        indicatorInstance._updateConversationHistory(questionText, errorMessage);
+        indicatorInstance.questions = cachedData?.questions || []
+        indicatorInstance._updateTooltipUI();
 
-         // Update cache with error message?
-         const currentCache = tweetCache.get(tweetId) || {};
-         currentCache.lastAnswer = errorMessage; // Store error in lastAnswer
-         // currentCache.questions = []; // Optionally clear questions on error
-         currentCache.timestamp = Date.now();
-         tweetCache.set(tweetId, currentCache);
+        const currentCache = tweetCache.get(tweetId) || {};
+        currentCache.lastAnswer = errorMessage;
+        currentCache.timestamp = Date.now();
+        tweetCache.set(tweetId, currentCache);
     }
 }
 

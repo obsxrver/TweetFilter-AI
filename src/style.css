@@ -1115,6 +1115,159 @@ input:checked+.toggle-slider:before {
     max-width: 100% !important;
     overflow-wrap: break-word !important;
     padding: 5px 0 !important;
+    color: #e1e8ed !important;
+    letter-spacing: 0.2px !important;
+}
+
+/* Style different elements within description text */
+.description-text p {
+    margin: 0 0 12px 0 !important;
+}
+
+.description-text p:last-child {
+    margin-bottom: 0 !important;
+}
+
+.description-text strong {
+    color: #fff !important;
+    font-weight: 600 !important;
+}
+
+.description-text em {
+    color: #8899a6 !important;
+    font-style: italic !important;
+}
+
+.description-text code {
+    background: rgba(255, 255, 255, 0.1) !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;
+    font-size: 0.9em !important;
+    color: #1d9bf0 !important;
+}
+
+.description-text a {
+    color: #1d9bf0 !important;
+    text-decoration: none !important;
+    transition: color 0.2s ease !important;
+    border-bottom: 1px solid rgba(29, 155, 240, 0.3) !important;
+}
+
+.description-text a:hover {
+    color: #ffffff !important;
+    border-bottom-color: #ffffff !important;
+}
+
+/* Add subtle highlight for important sections */
+.description-text blockquote {
+    margin: 12px 0 !important;
+    padding: 8px 16px !important;
+    border-left: 3px solid #1d9bf0 !important;
+    background: rgba(29, 155, 240, 0.1) !important;
+    border-radius: 0 4px 4px 0 !important;
+}
+
+/* Style lists within description */
+.description-text ul, 
+.description-text ol {
+    margin: 8px 0 12px 20px !important;
+    padding: 0 !important;
+}
+
+.description-text li {
+    margin: 4px 0 !important;
+    line-height: 1.5 !important;
+}
+
+/* Style headings if present */
+.description-text h1,
+.description-text h2,
+.description-text h3,
+.description-text h4 {
+    color: #ffffff !important;
+    margin: 16px 0 8px 0 !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+}
+
+.description-text h1 { font-size: 1.4em !important; }
+.description-text h2 { font-size: 1.3em !important; }
+.description-text h3 { font-size: 1.2em !important; }
+.description-text h4 { font-size: 1.1em !important; }
+
+/* Add subtle animation for content changes */
+.description-text {
+    transition: opacity 0.2s ease !important;
+}
+
+/* Style tables if present */
+.description-text table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 12px 0 !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border-radius: 4px !important;
+}
+
+.description-text th,
+.description-text td {
+    padding: 8px 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    text-align: left !important;
+}
+
+.description-text th {
+    background: rgba(255, 255, 255, 0.05) !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+}
+
+/* Add a subtle separator between major sections */
+.description-text hr {
+    border: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    margin: 20px 0 !important;
+}
+
+/* Style pre blocks for code snippets */
+.description-text pre {
+    background: rgba(0, 0, 0, 0.2) !important;
+    padding: 12px !important;
+    border-radius: 4px !important;
+    overflow-x: auto !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    margin: 12px 0 !important;
+}
+
+.description-text pre code {
+    background: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    font-size: 0.9em !important;
+    color: #e1e8ed !important;
+}
+
+/* Add a subtle hover effect for interactive elements */
+.description-text *[role="button"],
+.description-text .interactive {
+    transition: all 0.2s ease !important;
+}
+
+.description-text *[role="button"]:hover,
+.description-text .interactive:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Style keyboard shortcuts or commands */
+.description-text kbd {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px !important;
+    padding: 2px 6px !important;
+    font-size: 0.9em !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.2) !important;
 }
 
 .tooltip-bottom-spacer {
@@ -1820,4 +1973,79 @@ input:checked+.toggle-slider:before {
     .tooltip-controls {
         padding-right: 40px !important; /* Add padding to prevent overlap if button was absolute */
     }
+}
+
+/* --- Styling for Reasoning Dropdown within Conversation Turn --- */
+.conversation-turn .reasoning-dropdown {
+    margin-top: 8px; /* Space above the dropdown */
+    margin-bottom: 8px; /* Space below the dropdown, before the answer */
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.02); /* Slightly different background from turn itself */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.conversation-turn .reasoning-toggle {
+    display: flex;
+    align-items: center;
+    color: #b0bec5; /* Muted color for toggle text */
+    cursor: pointer;
+    font-weight: normal; /* Less prominent than main reasoning toggle */
+    font-size: 0.85em;
+    padding: 6px 8px;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.conversation-turn .reasoning-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.conversation-turn .reasoning-arrow {
+    display: inline-block;
+    margin-right: 4px;
+    font-size: 0.9em;
+    transition: transform 0.2s ease;
+}
+
+.conversation-turn .reasoning-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 0 0 4px 4px;
+    padding: 0 8px; /* Horizontal padding only when collapsed */
+}
+
+.conversation-turn .reasoning-dropdown.expanded .reasoning-content {
+    max-height: 200px; /* Adjust as needed */
+    overflow-y: auto;
+    padding: 8px; /* Full padding when expanded */
+}
+
+.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {
+    transform: rotate(90deg);
+}
+
+.conversation-turn .reasoning-text {
+    font-size: 0.85em; /* Smaller text for reasoning */
+    line-height: 1.4;
+    color: #ccc; /* Similar to main reasoning text */
+    margin: 0;
+    padding: 0; /* Padding is on the content container */
+}
+
+/* Ensure scrollbars look consistent */
+.conversation-turn .reasoning-content::-webkit-scrollbar {
+    width: 5px;
+}
+.conversation-turn .reasoning-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }

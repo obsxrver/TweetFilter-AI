@@ -358,6 +358,19 @@ function fetchAvailableModels() {
                 if (data.data && data.data.models) {
                     //filter all models that don't have key "endpoint" or endpoint is null
                     let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
+
+                    // Add :free slug if pricing indicates the model is free
+                    filteredModels.forEach(model => {
+                        const endpointPricing = model.endpoint?.pricing; // Safely access endpoint pricing
+                        const isFree = !endpointPricing || (
+                            (endpointPricing.completion == null || parseFloat(endpointPricing.completion) === 0) &&
+                            (endpointPricing.prompt == null || parseFloat(endpointPricing.prompt) === 0)
+                        );
+                        if (isFree && model.slug && !model.slug.endsWith(':free')) {
+                            model.slug += ':free';
+                        }
+                    });
+
                     // Reverse initial order for latency sorting to match High-Low expectations
                     if (sortOrder === 'latency-low-to-high'|| sortOrder === 'pricing-low-to-high') {
                         filteredModels.reverse();

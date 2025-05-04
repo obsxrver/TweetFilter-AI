@@ -421,8 +421,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             filterSingleTweet(tweetArticle); // Apply filtering even on generic error
             processingSuccessful = false;
         } finally {
-            // If processing was not successful, remove from processedTweets
-            // to allow future retry attempts
             if (!processingSuccessful) {
                 processedTweets.delete(tweetId);
             }
@@ -449,7 +447,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
             if (indicatorInstance && !isValidFinalState(indicatorInstance.status)) {
                 console.log(`Tweet ${tweetId} processing failed, will retry later`);
-                // Don't retry immediately to avoid spam
                 setTimeout(() => {
                     if (!isValidFinalState(ScoreIndicatorRegistry.get(tweetId)?.status)) {
                         scheduleTweetProcessing(tweetArticle);
