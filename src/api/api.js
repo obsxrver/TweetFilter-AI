@@ -60,7 +60,7 @@ function extractFollowUpQuestions(content) {
         // (Or potentially until the next major marker if the prompt changes later)
         let q3Text = content.substring(q3Start + q3Marker.length).trim();
         // Remove any trailing markers from Q3 if necessary
-        const endMarker = "[/FOLLOW_UP_QUESTIONS]";
+        const endMarker = "</FOLLOW_UP_QUESTIONS>";
         if (q3Text.endsWith(endMarker)) {
             q3Text = q3Text.substring(0, q3Text.length - endMarker.length).trim();
         }
@@ -139,18 +139,18 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                 [${tweetText}]
                 </TWEET>
                 <EXPECTED_RESPONSE_FORMAT>
-(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
-[ANALYSIS] 
-(Your analysis of the tweet according to the user defined instructions) 
-[/ANALYSIS]
-[SCORE]
+
+<ANALYSIS>
+(Your analysis of the tweet acco(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)rding to the user defined instructions) 
+</ANALYSIS>
+<SCORE>
 SCORE_X (where X is a number from 0 to 10 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc)
-[/SCORE]
-[FOLLOW_UP_QUESTIONS]
+</SCORE>
+<FOLLOW_UP_QUESTIONS>
 Q_1. (Question 1)
 Q_2. (Question 2)
 Q_3. (Question 3)
-[/FOLLOW_UP_QUESTIONS]
+</FOLLOW_UP_QUESTIONS>
 </EXPECTED_RESPONSE_FORMAT>
                 `
             }]
@@ -293,15 +293,15 @@ Q_3. (Question 3)
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
 async function getCustomInstructionsDescription(instructions) {
+    const INSTRUCTION_SUMMARY_MODEL = "google/gemini-2.5-flash-preview";
     const request={
-        model: selectedModel,
+        model: INSTRUCTION_SUMMARY_MODEL,
         messages: [{
             role: "system",
             content: [{
                 type: "text",
                 text: `
-                Please come up with a 5-word summary of the following instructions:
-                ${instructions}
+                Please come up with a 5-word summary of the following instructions.
                 `
             }]
         },
@@ -700,7 +700,7 @@ async function answerFollowUpQuestion(tweetId, questionText, apiKey, tweetArticl
     console.log(conversationHistory);
 
     const followUpPrompt = `
-You are answering a follow-up question about a specific tweet.
+You are TweetFilter AI. You are answering a follow-up question about a specific tweet.
 
 Here is the original tweet context:
 _______BEGIN TWEET CONTEXT_______
@@ -722,17 +722,20 @@ ${conversationHistory}
 ` : ''}Current follow-up question: "${questionText}"
 
 Please consider the ENTIRE conversation history above when formulating your response. Your answer should build upon and be consistent with previous answers, and acknowledge any relevant information that was discussed in earlier exchanges.
-
-Answer the user's question concisely and accurately.
 After answering, provide 3 new, relevant follow-up questions the user might have based on your answer or the ongoing conversation context.
-
-Follow this format exactly:
-[ANSWER]
-[Your answer here]
-[3 FOLLOW UP Questions]
-Q_1. [New Question 1]
-Q_2. [New Question 2]
-Q_3. [New Question 3]
+Follow EXPECTED_RESPONSE_FORMAT exactly. Do not include literally (text enclosed in parenthesis), but use it as a format guideline. Include everything else literally. Do not deviate from the format.
+[EXPECTED_RESPONSE_FORMAT]
+(NO TEXT BEFORE THE ANSWER)
+<ANSWER>
+(Your answer here)
+</ANSWER>
+<FOLLOW_UP_QUESTIONS>
+Q_1. (New Question 1 here)
+Q_2. (New Question 2 here)
+Q_3. (New Question 3 here)
+</FOLLOW_UP_QUESTIONS>
+(NO TEXT AFTER THE FOLLOW UP QUESTIONS)
+[/EXPECTED_RESPONSE_FORMAT]
 `;
     const request = {
         model: `${selectedModel}:online`, // Use the same model as the initial rating
@@ -797,7 +800,7 @@ Q_3. [New Question 3]
                      // onComplete
                      (result) => {
                          aggregatedContent = result.content || aggregatedContent;
-                         const answerMatch = aggregatedContent.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
+                         const answerMatch = aggregatedContent.match(/<ANSWER>\s*([\s\S]*?)\s*(?:<\/ANSWER>|<FOLLOW UP QUESTIONS>|$)/);
                          finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
                          finalQuestions = extractFollowUpQuestions(aggregatedContent);
 
@@ -837,7 +840,7 @@ Q_3. [New Question 3]
                 throw new Error(result.message || "Failed to get follow-up answer.");
             }
              const content = result.data.choices[0].message.content;
-             const answerMatch = content.match(/\[ANSWER\]\s*([\s\S]*?)(?=\[3 FOLLOW UP Questions\]|$)/);
+             const answerMatch = content.match(/<ANSWER>\s*([\s\S]*?)\s*(?:<\/ANSWER>|<FOLLOW UP QUESTIONS>|$)/);
              finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
              finalQuestions = extractFollowUpQuestions(content);
 

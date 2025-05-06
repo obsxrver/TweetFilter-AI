@@ -36,18 +36,18 @@ Do NOT ask questions which you cannot answer, such as context related to the twe
 Remember to ALWAYS follow the EXPECTED_RESPONSE_FORMAT EXACTLY. If you fail to respond with this format, the upstream processing pipeline will be unable to parse your response, leading to a crash. 
 </TASK_DESCRIPTION>
 <EXPECTED_RESPONSE_FORMAT>
-(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
-[ANALYSIS] 
+(!IMPORTANT: YOU MUST! INCLUDE THE ANGLE BRACKET TAGS!Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
+<ANALYSIS> 
 (Your analysis of the tweet according to the user defined instructions) 
-[/ANALYSIS]
-[SCORE]
+</ANALYSIS>
+<SCORE>
 SCORE_X (where X is a number from 0 to 10 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc)
-[/SCORE]
-[FOLLOW_UP_QUESTIONS]
+</SCORE>
+<FOLLOW_UP_QUESTIONS>
 Q_1. (Question 1)
 Q_2. (Question 2)
 Q_3. (Question 3)
-[/FOLLOW_UP_QUESTIONS]
+</FOLLOW_UP_QUESTIONS>
 </EXPECTED_RESPONSE_FORMAT>
 </SYSTEM_INSTRUCTIONS>
 `

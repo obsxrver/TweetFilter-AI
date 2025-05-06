@@ -336,9 +336,9 @@ class ScoreIndicator {
 
         // --- Parse the description into parts ---
         const fullDescription = this.description || "";
-        const analysisMatch = fullDescription.match(/\[ANALYSIS\]([^\]]+)\[\/ANALYSIS\]/);
-        const scoreMatch = fullDescription.match(/\[SCORE\]([^\]]+)\[\/SCORE\]/);
-        const questionsMatch = fullDescription.match(/\[FOLLOW_UP_QUESTIONS\]([^\]]+)\[\/FOLLOW_UP_QUESTIONS\]/);
+        const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
+        const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
+        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([^<]+)<\/FOLLOW_UP_QUESTIONS>/);
 
         let analysisContent = "";
         let scoreContent = "";
