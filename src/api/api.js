@@ -135,7 +135,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     [${currentInstructions}]
                     </USER INSTURCTIONS>
                     <TWEET>
-                _______BEGIN TWEET CONTEXT_______
+                
                 [${tweetText}]
                 </TWEET>
                 <EXPECTED_RESPONSE_FORMAT>

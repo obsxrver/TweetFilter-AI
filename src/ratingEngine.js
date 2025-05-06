@@ -923,30 +923,38 @@ async function handleThreads() {
             }
         }
 
-        // Extract the root tweet ID from the URL for improved thread mapping
+        // Extract the tweet ID from the URL (may not be the true root)
         const match = location.pathname.match(/status\/(\d+)/);
-        const localRootTweetId = match ? match[1] : null;
+        const pageTweetId = match ? match[1] : null;
+        if (!pageTweetId) return; // Only proceed if we can identify a tweet
 
-        if (!localRootTweetId) return; // Only proceed if we can identify the root tweet
+        // Determine the actual root tweet ID by climbing persistent threadRelationships
+        let rootTweetId = pageTweetId;
+        while (threadRelationships[rootTweetId] && threadRelationships[rootTweetId].replyTo) {
+            rootTweetId = threadRelationships[rootTweetId].replyTo;
+        }
 
         // Initialize thread history
         if (conversation.dataset.threadHist === undefined) {
-            // Original behavior - initialize thread history
+            // Initialize thread history from the true root tweet in view
             threadHist = "";
-            const firstArticle = document.querySelector('article[data-testid="tweet"]');
-            if (firstArticle) {
+            // Try to find the DOM element corresponding to the actual root
+            const rootArticle = Array.from(conversation.querySelectorAll('article[data-testid="tweet"]'))
+                .find(el => getTweetID(el) === rootTweetId)
+                || document.querySelector('article[data-testid="tweet"]');
+            if (rootArticle) {
                 conversation.dataset.threadHist = 'pending';
-                threadMappingInProgress = true; // Set memory-based flag
+                threadMappingInProgress = true;
 
                 try {
-                    const tweetId = getTweetID(firstArticle);
+                    const tweetId = getTweetID(rootArticle);
                     if (!tweetId) {
                         throw new Error("Failed to get tweet ID from first article");
                     }
 
                     // Get the full context of the root tweet
                     const apiKey = browserGet('openrouter-api-key', '');
-                    const fullcxt = await getFullContext(firstArticle, tweetId, apiKey);
+                    const fullcxt = await getFullContext(rootArticle, tweetId, apiKey);
                     if (!fullcxt) {
                         throw new Error("Failed to get full context for root tweet");
                     }
@@ -958,14 +966,14 @@ async function handleThreads() {
                         conversation.firstChild.dataset.canary = "true";
                     }
 
-                    // Schedule processing for the original tweet
+                    // Schedule processing for the root tweet
                     if (!processedTweets.has(tweetId)) {
-                        scheduleTweetProcessing(firstArticle);
+                        scheduleTweetProcessing(rootArticle);
                     }
 
                     // Use improved thread detection to map the structure
                     setTimeout(() => {
-                        mapThreadStructure(conversation, localRootTweetId);
+                        mapThreadStructure(conversation, rootTweetId);
                     }, 10);
                 } catch (error) {
                     console.error("Error initializing thread history:", error);
@@ -1009,7 +1017,7 @@ async function handleThreads() {
 
                 // Map thread structure after updating history
                 setTimeout(() => {
-                    mapThreadStructure(conversation, localRootTweetId);
+                    mapThreadStructure(conversation, rootTweetId);
                 }, 500);
             } catch (error) {
                 console.error("Error processing reply:", error);
@@ -1024,7 +1032,7 @@ async function handleThreads() {
             threadMappingInProgress = true; // Set memory-based flag
 
             setTimeout(() => {
-                mapThreadStructure(conversation, localRootTweetId);
+                mapThreadStructure(conversation, rootTweetId);
             }, 250);
         }
     } catch (error) {
