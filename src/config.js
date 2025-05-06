@@ -36,7 +36,7 @@ Do NOT ask questions which you cannot answer, such as context related to the twe
 Remember to ALWAYS follow the EXPECTED_RESPONSE_FORMAT EXACTLY. If you fail to respond with this format, the upstream processing pipeline will be unable to parse your response, leading to a crash. 
 </TASK_DESCRIPTION>
 <EXPECTED_RESPONSE_FORMAT>
-(!IMPORTANT: YOU MUST! INCLUDE THE ANGLE BRACKET TAGS!Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
+(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
 <ANALYSIS> 
 (Your analysis of the tweet according to the user defined instructions) 
 </ANALYSIS>
@@ -74,12 +74,10 @@ function modelSupportsImages(modelId) {
     if (!availableModels || availableModels.length === 0) {
         return false; // If we don't have model info, assume it doesn't support images
     }
-
     const model = availableModels.find(m => m.slug === modelId);
     if (!model) {
         return false; // Model not found in available models list
     }
-
     // Check if model supports images based on its architecture
     return model.input_modalities &&
         model.input_modalities.includes('image');
