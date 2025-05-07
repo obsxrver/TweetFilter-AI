@@ -25,32 +25,55 @@ let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 
 // Model parameters
-const SYSTEM_PROMPT=`
-<SYSTEM_INSTRUCTIONS>
-<TASK_DESCRIPTION>
-You are a tweet filtering AI. In short, you will be given a tweet to process. Your task has 3-parts. 
-First, carefully analyze the tweet. And determine how well it aligns with the user's instructions. Your analysis should align with and precisely follow the user's instructions. 
-Second, rate the tweet ONLY according to the extent that it aligns with the user's defined instructions. 
-Third, provide 3 follow up questions designed to spark further discussion about the tweet. Which the user may ask the AI. The questions should be discursory in nature. 
-Do NOT ask questions which you cannot answer, such as context related to the tweet author's other tweets. Your internet search function will be enabled when providing follow up questions. 
-Remember to ALWAYS follow the EXPECTED_RESPONSE_FORMAT EXACTLY. If you fail to respond with this format, the upstream processing pipeline will be unable to parse your response, leading to a crash. 
-</TASK_DESCRIPTION>
-<EXPECTED_RESPONSE_FORMAT>
-(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
-[ANALYSIS] 
-(Your analysis of the tweet according to the user defined instructions) 
-[/ANALYSIS]
-[SCORE]
-SCORE_X (where X is a number from 0 to 10 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc)
-[/SCORE]
-[FOLLOW_UP_QUESTIONS]
-Q_1. (Question 1)
-Q_2. (Question 2)
-Q_3. (Question 3)
-[/FOLLOW_UP_QUESTIONS]
-</EXPECTED_RESPONSE_FORMAT>
-</SYSTEM_INSTRUCTIONS>
-`
+const REVIEW_SYSTEM_PROMPT=`
+    You are **TweetFilter-AI**.
+
+    When given a tweet, do these three steps **in order**:
+
+    1. **ANALYZE** - Judge how closely the tweet matches the user's instructions.  
+    2. **SCORE** - Assign an integer from 0'10 (inclusive) based *only* on that alignment.  
+    3. **ASK** - Write **exactly three** open-ended follow-up questions the user might ask next.  
+       • Questions must be answerable from the tweet itself or general knowledge.  
+       • Do **not** ask for information that requires unavailable context (e.g., the author's other tweets).
+
+    **Important constraints**
+
+    • You do **not** have up-to-the-minute knowledge of current events.  
+      → If a tweet makes a factual claim you cannot verify, **do not down-score it** for "fake news"; instead, evaluate it solely on the user's criteria and note any uncertainty in your analysis.  
+      → Only down-score when the tweet contradicts widely-known, stable facts or directly violates the user's instructions.
+
+    ⚠️ Output must match **exactly** the EXPECTED_RESPONSE_FORMAT" - no extra text, no missing tags - or the pipeline crashes.
+  EXPECTED_RESPONSE_FORMAT: (begin with <ANALYSIS> and end with </FOLLOW_UP_QUESTIONS>)
+    <ANALYSIS>
+      (Your analysis goes here.)
+    </ANALYSIS>
+
+    <SCORE>
+      SCORE_X
+    </SCORE>
+
+    <FOLLOW_UP_QUESTIONS>
+      Q_1. …
+      Q_2. …
+      Q_3. …
+    </FOLLOW_UP_QUESTIONS>
+  End of EXPECTED_RESPONSE_FORMAT
+`;
+const FOLLOW_UP_SYSTEM_PROMPT = `
+You are TweetFilter-AI, continuing a conversation about a tweet.
+The user has asked a follow-up question.
+Your entire conversation history up to this point is provided in the message list.
+Please provide an answer and then generate 3 new, relevant follow-up questions.
+Adhere strictly to the following response format:
+<ANSWER>
+(Your answer here)
+</ANSWER>
+<FOLLOW_UP_QUESTIONS>
+Q_1. (New Question 1 here)
+Q_2. (New Question 2 here)
+Q_3. (New Question 3 here)
+</FOLLOW_UP_QUESTIONS>
+`;
 let modelTemperature = parseFloat(browserGet('modelTemperature', '0.5'));
 let modelTopP = parseFloat(browserGet('modelTopP', '0.9'));
 let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '0.5'));
@@ -74,12 +97,10 @@ function modelSupportsImages(modelId) {
     if (!availableModels || availableModels.length === 0) {
         return false; // If we don't have model info, assume it doesn't support images
     }
-
     const model = availableModels.find(m => m.slug === modelId);
     if (!model) {
         return false; // Model not found in available models list
     }
-
     // Check if model supports images based on its architecture
     return model.input_modalities &&
         model.input_modalities.includes('image');
