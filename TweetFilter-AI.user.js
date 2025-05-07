@@ -4717,7 +4717,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     const questionText = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
     const useStreaming = browserGet('enableStreaming', false);
     const request = {
-        model: selectedModel,//was using :online but the search results are irrelevant
+        model: selectedModel+':online',//was using :online but the search results are irrelevant
         messages: qaHistoryForApiCall, // The entire history IS the messages array
         temperature: modelTemperature,
         top_p: modelTopP,
