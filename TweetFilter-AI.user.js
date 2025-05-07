@@ -1522,7 +1522,18 @@ class ScoreIndicator {
         this._updateTooltipUI();
         this.questions = [];
         this._updateTooltipUI();
-        const userMessageContent = [{ type: "text", text: questionText }];
+        const userMessageContent = [{ type: "text", text: `<UserQuestion> ${questionText} </UserQuestion>
+        You MUST match the EXPECTED_RESPONSE_FORMAT
+        EXPECTED_RESPONSE_FORMAT:
+        <ANSWER>
+(Your answer here)
+</ANSWER>
+<FOLLOW_UP_QUESTIONS>
+Q_1. (New Question 1 here)
+Q_2. (New Question 2 here)
+Q_3. (New Question 3 here)
+</FOLLOW_UP_QUESTIONS>
+        `; }];
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
                 userMessageContent.push({ type: "image_url", image_url: { "url": url } });
