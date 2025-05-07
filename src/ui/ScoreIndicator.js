@@ -1084,7 +1084,7 @@ Q_1. (New Question 1 here)
 Q_2. (New Question 2 here)
 Q_3. (New Question 3 here)
 </FOLLOW_UP_QUESTIONS>
-        `; }];
+        `}];
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
                 userMessageContent.push({ type: "image_url", image_url: { "url": url } });
