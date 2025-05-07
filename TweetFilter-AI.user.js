@@ -1500,7 +1500,18 @@ class ScoreIndicator {
         const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
         if (!button) return;
         event.stopPropagation();
-        const questionText = button.dataset.questionText;
+        const questionText = `<UserQuestion> ${button.dataset.questionText} </UserQuestion>
+        You MUST match the EXPECTED_RESPONSE_FORMAT
+        EXPECTED_RESPONSE_FORMAT:
+        <ANSWER>
+(Your answer here)
+</ANSWER>
+<FOLLOW_UP_QUESTIONS>
+Q_1. (New Question 1 here)
+Q_2. (New Question 2 here)
+Q_3. (New Question 3 here)
+</FOLLOW_UP_QUESTIONS>
+        `;
         const apiKey = browserGet('openrouter-api-key', '');
         if (!isMockEvent) {
         button.disabled = true;
