@@ -57,25 +57,59 @@ function filterSingleTweet(tweetArticle) {
  * @param {Element} tweetArticle - The tweet element.
  * @returns {boolean} True if a cached rating was applied.
  */
-function applyTweetCachedRating(tweetArticle) {
+async function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
 
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-        tweetArticle.dataset.sloppinessScore = '10';
-        tweetArticle.dataset.blacklisted = 'true';
-        tweetArticle.dataset.ratingStatus = 'blacklisted';
-        tweetArticle.dataset.ratingDescription = 'Whitelisted user';
-        // Use the ScoreIndicator instance to update UI
-        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-            status: 'blacklisted',
-            score: 10,
-            description: "User is whitelisted",
-            questions: [], // No questions for blacklist
-            lastAnswer: "" // No answer for blacklist
-        });
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        if (indicatorInstance) {
+            const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "[Tweet text not found]";
+            const mediaUrls = await extractMediaLinks(tweetArticle); // extractMediaLinks is async
+
+            const blacklistResponse = `<ANALYSIS>
+            This user is on the blacklist. Tweets from this user are not rated by the AI and are always shown.
+            </ANALYSIS>
+            <SCORE>
+            SCORE_10
+            </SCORE>
+            <FOLLOW_UP_QUESTIONS>
+            Q_1. Rate this tweet anyway.
+            Q_2. N/A
+            Q_3. N/A
+            </FOLLOW_UP_QUESTIONS>`;
+            indicatorInstance.updateInitialReviewAndBuildHistory({
+                fullContext: tweetText,
+                mediaUrls: mediaUrls,
+                apiResponseContent: blacklistResponse,
+                reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Assumed global
+                followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Assumed global
+            });
+
+            tweetCache.set(tweetId, {
+                score: 10,
+                description: indicatorInstance.description,
+                reasoning: "",
+                questions: indicatorInstance.questions,
+                lastAnswer: "",
+                tweetContent: tweetText,
+                mediaUrls: mediaUrls,
+                streaming: false,
+                blacklisted: true,
+                timestamp: Date.now(),
+                qaConversationHistory: indicatorInstance.qaConversationHistory
+            });
+        } else {
+            console.warn(`[applyTweetCachedRating] Could not get/create ScoreIndicator for blacklisted tweet ${tweetId}.`);
+            // Fallback to dataset attributes if indicator fails, though qaHistory won't be built.
+            tweetArticle.dataset.sloppinessScore = '10';
+            tweetArticle.dataset.blacklisted = 'true';
+            tweetArticle.dataset.ratingStatus = 'blacklisted';
+            tweetArticle.dataset.ratingDescription = 'User is blacklisted';
+        }
+
         filterSingleTweet(tweetArticle); // Apply filtering immediately
         return true;
     }
@@ -92,41 +126,40 @@ function applyTweetCachedRating(tweetArticle) {
 
         // Ensure the score exists before applying it
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
-            const score = cachedRating.score;
-            const desc = cachedRating.description;
-            const reasoning = cachedRating.reasoning || "";
-            const questions = cachedRating.questions || []; // Get cached questions
-            const lastAnswer = cachedRating.lastAnswer || ""; // Get cached answer
-            const mediaUrls = cachedRating.mediaUrls || []; // Get cached media URLs
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (indicatorInstance) {
+                indicatorInstance.rehydrateFromCache(cachedRating);
+                // The rehydrateFromCache method now handles updating UI and dataset attributes.
+                // So, direct updates here are redundant.
+                /*
+                const score = cachedRating.score;
+                const desc = cachedRating.description;
+                const reasoning = cachedRating.reasoning || "";
+                const questions = cachedRating.questions || [];
+                const lastAnswer = cachedRating.lastAnswer || "";
+                const mediaUrls = cachedRating.mediaUrls || [];
+                const metadata = cachedRating.metadata || null;
+                let status = cachedRating.fromStorage ? 'cached' : 'rated';
 
-            tweetArticle.dataset.sloppinessScore = score.toString();
-            tweetArticle.dataset.cachedRating = 'true';
-            if (reasoning) {
-                tweetArticle.dataset.ratingReasoning = reasoning;
+                tweetArticle.dataset.sloppinessScore = score.toString();
+                tweetArticle.dataset.cachedRating = 'true';
+                if (reasoning) tweetArticle.dataset.ratingReasoning = reasoning;
+                
+                indicatorInstance.update({
+                    status: status,
+                    score: score,
+                    description: desc,
+                    reasoning: reasoning,
+                    questions: questions,
+                    lastAnswer: lastAnswer,
+                    metadata: metadata,
+                    mediaUrls: mediaUrls
+                });
+                */
+            } else {
+                console.warn(`[applyTweetCachedRating] Could not get/create ScoreIndicator for ${tweetId} to apply cached rating.`);
+                return false; // Cannot apply if indicator doesn't exist
             }
-            // Optionally store questions/answer in dataset if needed for debugging
-            // tweetArticle.dataset.ratingQuestions = JSON.stringify(questions);
-            // tweetArticle.dataset.ratingLastAnswer = lastAnswer;
-
-            let status = 'rated'; // Default status
-            // Check if this rating is from storage (cached) or newly created
-            const isFromStorage = cachedRating.fromStorage === true;
-            status = isFromStorage ? 'cached' : 'rated';
-
-            // Get metadata from cache if it exists
-            const metadata = cachedRating.metadata || null;
-
-            // Update the indicator via the registry
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: status,
-                score: score,
-                description: desc,
-                reasoning: reasoning,
-                questions: questions, // Pass questions to indicator
-                lastAnswer: lastAnswer, // Pass answer to indicator
-                metadata: metadata, // Pass metadata to indicator
-                mediaUrls: mediaUrls // Pass mediaUrls to indicator
-            });
 
             filterSingleTweet(tweetArticle);
             return true;
@@ -461,7 +494,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
  * Schedules processing of a tweet if it hasn't been processed yet.
  * @param {Element} tweetArticle - The tweet element.
  */
-function scheduleTweetProcessing(tweetArticle) {
+async function scheduleTweetProcessing(tweetArticle) {
     // First, ensure the tweet has a valid ID
     const tweetId = getTweetID(tweetArticle);
     if (!tweetId) {
@@ -516,17 +549,52 @@ function scheduleTweetProcessing(tweetArticle) {
 
     // Fast-path: if author is blacklisted, assign score immediately
     if (authorHandle && isUserBlacklisted(authorHandle)) {
-        tweetArticle.dataset.sloppinessScore = '10';
-        tweetArticle.dataset.blacklisted = 'true';
-        tweetArticle.dataset.ratingStatus = 'blacklisted';
-        tweetArticle.dataset.ratingDescription = "Whitelisted user";
-        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-            status: 'blacklisted',
-            score: 10,
-            description: "User is whitelisted",
-            questions: [],
-            lastAnswer: ""
-        });
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        if (indicatorInstance) {
+            const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "[Tweet text not found]";
+            const mediaUrls = await extractMediaLinks(tweetArticle); // extractMediaLinks is async
+
+            const blacklistResponse = `<ANALYSIS>
+            This user is on the blacklist. Tweets from this user are not rated by the AI and are always shown.
+            </ANALYSIS>
+            <SCORE>
+            SCORE_10
+            </SCORE>
+            <FOLLOW_UP_QUESTIONS>
+            Q_1. Rate this tweet anyway.
+            Q_2. N/A
+            Q_3. N/A
+            </FOLLOW_UP_QUESTIONS>`;
+            
+            indicatorInstance.updateInitialReviewAndBuildHistory({
+                fullContext: tweetText,
+                mediaUrls: mediaUrls,
+                apiResponseContent: blacklistResponse,
+                reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Assumed global
+                followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Assumed global
+            });
+
+            tweetCache.set(tweetId, {
+                score: 10,
+                description: indicatorInstance.description,
+                reasoning: "",
+                questions: indicatorInstance.questions,
+                lastAnswer: "",
+                tweetContent: tweetText,
+                mediaUrls: mediaUrls,
+                streaming: false,
+                blacklisted: true,
+                timestamp: Date.now(),
+                qaConversationHistory: indicatorInstance.qaConversationHistory
+            });
+        } else {
+            console.warn(`[scheduleTweetProcessing] Could not get/create ScoreIndicator for blacklisted tweet ${tweetId}.`);
+            // Fallback to dataset attributes if indicator fails
+            tweetArticle.dataset.sloppinessScore = '10';
+            tweetArticle.dataset.blacklisted = 'true';
+            tweetArticle.dataset.ratingStatus = 'blacklisted';
+            tweetArticle.dataset.ratingDescription = 'User is blacklisted';
+        }
         filterSingleTweet(tweetArticle);
         return;
     }
@@ -539,7 +607,7 @@ function scheduleTweetProcessing(tweetArticle) {
             (tweetCache.get(tweetId).score === undefined || tweetCache.get(tweetId).score === null);
 
         if (!isIncompleteStreaming) {
-            const wasApplied = applyTweetCachedRating(tweetArticle);
+            const wasApplied = await applyTweetCachedRating(tweetArticle);
             if (wasApplied) {
                 return;
             }

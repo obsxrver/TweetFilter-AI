@@ -37,6 +37,15 @@ class ScoreIndicator {
         this.customQuestionContainer = null; // Container for custom question input/button
         this.customQuestionInput = null;
         this.customQuestionButton = null;
+        this.attachImageButton = null; // Moved here
+
+        // --- New: Image Upload Elements for Follow-up ---
+        this.followUpImageContainer = null; // This will hold preview and remove button
+        this.followUpImageInput = null;
+        this.followUpImagePreview = null;
+        this.followUpRemoveImageButton = null;
+        this.uploadedImageDataUrls = []; // Changed from single string to array
+        // --- End New ---
 
         this.status = 'pending'; // Initial status
         this.score = null;
@@ -49,6 +58,8 @@ class ScoreIndicator {
         this.isVisible = false;
         this.autoScroll = true; // Default to true for pending/streaming
         this.userInitiatedScroll = false; // Track user scroll interaction
+        this.uploadedImageDataUrls = []; // Initialize
+        this.qaConversationHistory = []; // Stores the full conversation history for API calls
 
         try {
             this._createElements(tweetArticle);
@@ -173,18 +184,80 @@ class ScoreIndicator {
         this.customQuestionContainer = document.createElement('div');
         this.customQuestionContainer.className = 'tooltip-custom-question-container';
 
-        this.customQuestionInput = document.createElement('input');
-        this.customQuestionInput.type = 'text';
+        this.customQuestionInput = document.createElement('textarea');
         this.customQuestionInput.placeholder = 'Ask your own question...';
         this.customQuestionInput.className = 'tooltip-custom-question-input';
+        this.customQuestionInput.rows = 1; // Start with a single row
+
+        // Add event listener for dynamic height adjustment
+        this.customQuestionInput.addEventListener('input', function() {
+            this.style.height = 'auto'; // Reset height to recalculate
+            this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
+            // Optionally, adjust rows attribute if preferred, but direct height is often smoother
+            // const computedStyle = window.getComputedStyle(this);
+            // const lineHeight = parseFloat(computedStyle.lineHeight);
+            // const paddingTop = parseFloat(computedStyle.paddingTop);
+            // const paddingBottom = parseFloat(computedStyle.paddingBottom);
+            // const borderTop = parseFloat(computedStyle.borderTopWidth);
+            // const borderBottom = parseFloat(computedStyle.borderBottomWidth);
+            // const verticalPaddingAndBorder = paddingTop + paddingBottom + borderTop + borderBottom;
+            // const lines = Math.floor((this.scrollHeight - verticalPaddingAndBorder) / lineHeight);
+            // this.rows = Math.max(1, lines);
+        });
+
+        // Check if model supports images to conditionally create image attach button
+        const currentSelectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano'); // Provide a default or ensure it's always set
+        const supportsImages = typeof modelSupportsImages === 'function' && modelSupportsImages(currentSelectedModel);
+
+        if (supportsImages) {
+            this.attachImageButton = document.createElement('button');
+            this.attachImageButton.textContent = '📎'; // Paperclip Icon
+            this.attachImageButton.className = 'tooltip-attach-image-button';
+            this.attachImageButton.title = 'Attach image(s)'; // Updated title
+
+            this.followUpImageInput = document.createElement('input');
+            this.followUpImageInput.type = 'file';
+            this.followUpImageInput.accept = 'image/' + '*';
+            this.followUpImageInput.multiple = true; // Allow multiple files
+            this.followUpImageInput.style.display = 'none'; // Hide the actual input
+        }
 
         this.customQuestionButton = document.createElement('button');
         this.customQuestionButton.textContent = 'Ask';
         this.customQuestionButton.className = 'tooltip-custom-question-button';
 
         this.customQuestionContainer.appendChild(this.customQuestionInput);
+        if (this.attachImageButton) {
+            this.customQuestionContainer.appendChild(this.attachImageButton);
+            // The input needs to be in the DOM to be clickable, even if hidden.
+            // It can be a direct child of the container or outside, as long as it's in the document.
+            // For simplicity, let's add it here if attachImageButton exists.
+            if (this.followUpImageInput) {
+                 this.customQuestionContainer.appendChild(this.followUpImageInput);
+            }
+        }
         this.customQuestionContainer.appendChild(this.customQuestionButton);
         this.tooltipElement.appendChild(this.customQuestionContainer);
+
+        // --- Image Preview and Remove Area (conditionally created) ---
+        if (supportsImages) {
+            this.followUpImageContainer = document.createElement('div');
+            this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container'; // New class for styling
+            // this.followUpImageContainer.style.display = 'none'; // Display handled by content
+
+            // No single preview/remove button here anymore; they are per image.
+            // this.followUpImagePreview = document.createElement('img');
+            // this.followUpImagePreview.className = 'tooltip-follow-up-image-preview';
+
+            // this.followUpRemoveImageButton = document.createElement('button');
+            // this.followUpRemoveImageButton.textContent = 'Remove Image';
+            // this.followUpRemoveImageButton.className = 'tooltip-remove-image-button';
+
+            // this.followUpImageContainer.appendChild(this.followUpImagePreview);
+            // this.followUpImageContainer.appendChild(this.followUpRemoveImageButton);
+            this.tooltipElement.insertBefore(this.followUpImageContainer, this.metadataElement);
+        }
+        // --- End Image Preview and Remove Area ---
 
         // --- Metadata Area ---
         this.metadataElement = document.createElement('div');
@@ -251,6 +324,17 @@ class ScoreIndicator {
                 this._handleCustomQuestionClick();
             }
         });
+
+        // --- New: Event Listeners for Image Upload (conditional) ---
+        if (this.attachImageButton && this.followUpImageInput) {
+            this.attachImageButton.addEventListener('click', () => this.followUpImageInput.click());
+            this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
+        }
+        // No global remove button listener now
+        // if (this.followUpRemoveImageButton) { 
+        //     this.followUpRemoveImageButton.addEventListener('click', this._handleRemoveFollowUpImage.bind(this));
+        // }
+        // --- End New ---
     }
 
     /** 
@@ -542,6 +626,17 @@ class ScoreIndicator {
             const formattedQuestion = turn.question
                 .replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Basic escaping
 
+            let uploadedImageHtml = '';
+            if (turn.uploadedImages && turn.uploadedImages.length > 0) {
+                uploadedImageHtml = `
+                    <div class="conversation-image-container">
+                        ${turn.uploadedImages.map(imageUrl => `
+                            <img src="${imageUrl}" alt="User uploaded image" class="conversation-uploaded-image">
+                        `).join('')}
+                    </div>
+                `;
+            }
+
             let formattedAnswer;
             if (turn.answer === 'pending') {
                 formattedAnswer = '<em class="pending-answer">Answering...</em>';
@@ -587,6 +682,7 @@ class ScoreIndicator {
             historyHtml += `
                 <div class="conversation-turn">
                     <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    ${uploadedImageHtml}
                     ${reasoningHtml}
                     <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
                 </div>
@@ -939,71 +1035,112 @@ class ScoreIndicator {
     }
 
     _handleFollowUpQuestionClick(event) {
-        const button = event.target.closest('.follow-up-question-button');
-        if (!button) return;
+        // If called from _handleCustomQuestionClick, event.target will be our mockButton
+        // Otherwise, it's a real DOM event and we need to find the button.
+        const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
+        const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
 
-        event.stopPropagation(); // Prevent tooltip hide
+        if (!button) return; // Should not happen if called from custom handler with mockButton
+
+        event.stopPropagation(); // Prevent tooltip hide if it's a real event
 
         const questionText = button.dataset.questionText;
         const apiKey = browserGet('openrouter-api-key', '');
 
-        // Add immediate feedback
+        // Add immediate feedback - only if it's a real button
+        if (!isMockEvent) {
         button.disabled = true;
         button.textContent = `🤔 Asking: ${questionText}...`;
         // Optionally disable other question buttons too
         this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        //this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
+        } else {
+            // For custom questions, disable the input and button
+            if (this.customQuestionInput) this.customQuestionInput.disabled = true;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = true;
+                this.customQuestionButton.textContent = 'Asking...';
+            }
+        }
 
-        // << New: Add question to history and update UI
-        this.conversationHistory.push({ question: questionText, answer: 'pending' });
+        this.conversationHistory.push({ 
+            question: questionText, 
+            answer: 'pending', 
+            uploadedImages: [...this.uploadedImageDataUrls], // Store a copy of the image URLs array
+            reasoning: '' // Initialize reasoning for this turn
+        });
         this._updateTooltipUI(); // Update UI to show pending state
         this.questions = []; // Clear suggested questions
         this._updateTooltipUI(); // Update UI again to remove suggested questions
 
+        // Construct the user message for the API
+        const userMessageContent = [{ type: "text", text: questionText }];
+        if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
+            this.uploadedImageDataUrls.forEach(url => {
+                userMessageContent.push({ type: "image_url", image_url: { "url": url } });
+            });
+        }
+        const userApiMessage = { role: "user", content: userMessageContent };
+
+        // Create a new history array for the API call, including the new user message
+        const historyForApiCall = [...this.qaConversationHistory, userApiMessage];
+
         if (!apiKey) {
             showStatus('API key missing. Cannot answer question.', 'error');
-            //this.update({ lastAnswer: "Error: API Key missing." }); // Update UI directly
-            // << New: Update the pending history entry with error
             this._updateConversationHistory(questionText, "Error: API Key missing.", "");
-            button.disabled = false; // Re-enable button on error
-            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            // Re-enable buttons
+            if (!isMockEvent) {
+                button.disabled = false;
+                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            }
+            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+            this._clearFollowUpImage(); // Clear image even on error
             return;
         }
 
         if (!questionText) {
             console.error("Follow-up question text not found on button.");
-            //this.update({ lastAnswer: "Error: Could not identify question." });
-            // << New: Update the pending history entry with error
             this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
-            button.disabled = false; // Re-enable button on error
-            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            // Re-enable buttons
+             if (!isMockEvent) {
+                button.disabled = false;
+                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            }
+            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+            this._clearFollowUpImage();
             return;
         }
 
-        // Get media URLs from cache
-        const cachedData = tweetCache.get(this.tweetId);
-        const mediaUrls = cachedData?.mediaUrls || [];
         const currentArticle = this.findCurrentArticleElement();
-        // Use try/finally to ensure buttons are re-enabled
+        // We no longer need to pass original mediaUrls from cache, as they are in qaConversationHistory
+        // const cachedData = tweetCache.get(this.tweetId);
+        // const mediaUrls = cachedData?.mediaUrls || []; 
+
         try {
-            // Pass `this` instance so answerFollowUpQuestion can update the history
-            answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
+            // Pass the augmented history to answerFollowUpQuestion
+            answerFollowUpQuestion(this.tweetId, historyForApiCall, apiKey, currentArticle, this);
         } finally {
-             // Re-enable buttons after the async function is called
-             // Note: The answer function itself will update the UI with the final answer/questions
-             // This might re-enable slightly before the answer appears, which is acceptable.
-            setTimeout(() => { // Use timeout to ensure it happens after current execution context
+            setTimeout(() => {
                  if (this.followUpQuestionsElement) {
                     this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
-                         // Find the original text if needed, or just re-enable
-                         // For simplicity, just re-enable. The update() call inside answerFollowUpQuestion
-                         // will redraw the buttons with new text anyway.
                          btn.disabled = false;
-                         // Restore text if needed (might cause flicker)
-                         // if(btn.dataset.questionText) btn.textContent = `🤔 ${btn.dataset.questionText}`;
-                     });
-                 }
-            }, 100); // Small delay
+                    });
+                }
+                 // Re-enable custom question UI if it was used
+                if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+                if (this.customQuestionButton) {
+                    this.customQuestionButton.disabled = false;
+                    this.customQuestionButton.textContent = 'Ask';
+                }
+                this._clearFollowUpImage(); // Clear image after sending
+            }, 100);
         }
     }
 
@@ -1017,62 +1154,110 @@ class ScoreIndicator {
             return;
         }
 
-        const apiKey = browserGet('openrouter-api-key', '');
+        // This reuses the logic from _handleFollowUpQuestionClick for sending the question
+        // The actual API call happens there. We just need to trigger it.
+        // Create a temporary "button" like object to pass to _handleFollowUpQuestionClick
+        // or refactor to a common sending function. For now, let's simulate a click.
 
-        // --- Add UI Feedback ---
-        this.customQuestionInput.disabled = true;
-        this.customQuestionButton.disabled = true;
-        this.customQuestionButton.textContent = 'Asking...';
-        // Optionally disable suggested question buttons too
+        const mockButton = {
+            dataset: { questionText: questionText },
+            disabled: false,
+            textContent: ''
+        };
+        // Temporarily disable suggested questions if any
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        //this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
 
-        // << New: Add question to history and update UI
-        this.conversationHistory.push({ question: questionText, answer: 'pending' });
-        this.questions = []; // Clear suggested questions
-        this._updateTooltipUI(); // Update UI to show pending state & remove questions
+        // Call the handler, it will manage UI updates and API call
+        this._handleFollowUpQuestionClick({ target: mockButton, stopPropagation: () => {} });
 
-        // --- End UI Feedback ---
-
-        if (!apiKey) {
-            showStatus('API key missing. Cannot answer question.', 'error');
-            //this.update({ lastAnswer: "Error: API Key missing." });
-            // << New: Update the pending history entry with error
-            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
-            this.customQuestionInput.disabled = false;
-            this.customQuestionButton.disabled = false;
-            this.customQuestionButton.textContent = 'Ask';
-            this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-            return;
-        }
-
-        // Clear the input field
-        this.customQuestionInput.value = '';
-
-        // Get media URLs from cache
-        const cachedData = tweetCache.get(this.tweetId);
-        const mediaUrls = cachedData?.mediaUrls || [];
-        const currentArticle = this.findCurrentArticleElement();
-
-        // Use try/finally to ensure buttons/input are re-enabled
-        try {
-            // Pass `this` instance so answerFollowUpQuestion can update the history
-            answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
-        } finally {
-            // Re-enable after the async call starts. The answer function updates UI with the result.
-             setTimeout(() => {
-                if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-                if (this.customQuestionButton) {
-                    this.customQuestionButton.disabled = false;
-                    this.customQuestionButton.textContent = 'Ask';
-                }
-                // Re-enable suggested questions as well (answerFollowUpQuestion will redraw them)
-                 if (this.followUpQuestionsElement) {
-                    this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-                 }
-             }, 100);
+        // Clear the input field after initiating the send for custom questions
+        if (this.customQuestionInput) {
+            this.customQuestionInput.value = '';
         }
     }
+
+    // --- New: Image Handling Methods for Follow-up ---
+    _handleFollowUpImageSelect(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        // Ensure the container is visible if we're adding images
+        if (this.followUpImageContainer && files.length > 0) {
+            this.followUpImageContainer.style.display = 'flex'; // Or 'block', depending on final styling
+        }
+
+        Array.from(files).forEach(file => {
+            if (file && file.type.startsWith('image/')) {
+                resizeImage(file, 512) // Resize to max 512px
+                    .then(resizedDataUrl => {
+                        this.uploadedImageDataUrls.push(resizedDataUrl);
+                        this._addPreviewToContainer(resizedDataUrl);
+                    })
+                    .catch(error => {
+                        console.error("Error resizing image:", error);
+                        showStatus(`Could not process image ${file.name}: ${error.message}`, "error");
+                    });
+            } else if (file) {
+                showStatus(`Skipping non-image file: ${file.name}`, "warning");
+        }
+        });
+
+        // Reset file input to allow selecting the same file again if removed
+        event.target.value = null;
+    }
+
+    _addPreviewToContainer(imageDataUrl) {
+        if (!this.followUpImageContainer) return;
+
+        const previewItem = document.createElement('div');
+        previewItem.className = 'follow-up-image-preview-item';
+        previewItem.dataset.imageDataUrl = imageDataUrl; // Store for easy removal
+
+        const img = document.createElement('img');
+        img.src = imageDataUrl;
+        img.className = 'follow-up-image-preview-thumbnail';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '×'; // 'X' character for close
+        removeBtn.className = 'follow-up-image-remove-btn';
+        removeBtn.title = 'Remove this image';
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._removeSpecificUploadedImage(imageDataUrl);
+        });
+
+        previewItem.appendChild(img);
+        previewItem.appendChild(removeBtn);
+        this.followUpImageContainer.appendChild(previewItem);
+    }
+
+    _removeSpecificUploadedImage(imageDataUrl) {
+        this.uploadedImageDataUrls = this.uploadedImageDataUrls.filter(url => url !== imageDataUrl);
+
+        if (this.followUpImageContainer) {
+            const previewItemToRemove = this.followUpImageContainer.querySelector(`div.follow-up-image-preview-item[data-image-data-url="${CSS.escape(imageDataUrl)}"]`);
+            if (previewItemToRemove) {
+                previewItemToRemove.remove();
+                }
+            // Hide container if no images are left
+            if (this.uploadedImageDataUrls.length === 0) {
+                this.followUpImageContainer.style.display = 'none';
+            }
+        }
+    }
+
+
+    _clearFollowUpImage() {
+        this.uploadedImageDataUrls = []; // Reset the array
+        if (this.followUpImageContainer) {
+            this.followUpImageContainer.innerHTML = ''; // Clear all preview items
+            this.followUpImageContainer.style.display = 'none'; // Hide the container
+        }
+        if (this.followUpImageInput) {
+            this.followUpImageInput.value = null; // Clear the file input
+        }
+    }
+    // --- End New ---
 
     // --- Public API ---
 
@@ -1116,7 +1301,8 @@ class ScoreIndicator {
         }
 
         // Ensure the corresponding state is actually pending before updating visuals
-        if (!(this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].answer === 'pending')) {
+        const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length -1] : null;
+        if (!(lastHistoryEntry && lastHistoryEntry.answer === 'pending')) {
             console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
             return;
         }
@@ -1411,6 +1597,14 @@ class ScoreIndicator {
         this.customQuestionContainer = null;
         this.customQuestionInput = null;
         this.customQuestionButton = null;
+        // --- New: Nullify Image Upload Elements ---
+        this.followUpImageContainer = null;
+        this.followUpImageInput = null;
+        this.followUpImagePreview = null;
+        this.followUpRemoveImageButton = null;
+        this.attachImageButton = null; // Added for cleanup
+        this.uploadedImageDataUrls = []; // Ensure it's reset here too
+        // --- End New ---
     }
 
     /** Ensures the indicator element is attached to the correct current article element. */
@@ -1462,6 +1656,161 @@ class ScoreIndicator {
         }
 
         return null; // Not found
+    }
+
+    /**
+     * Updates the indicator's state after an initial review and builds the conversation history.
+     * @param {object} params
+     * @param {string} params.fullContext - The full text context of the tweet.
+     * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
+     * @param {string} params.apiResponseContent - The raw content from the API response.
+     * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
+     * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
+     */
+    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt }) {
+        // Parse apiResponseContent for analysis, score, and initial questions
+        const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
+        const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
+        // extractFollowUpQuestions function is defined in api.js, assuming it's globally available
+        const initialQuestions = extractFollowUpQuestions(apiResponseContent);
+
+        this.score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+        this.description = analysisMatch ? analysisMatch[1].trim() : apiResponseContent; // Fallback to full content
+        this.questions = initialQuestions;
+        this.status = this.score !== null ? 'rated' : 'error'; // Or some other logic for status
+
+        // Construct qaConversationHistory
+        const userMessageContent = [{ type: "text", text: fullContext }];
+        mediaUrls.forEach(url => {
+            userMessageContent.push({ type: "image_url", image_url: { "url": url } });
+        });
+
+        this.qaConversationHistory = [
+            { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
+            { role: "user", content: userMessageContent },
+            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
+            { role: "system", content: [{ type: "text", text: followUpSystemPrompt }] }
+        ];
+
+        // Update UI elements
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+        this.updateDatasetAttributes();
+    }
+
+    /**
+     * Updates the indicator's state after a follow-up question has been answered.
+     * @param {object} params
+     * @param {string} params.assistantResponseContent - The raw content of the AI's response.
+     * @param {object[]} params.updatedQaHistory - The fully updated qaConversationHistory array.
+     */
+    updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
+        this.qaConversationHistory = updatedQaHistory;
+
+        // Parse assistantResponseContent for the answer and new follow-up questions
+        const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+        const newFollowUpQuestions = extractFollowUpQuestions(assistantResponseContent);
+
+        const answerText = answerMatch ? answerMatch[1].trim() : assistantResponseContent; // Fallback
+
+        // Update this.questions for the UI buttons
+        this.questions = newFollowUpQuestions;
+
+        // Update the last turn in this.conversationHistory (for UI rendering)
+        if (this.conversationHistory.length > 0) {
+            const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
+            if (lastTurn.answer === 'pending') {
+                lastTurn.answer = answerText;
+                // Assuming reasoning might be part of assistantResponseContent or handled elsewhere
+                // For now, let's assume reasoning isn't explicitly parsed here for simplicity
+                // lastTurn.reasoning = ...;
+            }
+        }
+
+        // Refresh the tooltip UI
+        this._updateTooltipUI();
+        this.updateDatasetAttributes(); // Ensure dataset reflects any score/status change if applicable
+    }
+
+    /**
+     * Rehydrates the ScoreIndicator instance from cached data.
+     * @param {object} cachedData - The cached data object.
+     */
+    rehydrateFromCache(cachedData) {
+        this.score = cachedData.score;
+        this.description = cachedData.description; // This should be the analysis part
+        this.reasoning = cachedData.reasoning;
+        this.questions = cachedData.questions || [];
+        this.status = cachedData.status || (cachedData.score !== null ? (cachedData.fromStorage ? 'cached' : 'rated') : 'error');
+        this.metadata = cachedData.metadata || null;
+        this.qaConversationHistory = cachedData.qaConversationHistory || [];
+        this.isPinned = cachedData.isPinned || false; // Assuming we might cache pin state
+
+        // Rebuild this.conversationHistory (for UI) from qaConversationHistory
+        this.conversationHistory = [];
+        if (this.qaConversationHistory.length > 0) {
+            let currentQuestion = null;
+            let currentUploadedImages = [];
+
+            // Start iterating after the initial assistant review and the follow-up system prompt
+            // Initial structure: [SysReview, UserTweet, AssReview, SysFollowUp, UserQ1, AssA1, ...]
+            // We look for UserQ -> AssA pairs
+            let startIndex = 0;
+            for(let i=0; i < this.qaConversationHistory.length; i++) {
+                if (this.qaConversationHistory[i].role === 'system' && this.qaConversationHistory[i].content[0].text.includes('FOLLOW_UP_SYSTEM_PROMPT')) {
+                    startIndex = i + 1;
+                    break;
+                }
+                 // Fallback if FOLLOW_UP_SYSTEM_PROMPT is not found (e.g. very old cache)
+                if (i === 3 && this.qaConversationHistory[i].role === 'system') {
+                    startIndex = i + 1;
+                }
+            }
+
+
+            for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
+                const message = this.qaConversationHistory[i];
+                if (message.role === 'user') {
+                    // Find the text part of the user's message
+                    const textContent = message.content.find(c => c.type === 'text');
+                    currentQuestion = textContent ? textContent.text : "[Question not found]";
+                    
+                    // Extract uploaded images if any
+                    currentUploadedImages = message.content
+                        .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
+                        .map(c => c.image_url.url);
+
+                } else if (message.role === 'assistant' && currentQuestion) {
+                    const assistantTextContent = message.content.find(c => c.type === 'text');
+                    const assistantAnswer = assistantTextContent ? assistantTextContent.text : "[Answer not found]";
+                    
+                    // Attempt to parse out just the answer part for the UI history
+                    const answerMatch = assistantAnswer.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                    const uiAnswer = answerMatch ? answerMatch[1].trim() : assistantAnswer;
+
+                    this.conversationHistory.push({
+                        question: currentQuestion,
+                        answer: uiAnswer,
+                        uploadedImages: currentUploadedImages,
+                        reasoning: '' // Reasoning extraction from assistant's full response for UI needs more logic
+                    });
+                    currentQuestion = null; // Reset for the next pair
+                    currentUploadedImages = [];
+                }
+            }
+        }
+
+        if (this.isPinned) {
+            this.pinButton.innerHTML = '📍';
+            this.tooltipElement?.classList.add('pinned');
+        } else {
+            this.pinButton.innerHTML = '📌';
+            this.tooltipElement?.classList.remove('pinned');
+        }
+        
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+        this.updateDatasetAttributes();
     }
 }
 

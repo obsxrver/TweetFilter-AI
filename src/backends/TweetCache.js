@@ -90,7 +90,8 @@ class TweetCache {
                 latency: rating.metadata?.latency || null,
                 mediaInputs: rating.metadata?.mediaInputs || null,
                 price: rating.metadata?.price || null
-            }
+            },
+            qaConversationHistory: rating.qaConversationHistory || []
         };
 
         if(!saveImmediately) {
@@ -147,15 +148,27 @@ class TweetCache {
         let deletedCount = 0;
         let streamingDeletedCount = 0;
         let undefinedScoreCount = 0;
+        let missingQaHistoryCount = 0;
 
         for (const tweetId in this.cache) {
             const entry = this.cache[tweetId];
+            let shouldDelete = false;
             if (entry.score === undefined || entry.score === null) {
                 if (entry.streaming === true) {
                     streamingDeletedCount++;
                 } else {
                     undefinedScoreCount++;
                 }
+                shouldDelete = true;
+            }
+            if (!entry.streaming && entry.score !== undefined && entry.score !== null && !entry.blacklisted && 
+                (!entry.qaConversationHistory || !Array.isArray(entry.qaConversationHistory) || entry.qaConversationHistory.length < 3)) {
+                console.warn(`[Cache Cleanup] Tweet ${tweetId} is rated but has invalid/missing qaConversationHistory. Deleting.`);
+                missingQaHistoryCount++;
+                shouldDelete = true;
+            }
+
+            if (shouldDelete) {
                 delete this.cache[tweetId];
                 deletedCount++;
             }
@@ -171,7 +184,8 @@ class TweetCache {
             afterCount: this.size,
             deletedCount,
             streamingDeletedCount,
-            undefinedScoreCount
+            undefinedScoreCount,
+            missingQaHistoryCount
         };
     }
 }

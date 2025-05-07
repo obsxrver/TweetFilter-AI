@@ -1828,6 +1828,12 @@ input:checked+.toggle-slider:before {
     background-color: rgba(39, 44, 48, 0.9);
     color: #e7e9ea;
     font-size: 0.9em;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Ensure font consistency */
+    line-height: 1.4; /* Adjust line height for better text readability */
+    resize: none; /* Prevent manual resizing by the user */
+    overflow-y: hidden; /* Hide scrollbar initially, height adjustment will manage overflow */
+    min-height: calc(0.9em * 1.4 + 16px + 2px); /* Approx height for 1 row: (font-size * line-height) + padding + border */
+    box-sizing: border-box; /* Ensure padding and border are included in height calculation */
 }
 
 .tooltip-custom-question-input:focus {
@@ -2048,4 +2054,113 @@ input:checked+.toggle-slider:before {
 }
 .conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
+}
+
+/* --- Styling for Image Upload in Follow-up --- */
+.tooltip-attach-image-button {
+    background: none;
+    border: none;
+    color: #8899a6; /* Muted color, similar to other controls */
+    font-size: 1.2em; /* Slightly larger for icon visibility */
+    cursor: pointer;
+    padding: 6px 8px; /* Adjust padding to align with input/button height */
+    margin: 0 4px; /* Space around the icon */
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    align-self: center; /* Vertically align with input and Ask button */
+}
+
+.tooltip-attach-image-button:hover {
+    background-color: rgba(29, 155, 240, 0.1);
+    color: #1d9bf0;
+}
+
+.tooltip-follow-up-image-preview-container {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex; /* Changed to flex for easier alignment of preview and button */
+    flex-direction: row; /* Lay out previews in a row */
+    flex-wrap: wrap; /* Allow previews to wrap to the next line */
+    gap: 10px; /* Spacing between preview items */
+    align-items: flex-start;
+}
+
+.follow-up-image-preview-item {
+    position: relative; /* For positioning the remove button */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 5px;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.follow-up-image-preview-thumbnail {
+    max-width: 80px; /* Smaller thumbnails for multiple previews */
+    max-height: 80px;
+    border-radius: 4px;
+    object-fit: cover; /* Or contain, depending on desired look */
+    margin-bottom: 5px; /* Space between image and potential future captions */
+}
+
+.follow-up-image-remove-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: rgba(40, 40, 40, 0.8);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50%; /* Circular button */
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 18px; /* Adjust for vertical centering of X */
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.follow-up-image-remove-btn:hover {
+    background-color: rgba(255, 92, 92, 0.9);
+    transform: scale(1.1);
+}
+
+/* Adjust custom question container to be flex for alignment */
+.tooltip-custom-question-container {
+    /* ... existing styles ... */
+    display: flex; /* Ensures items are in a row */
+    align-items: center; /* Vertically aligns items in the middle */
+}
+
+.tooltip-custom-question-input {
+    /* ... existing styles ... */
+    margin-right: 0; /* Remove right margin if any, gap handles spacing */
+}
+
+/* --- Styling for Uploaded Image in Conversation History --- */
+.conversation-image-container {
+    margin-top: 8px; /* Space above the image */
+    margin-bottom: 8px; /* Space below the image, before reasoning/answer */
+    display: flex; /* Use flex for multiple images */
+    flex-wrap: wrap; /* Allow images to wrap */
+    gap: 8px; /* Space between images */
+}
+
+.conversation-uploaded-image {
+    max-width: 80%; /* Limit width to not dominate the tooltip */
+    max-height: 120px; /* Slightly larger than preview, but still constrained */
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    object-fit: contain; /* Maintain aspect ratio */
+    display: block; /* Ensure it takes its own line if needed */
+    cursor: pointer; /* Indicate it can be clicked (e.g., for lightbox in future) */
+    transition: transform 0.2s ease;
+}
+
+.conversation-uploaded-image:hover {
+    transform: scale(1.02); /* Slight zoom on hover */
 }

@@ -17,11 +17,10 @@
 // ==/UserScript==
 (function() {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
     // Embedded Menu.html
     const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">×</button><label for="tweet-filter-slider">SlopScore:</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings"><span style="font-size: 14px;">⚙️</span> Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">Twitter De-Sloppifier</div><button class="close-button" data-action="toggle-settings">×</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/settings/keys" target="_blank">Get one here</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Cached Tweet Ratings</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Whitelisted Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">💾</span> Backup &amp; Restore</div><div class="section-description">Export your settings and cached ratings to a file for backup, or import previously saved settings.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div></div><div id="models-tab" class="tab-content"><div class="section-title"><span style="font-size: 14px;">🧠</span> Tweet Rating Model</div><div class="section-description">The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-sort-order">Sort models by: </label><div class="controls-group"><select id="model-sort-order" data-setting="modelSortOrder"><option value="pricing-low-to-high">Price</option><option value="latency-low-to-high">Latency</option><option value="throughput-high-to-low">Throughput</option><option value="top-weekly">Popularity</option><option value="">Age</option></select><button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button></div></div><div class="sort-container"><label for="provider-sort">API Endpoint Priority: </label><select id="provider-sort" data-setting="providerSort"><option value="">Default (load-balanced)</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show Free Models</label></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div><div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div><div class="toggle-row"><div class="toggle-label">Enable Image Descriptions</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Custom Instructions</div><div class="section-description">Add custom instructions for how the model should score tweets:</div><textarea id="user-instructions" placeholder="Examples:- Give high scores to tweets about technology- Penalize clickbait-style tweets- Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Custom Instructions History</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"><!-- Instructions entries will be added here dynamically --></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button></div></div><div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div><div class="section-description">Add Twitter handles to automatically rate as 10/10:</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Twitter handle (without @)"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
     // Embedded style.css
-    const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;/* Twitter blue */color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {/* Add specific mobile tooltip styles if needed */max-width: 90vw;/* Example */}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 6px;}.score-description::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}/* Only override hidden for our specific containers */#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 16px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);display: flex;flex-direction: column;width: 90vw;max-width: 380px;max-height: 85vh;overflow: hidden;border: 1px solid rgba(255, 255, 255, 0.1);line-height: 1.3;transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 12px 15px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 20;border-radius: 16px 16px 0 0;}.settings-title {font-weight: bold;font-size: 16px;}.settings-content {overflow-y: auto;max-height: calc(85vh - 110px);padding: 0;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(255, 255, 255, 0.1);position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 10;padding: 10px 15px;gap: 8px;}.tab-button {padding: 6px 10px;background: none;border: none;color: #e7e9ea;font-weight: bold;cursor: pointer;border-radius: 8px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(255, 255, 255, 0.1);}.tab-button.active {color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);border-bottom: 2px solid #1d9bf0;}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 15px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 15px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(39, 44, 48, 0.95);padding: 8px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);z-index: 1;}.select-container .search-input {width: 100%;padding: 8px 10px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 12px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;padding: 10px 12px;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(39, 44, 48, 0.98);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;margin-top: 5px;box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(255, 255, 255, 0.05);}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: bold;margin-top: 20px;margin-bottom: 8px;color: #e7e9ea;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12px;margin-bottom: 8px;opacity: 0.8;line-height: 1.4;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 5px;margin-bottom: 15px;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 12px;background-color: rgba(255, 255, 255, 0.03);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: bold;font-size: 13px;color: #e7e9ea;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: none;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0 20px 16px 20px;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 550px !important;max-width: 80vw !important;max-height: 60vh;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;max-width: 500px;padding-bottom: 35px;}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 -20px 15px -20px !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.description-text {margin: 0 0 25px 0 !important;font-size: 15px !important;line-height: 1.6 !important;max-width: 100% !important;overflow-wrap: break-word !important;padding: 5px 0 !important;color: #e1e8ed !important;letter-spacing: 0.2px !important;}/* Style different elements within description text */.description-text p {margin: 0 0 12px 0 !important;}.description-text p:last-child {margin-bottom: 0 !important;}.description-text strong {color: #fff !important;font-weight: 600 !important;}.description-text em {color: #8899a6 !important;font-style: italic !important;}.description-text code {background: rgba(255, 255, 255, 0.1) !important;padding: 2px 6px !important;border-radius: 4px !important;font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;font-size: 0.9em !important;color: #1d9bf0 !important;}.description-text a {color: #1d9bf0 !important;text-decoration: none !important;transition: color 0.2s ease !important;border-bottom: 1px solid rgba(29, 155, 240, 0.3) !important;}.description-text a:hover {color: #ffffff !important;border-bottom-color: #ffffff !important;}/* Add subtle highlight for important sections */.description-text blockquote {margin: 12px 0 !important;padding: 8px 16px !important;border-left: 3px solid #1d9bf0 !important;background: rgba(29, 155, 240, 0.1) !important;border-radius: 0 4px 4px 0 !important;}/* Style lists within description */.description-text ul, .description-text ol {margin: 8px 0 12px 20px !important;padding: 0 !important;}.description-text li {margin: 4px 0 !important;line-height: 1.5 !important;}/* Style headings if present */.description-text h1,.description-text h2,.description-text h3,.description-text h4 {color: #ffffff !important;margin: 16px 0 8px 0 !important;font-weight: 600 !important;line-height: 1.3 !important;}.description-text h1 { font-size: 1.4em !important; }.description-text h2 { font-size: 1.3em !important; }.description-text h3 { font-size: 1.2em !important; }.description-text h4 { font-size: 1.1em !important; }/* Add subtle animation for content changes */.description-text {transition: opacity 0.2s ease !important;}/* Style tables if present */.description-text table {width: 100% !important;border-collapse: collapse !important;margin: 12px 0 !important;background: rgba(255, 255, 255, 0.03) !important;border-radius: 4px !important;}.description-text th,.description-text td {padding: 8px 12px !important;border: 1px solid rgba(255, 255, 255, 0.1) !important;text-align: left !important;}.description-text th {background: rgba(255, 255, 255, 0.05) !important;font-weight: 600 !important;color: #ffffff !important;}/* Add a subtle separator between major sections */.description-text hr {border: none !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;margin: 20px 0 !important;}/* Style pre blocks for code snippets */.description-text pre {background: rgba(0, 0, 0, 0.2) !important;padding: 12px !important;border-radius: 4px !important;overflow-x: auto !important;border: 1px solid rgba(255, 255, 255, 0.1) !important;margin: 12px 0 !important;}.description-text pre code {background: none !important;padding: 0 !important;border-radius: 0 !important;font-size: 0.9em !important;color: #e1e8ed !important;}/* Add a subtle hover effect for interactive elements */.description-text *[role="button"],.description-text .interactive {transition: all 0.2s ease !important;}.description-text *[role="button"]:hover,.description-text .interactive:hover {background-color: rgba(255, 255, 255, 0.1) !important;}/* Style keyboard shortcuts or commands */.description-text kbd {background: rgba(255, 255, 255, 0.1) !important;border: 1px solid rgba(255, 255, 255, 0.2) !important;border-radius: 3px !important;padding: 2px 6px !important;font-size: 0.9em !important;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;box-shadow: 0 1px 1px rgba(0,0,0,0.2) !important;}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: sticky;bottom: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);margin-top: 10px;z-index: 100;transition: background-color 0.2s;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 12px !important;box-sizing: border-box !important;overflow-y: auto !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}}.sort-container {margin: 10px 0;display: flex;align-items: center;gap: 10px;justify-content: space-between;}.sort-container label {font-size: 14px;color: var(--text-color);white-space: nowrap;}.sort-container .controls-group {display: flex;gap: 8px;align-items: center;}.sort-container select {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;min-width: 120px;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}@media (min-width: 601px) {#settings-container {width: 480px;max-width: 480px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;/* Ensure it stays hidden even if Twitter tries to show it */position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}/* Hide number input spinners */.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}/* --- Metadata Specific Styling --- */.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}/* --- Specific Indicator Styles --- */.score-indicator.pending-rating {}/* --- Tooltip Styles --- */.score-description {/* ... existing styles ... */max-width: 500px;padding-bottom: 35px; /* Add padding for scroll button *//* ... existing styles ... */}.score-description.streaming-tooltip {border-color: #ffa500; /* Orange border for streaming */}/* ... existing .tooltip-controls, .tooltip-pin-button, .tooltip-copy-button styles ... *//* --- Reasoning Dropdown --- */.reasoning-dropdown {/* ... existing styles ... */}.reasoning-toggle {/* ... existing styles ... */}.reasoning-arrow {/* ... existing styles ... */}.reasoning-content {/* ... existing styles ... */}.reasoning-text {/* ... existing styles ... */}.description-text {/* ... existing styles ... */}/* --- Last Answer Area --- */.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); /* Slightly different background */border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}/* --- Follow-Up Questions Area --- */.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 6px; /* Spacing between buttons */}.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); /* Light blue background */border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; /* Light text */padding: 8px 12px;border-radius: 15px; /* Pill shape */cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; /* Allow wrapping */line-height: 1.3;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}/* --- Metadata Area --- */.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; /* Muted color */border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}/* --- Score Highlight --- */.score-highlight {/* ... existing styles ... */}/* --- Scroll Button --- */.scroll-to-bottom-button {/* ... existing styles ... */}.tooltip-bottom-spacer {/* ... existing styles ... */}/* --- Custom Question Input Area --- */.tooltip-custom-question-container {margin-top: 15px;display: flex;gap: 8px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator */}.tooltip-custom-question-input {flex-grow: 1; /* Take available space */padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}/* --- Conversation History Styling --- */.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; /* Space between conversation turns */}.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; /* Lighter grey for user question */margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; /* Slightly brighter for "You:" */}.conversation-answer {font-size: 0.95em;color: #e1e8ed; /* Main text color for AI answer */}.conversation-answer strong {color: #1d9bf0; /* Twitter blue for "AI:" */}.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; /* Reset margin, gap handles spacing */}.pending-answer {color: #ffa726; /* Orange for pending state */font-style: italic;}/* Blinking cursor for streaming answers */.pending-cursor {display: inline-block;color: #1d9bf0; /* Twitter blue */animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; /* Override italic from pending-answer if nested */}@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}/* Styling for links generated from markdown in AI answers */.ai-generated-link {color: #1d9bf0; /* Twitter blue */text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; /* Slightly darker blue on hover */text-decoration: underline;}/* Style for the new tooltip close button */.tooltip-close-button {/* Reuse general close button styles */background: none !important;border: none !important;color: #8899a6 !important; /* Match other control button colors */cursor: pointer !important;font-size: 20px !important; /* Slightly larger for easier tapping */line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; /* Space from other buttons */border-radius: 50% !important; /* Make it round */width: 28px !important; /* Explicit size */height: 28px !important; /* Explicit size */display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; /* Ensure it comes after pin and copy */}.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; /* Reddish background on hover */color: #ff5c5c !important; /* Red color on hover */}.tooltip-close-button:active {transform: scale(0.95) !important;}/* Adjust mobile close button specifically if needed */@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; /* Even larger on mobile */width: 32px !important;height: 32px !important;}/* Ensure controls container accommodates button */.tooltip-controls {padding-right: 40px !important; /* Add padding to prevent overlap if button was absolute */}}/* --- Styling for Reasoning Dropdown within Conversation Turn --- */.conversation-turn .reasoning-dropdown {margin-top: 8px; /* Space above the dropdown */margin-bottom: 8px; /* Space below the dropdown, before the answer */border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); /* Slightly different background from turn itself */border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; /* Muted color for toggle text */cursor: pointer;font-weight: normal; /* Less prominent than main reasoning toggle */font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; /* Horizontal padding only when collapsed */}.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; /* Adjust as needed */overflow-y: auto;padding: 8px; /* Full padding when expanded */}.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; /* Smaller text for reasoning */line-height: 1.4;color: #ccc; /* Similar to main reasoning text */margin: 0;padding: 0; /* Padding is on the content container */}/* Ensure scrollbars look consistent */.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}`;
+    const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;/* Twitter blue */color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {/* Add specific mobile tooltip styles if needed */max-width: 90vw;/* Example */}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 6px;}.score-description::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}/* Only override hidden for our specific containers */#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 16px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);display: flex;flex-direction: column;width: 90vw;max-width: 380px;max-height: 85vh;overflow: hidden;border: 1px solid rgba(255, 255, 255, 0.1);line-height: 1.3;transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 12px 15px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 20;border-radius: 16px 16px 0 0;}.settings-title {font-weight: bold;font-size: 16px;}.settings-content {overflow-y: auto;max-height: calc(85vh - 110px);padding: 0;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(255, 255, 255, 0.1);position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 10;padding: 10px 15px;gap: 8px;}.tab-button {padding: 6px 10px;background: none;border: none;color: #e7e9ea;font-weight: bold;cursor: pointer;border-radius: 8px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(255, 255, 255, 0.1);}.tab-button.active {color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);border-bottom: 2px solid #1d9bf0;}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 15px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 15px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(39, 44, 48, 0.95);padding: 8px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);z-index: 1;}.select-container .search-input {width: 100%;padding: 8px 10px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 12px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;padding: 10px 12px;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(39, 44, 48, 0.98);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;margin-top: 5px;box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(255, 255, 255, 0.05);}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: bold;margin-top: 20px;margin-bottom: 8px;color: #e7e9ea;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12px;margin-bottom: 8px;opacity: 0.8;line-height: 1.4;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 5px;margin-bottom: 15px;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 12px;background-color: rgba(255, 255, 255, 0.03);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: bold;font-size: 13px;color: #e7e9ea;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: none;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0 20px 16px 20px;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 550px !important;max-width: 80vw !important;max-height: 60vh;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;max-width: 500px;padding-bottom: 35px;}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 -20px 15px -20px !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.description-text {margin: 0 0 25px 0 !important;font-size: 15px !important;line-height: 1.6 !important;max-width: 100% !important;overflow-wrap: break-word !important;padding: 5px 0 !important;color: #e1e8ed !important;letter-spacing: 0.2px !important;}/* Style different elements within description text */.description-text p {margin: 0 0 12px 0 !important;}.description-text p:last-child {margin-bottom: 0 !important;}.description-text strong {color: #fff !important;font-weight: 600 !important;}.description-text em {color: #8899a6 !important;font-style: italic !important;}.description-text code {background: rgba(255, 255, 255, 0.1) !important;padding: 2px 6px !important;border-radius: 4px !important;font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;font-size: 0.9em !important;color: #1d9bf0 !important;}.description-text a {color: #1d9bf0 !important;text-decoration: none !important;transition: color 0.2s ease !important;border-bottom: 1px solid rgba(29, 155, 240, 0.3) !important;}.description-text a:hover {color: #ffffff !important;border-bottom-color: #ffffff !important;}/* Add subtle highlight for important sections */.description-text blockquote {margin: 12px 0 !important;padding: 8px 16px !important;border-left: 3px solid #1d9bf0 !important;background: rgba(29, 155, 240, 0.1) !important;border-radius: 0 4px 4px 0 !important;}/* Style lists within description */.description-text ul, .description-text ol {margin: 8px 0 12px 20px !important;padding: 0 !important;}.description-text li {margin: 4px 0 !important;line-height: 1.5 !important;}/* Style headings if present */.description-text h1,.description-text h2,.description-text h3,.description-text h4 {color: #ffffff !important;margin: 16px 0 8px 0 !important;font-weight: 600 !important;line-height: 1.3 !important;}.description-text h1 { font-size: 1.4em !important; }.description-text h2 { font-size: 1.3em !important; }.description-text h3 { font-size: 1.2em !important; }.description-text h4 { font-size: 1.1em !important; }/* Add subtle animation for content changes */.description-text {transition: opacity 0.2s ease !important;}/* Style tables if present */.description-text table {width: 100% !important;border-collapse: collapse !important;margin: 12px 0 !important;background: rgba(255, 255, 255, 0.03) !important;border-radius: 4px !important;}.description-text th,.description-text td {padding: 8px 12px !important;border: 1px solid rgba(255, 255, 255, 0.1) !important;text-align: left !important;}.description-text th {background: rgba(255, 255, 255, 0.05) !important;font-weight: 600 !important;color: #ffffff !important;}/* Add a subtle separator between major sections */.description-text hr {border: none !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;margin: 20px 0 !important;}/* Style pre blocks for code snippets */.description-text pre {background: rgba(0, 0, 0, 0.2) !important;padding: 12px !important;border-radius: 4px !important;overflow-x: auto !important;border: 1px solid rgba(255, 255, 255, 0.1) !important;margin: 12px 0 !important;}.description-text pre code {background: none !important;padding: 0 !important;border-radius: 0 !important;font-size: 0.9em !important;color: #e1e8ed !important;}/* Add a subtle hover effect for interactive elements */.description-text *[role="button"],.description-text .interactive {transition: all 0.2s ease !important;}.description-text *[role="button"]:hover,.description-text .interactive:hover {background-color: rgba(255, 255, 255, 0.1) !important;}/* Style keyboard shortcuts or commands */.description-text kbd {background: rgba(255, 255, 255, 0.1) !important;border: 1px solid rgba(255, 255, 255, 0.2) !important;border-radius: 3px !important;padding: 2px 6px !important;font-size: 0.9em !important;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;box-shadow: 0 1px 1px rgba(0,0,0,0.2) !important;}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: sticky;bottom: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);margin-top: 10px;z-index: 100;transition: background-color 0.2s;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 12px !important;box-sizing: border-box !important;overflow-y: auto !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}}.sort-container {margin: 10px 0;display: flex;align-items: center;gap: 10px;justify-content: space-between;}.sort-container label {font-size: 14px;color: var(--text-color);white-space: nowrap;}.sort-container .controls-group {display: flex;gap: 8px;align-items: center;}.sort-container select {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;min-width: 120px;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}@media (min-width: 601px) {#settings-container {width: 480px;max-width: 480px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;/* Ensure it stays hidden even if Twitter tries to show it */position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}/* Hide number input spinners */.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}/* --- Metadata Specific Styling --- */.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}/* --- Specific Indicator Styles --- */.score-indicator.pending-rating {}/* --- Tooltip Styles --- */.score-description {/* ... existing styles ... */max-width: 500px;padding-bottom: 35px; /* Add padding for scroll button *//* ... existing styles ... */}.score-description.streaming-tooltip {border-color: #ffa500; /* Orange border for streaming */}/* ... existing .tooltip-controls, .tooltip-pin-button, .tooltip-copy-button styles ... *//* --- Reasoning Dropdown --- */.reasoning-dropdown {/* ... existing styles ... */}.reasoning-toggle {/* ... existing styles ... */}.reasoning-arrow {/* ... existing styles ... */}.reasoning-content {/* ... existing styles ... */}.reasoning-text {/* ... existing styles ... */}.description-text {/* ... existing styles ... */}/* --- Last Answer Area --- */.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); /* Slightly different background */border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}/* --- Follow-Up Questions Area --- */.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 6px; /* Spacing between buttons */}.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); /* Light blue background */border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; /* Light text */padding: 8px 12px;border-radius: 15px; /* Pill shape */cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; /* Allow wrapping */line-height: 1.3;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}/* --- Metadata Area --- */.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; /* Muted color */border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}/* --- Score Highlight --- */.score-highlight {/* ... existing styles ... */}/* --- Scroll Button --- */.scroll-to-bottom-button {/* ... existing styles ... */}.tooltip-bottom-spacer {/* ... existing styles ... */}/* --- Custom Question Input Area --- */.tooltip-custom-question-container {margin-top: 15px;display: flex;gap: 8px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator */}.tooltip-custom-question-input {flex-grow: 1; /* Take available space */padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Ensure font consistency */line-height: 1.4; /* Adjust line height for better text readability */resize: none; /* Prevent manual resizing by the user */overflow-y: hidden; /* Hide scrollbar initially, height adjustment will manage overflow */min-height: calc(0.9em * 1.4 + 16px + 2px); /* Approx height for 1 row: (font-size * line-height) + padding + border */box-sizing: border-box; /* Ensure padding and border are included in height calculation */}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}/* --- Conversation History Styling --- */.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; /* Space between conversation turns */}.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; /* Lighter grey for user question */margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; /* Slightly brighter for "You:" */}.conversation-answer {font-size: 0.95em;color: #e1e8ed; /* Main text color for AI answer */}.conversation-answer strong {color: #1d9bf0; /* Twitter blue for "AI:" */}.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; /* Reset margin, gap handles spacing */}.pending-answer {color: #ffa726; /* Orange for pending state */font-style: italic;}/* Blinking cursor for streaming answers */.pending-cursor {display: inline-block;color: #1d9bf0; /* Twitter blue */animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; /* Override italic from pending-answer if nested */}@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}/* Styling for links generated from markdown in AI answers */.ai-generated-link {color: #1d9bf0; /* Twitter blue */text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; /* Slightly darker blue on hover */text-decoration: underline;}/* Style for the new tooltip close button */.tooltip-close-button {/* Reuse general close button styles */background: none !important;border: none !important;color: #8899a6 !important; /* Match other control button colors */cursor: pointer !important;font-size: 20px !important; /* Slightly larger for easier tapping */line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; /* Space from other buttons */border-radius: 50% !important; /* Make it round */width: 28px !important; /* Explicit size */height: 28px !important; /* Explicit size */display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; /* Ensure it comes after pin and copy */}.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; /* Reddish background on hover */color: #ff5c5c !important; /* Red color on hover */}.tooltip-close-button:active {transform: scale(0.95) !important;}/* Adjust mobile close button specifically if needed */@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; /* Even larger on mobile */width: 32px !important;height: 32px !important;}/* Ensure controls container accommodates button */.tooltip-controls {padding-right: 40px !important; /* Add padding to prevent overlap if button was absolute */}}/* --- Styling for Reasoning Dropdown within Conversation Turn --- */.conversation-turn .reasoning-dropdown {margin-top: 8px; /* Space above the dropdown */margin-bottom: 8px; /* Space below the dropdown, before the answer */border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); /* Slightly different background from turn itself */border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; /* Muted color for toggle text */cursor: pointer;font-weight: normal; /* Less prominent than main reasoning toggle */font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; /* Horizontal padding only when collapsed */}.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; /* Adjust as needed */overflow-y: auto;padding: 8px; /* Full padding when expanded */}.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; /* Smaller text for reasoning */line-height: 1.4;color: #ccc; /* Similar to main reasoning text */margin: 0;padding: 0; /* Padding is on the content container */}/* Ensure scrollbars look consistent */.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}/* --- Styling for Image Upload in Follow-up --- */.tooltip-attach-image-button {background: none;border: none;color: #8899a6; /* Muted color, similar to other controls */font-size: 1.2em; /* Slightly larger for icon visibility */cursor: pointer;padding: 6px 8px; /* Adjust padding to align with input/button height */margin: 0 4px; /* Space around the icon */border-radius: 4px;transition: all 0.2s ease;align-self: center; /* Vertically align with input and Ask button */}.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {margin-top: 10px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; /* Changed to flex for easier alignment of preview and button */flex-direction: row; /* Lay out previews in a row */flex-wrap: wrap; /* Allow previews to wrap to the next line */gap: 10px; /* Spacing between preview items */align-items: flex-start;}.follow-up-image-preview-item {position: relative; /* For positioning the remove button */display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; /* Smaller thumbnails for multiple previews */max-height: 80px;border-radius: 4px;object-fit: cover; /* Or contain, depending on desired look */margin-bottom: 5px; /* Space between image and potential future captions */}.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; /* Circular button */width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; /* Adjust for vertical centering of X */text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}/* Adjust custom question container to be flex for alignment */.tooltip-custom-question-container {/* ... existing styles ... */display: flex; /* Ensures items are in a row */align-items: center; /* Vertically aligns items in the middle */}.tooltip-custom-question-input {/* ... existing styles ... */margin-right: 0; /* Remove right margin if any, gap handles spacing */}/* --- Styling for Uploaded Image in Conversation History --- */.conversation-image-container {margin-top: 8px; /* Space above the image */margin-bottom: 8px; /* Space below the image, before reasoning/answer */display: flex; /* Use flex for multiple images */flex-wrap: wrap; /* Allow images to wrap */gap: 8px; /* Space between images */}.conversation-uploaded-image {max-width: 80%; /* Limit width to not dominate the tooltip */max-height: 120px; /* Slightly larger than preview, but still constrained */border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; /* Maintain aspect ratio */display: block; /* Ensure it takes its own line if needed */cursor: pointer; /* Indicate it can be clicked (e.g., for lightbox in future) */transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); /* Slight zoom on hover */}`;
     // Apply CSS
     GM_addStyle(STYLE);
     // Set menu HTML
@@ -41,7 +40,6 @@ function browserGet(key, defaultValue = null) {
     try {
         return GM_getValue(key, defaultValue);
     } catch (error) {
-        console.error('Error reading from browser storage:', error);
         return defaultValue;
     }
 }
@@ -54,7 +52,6 @@ function browserSet(key, value) {
     try {
         GM_setValue(key, value);
     } catch (error) {
-        console.error('Error writing to browser storage:', error);
     }
 }
 //export { browserGet, browserSet }; 
@@ -115,7 +112,6 @@ class TweetCache {
                 this.cache[tweetId].fromStorage = true;
             }
         } catch (error) {
-            console.error('Error loading tweet cache:', error);
             this.cache = {};
         }
     }
@@ -127,7 +123,6 @@ class TweetCache {
             browserSet('tweetRatings', JSON.stringify(this.cache));
             updateCacheStatsUI(); // Update UI after saving
         } catch (error) {
-            console.error("Error saving tweet cache to storage:", error);
         }
     }
     /**
@@ -165,7 +160,8 @@ class TweetCache {
                 latency: rating.metadata?.latency || null,
                 mediaInputs: rating.metadata?.mediaInputs || null,
                 price: rating.metadata?.price || null
-            }
+            },
+            qaConversationHistory: rating.qaConversationHistory || []
         };
         if(!saveImmediately) {
             this.debouncedSaveToStorage();
@@ -218,14 +214,24 @@ class TweetCache {
         let deletedCount = 0;
         let streamingDeletedCount = 0;
         let undefinedScoreCount = 0;
+        let missingQaHistoryCount = 0;
         for (const tweetId in this.cache) {
             const entry = this.cache[tweetId];
+            let shouldDelete = false;
             if (entry.score === undefined || entry.score === null) {
                 if (entry.streaming === true) {
                     streamingDeletedCount++;
                 } else {
                     undefinedScoreCount++;
                 }
+                shouldDelete = true;
+            }
+            if (!entry.streaming && entry.score !== undefined && entry.score !== null && !entry.blacklisted && 
+                (!entry.qaConversationHistory || !Array.isArray(entry.qaConversationHistory) || entry.qaConversationHistory.length < 3)) {
+                missingQaHistoryCount++;
+                shouldDelete = true;
+            }
+            if (shouldDelete) {
                 delete this.cache[tweetId];
                 deletedCount++;
             }
@@ -239,7 +245,8 @@ class TweetCache {
             afterCount: this.size,
             deletedCount,
             streamingDeletedCount,
-            undefinedScoreCount
+            undefinedScoreCount,
+            missingQaHistoryCount
         };
     }
 }
@@ -294,7 +301,6 @@ class InstructionsHistory {
                 hash: entry.hash || this.#hashString(entry.instructions)
             }));
         } catch (e) {
-            console.error('Error loading instructions history:', e);
             this.history = [];
         }
     }
@@ -306,7 +312,6 @@ class InstructionsHistory {
         try {
             browserSet('instructionsHistory', JSON.stringify(this.history));
         } catch (e) {
-            console.error('Error saving instructions history:', e);
             throw new Error('Failed to save instructions history');
         }
     }
@@ -347,7 +352,6 @@ class InstructionsHistory {
             this.#saveToStorage();
             return true;
         } catch (e) {
-            console.error('Error adding instructions to history:', e);
             return false;
         }
     }
@@ -365,7 +369,6 @@ class InstructionsHistory {
             this.#saveToStorage();
             return true;
         } catch (e) {
-            console.error('Error removing instructions from history:', e);
             return false;
         }
     }
@@ -388,7 +391,6 @@ class InstructionsHistory {
             }
             return { ...this.history[index] };
         } catch (e) {
-            console.error('Error getting history entry:', e);
             return null;
         }
     }
@@ -400,7 +402,6 @@ class InstructionsHistory {
             this.history = [];
             this.#saveToStorage();
         } catch (e) {
-            console.error('Error clearing instructions history:', e);
             throw new Error('Failed to clear instructions history');
         }
     }
@@ -508,32 +509,48 @@ let threadHist = "";
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 // Model parameters
-const SYSTEM_PROMPT=`
-<SYSTEM_INSTRUCTIONS>
-<TASK_DESCRIPTION>
-You are a tweet filtering AI. In short, you will be given a tweet to process. Your task has 3-parts. 
-First, carefully analyze the tweet. And determine how well it aligns with the user's instructions. Your analysis should align with and precisely follow the user's instructions. 
-Second, rate the tweet ONLY according to the extent that it aligns with the user's defined instructions. 
-Third, provide 3 follow up questions designed to spark further discussion about the tweet. Which the user may ask the AI. The questions should be discursory in nature. 
-Do NOT ask questions which you cannot answer, such as context related to the tweet author's other tweets. Your internet search function will be enabled when providing follow up questions. 
-Remember to ALWAYS follow the EXPECTED_RESPONSE_FORMAT EXACTLY. If you fail to respond with this format, the upstream processing pipeline will be unable to parse your response, leading to a crash. 
-</TASK_DESCRIPTION>
-<EXPECTED_RESPONSE_FORMAT>
-(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)
-<ANALYSIS> 
-(Your analysis of the tweet according to the user defined instructions) 
-</ANALYSIS>
-<SCORE>
-SCORE_X (where X is a number from 0 to 10 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc)
-</SCORE>
+const REVIEW_SYSTEM_PROMPT=`
+    You are **TweetFilter-AI**.
+    When given a tweet, do these three steps **in order**:
+    1. **ANALYZE** - Judge how closely the tweet matches the user's instructions.  
+    2. **SCORE** - Assign an integer from 0'10 (inclusive) based *only* on that alignment.  
+    3. **ASK** - Write **exactly three** open-ended follow-up questions the user might ask next.  
+       • Questions must be answerable from the tweet itself or general knowledge.  
+       • Do **not** ask for information that requires unavailable context (e.g., the author's other tweets).
+    **Important constraints**
+    • You do **not** have up-to-the-minute knowledge of current events.  
+      → If a tweet makes a factual claim you cannot verify, **do not down-score it** for "fake news"; instead, evaluate it solely on the user's criteria and note any uncertainty in your analysis.  
+      → Only down-score when the tweet contradicts widely-known, stable facts or directly violates the user's instructions.
+    ⚠️ Output must match **exactly** the EXPECTED_RESPONSE_FORMAT" - no extra text, no missing tags - or the pipeline crashes.
+  EXPECTED_RESPONSE_FORMAT: (begin with <ANALYSIS> and end with </FOLLOW_UP_QUESTIONS>)
+    <ANALYSIS>
+      (Your analysis goes here.)
+    </ANALYSIS>
+    <SCORE>
+      SCORE_X
+    </SCORE>
+    <FOLLOW_UP_QUESTIONS>
+      Q_1. …
+      Q_2. …
+      Q_3. …
+    </FOLLOW_UP_QUESTIONS>
+  End of EXPECTED_RESPONSE_FORMAT
+`;
+const FOLLOW_UP_SYSTEM_PROMPT = `
+You are TweetFilter-AI, continuing a conversation about a tweet.
+The user has asked a follow-up question.
+Your entire conversation history up to this point is provided in the message list.
+Please provide an answer and then generate 3 new, relevant follow-up questions.
+Adhere strictly to the following response format:
+<ANSWER>
+(Your answer here)
+</ANSWER>
 <FOLLOW_UP_QUESTIONS>
-Q_1. (Question 1)
-Q_2. (Question 2)
-Q_3. (Question 3)
+Q_1. (New Question 1 here)
+Q_2. (New Question 2 here)
+Q_3. (New Question 3 here)
 </FOLLOW_UP_QUESTIONS>
-</EXPECTED_RESPONSE_FORMAT>
-</SYSTEM_INSTRUCTIONS>
-`
+`;
 let modelTemperature = parseFloat(browserGet('modelTemperature', '0.5'));
 let modelTopP = parseFloat(browserGet('modelTopP', '0.9'));
 let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '0.5'));
@@ -663,7 +680,6 @@ async function extractMediaLinks(scopeElement) {
     let retries = 0;
     while (mediaElements.length === 0 && retries < MAX_RETRIES) {
         retries++;
-        // console.log(`[extractMediaLinks] Retry ${retries}/${MAX_RETRIES} for media in:`, scopeElement); 
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         mediaElements = scopeElement.querySelectorAll(combinedSelector);
     }
@@ -773,7 +789,6 @@ function handleMutations(mutationsList) {
                             conversationTimeline = node.querySelector('div[aria-label^="Timeline: Conversation"]');
                         }
                         if (conversationTimeline) {
-                            console.log("[handleMutations] Conversation timeline detected. Triggering handleThreads.");
                             // Call handleThreads immediately. The internal checks within handleThreads
                             // should prevent redundant processing if it's already running.
                             setTimeout(handleThreads, 50); // Short delay to potentially allow elements to settle
@@ -870,16 +885,68 @@ function isMobileDevice() {
 /**
  * Displays a temporary status message on the screen.
  * @param {string} message - The message to display.
+ * @param {string} [type=\'info\'] - The type of message (info, error, warning, success).
  */
-function showStatus(message) {
+function showStatus(message, type = 'info') {
     const indicator = document.getElementById('status-indicator');
     if (!indicator) {
-        console.error('#status-indicator element not found.');
         return;
     }
     indicator.textContent = message;
-    indicator.classList.add('active');
-    setTimeout(() => { indicator.classList.remove('active'); }, 3000);
+    indicator.className = 'active ' + type;
+    setTimeout(() => { indicator.classList.remove('active', type); }, 3000);
+}
+/**
+ * Resizes an image file to a maximum dimension.
+ * @param {File} file - The image file to resize.
+ * @param {number} maxDimPx - The maximum dimension (width or height) in pixels.
+ * @returns {Promise<string>} A promise that resolves with the data URL of the resized image (JPEG format).
+ */
+function resizeImage(file, maxDimPx) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                let newWidth, newHeight;
+                if (width > height) {
+                    if (width > maxDimPx) {
+                        newWidth = maxDimPx;
+                        newHeight = height * (maxDimPx / width);
+                    } else {
+                        newWidth = width;
+                        newHeight = height;
+                    }
+                } else {
+                    if (height > maxDimPx) {
+                        newHeight = maxDimPx;
+                        newWidth = width * (maxDimPx / height);
+                    } else {
+                        newWidth = width;
+                        newHeight = height;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                // Using JPEG for potentially smaller file sizes, quality 0.9
+                // You can change to 'image/png' if transparency is critical and size is less of a concern
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
+                resolve(dataUrl);
+            };
+            img.onerror = (error) => {
+                reject(new Error("Could not load image for resizing."));
+            };
+            img.src = event.target.result; // Use FileReader result as img src
+        };
+        reader.onerror = (error) => {
+            reject(new Error("Could not read file."));
+        };
+        reader.readAsDataURL(file); // Read the file to get a data URL for the Image object
+    });
 }
     // ----- ui/InstructionsUI.js -----
 /**
@@ -1022,6 +1089,14 @@ class ScoreIndicator {
         this.customQuestionContainer = null; // Container for custom question input/button
         this.customQuestionInput = null;
         this.customQuestionButton = null;
+        this.attachImageButton = null; // Moved here
+        // --- New: Image Upload Elements for Follow-up ---
+        this.followUpImageContainer = null; // This will hold preview and remove button
+        this.followUpImageInput = null;
+        this.followUpImagePreview = null;
+        this.followUpRemoveImageButton = null;
+        this.uploadedImageDataUrls = []; // Changed from single string to array
+        // --- End New ---
         this.status = 'pending'; // Initial status
         this.score = null;
         this.description = '';
@@ -1033,6 +1108,8 @@ class ScoreIndicator {
         this.isVisible = false;
         this.autoScroll = true; // Default to true for pending/streaming
         this.userInitiatedScroll = false; // Track user scroll interaction
+        this.uploadedImageDataUrls = []; // Initialize
+        this.qaConversationHistory = []; // Stores the full conversation history for API calls
         try {
             this._createElements(tweetArticle);
             this._addEventListeners();
@@ -1041,7 +1118,6 @@ class ScoreIndicator {
             // Set initial dataset attributes on the initial article
             this.updateDatasetAttributes(tweetArticle);
         } catch (error) {
-            console.error(`[ScoreIndicator ${this.tweetId}] Failed initialization:`, error);
             // Attempt cleanup if elements were partially created
             this.destroy();
             throw error; // Re-throw error after cleanup attempt
@@ -1135,16 +1211,70 @@ class ScoreIndicator {
         // --- Custom Question Area ---
         this.customQuestionContainer = document.createElement('div');
         this.customQuestionContainer.className = 'tooltip-custom-question-container';
-        this.customQuestionInput = document.createElement('input');
-        this.customQuestionInput.type = 'text';
+        this.customQuestionInput = document.createElement('textarea');
         this.customQuestionInput.placeholder = 'Ask your own question...';
         this.customQuestionInput.className = 'tooltip-custom-question-input';
+        this.customQuestionInput.rows = 1; // Start with a single row
+        // Add event listener for dynamic height adjustment
+        this.customQuestionInput.addEventListener('input', function() {
+            this.style.height = 'auto'; // Reset height to recalculate
+            this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
+            // Optionally, adjust rows attribute if preferred, but direct height is often smoother
+            // const computedStyle = window.getComputedStyle(this);
+            // const lineHeight = parseFloat(computedStyle.lineHeight);
+            // const paddingTop = parseFloat(computedStyle.paddingTop);
+            // const paddingBottom = parseFloat(computedStyle.paddingBottom);
+            // const borderTop = parseFloat(computedStyle.borderTopWidth);
+            // const borderBottom = parseFloat(computedStyle.borderBottomWidth);
+            // const verticalPaddingAndBorder = paddingTop + paddingBottom + borderTop + borderBottom;
+            // const lines = Math.floor((this.scrollHeight - verticalPaddingAndBorder) / lineHeight);
+            // this.rows = Math.max(1, lines);
+        });
+        // Check if model supports images to conditionally create image attach button
+        const currentSelectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano'); // Provide a default or ensure it's always set
+        const supportsImages = typeof modelSupportsImages === 'function' && modelSupportsImages(currentSelectedModel);
+        if (supportsImages) {
+            this.attachImageButton = document.createElement('button');
+            this.attachImageButton.textContent = '📎'; // Paperclip Icon
+            this.attachImageButton.className = 'tooltip-attach-image-button';
+            this.attachImageButton.title = 'Attach image(s)'; // Updated title
+            this.followUpImageInput = document.createElement('input');
+            this.followUpImageInput.type = 'file';
+            this.followUpImageInput.accept = 'image/' + '*';
+            this.followUpImageInput.multiple = true; // Allow multiple files
+            this.followUpImageInput.style.display = 'none'; // Hide the actual input
+        }
         this.customQuestionButton = document.createElement('button');
         this.customQuestionButton.textContent = 'Ask';
         this.customQuestionButton.className = 'tooltip-custom-question-button';
         this.customQuestionContainer.appendChild(this.customQuestionInput);
+        if (this.attachImageButton) {
+            this.customQuestionContainer.appendChild(this.attachImageButton);
+            // The input needs to be in the DOM to be clickable, even if hidden.
+            // It can be a direct child of the container or outside, as long as it's in the document.
+            // For simplicity, let's add it here if attachImageButton exists.
+            if (this.followUpImageInput) {
+                 this.customQuestionContainer.appendChild(this.followUpImageInput);
+            }
+        }
         this.customQuestionContainer.appendChild(this.customQuestionButton);
         this.tooltipElement.appendChild(this.customQuestionContainer);
+        // --- Image Preview and Remove Area (conditionally created) ---
+        if (supportsImages) {
+            this.followUpImageContainer = document.createElement('div');
+            this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container'; // New class for styling
+            // this.followUpImageContainer.style.display = 'none'; // Display handled by content
+            // No single preview/remove button here anymore; they are per image.
+            // this.followUpImagePreview = document.createElement('img');
+            // this.followUpImagePreview.className = 'tooltip-follow-up-image-preview';
+            // this.followUpRemoveImageButton = document.createElement('button');
+            // this.followUpRemoveImageButton.textContent = 'Remove Image';
+            // this.followUpRemoveImageButton.className = 'tooltip-remove-image-button';
+            // this.followUpImageContainer.appendChild(this.followUpImagePreview);
+            // this.followUpImageContainer.appendChild(this.followUpRemoveImageButton);
+            this.tooltipElement.insertBefore(this.followUpImageContainer, this.metadataElement);
+        }
+        // --- End Image Preview and Remove Area ---
         // --- Metadata Area ---
         this.metadataElement = document.createElement('div');
         this.metadataElement.className = 'tooltip-metadata';
@@ -1198,6 +1328,16 @@ class ScoreIndicator {
                 this._handleCustomQuestionClick();
             }
         });
+        // --- New: Event Listeners for Image Upload (conditional) ---
+        if (this.attachImageButton && this.followUpImageInput) {
+            this.attachImageButton.addEventListener('click', () => this.followUpImageInput.click());
+            this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
+        }
+        // No global remove button listener now
+        // if (this.followUpRemoveImageButton) { 
+        //     this.followUpRemoveImageButton.addEventListener('click', this._handleRemoveFollowUpImage.bind(this));
+        // }
+        // --- End New ---
     }
     /** 
      * Updates the tweet article's dataset attributes based on the instance's state.
@@ -1207,7 +1347,6 @@ class ScoreIndicator {
     updateDatasetAttributes(currentTweetArticle) {
         const article = currentTweetArticle || this.findCurrentArticleElement();
         if (!article) {
-            // console.warn(`[ScoreIndicator ${this.tweetId}] Could not find article element to update dataset.`);
             return;
         }
         article.dataset.ratingStatus = this.status;
@@ -1458,6 +1597,16 @@ class ScoreIndicator {
         this.conversationHistory.forEach((turn, index) => {
             const formattedQuestion = turn.question
                 .replace(/</g, '&lt;').replace(/>/g, '&gt;'); // Basic escaping
+            let uploadedImageHtml = '';
+            if (turn.uploadedImages && turn.uploadedImages.length > 0) {
+                uploadedImageHtml = `
+                    <div class="conversation-image-container">
+                        ${turn.uploadedImages.map(imageUrl => `
+                            <img src="${imageUrl}" alt="User uploaded image" class="conversation-uploaded-image">
+                        `).join('')}
+                    </div>
+                `;
+            }
             let formattedAnswer;
             if (turn.answer === 'pending') {
                 formattedAnswer = '<em class="pending-answer">Answering...</em>';
@@ -1499,6 +1648,7 @@ class ScoreIndicator {
             historyHtml += `
                 <div class="conversation-turn">
                     <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    ${uploadedImageHtml}
                     ${reasoningHtml}
                     <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
                 </div>
@@ -1776,7 +1926,6 @@ class ScoreIndicator {
                 this.copyButton.disabled = false;
             }, 1500);
         }).catch(err => {
-            console.error('[ScoreIndicator] Failed to copy text: ', err);
             // Optionally provide user feedback here
         });
     }
@@ -1802,64 +1951,100 @@ class ScoreIndicator {
         this._updateScrollButtonVisibility(); // Should hide the button now
     }
     _handleFollowUpQuestionClick(event) {
-        const button = event.target.closest('.follow-up-question-button');
-        if (!button) return;
-        event.stopPropagation(); // Prevent tooltip hide
+        // If called from _handleCustomQuestionClick, event.target will be our mockButton
+        // Otherwise, it's a real DOM event and we need to find the button.
+        const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
+        const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
+        if (!button) return; // Should not happen if called from custom handler with mockButton
+        event.stopPropagation(); // Prevent tooltip hide if it's a real event
         const questionText = button.dataset.questionText;
         const apiKey = browserGet('openrouter-api-key', '');
-        // Add immediate feedback
+        // Add immediate feedback - only if it's a real button
+        if (!isMockEvent) {
         button.disabled = true;
         button.textContent = `🤔 Asking: ${questionText}...`;
         // Optionally disable other question buttons too
         this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        //this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
-        // << New: Add question to history and update UI
-        this.conversationHistory.push({ question: questionText, answer: 'pending' });
+        } else {
+            // For custom questions, disable the input and button
+            if (this.customQuestionInput) this.customQuestionInput.disabled = true;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = true;
+                this.customQuestionButton.textContent = 'Asking...';
+            }
+        }
+        this.conversationHistory.push({ 
+            question: questionText, 
+            answer: 'pending', 
+            uploadedImages: [...this.uploadedImageDataUrls], // Store a copy of the image URLs array
+            reasoning: '' // Initialize reasoning for this turn
+        });
         this._updateTooltipUI(); // Update UI to show pending state
         this.questions = []; // Clear suggested questions
         this._updateTooltipUI(); // Update UI again to remove suggested questions
+        // Construct the user message for the API
+        const userMessageContent = [{ type: "text", text: questionText }];
+        if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
+            this.uploadedImageDataUrls.forEach(url => {
+                userMessageContent.push({ type: "image_url", image_url: { "url": url } });
+            });
+        }
+        const userApiMessage = { role: "user", content: userMessageContent };
+        // Create a new history array for the API call, including the new user message
+        const historyForApiCall = [...this.qaConversationHistory, userApiMessage];
         if (!apiKey) {
             showStatus('API key missing. Cannot answer question.', 'error');
-            //this.update({ lastAnswer: "Error: API Key missing." }); // Update UI directly
-            // << New: Update the pending history entry with error
             this._updateConversationHistory(questionText, "Error: API Key missing.", "");
-            button.disabled = false; // Re-enable button on error
-            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            // Re-enable buttons
+            if (!isMockEvent) {
+                button.disabled = false;
+                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            }
+            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+            this._clearFollowUpImage(); // Clear image even on error
             return;
         }
         if (!questionText) {
-            console.error("Follow-up question text not found on button.");
-            //this.update({ lastAnswer: "Error: Could not identify question." });
-            // << New: Update the pending history entry with error
             this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
-            button.disabled = false; // Re-enable button on error
-            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            // Re-enable buttons
+             if (!isMockEvent) {
+                button.disabled = false;
+                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            }
+            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+            this._clearFollowUpImage();
             return;
         }
-        // Get media URLs from cache
-        const cachedData = tweetCache.get(this.tweetId);
-        const mediaUrls = cachedData?.mediaUrls || [];
         const currentArticle = this.findCurrentArticleElement();
-        // Use try/finally to ensure buttons are re-enabled
+        // We no longer need to pass original mediaUrls from cache, as they are in qaConversationHistory
+        // const cachedData = tweetCache.get(this.tweetId);
+        // const mediaUrls = cachedData?.mediaUrls || []; 
         try {
-            // Pass `this` instance so answerFollowUpQuestion can update the history
-            answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
+            // Pass the augmented history to answerFollowUpQuestion
+            answerFollowUpQuestion(this.tweetId, historyForApiCall, apiKey, currentArticle, this);
         } finally {
-             // Re-enable buttons after the async function is called
-             // Note: The answer function itself will update the UI with the final answer/questions
-             // This might re-enable slightly before the answer appears, which is acceptable.
-            setTimeout(() => { // Use timeout to ensure it happens after current execution context
+            setTimeout(() => {
                  if (this.followUpQuestionsElement) {
                     this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
-                         // Find the original text if needed, or just re-enable
-                         // For simplicity, just re-enable. The update() call inside answerFollowUpQuestion
-                         // will redraw the buttons with new text anyway.
                          btn.disabled = false;
-                         // Restore text if needed (might cause flicker)
-                         // if(btn.dataset.questionText) btn.textContent = `🤔 ${btn.dataset.questionText}`;
-                     });
-                 }
-            }, 100); // Small delay
+                    });
+                }
+                 // Re-enable custom question UI if it was used
+                if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+                if (this.customQuestionButton) {
+                    this.customQuestionButton.disabled = false;
+                    this.customQuestionButton.textContent = 'Ask';
+                }
+                this._clearFollowUpImage(); // Clear image after sending
+            }, 100);
         }
     }
     _handleCustomQuestionClick() {
@@ -1870,55 +2055,93 @@ class ScoreIndicator {
             this.customQuestionInput.focus();
             return;
         }
-        const apiKey = browserGet('openrouter-api-key', '');
-        // --- Add UI Feedback ---
-        this.customQuestionInput.disabled = true;
-        this.customQuestionButton.disabled = true;
-        this.customQuestionButton.textContent = 'Asking...';
-        // Optionally disable suggested question buttons too
+        // This reuses the logic from _handleFollowUpQuestionClick for sending the question
+        // The actual API call happens there. We just need to trigger it.
+        // Create a temporary "button" like object to pass to _handleFollowUpQuestionClick
+        // or refactor to a common sending function. For now, let's simulate a click.
+        const mockButton = {
+            dataset: { questionText: questionText },
+            disabled: false,
+            textContent: ''
+        };
+        // Temporarily disable suggested questions if any
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        //this.update({ lastAnswer: `*Asking "${questionText}"...*`, questions: [] }); // Clear old questions, show thinking
-        // << New: Add question to history and update UI
-        this.conversationHistory.push({ question: questionText, answer: 'pending' });
-        this.questions = []; // Clear suggested questions
-        this._updateTooltipUI(); // Update UI to show pending state & remove questions
-        // --- End UI Feedback ---
-        if (!apiKey) {
-            showStatus('API key missing. Cannot answer question.', 'error');
-            //this.update({ lastAnswer: "Error: API Key missing." });
-            // << New: Update the pending history entry with error
-            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
-            this.customQuestionInput.disabled = false;
-            this.customQuestionButton.disabled = false;
-            this.customQuestionButton.textContent = 'Ask';
-            this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-            return;
-        }
-        // Clear the input field
-        this.customQuestionInput.value = '';
-        // Get media URLs from cache
-        const cachedData = tweetCache.get(this.tweetId);
-        const mediaUrls = cachedData?.mediaUrls || [];
-        const currentArticle = this.findCurrentArticleElement();
-        // Use try/finally to ensure buttons/input are re-enabled
-        try {
-            // Pass `this` instance so answerFollowUpQuestion can update the history
-            answerFollowUpQuestion(this.tweetId, questionText, apiKey, currentArticle, this, mediaUrls);
-        } finally {
-            // Re-enable after the async call starts. The answer function updates UI with the result.
-             setTimeout(() => {
-                if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-                if (this.customQuestionButton) {
-                    this.customQuestionButton.disabled = false;
-                    this.customQuestionButton.textContent = 'Ask';
-                }
-                // Re-enable suggested questions as well (answerFollowUpQuestion will redraw them)
-                 if (this.followUpQuestionsElement) {
-                    this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-                 }
-             }, 100);
+        // Call the handler, it will manage UI updates and API call
+        this._handleFollowUpQuestionClick({ target: mockButton, stopPropagation: () => {} });
+        // Clear the input field after initiating the send for custom questions
+        if (this.customQuestionInput) {
+            this.customQuestionInput.value = '';
         }
     }
+    // --- New: Image Handling Methods for Follow-up ---
+    _handleFollowUpImageSelect(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        // Ensure the container is visible if we're adding images
+        if (this.followUpImageContainer && files.length > 0) {
+            this.followUpImageContainer.style.display = 'flex'; // Or 'block', depending on final styling
+        }
+        Array.from(files).forEach(file => {
+            if (file && file.type.startsWith('image/')) {
+                resizeImage(file, 512) // Resize to max 512px
+                    .then(resizedDataUrl => {
+                        this.uploadedImageDataUrls.push(resizedDataUrl);
+                        this._addPreviewToContainer(resizedDataUrl);
+                    })
+                    .catch(error => {
+                        showStatus(`Could not process image ${file.name}: ${error.message}`, "error");
+                    });
+            } else if (file) {
+                showStatus(`Skipping non-image file: ${file.name}`, "warning");
+        }
+        });
+        // Reset file input to allow selecting the same file again if removed
+        event.target.value = null;
+    }
+    _addPreviewToContainer(imageDataUrl) {
+        if (!this.followUpImageContainer) return;
+        const previewItem = document.createElement('div');
+        previewItem.className = 'follow-up-image-preview-item';
+        previewItem.dataset.imageDataUrl = imageDataUrl; // Store for easy removal
+        const img = document.createElement('img');
+        img.src = imageDataUrl;
+        img.className = 'follow-up-image-preview-thumbnail';
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '×'; // 'X' character for close
+        removeBtn.className = 'follow-up-image-remove-btn';
+        removeBtn.title = 'Remove this image';
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._removeSpecificUploadedImage(imageDataUrl);
+        });
+        previewItem.appendChild(img);
+        previewItem.appendChild(removeBtn);
+        this.followUpImageContainer.appendChild(previewItem);
+    }
+    _removeSpecificUploadedImage(imageDataUrl) {
+        this.uploadedImageDataUrls = this.uploadedImageDataUrls.filter(url => url !== imageDataUrl);
+        if (this.followUpImageContainer) {
+            const previewItemToRemove = this.followUpImageContainer.querySelector(`div.follow-up-image-preview-item[data-image-data-url="${CSS.escape(imageDataUrl)}"]`);
+            if (previewItemToRemove) {
+                previewItemToRemove.remove();
+                }
+            // Hide container if no images are left
+            if (this.uploadedImageDataUrls.length === 0) {
+                this.followUpImageContainer.style.display = 'none';
+            }
+        }
+    }
+    _clearFollowUpImage() {
+        this.uploadedImageDataUrls = []; // Reset the array
+        if (this.followUpImageContainer) {
+            this.followUpImageContainer.innerHTML = ''; // Clear all preview items
+            this.followUpImageContainer.style.display = 'none'; // Hide the container
+        }
+        if (this.followUpImageInput) {
+            this.followUpImageInput.value = null; // Clear the file input
+        }
+    }
+    // --- End New ---
     // --- Public API ---
     /**
      * Finds a pending entry in the conversation history by question text and updates its answer.
@@ -1934,7 +2157,6 @@ class ScoreIndicator {
             this.conversationHistory[entryIndex].reasoning = reasoning; // Store reasoning
             this._updateTooltipUI(); // Refresh the view to show the updated answer
         } else {
-            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find pending history entry for question: "${question}"`);
             // Optionally, append as a new entry if not found, though this might indicate a logic error
             // this.conversationHistory.push({ question: question, answer: answer });
             // this._updateTooltipUI();
@@ -1952,12 +2174,11 @@ class ScoreIndicator {
         const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
         const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
         if (!lastTurnElement) {
-            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find last conversation turn to render streaming answer.`);
             return;
         }
         // Ensure the corresponding state is actually pending before updating visuals
-        if (!(this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].answer === 'pending')) {
-            console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
+        const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length -1] : null;
+        if (!(lastHistoryEntry && lastHistoryEntry.answer === 'pending')) {
             return;
         }
         // --- Handle Reasoning Dropdown ---
@@ -2029,7 +2250,6 @@ class ScoreIndicator {
             // Update the innerHTML directly, adding the cursor
             lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
         } else {
-             console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
         }
         // Ensure autoscroll if needed
         if (this.autoScroll) {
@@ -2047,7 +2267,6 @@ class ScoreIndicator {
      * @param {string[]} [options.questions] - New follow-up questions.
      */
     update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined }) {
-        // console.log(`[ScoreIndicator ${this.tweetId}] Updating state - Status: ${status}, Score: ${score}`);
         const statusChanged = status !== undefined && this.status !== status;
         const scoreChanged = score !== null && this.score !== score;
         const descriptionChanged = description !== '' && this.description !== description;
@@ -2057,7 +2276,6 @@ class ScoreIndicator {
         // Conversation history updates are handled separately now
         // Only update if something actually changed
         if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged && !questionsChanged) {
-            // console.log(`[ScoreIndicator ${this.tweetId}] No state change detected.`);
             return;
         }
         if (statusChanged) this.status = status;
@@ -2099,7 +2317,6 @@ class ScoreIndicator {
     /** Shows the tooltip and positions it correctly. */
     show() {
         if (!this.tooltipElement) return;
-        // console.log(`[ScoreIndicator ${this.tweetId}] Showing tooltip`);
         this.isVisible = true;
         this.tooltipElement.style.display = 'block';
         this._setPosition(); // Calculate and apply position
@@ -2113,11 +2330,9 @@ class ScoreIndicator {
     /** Hides the tooltip unless it's pinned. */
     hide() {
         if (!this.isPinned && this.tooltipElement) {
-            // console.log(`[ScoreIndicator ${this.tweetId}] Hiding tooltip`);
             this.isVisible = false;
             this.tooltipElement.style.display = 'none';
         } else if (this.isPinned) {
-            // console.log(`[ScoreIndicator ${this.tweetId}] Attempted to hide pinned tooltip`);
         }
     }
     /** Toggles the tooltip's visibility. */
@@ -2132,7 +2347,6 @@ class ScoreIndicator {
     /** Pins the tooltip open. */
     pin() {
         if (!this.tooltipElement || !this.pinButton) return;
-        // console.log(`[ScoreIndicator ${this.tweetId}] Pinning tooltip`);
         this.isPinned = true;
         this.tooltipElement.classList.add('pinned');
         this.pinButton.innerHTML = '📍'; // Use the filled pin icon
@@ -2142,7 +2356,6 @@ class ScoreIndicator {
     /** Unpins the tooltip, allowing it to be hidden automatically. */
     unpin() {
         if (!this.tooltipElement || !this.pinButton) return;
-        // console.log(`[ScoreIndicator ${this.tweetId}] Unpinning tooltip`);
         this.isPinned = false;
         this.tooltipElement.classList.remove('pinned');
         this.pinButton.innerHTML = '📌'; // Use the outline pin icon
@@ -2163,10 +2376,8 @@ class ScoreIndicator {
     // --- End New Event Handler ---
     /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
     destroy() {
-        // console.log(`[ScoreIndicator ${this.tweetId}] Destroying...`);
         // Clean up any active streaming request for this tweet
         if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
-            console.log(`Cleaning up active streaming request for tweet ${this.tweetId}`);
             window.activeStreamingRequests[this.tweetId].abort();
             delete window.activeStreamingRequests[this.tweetId];
         }
@@ -2214,6 +2425,14 @@ class ScoreIndicator {
         this.customQuestionContainer = null;
         this.customQuestionInput = null;
         this.customQuestionButton = null;
+        // --- New: Nullify Image Upload Elements ---
+        this.followUpImageContainer = null;
+        this.followUpImageInput = null;
+        this.followUpImagePreview = null;
+        this.followUpRemoveImageButton = null;
+        this.attachImageButton = null; // Added for cleanup
+        this.uploadedImageDataUrls = []; // Ensure it's reset here too
+        // --- End New ---
     }
     /** Ensures the indicator element is attached to the correct current article element. */
     ensureIndicatorAttached() {
@@ -2224,7 +2443,6 @@ class ScoreIndicator {
         }
         // Check if the indicator is already in the *correct* article
         if (this.indicatorElement.parentElement !== currentArticle) {
-            // console.log(`[ScoreIndicator ${this.tweetId}] Re-attaching indicator to current article.`);
             // Ensure parent is positioned
             const currentPosition = window.getComputedStyle(currentArticle).position;
             if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
@@ -2259,6 +2477,139 @@ class ScoreIndicator {
         }
         return null; // Not found
     }
+    /**
+     * Updates the indicator's state after an initial review and builds the conversation history.
+     * @param {object} params
+     * @param {string} params.fullContext - The full text context of the tweet.
+     * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
+     * @param {string} params.apiResponseContent - The raw content from the API response.
+     * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
+     * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
+     */
+    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt }) {
+        // Parse apiResponseContent for analysis, score, and initial questions
+        const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
+        const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
+        // extractFollowUpQuestions function is defined in api.js, assuming it's globally available
+        const initialQuestions = extractFollowUpQuestions(apiResponseContent);
+        this.score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+        this.description = analysisMatch ? analysisMatch[1].trim() : apiResponseContent; // Fallback to full content
+        this.questions = initialQuestions;
+        this.status = this.score !== null ? 'rated' : 'error'; // Or some other logic for status
+        // Construct qaConversationHistory
+        const userMessageContent = [{ type: "text", text: fullContext }];
+        mediaUrls.forEach(url => {
+            userMessageContent.push({ type: "image_url", image_url: { "url": url } });
+        });
+        this.qaConversationHistory = [
+            { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
+            { role: "user", content: userMessageContent },
+            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
+            { role: "system", content: [{ type: "text", text: followUpSystemPrompt }] }
+        ];
+        // Update UI elements
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+        this.updateDatasetAttributes();
+    }
+    /**
+     * Updates the indicator's state after a follow-up question has been answered.
+     * @param {object} params
+     * @param {string} params.assistantResponseContent - The raw content of the AI's response.
+     * @param {object[]} params.updatedQaHistory - The fully updated qaConversationHistory array.
+     */
+    updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
+        this.qaConversationHistory = updatedQaHistory;
+        // Parse assistantResponseContent for the answer and new follow-up questions
+        const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+        const newFollowUpQuestions = extractFollowUpQuestions(assistantResponseContent);
+        const answerText = answerMatch ? answerMatch[1].trim() : assistantResponseContent; // Fallback
+        // Update this.questions for the UI buttons
+        this.questions = newFollowUpQuestions;
+        // Update the last turn in this.conversationHistory (for UI rendering)
+        if (this.conversationHistory.length > 0) {
+            const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
+            if (lastTurn.answer === 'pending') {
+                lastTurn.answer = answerText;
+                // Assuming reasoning might be part of assistantResponseContent or handled elsewhere
+                // For now, let's assume reasoning isn't explicitly parsed here for simplicity
+                // lastTurn.reasoning = ...;
+            }
+        }
+        // Refresh the tooltip UI
+        this._updateTooltipUI();
+        this.updateDatasetAttributes(); // Ensure dataset reflects any score/status change if applicable
+    }
+    /**
+     * Rehydrates the ScoreIndicator instance from cached data.
+     * @param {object} cachedData - The cached data object.
+     */
+    rehydrateFromCache(cachedData) {
+        this.score = cachedData.score;
+        this.description = cachedData.description; // This should be the analysis part
+        this.reasoning = cachedData.reasoning;
+        this.questions = cachedData.questions || [];
+        this.status = cachedData.status || (cachedData.score !== null ? (cachedData.fromStorage ? 'cached' : 'rated') : 'error');
+        this.metadata = cachedData.metadata || null;
+        this.qaConversationHistory = cachedData.qaConversationHistory || [];
+        this.isPinned = cachedData.isPinned || false; // Assuming we might cache pin state
+        // Rebuild this.conversationHistory (for UI) from qaConversationHistory
+        this.conversationHistory = [];
+        if (this.qaConversationHistory.length > 0) {
+            let currentQuestion = null;
+            let currentUploadedImages = [];
+            // Start iterating after the initial assistant review and the follow-up system prompt
+            // Initial structure: [SysReview, UserTweet, AssReview, SysFollowUp, UserQ1, AssA1, ...]
+            // We look for UserQ -> AssA pairs
+            let startIndex = 0;
+            for(let i=0; i < this.qaConversationHistory.length; i++) {
+                if (this.qaConversationHistory[i].role === 'system' && this.qaConversationHistory[i].content[0].text.includes('FOLLOW_UP_SYSTEM_PROMPT')) {
+                    startIndex = i + 1;
+                    break;
+                }
+                 // Fallback if FOLLOW_UP_SYSTEM_PROMPT is not found (e.g. very old cache)
+                if (i === 3 && this.qaConversationHistory[i].role === 'system') {
+                    startIndex = i + 1;
+                }
+            }
+            for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
+                const message = this.qaConversationHistory[i];
+                if (message.role === 'user') {
+                    // Find the text part of the user's message
+                    const textContent = message.content.find(c => c.type === 'text');
+                    currentQuestion = textContent ? textContent.text : "[Question not found]";
+                    // Extract uploaded images if any
+                    currentUploadedImages = message.content
+                        .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
+                        .map(c => c.image_url.url);
+                } else if (message.role === 'assistant' && currentQuestion) {
+                    const assistantTextContent = message.content.find(c => c.type === 'text');
+                    const assistantAnswer = assistantTextContent ? assistantTextContent.text : "[Answer not found]";
+                    // Attempt to parse out just the answer part for the UI history
+                    const answerMatch = assistantAnswer.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                    const uiAnswer = answerMatch ? answerMatch[1].trim() : assistantAnswer;
+                    this.conversationHistory.push({
+                        question: currentQuestion,
+                        answer: uiAnswer,
+                        uploadedImages: currentUploadedImages,
+                        reasoning: '' // Reasoning extraction from assistant's full response for UI needs more logic
+                    });
+                    currentQuestion = null; // Reset for the next pair
+                    currentUploadedImages = [];
+                }
+            }
+        }
+        if (this.isPinned) {
+            this.pinButton.innerHTML = '📍';
+            this.tooltipElement?.classList.add('pinned');
+        } else {
+            this.pinButton.innerHTML = '📌';
+            this.tooltipElement?.classList.remove('pinned');
+        }
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+        this.updateDatasetAttributes();
+    }
 }
 // --- Registry for Managing Instances ---
 const ScoreIndicatorRegistry = {
@@ -2272,7 +2623,6 @@ const ScoreIndicatorRegistry = {
      */
     get(tweetId, tweetArticle = null) {
         if (!tweetId) {
-            console.error("[Registry] Attempted to get instance with invalid tweetId:", tweetId);
             return null;
         }
         if (this.managers.has(tweetId)) {
@@ -2280,7 +2630,6 @@ const ScoreIndicatorRegistry = {
             // Ensure the existing manager's article is still valid if possible
             if (tweetArticle && existingManager.tweetArticle !== tweetArticle) {
                 // This might happen if the DOM is manipulated strangely. Log a warning.
-                console.warn(`[Registry] Mismatch between provided article and existing manager for tweet ${tweetId}. Using existing manager.`);
             }
             return existingManager;
         } else if (tweetArticle) {
@@ -2290,19 +2639,16 @@ const ScoreIndicatorRegistry = {
                 const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
                 const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
                 if (existingIndicator || existingTooltip) {
-                    console.warn(`[Registry] Found existing indicator/tooltip elements for tweet ${tweetId} outside registry. Removing them before creating new manager.`);
                     existingIndicator?.remove();
                     existingTooltip?.remove();
                 }
                 // Create new instance. The constructor handles adding itself to the registry.
                 return new ScoreIndicator(tweetArticle);
             } catch (e) {
-                console.error(`[Registry] Error creating ScoreIndicator for ${tweetId}:`, e);
                 return null;
             }
         }
         // If no instance exists and no article provided to create one
-        // console.log(`[Registry] No instance found for ${tweetId} and no article provided.`);
         return null;
     },
     /**
@@ -2312,11 +2658,9 @@ const ScoreIndicatorRegistry = {
      */
     add(tweetId, instance) {
         if (this.managers.has(tweetId)) {
-            console.warn(`[Registry] Overwriting existing manager for tweet ${tweetId}. This may indicate an issue.`);
             // Optionally destroy the old one first: this.managers.get(tweetId).destroy();
         }
         this.managers.set(tweetId, instance);
-        // console.log(`[Registry] Added indicator for ${tweetId}. Total: ${this.managers.size}`);
     },
     /**
      * Removes an instance from the registry (called by destroy method).
@@ -2353,7 +2697,6 @@ const ScoreIndicatorRegistry = {
      * Destroys all managed indicators. Useful for full cleanup on script unload/major UI reset.
      */
     destroyAll() {
-        console.log(`[Registry] Destroying all ${this.managers.size} indicators.`);
         // Iterate over a copy of values, as destroy() modifies the map
         [...this.managers.values()].forEach(manager => manager.destroy());
         this.managers.clear(); // Ensure map is empty
@@ -2447,7 +2790,6 @@ function injectUI() {
         menuHTML = browserGet('menuHTML');
     }
     if (!menuHTML) {
-        console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
         return null;
     }
@@ -2455,7 +2797,6 @@ function injectUI() {
     const containerId = 'tweetfilter-root-container'; // Use the ID from the updated HTML
     let uiContainer = document.getElementById(containerId);
     if (uiContainer) {
-        console.warn('UI container already exists. Skipping injection.');
         return uiContainer; // Return existing container
     }
     uiContainer = document.createElement('div');
@@ -2463,7 +2804,6 @@ function injectUI() {
     uiContainer.innerHTML = menuHTML;
     // Append the rest of the UI elements
     document.body.appendChild(uiContainer);
-    console.log('TweetFilter UI Injected from HTML resource.');
     // Set version number
     const versionInfo = uiContainer.querySelector('#version-info');
     if (versionInfo) {
@@ -2477,10 +2817,8 @@ function injectUI() {
  */
 function initializeEventListeners(uiContainer) {
     if (!uiContainer) {
-        console.error('UI Container not found for event listeners.');
         return;
     }
-    console.log('Wiring UI events...');
     const settingsContainer = uiContainer.querySelector('#settings-container');
     const filterContainer = uiContainer.querySelector('#tweet-filter-container');
     const settingsToggleBtn = uiContainer.querySelector('#settings-toggle');
@@ -2633,7 +2971,6 @@ function initializeEventListeners(uiContainer) {
             browserSet('providerSort', providerSort);
         });
     }
-    console.log('UI events wired.');
 }
 // --- Event Handlers ---
 /** Saves the API key from the input field. */
@@ -2683,7 +3020,6 @@ function exportCacheToJson() {
         URL.revokeObjectURL(url);
         showStatus(`Cache exported successfully (${Object.keys(cacheData).length} items).`);
     } catch (error) {
-        console.error('Error exporting cache:', error);
         showStatus('Error exporting cache. Check console for details.', 'error');
     }
 }
@@ -2698,10 +3034,8 @@ function clearTweetRatingsAndRefreshUI() {
         if (window.threadRelationships) {
             window.threadRelationships = {};
             browserSet('threadRelationships', '{}');
-            console.log('Cleared thread relationships cache');
         }
         showStatus('All cached ratings and thread relationships cleared!');
-        console.log('Cleared all tweet ratings and thread relationships');
         // Reset all tweet elements to unrated state and reprocess them
         if (observedTargetNode) {
             observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
@@ -3284,7 +3618,6 @@ function initializeFloatingCacheStats() {
 function filterSingleTweet(tweetArticle) {
     const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
     if (!cell) {
-        console.warn("Couldn't find cellInnerDiv for tweet");
         return;
     }
     // Get the author handle
@@ -3326,24 +3659,54 @@ function filterSingleTweet(tweetArticle) {
  * @param {Element} tweetArticle - The tweet element.
  * @returns {boolean} True if a cached rating was applied.
  */
-function applyTweetCachedRating(tweetArticle) {
+async function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
     // Blacklisted users are automatically given a score of 10
     if (userHandle && isUserBlacklisted(userHandle)) {
-        tweetArticle.dataset.sloppinessScore = '10';
-        tweetArticle.dataset.blacklisted = 'true';
-        tweetArticle.dataset.ratingStatus = 'blacklisted';
-        tweetArticle.dataset.ratingDescription = 'Whitelisted user';
-        // Use the ScoreIndicator instance to update UI
-        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-            status: 'blacklisted',
-            score: 10,
-            description: "User is whitelisted",
-            questions: [], // No questions for blacklist
-            lastAnswer: "" // No answer for blacklist
-        });
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        if (indicatorInstance) {
+            const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "[Tweet text not found]";
+            const mediaUrls = await extractMediaLinks(tweetArticle); // extractMediaLinks is async
+            const blacklistResponse = `<ANALYSIS>
+            This user is on the blacklist. Tweets from this user are not rated by the AI and are always shown.
+            </ANALYSIS>
+            <SCORE>
+            SCORE_10
+            </SCORE>
+            <FOLLOW_UP_QUESTIONS>
+            Q_1. Rate this tweet anyway.
+            Q_2. N/A
+            Q_3. N/A
+            </FOLLOW_UP_QUESTIONS>`;
+            indicatorInstance.updateInitialReviewAndBuildHistory({
+                fullContext: tweetText,
+                mediaUrls: mediaUrls,
+                apiResponseContent: blacklistResponse,
+                reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Assumed global
+                followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Assumed global
+            });
+            tweetCache.set(tweetId, {
+                score: 10,
+                description: indicatorInstance.description,
+                reasoning: "",
+                questions: indicatorInstance.questions,
+                lastAnswer: "",
+                tweetContent: tweetText,
+                mediaUrls: mediaUrls,
+                streaming: false,
+                blacklisted: true,
+                timestamp: Date.now(),
+                qaConversationHistory: indicatorInstance.qaConversationHistory
+            });
+        } else {
+            // Fallback to dataset attributes if indicator fails, though qaHistory won't be built.
+            tweetArticle.dataset.sloppinessScore = '10';
+            tweetArticle.dataset.blacklisted = 'true';
+            tweetArticle.dataset.ratingStatus = 'blacklisted';
+            tweetArticle.dataset.ratingDescription = 'User is blacklisted';
+        }
         filterSingleTweet(tweetArticle); // Apply filtering immediately
         return true;
     }
@@ -3353,47 +3716,45 @@ function applyTweetCachedRating(tweetArticle) {
         // Skip incomplete streaming entries that don't have a score yet
         if (cachedRating.streaming === true &&
             (cachedRating.score === undefined || cachedRating.score === null)) {
-            // console.log(`Skipping incomplete streaming cache for ${tweetId}`);
             return false;
         }
         // Ensure the score exists before applying it
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
-            const score = cachedRating.score;
-            const desc = cachedRating.description;
-            const reasoning = cachedRating.reasoning || "";
-            const questions = cachedRating.questions || []; // Get cached questions
-            const lastAnswer = cachedRating.lastAnswer || ""; // Get cached answer
-            const mediaUrls = cachedRating.mediaUrls || []; // Get cached media URLs
-            tweetArticle.dataset.sloppinessScore = score.toString();
-            tweetArticle.dataset.cachedRating = 'true';
-            if (reasoning) {
-                tweetArticle.dataset.ratingReasoning = reasoning;
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (indicatorInstance) {
+                indicatorInstance.rehydrateFromCache(cachedRating);
+                // The rehydrateFromCache method now handles updating UI and dataset attributes.
+                // So, direct updates here are redundant.
+                /*
+                const score = cachedRating.score;
+                const desc = cachedRating.description;
+                const reasoning = cachedRating.reasoning || "";
+                const questions = cachedRating.questions || [];
+                const lastAnswer = cachedRating.lastAnswer || "";
+                const mediaUrls = cachedRating.mediaUrls || [];
+                const metadata = cachedRating.metadata || null;
+                let status = cachedRating.fromStorage ? 'cached' : 'rated';
+                tweetArticle.dataset.sloppinessScore = score.toString();
+                tweetArticle.dataset.cachedRating = 'true';
+                if (reasoning) tweetArticle.dataset.ratingReasoning = reasoning;
+                indicatorInstance.update({
+                    status: status,
+                    score: score,
+                    description: desc,
+                    reasoning: reasoning,
+                    questions: questions,
+                    lastAnswer: lastAnswer,
+                    metadata: metadata,
+                    mediaUrls: mediaUrls
+                });
+                */
+            } else {
+                return false; // Cannot apply if indicator doesn't exist
             }
-            // Optionally store questions/answer in dataset if needed for debugging
-            // tweetArticle.dataset.ratingQuestions = JSON.stringify(questions);
-            // tweetArticle.dataset.ratingLastAnswer = lastAnswer;
-            let status = 'rated'; // Default status
-            // Check if this rating is from storage (cached) or newly created
-            const isFromStorage = cachedRating.fromStorage === true;
-            status = isFromStorage ? 'cached' : 'rated';
-            // Get metadata from cache if it exists
-            const metadata = cachedRating.metadata || null;
-            // Update the indicator via the registry
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: status,
-                score: score,
-                description: desc,
-                reasoning: reasoning,
-                questions: questions, // Pass questions to indicator
-                lastAnswer: lastAnswer, // Pass answer to indicator
-                metadata: metadata, // Pass metadata to indicator
-                mediaUrls: mediaUrls // Pass mediaUrls to indicator
-            });
             filterSingleTweet(tweetArticle);
             return true;
         } else if (!cachedRating.streaming) {
             // Invalid cache entry - missing score
-            console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
             tweetCache.delete(tweetId);
             return false;
         }
@@ -3485,11 +3846,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 // Handle incomplete streaming entries specifically
                 if (cachedRating.streaming === true &&
                     (cachedRating.score === undefined || cachedRating.score === null)) {
-                    console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
                 }
                 else if (!cachedRating.streaming && (cachedRating.score === undefined || cachedRating.score === null)) {
                     // Invalid cache entry (non-streaming but missing score), delete it
-                    console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
                     tweetCache.delete(tweetId);
                 }
             }
@@ -3549,7 +3908,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         lastAnswer = currentCache.lastAnswer || ""; // Get answer from cache
                         const mediaUrls = currentCache.mediaUrls || []; // Get mediaUrls from cache
                         processingSuccessful = true;
-                        console.log(`Using valid cache entry found for ${tweetId} before API call.`);
                         // Update UI using cached data
                         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                             status: currentCache.fromStorage ? 'cached' : 'rated',
@@ -3608,7 +3966,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     filterSingleTweet(tweetArticle);
                     return; // Return after API call attempt
                 } catch (apiError) {
-                    console.error(`API error processing tweet ${tweetId}:`, apiError);
                     score = 5; // Fallback score on API error
                     description = `API Error: ${apiError.message}`;
                     reasoning = '';
@@ -3639,7 +3996,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             }
             filterSingleTweet(tweetArticle);
         } catch (error) {
-            console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
             // Ensure some error state is shown if processing fails unexpectedly
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: 'error',
@@ -3656,7 +4012,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             }
         }
     } catch (error) {
-        console.error(`Error processing tweet ${tweetId}:`, error);
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
         if (indicatorInstance) {
             indicatorInstance.update({
@@ -3676,7 +4031,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             // Check if we need to retry
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
             if (indicatorInstance && !isValidFinalState(indicatorInstance.status)) {
-                console.log(`Tweet ${tweetId} processing failed, will retry later`);
                 setTimeout(() => {
                     if (!isValidFinalState(ScoreIndicatorRegistry.get(tweetId)?.status)) {
                         scheduleTweetProcessing(tweetArticle);
@@ -3690,7 +4044,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
  * Schedules processing of a tweet if it hasn't been processed yet.
  * @param {Element} tweetArticle - The tweet element.
  */
-function scheduleTweetProcessing(tweetArticle) {
+async function scheduleTweetProcessing(tweetArticle) {
     // First, ensure the tweet has a valid ID
     const tweetId = getTweetID(tweetArticle);
     if (!tweetId) {
@@ -3698,7 +4052,6 @@ function scheduleTweetProcessing(tweetArticle) {
     }
     // Check if there's already an active streaming request
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
-        console.log(`Tweet ${tweetId} has an active streaming request, skipping processing`);
         return;
     }
     // Get the author handle
@@ -3736,17 +4089,48 @@ function scheduleTweetProcessing(tweetArticle) {
     }
     // Fast-path: if author is blacklisted, assign score immediately
     if (authorHandle && isUserBlacklisted(authorHandle)) {
-        tweetArticle.dataset.sloppinessScore = '10';
-        tweetArticle.dataset.blacklisted = 'true';
-        tweetArticle.dataset.ratingStatus = 'blacklisted';
-        tweetArticle.dataset.ratingDescription = "Whitelisted user";
-        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-            status: 'blacklisted',
-            score: 10,
-            description: "User is whitelisted",
-            questions: [],
-            lastAnswer: ""
-        });
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        if (indicatorInstance) {
+            const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "[Tweet text not found]";
+            const mediaUrls = await extractMediaLinks(tweetArticle); // extractMediaLinks is async
+            const blacklistResponse = `<ANALYSIS>
+            This user is on the blacklist. Tweets from this user are not rated by the AI and are always shown.
+            </ANALYSIS>
+            <SCORE>
+            SCORE_10
+            </SCORE>
+            <FOLLOW_UP_QUESTIONS>
+            Q_1. Rate this tweet anyway.
+            Q_2. N/A
+            Q_3. N/A
+            </FOLLOW_UP_QUESTIONS>`;
+            indicatorInstance.updateInitialReviewAndBuildHistory({
+                fullContext: tweetText,
+                mediaUrls: mediaUrls,
+                apiResponseContent: blacklistResponse,
+                reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Assumed global
+                followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Assumed global
+            });
+            tweetCache.set(tweetId, {
+                score: 10,
+                description: indicatorInstance.description,
+                reasoning: "",
+                questions: indicatorInstance.questions,
+                lastAnswer: "",
+                tweetContent: tweetText,
+                mediaUrls: mediaUrls,
+                streaming: false,
+                blacklisted: true,
+                timestamp: Date.now(),
+                qaConversationHistory: indicatorInstance.qaConversationHistory
+            });
+        } else {
+            // Fallback to dataset attributes if indicator fails
+            tweetArticle.dataset.sloppinessScore = '10';
+            tweetArticle.dataset.blacklisted = 'true';
+            tweetArticle.dataset.ratingStatus = 'blacklisted';
+            tweetArticle.dataset.ratingDescription = 'User is blacklisted';
+        }
         filterSingleTweet(tweetArticle);
         return;
     }
@@ -3757,7 +4141,7 @@ function scheduleTweetProcessing(tweetArticle) {
             tweetCache.get(tweetId).streaming === true &&
             (tweetCache.get(tweetId).score === undefined || tweetCache.get(tweetId).score === null);
         if (!isIncompleteStreaming) {
-            const wasApplied = applyTweetCachedRating(tweetArticle);
+            const wasApplied = await applyTweetCachedRating(tweetArticle);
             if (wasApplied) {
                 return;
             }
@@ -3791,7 +4175,6 @@ function scheduleTweetProcessing(tweetArticle) {
             return;
         }
     } else {
-        console.error(`Failed to get/create indicator instance for tweet ${tweetId} during scheduling.`);
     }
     // Add to processed set *after* successfully getting/creating instance
     if (!processedTweets.has(tweetId)) {
@@ -3802,7 +4185,6 @@ function scheduleTweetProcessing(tweetArticle) {
         try {
             delayedProcessTweet(tweetArticle, tweetId, authorHandle);
         } catch (e) {
-            console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
             processedTweets.delete(tweetId);
         }
     }, PROCESSING_DELAY_MS);
@@ -3818,9 +4200,7 @@ function loadThreadRelationships() {
     try {
         const savedRelationships = browserGet('threadRelationships', '{}');
         threadRelationships = JSON.parse(savedRelationships);
-        console.log(`Loaded ${Object.keys(threadRelationships).length} thread relationships`);
     } catch (e) {
-        console.error('Error loading thread relationships:', e);
         threadRelationships = {};
     }
 }
@@ -3839,7 +4219,6 @@ function saveThreadRelationships() {
         }
         browserSet('threadRelationships', JSON.stringify(threadRelationships));
     } catch (e) {
-        console.error('Error saving thread relationships:', e);
     }
 }
 // Initialize thread relationships on load
@@ -3928,7 +4307,6 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
             threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
         } catch (e) {
-            console.error("Error parsing thread media URLs:", e);
         }
     }
     let allAvailableMediaLinks = [...allMediaLinks];
@@ -4049,7 +4427,6 @@ function ensureAllTweetsRated() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
     if (tweets.length > 0) {
-        console.log(`Checking ${tweets.length} tweets to ensure all are rated...`);
         tweets.forEach(tweet => {
             const tweetId = getTweetID(tweet);
             if (!tweetId) return;
@@ -4061,7 +4438,6 @@ function ensureAllTweetsRated() {
                                   (processedTweets.has(tweetId) && !isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status));
             if (needsProcessing) {
                 if (processedTweets.has(tweetId)) {
-                    console.log(`Tweet ${tweetId} marked as processed but in invalid state: ${indicatorInstance?.status}`);
                     processedTweets.delete(tweetId);
                 }
                 scheduleTweetProcessing(tweet);
@@ -4136,7 +4512,6 @@ async function handleThreads() {
                         mapThreadStructure(conversation, rootTweetId);
                     }, 10);
                 } catch (error) {
-                    console.error("Error initializing thread history:", error);
                     // Clean up on error
                     threadMappingInProgress = false;
                     delete conversation.dataset.threadHist;
@@ -4176,7 +4551,6 @@ async function handleThreads() {
                     mapThreadStructure(conversation, rootTweetId);
                 }, 500);
             } catch (error) {
-                console.error("Error processing reply:", error);
                 // Clean up on error
                 threadMappingInProgress = false;
                 if (conversation.firstChild) {
@@ -4191,7 +4565,6 @@ async function handleThreads() {
             }, 250);
         }
     } catch (error) {
-        console.error("Error in handleThreads:", error);
         // Clean up all state on error
         threadMappingInProgress = false;
     }
@@ -4212,7 +4585,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             // Process all visible tweets using the cellInnerDiv structure for improved mapping
             let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
             if (!cellDivs.length) {
-                console.log("No cell divs found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4278,14 +4650,12 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         scheduleTweetProcessing(article);
                     }
                 } catch (err) {
-                    console.error("Error processing tweet in mapThreadStructure:", err);
                     // Continue with next tweet
                     continue;
                 }
             }
             // Build reply structure only if we have tweets to process
             if (tweetCells.length === 0) {
-                console.log("No valid tweets found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4402,7 +4772,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             }
                         }
                     } catch (error) {
-                        console.error("Error getting root context:", error);
                         // Continue processing even if full context fails
                     }
                 }
@@ -4464,7 +4833,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         // Race the mapping against the timeout
         await Promise.race([mapping(), timeout]);
     } catch (error) {
-        console.error("Error in mapThreadStructure:", error);
         // Clear the mapped timestamp and in-progress flag so we can try again later
         delete conversation.dataset.threadMappedAt;
         delete conversation.dataset.threadMappingInProgress;
@@ -4576,7 +4944,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     let reasoning = ""; // Add a variable to track reasoning content
     let responseObj = null;
     let streamComplete = false;
-    console.log(streamingRequest);
     const reqObj = GM_xmlhttpRequest({
         method: "POST",
         url: "https://openrouter.ai/api/v1/chat/completions",
@@ -4596,7 +4963,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
-                    console.log("Stream timed out after inactivity");
                     if (!streamComplete) {
                         streamComplete = true;
                         // Call onComplete with whatever we have so far
@@ -4675,7 +5041,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                         });
                                     }
                                 } catch (e) {
-                                    console.error("Error parsing SSE data:", e, data);
                                 }
                             }
                         }
@@ -4696,7 +5061,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         });
                     }
                 } catch (error) {
-                    console.error("Stream processing error:", error);
                     // Make sure we clean up and call onError
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
@@ -4714,7 +5078,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                 }
             };
             processStream().catch(error => {
-                console.error("Unhandled stream error:", error);
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
@@ -4761,7 +5124,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             try {
                 reqObj.abort(); // Attempt to abort the XHR request
             } catch (e) {
-                console.error("Error aborting request:", e);
             }
             // Remove from active requests tracking
             if (tweetId && window.activeStreamingRequests) {
@@ -4830,12 +5192,10 @@ function fetchAvailableModels() {
                     showStatus('Models updated!');
                 }
             } catch (error) {
-                console.error('Error parsing model list:', error);
                 showStatus('Error parsing models list');
             }
         },
         onerror: function (error) {
-            console.error('Error fetching models:', error);
             showStatus('Error fetching models!');
         }
     });
@@ -5035,7 +5395,6 @@ function extractFollowUpQuestions(content) {
         }
     }
     // If markers aren't found or questions are empty, return empty array
-    console.warn("[extractFollowUpQuestions] Failed to find or parse Q_1/Q_2/Q_3 markers.");
     return [];
 }
 /**
@@ -5050,101 +5409,110 @@ function extractFollowUpQuestions(content) {
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
-    // Add a cleanup function to ensure pendingRequests is always decremented
     const cleanupRequest = () => {
-        pendingRequests = Math.max(0, pendingRequests - 1); // Ensure it never goes below 0
+        pendingRequests = Math.max(0, pendingRequests - 1);
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
     };
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+    if (!indicatorInstance) {
+        // Cannot proceed without an indicator instance to store qaConversationHistory
+        return {
+            score: 5, // Default error score
+            content: "Failed to initialize UI components for rating.",
+            reasoning: "",
+            questions: [],
+            lastAnswer: "",
+            error: true,
+            cached: false,
+            data: null,
+            qaConversationHistory: [] // Empty history
+        };
+    }
     if (adAuthorCache.has(authorHandle)) {
+        // ... existing ad author handling ...
+        indicatorInstance.updateInitialReviewAndBuildHistory({
+            fullContext: tweetText, // or a specific ad message
+            mediaUrls: [],
+            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
+            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Globally available from config.js
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Globally available from config.js
+        });
         return {
             score: 0,
-            content: "This tweet is from an ad author.",
+            content: indicatorInstance.description,
             reasoning: "",
             error: false,
             cached: false,
+            questions: indicatorInstance.questions,
+            qaConversationHistory: indicatorInstance.qaConversationHistory
         };
     }
-    console.log(`Given Tweet Text: 
-        ${tweetText}
-        And Media URLS:`);
-    console.log(mediaUrls);
-    // Get current instructions from the manager
     const currentInstructions = instructionsManager.getCurrentInstructions();
-    // Create the request body
-    const request = {
+    const requestBody = {
         model: selectedModel,
-        messages: [{
-            role: "system",
-            content: [{
-                type: "text",
-                text: `
-                ${SYSTEM_PROMPT}`
-            },]
-        },
-        {
-            role: "user",
-            content: [{
-                type: "text",
-                text:
-                    `<TARGET_TWEET_ID_TO_RATE> 
-                    [${tweetId}].
-                    </TARGET_TWEET_ID_TO_RATE>
-                    <USER_INSTRUCTIONS:>
-                    [${currentInstructions}]
-                    </USER INSTURCTIONS>
-                    <TWEET>
-                [${tweetText}]
-                </TWEET>
-                <EXPECTED_RESPONSE_FORMAT>
-<ANALYSIS>
-(Your analysis of the tweet acco(Do not include (text enclosed in parenthesis) in your response. Parenthesisized text serves as guidelines. DO include everything else.)rding to the user defined instructions) 
-</ANALYSIS>
-<SCORE>
-SCORE_X (where X is a number from 0 to 10 for example: SCORE_0, SCORE_1, SCORE_2, SCORE_3, etc)
-</SCORE>
-<FOLLOW_UP_QUESTIONS>
-Q_1. (Question 1)
-Q_2. (Question 2)
-Q_3. (Question 3)
-</FOLLOW_UP_QUESTIONS>
+        messages: [
+            {
+                role: "system",
+                content: [{ type: "text", text: REVIEW_SYSTEM_PROMPT}]
+            },
+            {
+                role: "user",
+                content: [
+                    { 
+                        type: "text", 
+                        text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
+<USER_INSTRUCTIONS>[${currentInstructions}]</USER_INSTRUCTIONS>
+<TWEET>[${tweetText}]</TWEET>
+Follow this expected response format exactly, or you break the UI:
+<EXPECTED_RESPONSE_FORMAT>
+  <ANALYSIS>
+    (Your analysis according to the user instructions.)
+  </ANALYSIS>
+  <SCORE>
+    SCORE_X (Where X is a number between 0 and 10)
+  </SCORE>
+  <FOLLOW_UP_QUESTIONS>
+    Q_1. …
+    Q_2. …
+    Q_3. …
+  </FOLLOW_UP_QUESTIONS>
 </EXPECTED_RESPONSE_FORMAT>
-                `
-            }]
-        }]
+`
+                    }
+                ]
+            }
+        ],
+        temperature: modelTemperature,
+        top_p: modelTopP,
+        max_tokens: maxTokens
     };
+   /* // Simplified user message text, relying on system prompt for full format instruction
+    requestBody.messages[1].content[0].text = `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
+<USER_INSTRUCTIONS>[${currentInstructions}]</USER_INSTRUCTIONS>
+<TWEET>[${tweetText}]</TWEET>`;
+*/
     if (selectedModel.includes('gemini')) {
-        request.config = {
-            safetySettings: safetySettings,
-        };
+        requestBody.config = { safetySettings: safetySettings };
     }
-    // Add image URLs if present and supported
     if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
-        for (const url of mediaUrls) {
-            request.messages[1].content.push({
+        mediaUrls.forEach(url => {
+            requestBody.messages[1].content.push({
                 type: "image_url",
                 image_url: { "url": url }
             });
-        }
+        });
     }
-    // Add model parameters
-    request.temperature = modelTemperature;
-    request.top_p = modelTopP;
-    request.max_tokens = maxTokens;
-    // Add provider settings only if a specific sort is selected
     if (providerSort) {
-        request.provider = {
-            sort: providerSort,
-            allow_fallbacks: true
-        };
+        requestBody.provider = { sort: providerSort, allow_fallbacks: true };
     }
-    // Check if streaming is enabled
     const useStreaming = browserGet('enableStreaming', false);
-    // Store the streaming entry in cache
+    // Initial cache entry for streaming - qaConversationHistory will be added later
     tweetCache.set(tweetId, {
         streaming: true,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        tweetContent: tweetText, // Store original tweet text for context
+        mediaUrls: mediaUrls     // Store original media URLs
     });
-    // Implement retry logic
     let attempt = 0;
     while (attempt < maxRetries) {
         attempt++;
@@ -5160,68 +5528,116 @@ Q_3. (Question 3)
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
         try {
             let result;
-            // Call appropriate rating function based on streaming setting
             if (useStreaming) {
-                result = await rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle);
+                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle);
             } else {
-                result = await rateTweet(request, apiKey);
+                result = await rateTweet(requestBody, apiKey);
             }
-            cleanupRequest(); // Use cleanup function instead of direct decrement
-            // Parse the result for score
+            cleanupRequest();
             if (!result.error && result.content) {
-                const scoreMatches = result.content.match(/SCORE_(\d+)/g);
-                if (scoreMatches && scoreMatches.length > 0) {
-                    const lastScore = scoreMatches[scoreMatches.length - 1];
-                    const score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
-                    // Store the rating in cache
-                    tweetCache.set(tweetId, {
-                        score: score,
-                        description: result.content,
-                        reasoning: result.reasoning,
-                        questions: extractFollowUpQuestions(result.content),
-                        lastAnswer: "",
-                        tweetContent: tweetText,
-                        mediaUrls: mediaUrls,
-                        streaming: false,
-                        timestamp: Date.now(),
-                        metadata: result.data?.id ? { generationId: result.data.id } : null
-                    });
-                    return {
-                        score,
-                        content: result.content,
-                        reasoning: result.reasoning,
-                        questions: extractFollowUpQuestions(result.content),
-                        lastAnswer: "",
-                        error: false,
-                        cached: false,
-                        data: result.data
-                    };
-                }
+                indicatorInstance.updateInitialReviewAndBuildHistory({
+                    fullContext: tweetText, // The full text of the tweet that was rated
+                    mediaUrls: mediaUrls,   // The media URLs associated with that tweet
+                    apiResponseContent: result.content,
+                    reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+                });
+                const finalScore = indicatorInstance.score;
+                const finalQuestions = indicatorInstance.questions;
+                const finalDescription = indicatorInstance.description; // Analysis part
+                const finalQaHistory = indicatorInstance.qaConversationHistory;
+                tweetCache.set(tweetId, {
+                    score: finalScore,
+                    description: finalDescription, // Analysis
+                    reasoning: result.reasoning || "", // If rateTweet/Streaming provide it separately
+                    questions: finalQuestions,
+                    lastAnswer: "",
+                    tweetContent: tweetText, 
+                    mediaUrls: mediaUrls,
+                    streaming: false,
+                    timestamp: Date.now(),
+                    metadata: result.data?.id ? { generationId: result.data.id } : null,
+                    qaConversationHistory: finalQaHistory // Store the history
+                });
+                return {
+                    score: finalScore,
+                    content: result.content, // Keep raw content for direct use if needed
+                    reasoning: result.reasoning || "",
+                    questions: finalQuestions,
+                    error: false,
+                    cached: false,
+                    data: result.data,
+                    qaConversationHistory: finalQaHistory
+                };
             }
-            // If we get here, we couldn't find a score in the response
-            if (attempt < maxRetries) {
+            // Retry logic if result was error or no content
+            if (attempt < maxRetries && (result.error || !result.content)) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else if (result.error || !result.content) {
+                 // Last attempt failed or no content
+                throw new Error(result.content || "Failed to get valid rating content after multiple attempts");
             }
         } catch (error) {
-            cleanupRequest(); // Use cleanup function instead of direct decrement
-            console.error(`API error during attempt ${attempt}:`, error);
+            cleanupRequest();
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else {
+                // All retries failed, update indicator and cache with error state
+                const errorContent = `Failed to get valid rating after multiple attempts: ${error.message}`;
+                indicatorInstance.updateInitialReviewAndBuildHistory({
+                    fullContext: tweetText,
+                    mediaUrls: mediaUrls,
+                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
+                    reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+                });
+                tweetCache.set(tweetId, {
+                    score: 5,
+                    description: errorContent,
+                    reasoning: "",
+                    questions: [],
+                    lastAnswer: "",
+                    error: true,
+                    tweetContent: tweetText,
+                    mediaUrls: mediaUrls,
+                    streaming: false,
+                    timestamp: Date.now(),
+                    qaConversationHistory: indicatorInstance.qaConversationHistory
+                });
+                return {
+                    score: 5,
+                    content: errorContent,
+                    reasoning: "",
+                    questions: [],
+                    lastAnswer: "",
+                    error: true,
+                    data: null,
+                    qaConversationHistory: indicatorInstance.qaConversationHistory
+                };
             }
         }
     }
-    // If we get here, all retries failed
-    cleanupRequest(); // Ensure we cleanup even if all retries fail
+    // Fallback if loop finishes unexpectedly (should be caught by error handling within loop)
+    cleanupRequest(); 
+    const fallbackError = "Unexpected failure in rating process.";
+    indicatorInstance.updateInitialReviewAndBuildHistory({
+        fullContext: tweetText,
+        mediaUrls: mediaUrls,
+        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
+        reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+        followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+    });
     return {
         score: 5,
-        content: "Failed to get valid rating after multiple attempts",
+        content: fallbackError,
         reasoning: "",
         questions: [],
         lastAnswer: "",
         error: true,
-        data: null
+        data: null,
+        qaConversationHistory: indicatorInstance.qaConversationHistory
     };
 }
 /**
@@ -5318,7 +5734,6 @@ async function rateTweet(request, apiKey) {
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
     // Check if there's already an active streaming request for this tweet
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
-        console.log(`Aborting existing streaming request for tweet ${tweetId}`);
         window.activeStreamingRequests[tweetId].abort();
         delete window.activeStreamingRequests[tweetId];
     }
@@ -5341,7 +5756,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         // Use the passed-in tweetArticle
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
         if (!indicatorInstance) {
-             console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
              // Update cache to reflect error/non-streaming state
              if (tweetCache.has(tweetId)) {
                  tweetCache.get(tweetId).streaming = false;
@@ -5388,11 +5802,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             },
             // onComplete callback - finalize the rating
             (finalResult) => {
-                console.log(finalResult);
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
-                // console.log("Final stream data:", finalData);
                 // Final check for score
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
                 if (scoreMatches && scoreMatches.length > 0) {
@@ -5402,7 +5814,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 let finalStatus = 'rated';
                 // If no score was found anywhere, mark as error
                 if (score === null || score === undefined) {
-                    console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
                     finalStatus = 'error';
                     score = 5; // Assign default error score
                     aggregatedContent += "\n[No score detected - Error]";
@@ -5449,7 +5860,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             },
             // onError callback
             (errorData) => {
-                 console.error(`[API Stream Error] Tweet ${tweetId}: ${errorData.message}`);
                 // Update UI via instance to show error
                 indicatorInstance.update({
                     status: 'error',
@@ -5485,17 +5895,14 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
  */
 async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt = 0, delays = [1000, 500, 2000, 4000, 8000]) {
     if (attempt >= delays.length) {
-        console.warn(`[Metadata Fetch ${tweetId}] Max retries reached for generation ${generationId}.`);
         return;
     }
     const delay = delays[attempt];
     await new Promise(resolve => setTimeout(resolve, delay));
     try {
-        // console.log(`[Metadata Fetch ${tweetId}] Attempt ${attempt + 1} for generation ${generationId} after ${delay}ms`);
         const metadataResult = await getGenerationMetadata(generationId, apiKey);
         if (!metadataResult.error && metadataResult.data?.data) {
             const meta = metadataResult.data.data;
-            // console.log(`[Metadata Fetch ${tweetId}] Success for generation ${generationId}`, meta);
             const extractedMetadata = {
                 model: meta.model || 'N/A',
                 promptTokens: meta.tokens_prompt || 0,
@@ -5512,20 +5919,15 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
                 tweetCache.set(tweetId, currentCache); // Save updated cache entry
                 // Update the ScoreIndicator instance
                 indicatorInstance.update({ metadata: extractedMetadata });
-                console.log(`[Metadata Fetch ${tweetId}] Stored metadata and updated UI for generation ${generationId}`);
             } else {
-                console.warn(`[Metadata Fetch ${tweetId}] Cache entry disappeared before metadata could be stored for generation ${generationId}.`);
             }
             return; // Success, stop retrying
         } else if (metadataResult.status === 404) {
-            // console.log(`[Metadata Fetch ${tweetId}] Generation ${generationId} not found yet (404), retrying...`);
             fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
         } else {
-            console.warn(`[Metadata Fetch ${tweetId}] Error fetching metadata (Attempt ${attempt + 1}) for ${generationId}: ${metadataResult.message}`);
             fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays); // Retry on other errors too
         }
     } catch (error) {
-        console.error(`[Metadata Fetch ${tweetId}] Unexpected error during fetch (Attempt ${attempt + 1}) for ${generationId}:`, error);
         // Still retry on unexpected errors
         fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
     }
@@ -5534,214 +5936,118 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
  * Answers a follow-up question about a tweet and generates new questions.
  *
  * @param {string} tweetId - The ID of the tweet being discussed.
- * @param {string} questionText - The follow-up question being asked.
+ * @param {object[]} qaHistoryForApiCall - The conversation history array, including the latest user message.
  * @param {string} apiKey - The OpenRouter API key.
  * @param {Element} [tweetArticle=null] - The DOM element for the tweet article.
  * @param {ScoreIndicator} indicatorInstance - The ScoreIndicator instance to update.
- * @param {string[]} [mediaUrls=[]] - Optional array of media URLs from the original tweet.
  * @returns {Promise<void>} Resolves when the answer is generated and UI updated.
  */
-async function answerFollowUpQuestion(tweetId, questionText, apiKey, tweetArticle, indicatorInstance, mediaUrls = []) {
-    console.log(`[FollowUp] Answering question for ${tweetId}: "${questionText}"`);
+async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, tweetArticle, indicatorInstance) {
+    const questionText = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
     const useStreaming = browserGet('enableStreaming', false);
-    // 1. Get original context from cache
-    const cachedData = tweetCache.get(tweetId);
-    let originalContext = cachedData?.tweetContent || null;
-    const originalScore = cachedData?.score; // Get score
-    const originalDescription = cachedData?.description; // Get description
-    // If context not in cache, try to re-scrape (less ideal)
-    if (!originalContext && tweetArticle) {
-        try {
-            console.warn(`[FollowUp] Original context not in cache for ${tweetId}. Re-scraping.`);
-            originalContext = await getFullContext(tweetArticle, tweetId, apiKey);
-            // Update cache with the scraped context
-            if (originalContext && cachedData) {
-                cachedData.tweetContent = originalContext;
-                tweetCache.set(tweetId, cachedData);
-            } else if (originalContext && !cachedData) {
-                tweetCache.set(tweetId, { 
-                    tweetContent: originalContext, 
-                    timestamp: Date.now()
-                });
-            }
-        } catch (scrapeError) {
-            console.error(`[FollowUp] Failed to re-scrape context for ${tweetId}:`, scrapeError);
-            indicatorInstance.update({
-                lastAnswer: `Error: Could not retrieve original tweet context to answer question.`
-            });
-            return;
-        }
-    }
-    if (!originalContext) {
-        indicatorInstance.update({
-            lastAnswer: `Error: Original tweet context unavailable.`
-        });
-        return;
-    }
-    // Get conversation history from the DOM
-    let conversationHistory = '';
-    // Find the tooltip for this tweet
-    const tooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
-    if (tooltip) {
-        const historyContainer = tooltip.querySelector('.tooltip-conversation-history');
-        if (historyContainer) {
-            const turns = historyContainer.querySelectorAll('.conversation-turn');
-            conversationHistory = Array.from(turns).map((turn, index) => {
-                const question = turn.querySelector('.conversation-question')?.textContent?.replace('You:', '').trim() || '';
-                const answer = turn.querySelector('.conversation-answer')?.textContent?.replace('AI:', '').trim() || '';
-                return `Q${index + 1}: ${question}\nA${index + 1}: ${answer}`;
-            }).join('\n\n');
-        }
-    }
-    console.log("Found tooltip:", tooltip);
-    console.log(conversationHistory);
-    const followUpPrompt = `
-You are TweetFilter AI. You are answering a follow-up question about a specific tweet.
-Here is the original tweet context:
-_______BEGIN TWEET CONTEXT_______
-${originalContext}
-_______END TWEET CONTEXT_______
-${originalScore !== undefined && originalDescription ? `
-Here is the original AI rating and description for the tweet:
-SCORE: ${originalScore}
-DESCRIPTION:
-${originalDescription}
----------------------------------
-` : ''}
-${conversationHistory ? `CONVERSATION HISTORY:
-${conversationHistory}
----------------------------------
-` : ''}Current follow-up question: "${questionText}"
-Please consider the ENTIRE conversation history above when formulating your response. Your answer should build upon and be consistent with previous answers, and acknowledge any relevant information that was discussed in earlier exchanges.
-After answering, provide 3 new, relevant follow-up questions the user might have based on your answer or the ongoing conversation context.
-Follow EXPECTED_RESPONSE_FORMAT exactly. Do not include literally (text enclosed in parenthesis), but use it as a format guideline. Include everything else literally. Do not deviate from the format.
-[EXPECTED_RESPONSE_FORMAT]
-(NO TEXT BEFORE THE ANSWER)
-<ANSWER>
-(Your answer here)
-</ANSWER>
-<FOLLOW_UP_QUESTIONS>
-Q_1. (New Question 1 here)
-Q_2. (New Question 2 here)
-Q_3. (New Question 3 here)
-</FOLLOW_UP_QUESTIONS>
-(NO TEXT AFTER THE FOLLOW UP QUESTIONS)
-[/EXPECTED_RESPONSE_FORMAT]
-`;
+    // Original context and conversation history are now within qaHistoryForApiCall
+    // No need to fetch from cache or DOM separately for constructing the prompt.
     const request = {
-        model: `${selectedModel}:online`, // Use the same model as the initial rating
-        messages: [
-            // No system prompt needed here as instructions are inline
-            {
-                role: "user",
-                content: [{ type: "text", text: followUpPrompt }]
-            }
-        ],
+        model: selectedModel,//was using :online but the search results are irrelevant
+        messages: qaHistoryForApiCall, // The entire history IS the messages array
         temperature: modelTemperature,
         top_p: modelTopP,
         max_tokens: maxTokens,
-        stream: useStreaming // Set stream based on user setting
+        stream: useStreaming
     };
-    // Add image URLs if present and supported by the *selected rating model*
-    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
-        console.log(`[FollowUp] Adding ${mediaUrls.length} images to follow-up request for ${tweetId}`);
-        for (const url of mediaUrls) {
-            request.messages[0].content.push({
-                type: "image_url",
-                image_url: { "url": url }
-            });
-        }
-    }
+    // Model-specific configurations (Gemini safety, provider sort)
+    // These should ideally be applied based on the selectedModel used in the history.
+    // For simplicity, we'll use the current global selectedModel settings.
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
     }
     if (providerSort) {
         request.provider = { sort: providerSort, allow_fallbacks: true };
     }
-    // 3. Update UI immediately to show "Thinking..."
-    indicatorInstance.update({
-        lastAnswer: `*Answering "${questionText}"...*`,
-        questions: [] // Temporarily hide old questions
-    });
-    // 4. Make API call (Streaming or Non-Streaming)
+    // UI update for "Thinking..." is handled by ScoreIndicator's _handleFollowUpQuestionClick
     try {
-        let finalAnswer = "*Processing...*";
-        let finalQuestions = [];
+        let finalAnswerContent = "*Processing...*"; // This is the raw AI response string
+        let finalQaHistory = [...qaHistoryForApiCall]; // Start with a copy
         if (useStreaming) {
             await new Promise((resolve, reject) => {
                  let aggregatedContent = "";
-                 let currentAnswer = "";
-                 let currentQuestions = [];
-                 let aggregatedReasoning = "";
+                 // Reasoning is part of the assistant's message in qaHistory, not a separate stream here.
+                 // We will parse it after the full message is received.
                  getCompletionStreaming(
                      request, apiKey,
                      // onChunk
                      (chunkData) => {
                          aggregatedContent = chunkData.content || aggregatedContent;
-                         aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
-                         indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
+                         // Render streaming answer directly to UI.
+                         // The reasoning part of the UI will be updated once the full message is available.
+                         indicatorInstance._renderStreamingAnswer(aggregatedContent, "");
                      },
                      // onComplete
                      (result) => {
-                         aggregatedContent = result.content || aggregatedContent;
-                         const answerMatch = aggregatedContent.match(/<ANSWER>\s*([\s\S]*?)\s*(?:<\/ANSWER>|<FOLLOW UP QUESTIONS>|$)/);
-                         finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
-                         finalQuestions = extractFollowUpQuestions(aggregatedContent);
-                         // Extract final reasoning (assuming it's complete in aggregatedReasoning)
-                         const finalReasoning = aggregatedReasoning; // Or re-parse if needed
-                         // Update cache
+                         finalAnswerContent = result.content || aggregatedContent;
+                         const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
+                         finalQaHistory.push(assistantMessage);
+                         indicatorInstance.updateAfterFollowUp({
+                             assistantResponseContent: finalAnswerContent,
+                             updatedQaHistory: finalQaHistory
+                         });
+                         // Update cache with the new full QA history
                          const currentCache = tweetCache.get(tweetId) || {};
-                         currentCache.questions = finalQuestions;
+                         currentCache.qaConversationHistory = finalQaHistory;
+                         // also update questions and lastAnswer for compatibility if needed, though qaHistory is prime
+                         const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                         currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
+                         currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
                          currentCache.timestamp = Date.now();
                          tweetCache.set(tweetId, currentCache);
-                         // Final UI update using the instance helper
-                         indicatorInstance._updateConversationHistory(questionText, finalAnswer, finalReasoning);
-                         indicatorInstance.questions = finalQuestions;
-                         indicatorInstance._updateTooltipUI();
                          resolve();
                      },
                      // onError
                      (error) => {
-                         console.error("[FollowUp Stream Error]", error);
-                         finalAnswer = `Error generating answer: ${error.message}`;
-                         indicatorInstance._updateConversationHistory(questionText, finalAnswer);
-                         indicatorInstance.questions = [];
-                         indicatorInstance._updateTooltipUI();
+                         const errorMessage = `Error generating answer: ${error.message}`;
+                         // Update ScoreIndicator's UI part of conversationHistory
+                         indicatorInstance._updateConversationHistory(questionText, errorMessage); 
+                         indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions
+                         indicatorInstance._updateTooltipUI(); // Refresh
+                         // Update cache with error state for this turn if needed, though qaHistory won't have AI response
+                         const currentCache = tweetCache.get(tweetId) || {};
+                         currentCache.lastAnswer = errorMessage; // Store error message
+                         currentCache.timestamp = Date.now();
+                         tweetCache.set(tweetId, currentCache);
                          reject(new Error(error.message));
                      },
                      60000,
                      `followup-${tweetId}`
                  );
              });
-        } else {
-            // Non-streaming follow-up
+        } else { // Non-streaming follow-up
             const result = await getCompletion(request, apiKey, 60000);
-             if (result.error || !result.data?.choices?.[0]?.message?.content) {
+            if (result.error || !result.data?.choices?.[0]?.message?.content) {
                 throw new Error(result.message || "Failed to get follow-up answer.");
             }
-             const content = result.data.choices[0].message.content;
-             const answerMatch = content.match(/<ANSWER>\s*([\s\S]*?)\s*(?:<\/ANSWER>|<FOLLOW UP QUESTIONS>|$)/);
-             finalAnswer = answerMatch ? answerMatch[1].trim() : "[No answer found in response]";
-             finalQuestions = extractFollowUpQuestions(content);
-             // Update cache
-             const currentCache = tweetCache.get(tweetId) || {};
-             currentCache.lastAnswer = finalAnswer;
-             currentCache.questions = finalQuestions;
-             currentCache.timestamp = Date.now();
-             tweetCache.set(tweetId, currentCache);
-             // Final UI update using instance helper
-             indicatorInstance._updateConversationHistory(questionText, finalAnswer);
-             indicatorInstance.questions = finalQuestions;
-             indicatorInstance._updateTooltipUI();
+            finalAnswerContent = result.data.choices[0].message.content;
+            const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
+            finalQaHistory.push(assistantMessage);
+            indicatorInstance.updateAfterFollowUp({
+                assistantResponseContent: finalAnswerContent,
+                updatedQaHistory: finalQaHistory
+            });
+            // Update cache
+            const currentCache = tweetCache.get(tweetId) || {};
+            currentCache.qaConversationHistory = finalQaHistory;
+            const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+            currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
+            currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+            currentCache.timestamp = Date.now();
+            tweetCache.set(tweetId, currentCache);
         }
     } catch (error) {
-        console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
         const errorMessage = `Error answering question: ${error.message}`;
-        indicatorInstance._updateConversationHistory(questionText, errorMessage);
-        indicatorInstance.questions = cachedData?.questions || []
-        indicatorInstance._updateTooltipUI();
+        indicatorInstance._updateConversationHistory(questionText, errorMessage); // Update UI history
+        indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions from cache
+        indicatorInstance._updateTooltipUI(); // Refresh
         const currentCache = tweetCache.get(tweetId) || {};
-        currentCache.lastAnswer = errorMessage;
+        currentCache.lastAnswer = errorMessage; // Store error in cache
         currentCache.timestamp = Date.now();
         tweetCache.set(tweetId, currentCache);
     }
@@ -5759,7 +6065,6 @@ Q_3. (New Question 3 here)
 const VERSION = '1.4.5'; 
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.4.5- Enhanced)");
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");
@@ -5775,7 +6080,6 @@ const VERSION = '1.4.5';
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (target) {
             observedTargetNode = target;
-            console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
             initialiseUI();
             if (firstRun) {
                 resetSettings(true);
@@ -5810,7 +6114,6 @@ const VERSION = '1.4.5';
                 const statusIndicator = document.getElementById('status-indicator');
                 if (statusIndicator) statusIndicator.remove();
                 ScoreIndicatorRegistry.destroyAll();
-                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
             setTimeout(initializeObserver, 1000);
