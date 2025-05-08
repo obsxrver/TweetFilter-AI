@@ -47,6 +47,8 @@ class ScoreIndicator {
         this.uploadedImageDataUrls = []; // Changed from single string to array
         // --- End New ---
 
+        this.tooltipScrollableContentElement = null; // NEW: for the scrollable area
+
         this.status = 'pending'; // Initial status
         this.score = null;
         this.description = '';
@@ -60,6 +62,7 @@ class ScoreIndicator {
         this.userInitiatedScroll = false; // Track user scroll interaction
         this.uploadedImageDataUrls = []; // Initialize
         this.qaConversationHistory = []; // Stores the full conversation history for API calls
+        this.currentFollowUpSource = null; // Tracks if 'custom' or 'suggested'
 
         try {
             this._createElements(tweetArticle);
@@ -127,6 +130,10 @@ class ScoreIndicator {
         this.tooltipControls.appendChild(this.tooltipCloseButton); // Add the close button to controls
         this.tooltipElement.appendChild(this.tooltipControls);
 
+        // --- NEW: Scrollable Content Wrapper ---
+        this.tooltipScrollableContentElement = document.createElement('div');
+        this.tooltipScrollableContentElement.className = 'tooltip-scrollable-content';
+
         // --- Reasoning Dropdown ---
         this.reasoningDropdown = document.createElement('div');
         this.reasoningDropdown.className = 'reasoning-dropdown';
@@ -150,35 +157,35 @@ class ScoreIndicator {
 
         this.reasoningDropdown.appendChild(this.reasoningToggle);
         this.reasoningDropdown.appendChild(this.reasoningContent);
-        this.tooltipElement.appendChild(this.reasoningDropdown);
+        this.tooltipScrollableContentElement.appendChild(this.reasoningDropdown); // MODIFIED: Append to scrollable
 
         // --- Description Area ---
         this.descriptionElement = document.createElement('div');
         this.descriptionElement.className = 'description-text';
-        this.tooltipElement.appendChild(this.descriptionElement);
+        this.tooltipScrollableContentElement.appendChild(this.descriptionElement); // MODIFIED: Append to scrollable
 
         // --- Score Text Area (from description) ---
         this.scoreTextElement = document.createElement('div');
         this.scoreTextElement.className = 'score-text-from-description';
         this.scoreTextElement.style.display = 'none'; // Hide initially
-        this.tooltipElement.appendChild(this.scoreTextElement);
+        this.tooltipScrollableContentElement.appendChild(this.scoreTextElement); // MODIFIED: Append to scrollable
 
         // --- Follow-Up Questions Text Area (from description, hidden) ---
         this.followUpQuestionsTextElement = document.createElement('div');
         this.followUpQuestionsTextElement.className = 'follow-up-questions-text-from-description';
         this.followUpQuestionsTextElement.style.display = 'none'; // Always hidden
-        this.tooltipElement.appendChild(this.followUpQuestionsTextElement);
+        this.tooltipScrollableContentElement.appendChild(this.followUpQuestionsTextElement); // MODIFIED: Append to scrollable
 
         // --- Conversation History Area ---
         this.conversationContainerElement = document.createElement('div');
         this.conversationContainerElement.className = 'tooltip-conversation-history';
-        this.tooltipElement.appendChild(this.conversationContainerElement);
+        this.tooltipScrollableContentElement.appendChild(this.conversationContainerElement); // MODIFIED: Append to scrollable
 
         // --- Follow-Up Questions Area ---
         this.followUpQuestionsElement = document.createElement('div');
         this.followUpQuestionsElement.className = 'tooltip-follow-up-questions';
         this.followUpQuestionsElement.style.display = 'none'; // Hide initially
-        this.tooltipElement.appendChild(this.followUpQuestionsElement);
+        this.tooltipScrollableContentElement.appendChild(this.followUpQuestionsElement); // MODIFIED: Append to scrollable
 
         // --- Custom Question Area ---
         this.customQuestionContainer = document.createElement('div');
@@ -237,7 +244,7 @@ class ScoreIndicator {
             }
         }
         this.customQuestionContainer.appendChild(this.customQuestionButton);
-        this.tooltipElement.appendChild(this.customQuestionContainer);
+        this.tooltipScrollableContentElement.appendChild(this.customQuestionContainer); // MODIFIED: Append to scrollable
 
         // --- Image Preview and Remove Area (conditionally created) ---
         if (supportsImages) {
@@ -255,7 +262,7 @@ class ScoreIndicator {
 
             // this.followUpImageContainer.appendChild(this.followUpImagePreview);
             // this.followUpImageContainer.appendChild(this.followUpRemoveImageButton);
-            this.tooltipElement.insertBefore(this.followUpImageContainer, this.metadataElement);
+            this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer); // MODIFIED: Append to scrollable, was insertBefore metadata
         }
         // --- End Image Preview and Remove Area ---
 
@@ -263,7 +270,10 @@ class ScoreIndicator {
         this.metadataElement = document.createElement('div');
         this.metadataElement.className = 'tooltip-metadata';
         this.metadataElement.style.display = 'none'; // Hide initially
-        this.tooltipElement.appendChild(this.metadataElement);
+        this.tooltipScrollableContentElement.appendChild(this.metadataElement); // MODIFIED: Append to scrollable
+
+        // --- ADD Scrollable Content Wrapper to Tooltip Element ---
+        this.tooltipElement.appendChild(this.tooltipScrollableContentElement);
 
         // --- Scroll-to-Bottom Button ---
         this.scrollButton = document.createElement('div');
@@ -272,10 +282,10 @@ class ScoreIndicator {
         this.scrollButton.style.display = 'none'; // Hidden by default
         this.tooltipElement.appendChild(this.scrollButton);
 
-        // --- Bottom Spacer ---
+        // --- Bottom Spacer (Now inside scrollable content) ---
         const bottomSpacer = document.createElement('div');
         bottomSpacer.className = 'tooltip-bottom-spacer';
-        this.tooltipElement.appendChild(bottomSpacer);
+        this.tooltipScrollableContentElement.appendChild(bottomSpacer); // MODIFIED: Append to scrollable
 
         // Append tooltip to body
         document.body.appendChild(this.tooltipElement);
@@ -303,7 +313,8 @@ class ScoreIndicator {
         // Tooltip Events
         this.tooltipElement.addEventListener('mouseenter', this._handleTooltipMouseEnter.bind(this));
         this.tooltipElement.addEventListener('mouseleave', this._handleTooltipMouseLeave.bind(this));
-        this.tooltipElement.addEventListener('scroll', this._handleTooltipScroll.bind(this));
+        // MODIFIED: Scroll event listener should be on the new scrollable element
+        this.tooltipScrollableContentElement?.addEventListener('scroll', this._handleTooltipScroll.bind(this));
 
         // Tooltip Controls Events
         this.pinButton?.addEventListener('click', this._handlePinClick.bind(this));
@@ -409,14 +420,14 @@ class ScoreIndicator {
     /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
         // Ensure required elements exist
-        if (!this.tooltipElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement) {
+        if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement) {
             return;
         }
 
         // Store current scroll position and whether we were at bottom before update
-        const wasNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
-        const previousScrollTop = this.tooltipElement.scrollTop;
-        const previousScrollHeight = this.tooltipElement.scrollHeight;
+        const wasNearBottom = this.tooltipScrollableContentElement.scrollHeight - this.tooltipScrollableContentElement.scrollTop - this.tooltipScrollableContentElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        const previousScrollTop = this.tooltipScrollableContentElement.scrollTop;
+        const previousScrollHeight = this.tooltipScrollableContentElement.scrollHeight;
 
         // --- Parse the description into parts ---
         const fullDescription = this.description || "";
@@ -590,16 +601,19 @@ class ScoreIndicator {
         // Handle scrolling after content update
         if (contentChanged) {
             requestAnimationFrame(() => {
-                // If auto-scroll is enabled and we were at bottom, or if this is first content
-                if (this.autoScroll && (wasNearBottom || !previousScrollHeight)) {
-                    this._performAutoScroll();
-                } else if (!this.autoScroll && previousScrollHeight > 0) {
-                    // Maintain relative scroll position for user-scrolled content
-                    const newScrollHeight = this.tooltipElement.scrollHeight;
-                    const scrollDiff = newScrollHeight - previousScrollHeight;
-                    this.tooltipElement.scrollTop = previousScrollTop + scrollDiff;
+                // Check conditions again inside RAF, as state might have changed
+                // (e.g. visibility, or if tooltipScrollableContentElement was somehow removed)
+                if (this.tooltipScrollableContentElement && this.isVisible) {
+                    if (this.autoScroll) { // Use the current this.autoScroll state
+                        this._performAutoScroll();
+                    } else {
+                        // If autoScroll is false, it means user scrolled away or streaming ended
+                        // and wasn't at the very bottom. Restore their previous position
+                        // to prevent the browser from defaulting to scroll_top=0 after large DOM changes.
+                        this.tooltipScrollableContentElement.scrollTop = previousScrollTop;
+                    }
                 }
-                this._updateScrollButtonVisibility();
+                this._updateScrollButtonVisibility(); // Always update button visibility
             });
         } else {
             // Ensure scroll button visibility is correct even if content didn't change significantly
@@ -729,27 +743,27 @@ class ScoreIndicator {
     }
 
     _performAutoScroll() {
-        if (!this.tooltipElement || !this.autoScroll) return;
+        if (!this.tooltipScrollableContentElement || !this.autoScroll || !this.isVisible) return; // MODIFIED
         // Use double RAF to ensure DOM has updated dimensions
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                // Check again in case state changed during RAF
-                if (this.tooltipElement && this.autoScroll && this.isVisible) {
-                    const targetScroll = this.tooltipElement.scrollHeight;
-                    this.tooltipElement.scrollTo({
+                // Check conditions again inside RAF, as state might have changed
+                if (this.tooltipScrollableContentElement && this.autoScroll && this.isVisible) { // MODIFIED
+                    const targetScroll = this.tooltipScrollableContentElement.scrollHeight; // MODIFIED
+                    this.tooltipScrollableContentElement.scrollTo({ // MODIFIED
                         top: targetScroll,
-                        behavior: 'instant'
+                        behavior: 'instant' // Ensure 'instant'
                     });
-                    // Double-check after a short delay
-                    setTimeout(() => {
-                        if (this.tooltipElement && this.autoScroll && this.isVisible) {
-                            // Check if we are actually at the bottom, if not, scroll again
-                            const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < 5; // Use a small tolerance
-                            if (!isNearBottom) {
-                                this.tooltipElement.scrollTop = this.tooltipElement.scrollHeight;
-                            }
-                        }
-                    }, 50);
+                    // Double-check after a short delay -- REMOVED
+                    // setTimeout(() => {
+                    //     if (this.tooltipElement && this.autoScroll && this.isVisible) {
+                    //         // Check if we are actually at the bottom, if not, scroll again
+                    //         const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < 5; // Use a small tolerance
+                    //         if (!isNearBottom) {
+                    //             this.tooltipElement.scrollTop = this.tooltipElement.scrollHeight;
+                    //         }
+                    //     }
+                    // }, 50);
                 }
             });
         });
@@ -860,20 +874,23 @@ class ScoreIndicator {
         tooltip.style.left = `${left}px`;
         tooltip.style.top = `${top}px`;
         tooltip.style.zIndex = '99999999'; // Ensure high z-index
-        tooltip.style.maxHeight = finalMaxHeight;
-        tooltip.style.overflowY = finalOverflowY;
+        tooltip.style.maxHeight = finalMaxHeight; // This is still valid for the outer container
+        // tooltip.style.overflowY = finalOverflowY; // REMOVED: Outer container should not get JS-set overflowY
+        tooltip.style.overflowY = ''; // Explicitly clear any JS-set overflowY on outer container
 
-        // Force scrollbars on WebKit if needed
-        if (finalOverflowY === 'scroll') {
-            tooltip.style.webkitOverflowScrolling = 'touch';
-        }
+        // Force scrollbars on WebKit if needed (This might be irrelevant now for the outer container)
+        // if (finalOverflowY === 'scroll') {
+        //     tooltip.style.webkitOverflowScrolling = 'touch';
+        // }
+
+        tooltip.style.display = 'flex'; // RESTORED: Ensure flex display mode is set before making visible
 
         // Make visible AFTER positioning
         tooltip.style.visibility = 'visible';
     }
 
     _updateScrollButtonVisibility() {
-        if (!this.tooltipElement || !this.scrollButton) return;
+        if (!this.tooltipScrollableContentElement || !this.scrollButton) return; // MODIFIED
         const isStreaming = this.status === 'streaming';
         if (!isStreaming) {
             this.scrollButton.style.display = 'none';
@@ -881,7 +898,7 @@ class ScoreIndicator {
         }
 
         // Check if scrolled near the bottom
-        const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        const isNearBottom = this.tooltipScrollableContentElement.scrollHeight - this.tooltipScrollableContentElement.scrollTop - this.tooltipScrollableContentElement.clientHeight < (isMobileDevice() ? 40 : 55); // MODIFIED
         this.scrollButton.style.display = isNearBottom ? 'none' : 'block';
     }
 
@@ -951,23 +968,23 @@ class ScoreIndicator {
     }
 
     _handleTooltipScroll() {
-        if (!this.tooltipElement) return;
+        if (!this.tooltipScrollableContentElement) return; // MODIFIED
 
         // Check if we're near the bottom BEFORE potentially disabling autoScroll
-        const isNearBottom = this.tooltipElement.scrollHeight - this.tooltipElement.scrollTop - this.tooltipElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        const isNearBottom = this.tooltipScrollableContentElement.scrollHeight - this.tooltipScrollableContentElement.scrollTop - this.tooltipScrollableContentElement.clientHeight < (isMobileDevice() ? 40 : 55); // MODIFIED
 
         // If user is scrolling up or away from bottom
         if (!isNearBottom) {
             if (this.autoScroll) {
                 this.autoScroll = false;
-                this.tooltipElement.dataset.autoScroll = 'false';
+                this.tooltipElement.dataset.autoScroll = 'false'; // Keep this on main tooltip for now, or move if makes sense
                 this.userInitiatedScroll = true;
             }
         } else {
             // Only re-enable auto-scroll if user explicitly scrolled to bottom
             if (this.userInitiatedScroll) {
                 this.autoScroll = true;
-                this.tooltipElement.dataset.autoScroll = 'true';
+                this.tooltipElement.dataset.autoScroll = 'true'; // Keep this on main tooltip
                 this.userInitiatedScroll = false;
             }
         }
@@ -1026,10 +1043,10 @@ class ScoreIndicator {
 
     _handleScrollButtonClick(e) {
         e.stopPropagation();
-        if (!this.tooltipElement) return;
+        if (!this.tooltipScrollableContentElement) return; // MODIFIED
 
         this.autoScroll = true;
-        this.tooltipElement.dataset.autoScroll = 'true';
+        this.tooltipElement.dataset.autoScroll = 'true'; // Keep this on main tooltip
         this._performAutoScroll();
         this._updateScrollButtonVisibility(); // Should hide the button now
     }
@@ -1046,6 +1063,9 @@ class ScoreIndicator {
 
         const questionText = button.dataset.questionText;
         const apiKey = browserGet('openrouter-api-key', '');
+
+        // Set the source of the follow-up
+        this.currentFollowUpSource = isMockEvent ? 'custom' : 'suggested';
 
         // Add immediate feedback - only if it's a real button
         if (!isMockEvent) {
@@ -1072,27 +1092,16 @@ class ScoreIndicator {
         this.questions = []; // Clear suggested questions
         this._updateTooltipUI(); // Update UI again to remove suggested questions
 
-        // Construct the user message for the API
-        const userMessageContent = [{ type: "text", text: `<UserQuestion> ${questionText} </UserQuestion>
-        You MUST match the EXPECTED_RESPONSE_FORMAT
-        EXPECTED_RESPONSE_FORMAT:
-        <ANSWER>
-(Your answer here)
-</ANSWER>
-<FOLLOW_UP_QUESTIONS>
-Q_1. (New Question 1 here)
-Q_2. (New Question 2 here)
-Q_3. (New Question 3 here)
-</FOLLOW_UP_QUESTIONS>
-        `}];
+        // Construct the user message for the API history (raw question text)
+        const userMessageContentForHistory = [{ type: "text", text: questionText }];
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
-                userMessageContent.push({ type: "image_url", image_url: { "url": url } });
+                userMessageContentForHistory.push({ type: "image_url", image_url: { "url": url } });
             });
         }
-        const userApiMessage = { role: "user", content: userMessageContent };
+        const userApiMessage = { role: "user", content: userMessageContentForHistory };
 
-        // Create a new history array for the API call, including the new user message
+        // Create a new history array for the API call, including the new raw user message
         const historyForApiCall = [...this.qaConversationHistory, userApiMessage];
 
         if (!apiKey) {
@@ -1138,20 +1147,8 @@ Q_3. (New Question 3 here)
             // Pass the augmented history to answerFollowUpQuestion
             answerFollowUpQuestion(this.tweetId, historyForApiCall, apiKey, currentArticle, this);
         } finally {
-            setTimeout(() => {
-                 if (this.followUpQuestionsElement) {
-                    this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
-                         btn.disabled = false;
-                    });
-                }
-                 // Re-enable custom question UI if it was used
-                if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-                if (this.customQuestionButton) {
-                    this.customQuestionButton.disabled = false;
-                    this.customQuestionButton.textContent = 'Ask';
-                }
-                this._clearFollowUpImage(); // Clear image after sending
-            }, 100);
+            // Removed button re-enabling logic from here. It will be handled by _finalizeFollowUpInteraction
+            // called from answerFollowUpQuestion.
         }
     }
 
@@ -1199,7 +1196,7 @@ Q_3. (New Question 3 here)
 
         Array.from(files).forEach(file => {
             if (file && file.type.startsWith('image/')) {
-                resizeImage(file, 512) // Resize to max 512px
+                resizeImage(file, 1024) // Resize to max 1024px
                     .then(resizedDataUrl => {
                         this.uploadedImageDataUrls.push(resizedDataUrl);
                         this._addPreviewToContainer(resizedDataUrl);
@@ -1269,6 +1266,30 @@ Q_3. (New Question 3 here)
         }
     }
     // --- End New ---
+
+    _finalizeFollowUpInteraction() {
+        // Re-enable suggested question buttons if they exist (new ones might have been rendered)
+        if (this.followUpQuestionsElement) {
+            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
+                btn.disabled = false;
+                // Note: Text content of suggested buttons is reset when new questions are rendered
+                // by _updateTooltipUI, so no need to reset text like "Asking..." here.
+            });
+        }
+
+        // Re-enable custom question UI if it was the source
+        if (this.currentFollowUpSource === 'custom') {
+            if (this.customQuestionInput) {
+                this.customQuestionInput.disabled = false;
+            }
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+        }
+        this._clearFollowUpImage(); // Clear any uploaded images for the follow-up
+        this.currentFollowUpSource = null; // Reset the source tracker
+    }
 
     // --- Public API ---
 
@@ -1481,7 +1502,7 @@ Q_3. (New Question 3 here)
         if (!this.tooltipElement) return;
         // console.log(`[ScoreIndicator ${this.tweetId}] Showing tooltip`);
         this.isVisible = true;
-        this.tooltipElement.style.display = 'block';
+        this.tooltipElement.style.display = 'flex'; // MODIFIED: Was 'block', needs to be 'flex' for new layout
         this._setPosition(); // Calculate and apply position
 
         // Handle auto-scroll on show if needed
@@ -1565,7 +1586,7 @@ Q_3. (New Question 3 here)
         this.indicatorElement?.removeEventListener('click', this._handleIndicatorClick);
         this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
         this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
-        this.tooltipElement?.removeEventListener('scroll', this._handleTooltipScroll);
+        this.tooltipScrollableContentElement?.removeEventListener('scroll', this._handleTooltipScroll.bind(this));
         this.pinButton?.removeEventListener('click', this._handlePinClick);
         this.copyButton?.removeEventListener('click', this._handleCopyClick);
         this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick);
@@ -1616,6 +1637,7 @@ Q_3. (New Question 3 here)
         this.attachImageButton = null; // Added for cleanup
         this.uploadedImageDataUrls = []; // Ensure it's reset here too
         // --- End New ---
+        this.tooltipScrollableContentElement = null; // NEW: cleanup
     }
 
     /** Ensures the indicator element is attached to the correct current article element. */

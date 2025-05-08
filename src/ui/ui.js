@@ -30,6 +30,20 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
         }, 500); // Match the CSS transition duration
     }
 
+    // Update opacity for settings-toggle on mobile based on settings-container state
+    if (element.id === 'settings-container' && toggleButton.id === 'settings-toggle') {
+        if (isMobileDevice()) { // isMobileDevice() is from utils.js
+            if (element.classList.contains('hidden')) { // Settings panel is NOW hidden (i.e., "collapsed")
+                toggleButton.style.opacity = '0.3';
+            } else { // Settings panel is NOW visible (i.e., "open")
+                toggleButton.style.opacity = ''; // Revert to default CSS opacity (effectively 1)
+            }
+        } else {
+            // On non-mobile, ensure opacity always reverts to default CSS regardless of panel state
+            toggleButton.style.opacity = '';
+        }
+    }
+
     // Special case for filter slider button
     if (element.id === 'tweet-filter-container') {
         const filterToggle = document.getElementById('filter-toggle');

@@ -150,21 +150,20 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
 <TWEET>[${tweetText}]</TWEET>
 Follow this expected response format exactly, or you break the UI:
-<EXPECTED_RESPONSE_FORMAT>
-  <ANALYSIS>
-    (Your analysis according to the user instructions.)
-  </ANALYSIS>
+EXPECTED_RESPONSE_FORMAT:\n
+  <ANALYSIS>\n
+    \n(Your analysis according to the user instructions. Follow the user instructions EXACTLY.)
+  </ANALYSIS>\n
 
-  <SCORE>
-    SCORE_X (Where X is a number between 0 and 10)
-  </SCORE>
+  <SCORE>\n
+    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\N
+  </SCORE>\n
 
-  <FOLLOW_UP_QUESTIONS>
-    Q_1. …
-    Q_2. …
-    Q_3. …
+  <FOLLOW_UP_QUESTIONS>\n
+    Q_1. …\n
+    Q_2. …\n
+    Q_3. …\n
   </FOLLOW_UP_QUESTIONS>
-</EXPECTED_RESPONSE_FORMAT>
 `
                     }
                 ]
@@ -698,24 +697,37 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
  * @returns {Promise<void>} Resolves when the answer is generated and UI updated.
  */
 async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, tweetArticle, indicatorInstance) {
-    const questionText = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
-    console.log(`[FollowUp] Answering question for ${tweetId}: "${questionText}" using full history.`);
+    const questionTextForLogging = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
+    console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
     const useStreaming = browserGet('enableStreaming', false);
-    // Original context and conversation history are now within qaHistoryForApiCall
-    // No need to fetch from cache or DOM separately for constructing the prompt.
 
+    // Prepare messages for the API call: template the last user message in the history
+    const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
+        if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
+            const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
+            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion>\n        You MUST match the EXPECTED_RESPONSE_FORMAT\n        EXPECTED_RESPONSE_FORMAT:\n        <ANSWER>\n(Your answer here)\n</ANSWER>\n
+            <FOLLOW_UP_QUESTIONS> (Anticipate 3 things the user may ask you next. These questions should not be directed at the user. Only pose a question if you are sure you can answer it, based off your knowledge.)\nQ_1. (New Question 1 here)\nQ_2. (New Question 2 here)\nQ_3. (New Question 3 here)\n</FOLLOW_UP_QUESTIONS>\n        `;
+            const templatedContent = [{ type: "text", text: templatedText }];
+            msg.content.forEach(contentItem => {
+                if (contentItem.type === "image_url") {
+                    templatedContent.push(contentItem);
+                }
+            });
+            return { ...msg, content: templatedContent };
+        }
+        return msg; // Return other messages (system prompts, previous assistant messages, previous user messages) as is
+    });
+    
     const request = {
-        model: selectedModel,//was using :online but the search results are irrelevant
-        messages: qaHistoryForApiCall, // The entire history IS the messages array
+        model: selectedModel,
+        messages: messagesForApi, // Use the history with the last user message templated
         temperature: modelTemperature,
         top_p: modelTopP,
         max_tokens: maxTokens,
         stream: useStreaming
     };
-
-    // Model-specific configurations (Gemini safety, provider sort)
-    // These should ideally be applied based on the selectedModel used in the history.
-    // For simplicity, we'll use the current global selectedModel settings.
+    console.log(`followup request (templated): ${JSON.stringify(request)}`);
+    
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
     }
@@ -725,103 +737,111 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 
     // UI update for "Thinking..." is handled by ScoreIndicator's _handleFollowUpQuestionClick
 
-    try {
-        let finalAnswerContent = "*Processing...*"; // This is the raw AI response string
-        let finalQaHistory = [...qaHistoryForApiCall]; // Start with a copy
+    try { // Outer try for the finally block
+        try { // Inner try for existing error handling
+            let finalAnswerContent = "*Processing...*"; // This is the raw AI response string
+            let finalQaHistory = [...qaHistoryForApiCall]; // Start with a copy
 
-        if (useStreaming) {
-            await new Promise((resolve, reject) => {
-                 let aggregatedContent = "";
-                 // Reasoning is part of the assistant's message in qaHistory, not a separate stream here.
-                 // We will parse it after the full message is received.
+            if (useStreaming) {
+                await new Promise((resolve, reject) => {
+                    let aggregatedContent = "";
+                    // Reasoning is part of the assistant's message in qaHistory, not a separate stream here.
+                    // We will parse it after the full message is received.
 
-                 getCompletionStreaming(
-                     request, apiKey,
-                     // onChunk
-                     (chunkData) => {
-                         aggregatedContent = chunkData.content || aggregatedContent;
-                         // Render streaming answer directly to UI.
-                         // The reasoning part of the UI will be updated once the full message is available.
-                         indicatorInstance._renderStreamingAnswer(aggregatedContent, "");
-                     },
-                     // onComplete
-                     (result) => {
-                         finalAnswerContent = result.content || aggregatedContent;
-                         const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
-                         finalQaHistory.push(assistantMessage);
+                    getCompletionStreaming(
+                        request, apiKey,
+                        // onChunk
+                        (chunkData) => {
+                            aggregatedContent = chunkData.content || aggregatedContent;
+                            // Render streaming answer directly to UI.
+                            // The reasoning part of the UI will be updated once the full message is available.
+                            indicatorInstance._renderStreamingAnswer(aggregatedContent, "");
+                        },
+                        // onComplete
+                        (result) => {
+                            finalAnswerContent = result.content || aggregatedContent;
+                            const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
+                            finalQaHistory.push(assistantMessage);
 
-                         indicatorInstance.updateAfterFollowUp({
-                             assistantResponseContent: finalAnswerContent,
-                             updatedQaHistory: finalQaHistory
-                         });
-                         
-                         // Update cache with the new full QA history
-                         const currentCache = tweetCache.get(tweetId) || {};
-                         currentCache.qaConversationHistory = finalQaHistory;
-                         // also update questions and lastAnswer for compatibility if needed, though qaHistory is prime
-                         const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                         currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
-                         currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
-                         currentCache.timestamp = Date.now();
-                         tweetCache.set(tweetId, currentCache);
+                            indicatorInstance.updateAfterFollowUp({
+                                assistantResponseContent: finalAnswerContent,
+                                updatedQaHistory: finalQaHistory
+                            });
+                            
+                            // Update cache with the new full QA history
+                            const currentCache = tweetCache.get(tweetId) || {};
+                            currentCache.qaConversationHistory = finalQaHistory;
+                            // also update questions and lastAnswer for compatibility if needed, though qaHistory is prime
+                            const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                            currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
+                            currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                            currentCache.timestamp = Date.now();
+                            tweetCache.set(tweetId, currentCache);
 
-                         resolve();
-                     },
-                     // onError
-                     (error) => {
-                         console.error("[FollowUp Stream Error]", error);
-                         const errorMessage = `Error generating answer: ${error.message}`;
-                         // Update ScoreIndicator's UI part of conversationHistory
-                         indicatorInstance._updateConversationHistory(questionText, errorMessage); 
-                         indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions
-                         indicatorInstance._updateTooltipUI(); // Refresh
+                            resolve();
+                        },
+                        // onError
+                        (error) => {
+                            console.error("[FollowUp Stream Error]", error);
+                            const errorMessage = `Error generating answer: ${error.message}`;
+                            // Update ScoreIndicator's UI part of conversationHistory
+                            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage); 
+                            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions
+                            indicatorInstance._updateTooltipUI(); // Refresh
 
-                         // Update cache with error state for this turn if needed, though qaHistory won't have AI response
-                         const currentCache = tweetCache.get(tweetId) || {};
-                         currentCache.lastAnswer = errorMessage; // Store error message
-                         currentCache.timestamp = Date.now();
-                         tweetCache.set(tweetId, currentCache);
+                            // Update cache with error state for this turn if needed, though qaHistory won't have AI response
+                            const currentCache = tweetCache.get(tweetId) || {};
+                            currentCache.lastAnswer = errorMessage; // Store error message
+                            currentCache.timestamp = Date.now();
+                            tweetCache.set(tweetId, currentCache);
 
-                         reject(new Error(error.message));
-                     },
-                     60000,
-                     `followup-${tweetId}`
-                 );
-             });
-        } else { // Non-streaming follow-up
-            const result = await getCompletion(request, apiKey, 60000);
-            if (result.error || !result.data?.choices?.[0]?.message?.content) {
-                throw new Error(result.message || "Failed to get follow-up answer.");
+                            reject(new Error(error.message));
+                        },
+                        60000,
+                        `followup-${tweetId}`
+                    );
+                });
+            } else { // Non-streaming follow-up
+                const result = await getCompletion(request, apiKey, 60000);
+                if (result.error || !result.data?.choices?.[0]?.message?.content) {
+                    throw new Error(result.message || "Failed to get follow-up answer.");
+                }
+                finalAnswerContent = result.data.choices[0].message.content;
+                const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
+                finalQaHistory.push(assistantMessage);
+
+                indicatorInstance.updateAfterFollowUp({
+                    assistantResponseContent: finalAnswerContent,
+                    updatedQaHistory: finalQaHistory
+                });
+
+                // Update cache
+                const currentCache = tweetCache.get(tweetId) || {};
+                currentCache.qaConversationHistory = finalQaHistory;
+                const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
+                currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                currentCache.timestamp = Date.now();
+                tweetCache.set(tweetId, currentCache);
             }
-            finalAnswerContent = result.data.choices[0].message.content;
-            const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
-            finalQaHistory.push(assistantMessage);
+        } catch (error) {
+            console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
+            const errorMessage = `Error answering question: ${error.message}`;
+            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage); // Update UI history
+            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions from cache
+            indicatorInstance._updateTooltipUI(); // Refresh
 
-            indicatorInstance.updateAfterFollowUp({
-                assistantResponseContent: finalAnswerContent,
-                updatedQaHistory: finalQaHistory
-            });
-
-            // Update cache
             const currentCache = tweetCache.get(tweetId) || {};
-            currentCache.qaConversationHistory = finalQaHistory;
-            const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-            currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
-            currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+            currentCache.lastAnswer = errorMessage; // Store error in cache
             currentCache.timestamp = Date.now();
             tweetCache.set(tweetId, currentCache);
+            // No re-throw needed, as the finally block will handle cleanup.
         }
-    } catch (error) {
-        console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
-        const errorMessage = `Error answering question: ${error.message}`;
-        indicatorInstance._updateConversationHistory(questionText, errorMessage); // Update UI history
-        indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions from cache
-        indicatorInstance._updateTooltipUI(); // Refresh
-
-        const currentCache = tweetCache.get(tweetId) || {};
-        currentCache.lastAnswer = errorMessage; // Store error in cache
-        currentCache.timestamp = Date.now();
-        tweetCache.set(tweetId, currentCache);
+    } finally {
+        // This block ensures that UI elements are re-enabled regardless of success or failure.
+        if (indicatorInstance && typeof indicatorInstance._finalizeFollowUpInteraction === 'function') {
+            indicatorInstance._finalizeFollowUpInteraction();
+        }
     }
 }
 
