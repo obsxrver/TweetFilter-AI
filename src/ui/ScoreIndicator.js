@@ -663,6 +663,30 @@ class ScoreIndicator {
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     .replace(/\*(.*?)\*/g, '<em>$1</em>')
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    // Process Markdown Tables before line breaks
+                    .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                        const rows = match.trim().split('\n');
+                        const headerRow = rows[0];
+                        // const separatorRow = rows[1]; // Not strictly needed here for formatting
+                        const bodyRows = rows.slice(2);
+                        let html = '<table class="markdown-table">';
+                        html += '<thead><tr>';
+                        headerRow.slice(1, -1).split('|').forEach(cell => {
+                            html += `<th>${cell.trim()}</th>`;
+                        });
+                        html += '</tr></thead>';
+                        html += '<tbody>';
+                        bodyRows.forEach(rowStr => {
+                            if (!rowStr.trim()) return;
+                            html += '<tr>';
+                            rowStr.slice(1, -1).split('|').forEach(cell => {
+                                html += `<td>${cell.trim()}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        return html;
+                    })
                     .replace(/\n/g, '<br>');
             }
 
@@ -1088,6 +1112,7 @@ class ScoreIndicator {
             uploadedImages: [...this.uploadedImageDataUrls], // Store a copy of the image URLs array
             reasoning: '' // Initialize reasoning for this turn
         });
+        this._clearFollowUpImage(); // Clear preview after data is captured
         this._updateTooltipUI(); // Update UI to show pending state
         this.questions = []; // Clear suggested questions
         this._updateTooltipUI(); // Update UI again to remove suggested questions
@@ -1156,11 +1181,16 @@ class ScoreIndicator {
         if (!this.customQuestionInput || !this.customQuestionButton) return;
 
         const questionText = this.customQuestionInput.value.trim();
-        if (!questionText) {
-            showStatus("Please enter a question.", "warning");
+        const hasImages = this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0;
+
+        if (!questionText && !hasImages) {
+            showStatus("Please enter a question or attach an image.", "warning");
             this.customQuestionInput.focus();
             return;
         }
+
+        // If there's no text but there are images, use a placeholder space.
+        const submissionText = questionText || (hasImages ? "[image only message]" : "");
 
         // This reuses the logic from _handleFollowUpQuestionClick for sending the question
         // The actual API call happens there. We just need to trigger it.
@@ -1168,7 +1198,7 @@ class ScoreIndicator {
         // or refactor to a common sending function. For now, let's simulate a click.
 
         const mockButton = {
-            dataset: { questionText: questionText },
+            dataset: { questionText: submissionText },
             disabled: false,
             textContent: ''
         };
@@ -1287,7 +1317,7 @@ class ScoreIndicator {
                 this.customQuestionButton.textContent = 'Ask';
             }
         }
-        this._clearFollowUpImage(); // Clear any uploaded images for the follow-up
+        // this._clearFollowUpImage(); // Clear any uploaded images for the follow-up -- MOVED
         this.currentFollowUpSource = null; // Reset the source tracker
     }
 
@@ -1415,6 +1445,30 @@ class ScoreIndicator {
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Process Markdown Tables before line breaks
+                .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                    const rows = match.trim().split('\n');
+                    const headerRow = rows[0];
+                    // const separatorRow = rows[1]; // Not strictly needed here for formatting
+                    const bodyRows = rows.slice(2);
+                    let html = '<table class="markdown-table">';
+                    html += '<thead><tr>';
+                    headerRow.slice(1, -1).split('|').forEach(cell => {
+                        html += `<th>${cell.trim()}</th>`;
+                    });
+                    html += '</tr></thead>';
+                    html += '<tbody>';
+                    bodyRows.forEach(rowStr => {
+                        if (!rowStr.trim()) return;
+                        html += '<tr>';
+                        rowStr.slice(1, -1).split('|').forEach(cell => {
+                            html += `<td>${cell.trim()}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    return html;
+                })
                 .replace(/\n/g, '<br>');
 
             // Update the innerHTML directly, adding the cursor
@@ -1979,6 +2033,35 @@ function formatTooltipDescription(description = "", reasoning = "") {
             .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
             .replace(/`([^`]+)`/g, '<code>$1</code>')   // Inline code
             .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Score highlight class
+            // Process Markdown Tables before line breaks
+            .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                const rows = match.trim().split('\n');
+                const headerRow = rows[0];
+                const separatorRow = rows[1]; // We use this to confirm it's a table
+                const bodyRows = rows.slice(2);
+
+                let html = '<table class="markdown-table">';
+
+                // Header
+                html += '<thead><tr>';
+                headerRow.slice(1, -1).split('|').forEach(cell => {
+                    html += `<th>${cell.trim()}</th>`;
+                });
+                html += '</tr></thead>';
+
+                // Body
+                html += '<tbody>';
+                bodyRows.forEach(rowStr => {
+                    if (!rowStr.trim()) return; // Skip empty lines that might be caught by regex
+                    html += '<tr>';
+                    rowStr.slice(1, -1).split('|').forEach(cell => {
+                        html += `<td>${cell.trim()}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                return html;
+            })
             .replace(/\n\n/g, '<br><br>') // Paragraph breaks
             .replace(/\n/g, '<br>');      // Line breaks
 

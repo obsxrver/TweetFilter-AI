@@ -439,6 +439,9 @@ function handleSettingChange(target, settingName) {
         }
         showStatus('Image descriptions ' + (value ? 'enabled' : 'disabled'));
     }
+    if (settingName === 'enableWebSearch') {
+        showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
+    }
 }
 
 /**
@@ -916,6 +919,7 @@ function resetSettings(noconfirm = false) {
             selectedImageModel: 'openai/gpt-4.1-nano',
             enableImageDescriptions: false,
             enableStreaming: true,
+            enableWebSearch: false,
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,
@@ -923,7 +927,8 @@ function resetSettings(noconfirm = false) {
             maxTokens: 0,
             filterThreshold: 5,
             userDefinedInstructions: 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.',
-            modelSortOrder: 'throughput-high-to-low'
+            modelSortOrder: 'throughput-high-to-low',
+            sortDirection: 'default'
         };
 
         // Apply defaults

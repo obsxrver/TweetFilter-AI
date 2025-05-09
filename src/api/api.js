@@ -132,8 +132,10 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     }
 
     const currentInstructions = instructionsManager.getCurrentInstructions();
+    const effectiveModel = enableWebSearch ? `${selectedModel}:online` : selectedModel;
+
     const requestBody = {
-        model: selectedModel,
+        model: effectiveModel,
         messages: [
             {
                 role: "system",
@@ -156,7 +158,7 @@ EXPECTED_RESPONSE_FORMAT:\n
   </ANALYSIS>\n
 
   <SCORE>\n
-    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\N
+    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\n
   </SCORE>\n
 
   <FOLLOW_UP_QUESTIONS>\n
@@ -213,7 +215,7 @@ EXPECTED_RESPONSE_FORMAT:\n
         const now = Date.now();
         const timeElapsed = now - lastAPICallTime;
         if (timeElapsed < API_CALL_DELAY_MS) {
-            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
+            await new Promise(resolve => setTimeout(resolve, Math.max(0, API_CALL_DELAY_MS - timeElapsed)));
         }
         lastAPICallTime = now;
 
@@ -718,8 +720,10 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         return msg; // Return other messages (system prompts, previous assistant messages, previous user messages) as is
     });
     
+    const effectiveModel = enableWebSearch ? `${selectedModel}:online` : selectedModel;
+
     const request = {
-        model: selectedModel,
+        model: effectiveModel,
         messages: messagesForApi, // Use the history with the last user message templated
         temperature: modelTemperature,
         top_p: modelTopP,

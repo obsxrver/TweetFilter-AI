@@ -2062,3 +2062,28 @@ input:checked+.toggle-slider:before {
         opacity: 0.3;
     }
 }
+
+/* Add this to your stylesheet */
+.markdown-table {
+    border-collapse: collapse;
+    margin: 1em 0;
+    width: 100%; /* Or a specific width */
+    font-size: 0.9em;
+    color: #e7e9ea; /* Light text for table cells */
+}
+
+.markdown-table th,
+.markdown-table td {
+    border: 1px solid #555; /* Darker border for dark theme */
+    padding: 8px;
+    text-align: left;
+}
+
+.markdown-table th {
+    background-color: #333; /* Darker header for dark theme */
+    font-weight: bold;
+}
+
+.markdown-table tbody tr:nth-child(odd) {
+    background-color: #222; /* Darker zebra striping for dark theme */
+}
