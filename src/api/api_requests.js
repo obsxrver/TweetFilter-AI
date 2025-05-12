@@ -359,16 +359,11 @@ function fetchAvailableModels() {
                     //filter all models that don't have key "endpoint" or endpoint is null
                     let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
 
-                    // Add :free slug if pricing indicates the model is free
+                    // Assign the slug from model.endpoint.model_variant_slug
                     filteredModels.forEach(model => {
-                        const endpointPricing = model.endpoint?.pricing; // Safely access endpoint pricing
-                        const isFree = !endpointPricing || (
-                            (endpointPricing.completion == null || parseFloat(endpointPricing.completion) === 0) &&
-                            (endpointPricing.prompt == null || parseFloat(endpointPricing.prompt) === 0)
-                        );
-                        if (isFree && model.slug && !model.slug.endsWith(':free')) {
-                            model.slug += ':free';
-                        }
+                        // Use model.endpoint.model_variant_slug as the primary source for the slug
+                        let currentSlug = model.endpoint?.model_variant_slug || model.id; // Fallback to model.id if slug is not present
+                        model.slug = currentSlug; // Assign the processed slug back to model.slug for consistency elsewhere
                     });
 
                     // Reverse initial order for latency sorting to match High-Low expectations
@@ -402,8 +397,9 @@ function fetchAvailableModels() {
  * @returns {Promise<string>} Combined image descriptions
  */
 async function getImageDescription(urls, apiKey, tweetId, userHandle) {
-    if (!urls?.length || !enableImageDescriptions) {
-        return !enableImageDescriptions ? '[Image descriptions disabled]' : '';
+    const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
+    if (!urls?.length || !imageDescriptionsEnabled) {
+        return !imageDescriptionsEnabled ? '[Image descriptions disabled]' : '';
     }
 
     let descriptions = [];

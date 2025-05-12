@@ -713,7 +713,7 @@ function refreshModelsUI() {
         createCustomSelect(
             modelSelectContainer,
             'model-selector',
-            listedModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            listedModels.map(model => ({ value: model.endpoint?.model_variant_slug || model.id, label: formatModelLabel(model) })),
             selectedModel,
             (newValue) => {
                 selectedModel = newValue;
@@ -736,7 +736,7 @@ function refreshModelsUI() {
         createCustomSelect(
             imageModelSelectContainer,
             'image-model-selector',
-            visionModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            visionModels.map(model => ({ value: model.endpoint?.model_variant_slug || model.id, label: formatModelLabel(model) })),
             selectedImageModel,
             (newValue) => {
                 selectedImageModel = newValue;
@@ -754,7 +754,7 @@ function refreshModelsUI() {
  * @returns {string} A formatted label string.
  */
 function formatModelLabel(model) {
-    let label = model.slug || model.id || model.name || 'Unknown Model';
+    let label = model.endpoint?.model_variant_slug || model.id || model.name || 'Unknown Model';
     let pricingInfo = '';
 
     // Extract pricing
@@ -887,7 +887,7 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         if (isHidden) {
             searchInput.focus();
             searchInput.select(); // Select text for easy replacement
-            renderOptions(); // Re-render in case options changed
+            renderOptions(searchInput.value); // Re-render in case options changed AND filter by current search term
         }
     });
 }

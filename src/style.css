@@ -135,6 +135,12 @@
     color: white !important;
 }
 
+/* New style for blacklisted author indicator */
+.blacklisted-author-indicator {
+    background-color: purple !important; 
+    color: white !important;
+}
+
 @keyframes pulse {
     0% {
         opacity: 0.8;
@@ -966,7 +972,6 @@ input:checked+.toggle-slider:before {
 .settings-button.danger:hover {
     background-color: #e53935;
 }
-
 
 .button-row {
     display: flex;
