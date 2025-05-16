@@ -332,6 +332,8 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     return streamingRequestObj;
 }
 
+let isOnlineListenerAttached = false; // Flag to ensure listener is only added once
+
 /**
  * Fetches the list of available models from the OpenRouter API.
  * Uses the stored API key, and updates the model selector upon success.
@@ -344,6 +346,15 @@ function fetchAvailableModels() {
     }
     showStatus('Fetching available models...');
     const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
+
+    // Named function to handle the 'online' event
+    function handleOnline() {
+        showStatus('Back online. Fetching models...');
+        fetchAvailableModels(); // Retry fetching models
+        window.removeEventListener('online', handleOnline); // Remove the listener
+        isOnlineListenerAttached = false; // Reset the flag
+    }
+
     GM_xmlhttpRequest({
         method: "GET",
         url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
@@ -382,7 +393,17 @@ function fetchAvailableModels() {
         },
         onerror: function (error) {
             console.error('Error fetching models:', error);
-            showStatus('Error fetching models!');
+            if (!navigator.onLine) {
+                if (!isOnlineListenerAttached) {
+                    showStatus('Offline. Will attempt to fetch models when connection returns.');
+                    window.addEventListener('online', handleOnline);
+                    isOnlineListenerAttached = true;
+                } else {
+                    showStatus('Still offline. Waiting for connection to fetch models.');
+                }
+            } else {
+                showStatus('Error fetching models!');
+            }
         }
     });
 }

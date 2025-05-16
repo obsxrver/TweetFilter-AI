@@ -985,7 +985,7 @@ class ScoreIndicator {
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
                 this.hide();
             }
-        }, 100);
+        }, 500);
     }
 
     _handleIndicatorClick(event) {
@@ -1003,9 +1003,11 @@ class ScoreIndicator {
 
     _handleTooltipMouseLeave() {
         // If not pinned, hide the tooltip when mouse leaves it
-        if (!this.isPinned) {
-            this.hide();
-        }
+        setTimeout(() => {
+            if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
+                this.hide();
+            }
+        }, 500);
     }
 
     

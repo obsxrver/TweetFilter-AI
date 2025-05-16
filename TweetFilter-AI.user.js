@@ -1469,7 +1469,7 @@ class ScoreIndicator {
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
                 this.hide();
             }
-        }, 100);
+        }, 500);
     }
     _handleIndicatorClick(event) {
         event.stopPropagation();
@@ -1482,9 +1482,11 @@ class ScoreIndicator {
         }
     }
     _handleTooltipMouseLeave() {
-        if (!this.isPinned) {
-            this.hide();
-        }
+        setTimeout(() => {
+            if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
+                this.hide();
+            }
+        }, 500);
     }
     _handleTooltipScroll() {
         if (!this.tooltipScrollableContentElement) return;
@@ -4192,6 +4194,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     }
     return streamingRequestObj;
 }
+let isOnlineListenerAttached = false;
 function fetchAvailableModels() {
     const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
@@ -4200,6 +4203,12 @@ function fetchAvailableModels() {
     }
     showStatus('Fetching available models...');
     const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
+    function handleOnline() {
+        showStatus('Back online. Fetching models...');
+        fetchAvailableModels();
+        window.removeEventListener('online', handleOnline);
+        isOnlineListenerAttached = false;
+    }
     GM_xmlhttpRequest({
         method: "GET",
         url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
@@ -4230,7 +4239,17 @@ function fetchAvailableModels() {
             }
         },
         onerror: function (error) {
-            showStatus('Error fetching models!');
+            if (!navigator.onLine) {
+                if (!isOnlineListenerAttached) {
+                    showStatus('Offline. Will attempt to fetch models when connection returns.');
+                    window.addEventListener('online', handleOnline);
+                    isOnlineListenerAttached = true;
+                } else {
+                    showStatus('Still offline. Waiting for connection to fetch models.');
+                }
+            } else {
+                showStatus('Error fetching models!');
+            }
         }
     });
 }
