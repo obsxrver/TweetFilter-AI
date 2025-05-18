@@ -2,9 +2,9 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const adAuthorCache = new Set(); // Cache of handles that post ads
 
-const PROCESSING_DELAY_MS = 150; // Delay before processing a tweet (ms)
-const API_CALL_DELAY_MS = 25; // Minimum delay between API calls
-let USER_DEFINED_INSTRUCTIONS = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
+const PROCESSING_DELAY_MS = 40; // Delay before processing a tweet (ms)
+const API_CALL_DELAY_MS = 5; // Minimum delay between API calls
+let userDefinedInstructions = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
 let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5')); // Filter threshold for tweet visibility
 let observedTargetNode = null;
 let lastAPICallTime = 0;
@@ -16,6 +16,8 @@ let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
 let selectedImageModel = browserGet('selectedImageModel', 'openai/gpt-4.1-nano');
 let showFreeModels = browserGet('showFreeModels', true);
 let providerSort = browserGet('providerSort', ''); // Default to load-balanced
+let modelSortOrder = browserGet('modelSortOrder', 'throughput-high-to-low'); // Added for UI default consistency
+let sortDirection = browserGet('sortDirection', 'default'); // Added for UI default consistency
 let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let storedRatings = browserGet('tweetRatings', '{}');
@@ -23,6 +25,7 @@ let threadHist = "";
 // Settings variables
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
+let enableWebSearch = browserGet('enableWebSearch', false); // For appending :online to model slug
 
 // Model parameters
 const REVIEW_SYSTEM_PROMPT = `
@@ -31,7 +34,7 @@ const REVIEW_SYSTEM_PROMPT = `
     Today's date is ${new Date().toLocaleDateString()}, at ${new Date().toLocaleTimeString()}. UTC. Your knowledge cutoff is prior to this date.
     When given a tweet:
     1. Read the tweet and (if applicable) analyze the tweet's images. Think about how closely it aligns with the user's instructions.
-    2. Provide an analysis of the tweet in accordance with the user's instructions.
+    2. Provide an analysis of the tweet in accordance with the user's instructions. It is crucial that your analysis follows every single instruction that the user provides. There are no exceptions to this rule. 
     3. Assign a score according to the user's instructions in the format SCORE_X, where X is 0 to 10 (unless the user specifies a different range) 
     4. Write three follow-up questions the user might ask next. Do not ask questions which you will not be able to answer.
     Remember:

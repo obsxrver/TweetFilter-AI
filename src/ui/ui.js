@@ -439,6 +439,9 @@ function handleSettingChange(target, settingName) {
         }
         showStatus('Image descriptions ' + (value ? 'enabled' : 'disabled'));
     }
+    if (settingName === 'enableWebSearch') {
+        showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
+    }
 }
 
 /**
@@ -710,7 +713,7 @@ function refreshModelsUI() {
         createCustomSelect(
             modelSelectContainer,
             'model-selector',
-            listedModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            listedModels.map(model => ({ value: model.endpoint?.model_variant_slug || model.id, label: formatModelLabel(model) })),
             selectedModel,
             (newValue) => {
                 selectedModel = newValue;
@@ -733,7 +736,7 @@ function refreshModelsUI() {
         createCustomSelect(
             imageModelSelectContainer,
             'image-model-selector',
-            visionModels.map(model => ({ value: model.slug || model.id, label: formatModelLabel(model) })),
+            visionModels.map(model => ({ value: model.endpoint?.model_variant_slug || model.id, label: formatModelLabel(model) })),
             selectedImageModel,
             (newValue) => {
                 selectedImageModel = newValue;
@@ -751,7 +754,7 @@ function refreshModelsUI() {
  * @returns {string} A formatted label string.
  */
 function formatModelLabel(model) {
-    let label = model.slug || model.id || model.name || 'Unknown Model';
+    let label = model.endpoint?.model_variant_slug || model.id || model.name || 'Unknown Model';
     let pricingInfo = '';
 
     // Extract pricing
@@ -884,7 +887,7 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         if (isHidden) {
             searchInput.focus();
             searchInput.select(); // Select text for easy replacement
-            renderOptions(); // Re-render in case options changed
+            renderOptions(searchInput.value); // Re-render in case options changed AND filter by current search term
         }
     });
 }
@@ -916,6 +919,7 @@ function resetSettings(noconfirm = false) {
             selectedImageModel: 'openai/gpt-4.1-nano',
             enableImageDescriptions: false,
             enableStreaming: true,
+            enableWebSearch: false,
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,
@@ -923,7 +927,8 @@ function resetSettings(noconfirm = false) {
             maxTokens: 0,
             filterThreshold: 5,
             userDefinedInstructions: 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.',
-            modelSortOrder: 'throughput-high-to-low'
+            modelSortOrder: 'throughput-high-to-low',
+            sortDirection: 'default'
         };
 
         // Apply defaults

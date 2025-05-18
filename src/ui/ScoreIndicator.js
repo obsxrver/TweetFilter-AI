@@ -13,6 +13,7 @@ class ScoreIndicator {
         this.tweetArticle = tweetArticle;
         // Ensure getTweetID is available globally due to Tampermonkey concatenation
         this.tweetId = getTweetID(this.tweetArticle);
+        this.isAuthorBlacklisted = false; // Initialize new property
 
         this.indicatorElement = null;
         this.tooltipElement = null;
@@ -38,14 +39,20 @@ class ScoreIndicator {
         this.customQuestionInput = null;
         this.customQuestionButton = null;
         this.attachImageButton = null; // Moved here
+        this.refreshButton = null; // Add refresh button property
 
         // --- New: Image Upload Elements for Follow-up ---
         this.followUpImageContainer = null; // This will hold preview and remove button
         this.followUpImageInput = null;
-        this.followUpImagePreview = null;
-        this.followUpRemoveImageButton = null;
         this.uploadedImageDataUrls = []; // Changed from single string to array
         // --- End New ---
+
+        // --- Metadata Dropdown Elements ---
+        this.metadataDropdown = null;
+        this.metadataToggle = null;
+        this.metadataArrow = null;
+        this.metadataContent = null;
+        // this.metadataElement is initialized later, it holds the actual metadata lines
 
         this.tooltipScrollableContentElement = null; // NEW: for the scrollable area
 
@@ -125,9 +132,16 @@ class ScoreIndicator {
         this.copyButton.innerHTML = '📋';
         this.copyButton.title = 'Copy content to clipboard';
 
+        this.refreshButton = document.createElement('button');
+        this.refreshButton.className = 'tooltip-refresh-button';
+        this.refreshButton.innerHTML = '🔄'; // Refresh icon
+        this.refreshButton.title = 'Re-rate this tweet';
+
         this.tooltipControls.appendChild(this.pinButton);
         this.tooltipControls.appendChild(this.copyButton);
         this.tooltipControls.appendChild(this.tooltipCloseButton); // Add the close button to controls
+        this.tooltipControls.appendChild(this.refreshButton);
+
         this.tooltipElement.appendChild(this.tooltipControls);
 
         // --- NEW: Scrollable Content Wrapper ---
@@ -251,26 +265,37 @@ class ScoreIndicator {
             this.followUpImageContainer = document.createElement('div');
             this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container'; // New class for styling
             // this.followUpImageContainer.style.display = 'none'; // Display handled by content
-
-            // No single preview/remove button here anymore; they are per image.
-            // this.followUpImagePreview = document.createElement('img');
-            // this.followUpImagePreview.className = 'tooltip-follow-up-image-preview';
-
-            // this.followUpRemoveImageButton = document.createElement('button');
-            // this.followUpRemoveImageButton.textContent = 'Remove Image';
-            // this.followUpRemoveImageButton.className = 'tooltip-remove-image-button';
-
-            // this.followUpImageContainer.appendChild(this.followUpImagePreview);
-            // this.followUpImageContainer.appendChild(this.followUpRemoveImageButton);
-            this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer); // MODIFIED: Append to scrollable, was insertBefore metadata
+            this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer);
         }
         // --- End Image Preview and Remove Area ---
 
-        // --- Metadata Area ---
-        this.metadataElement = document.createElement('div');
-        this.metadataElement.className = 'tooltip-metadata';
-        this.metadataElement.style.display = 'none'; // Hide initially
-        this.tooltipScrollableContentElement.appendChild(this.metadataElement); // MODIFIED: Append to scrollable
+        // --- Metadata Dropdown Area ---
+        this.metadataDropdown = document.createElement('div');
+        this.metadataDropdown.className = 'reasoning-dropdown'; // Reuse class
+        this.metadataDropdown.style.display = 'none'; // Hide initially
+
+        this.metadataToggle = document.createElement('div');
+        this.metadataToggle.className = 'reasoning-toggle'; // Reuse class
+
+        this.metadataArrow = document.createElement('span');
+        this.metadataArrow.className = 'reasoning-arrow'; // Reuse class
+        this.metadataArrow.textContent = '▶';
+
+        this.metadataToggle.appendChild(this.metadataArrow);
+        this.metadataToggle.appendChild(document.createTextNode(' Show Metadata'));
+
+        this.metadataContent = document.createElement('div');
+        this.metadataContent.className = 'reasoning-content'; // Reuse class
+
+        // The existing metadataElement will now be the direct child holding the metadata text
+        this.metadataElement = document.createElement('div'); // This was the original metadataElement
+        this.metadataElement.className = 'tooltip-metadata'; // Keep its specific class for content styling
+
+        this.metadataContent.appendChild(this.metadataElement);
+        this.metadataDropdown.appendChild(this.metadataToggle);
+        this.metadataDropdown.appendChild(this.metadataContent);
+        this.tooltipScrollableContentElement.appendChild(this.metadataDropdown);
+        // --- End Metadata Dropdown Area ---
 
         // --- ADD Scrollable Content Wrapper to Tooltip Element ---
         this.tooltipElement.appendChild(this.tooltipScrollableContentElement);
@@ -322,6 +347,7 @@ class ScoreIndicator {
         this.tooltipCloseButton?.addEventListener('click', this._handleCloseClick.bind(this));
         this.reasoningToggle?.addEventListener('click', this._handleReasoningToggleClick.bind(this));
         this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
+        this.refreshButton?.addEventListener('click', this._handleRefreshClick.bind(this));
 
         // Follow-up Questions (using delegation on the container)
         this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
@@ -335,6 +361,9 @@ class ScoreIndicator {
                 this._handleCustomQuestionClick();
             }
         });
+
+        // Metadata Toggle
+        this.metadataToggle?.addEventListener('click', this._handleMetadataToggleClick.bind(this));
 
         // --- New: Event Listeners for Image Upload (conditional) ---
         if (this.attachImageButton && this.followUpImageInput) {
@@ -377,38 +406,44 @@ class ScoreIndicator {
         const classList = this.indicatorElement.classList;
         classList.remove(
             'pending-rating', 'rated-rating', 'error-rating',
-            'cached-rating', 'blacklisted-rating', 'streaming-rating'
+            'cached-rating', 'blacklisted-rating', 'streaming-rating',
+            'blacklisted-author-indicator' // Ensure to remove this as well before re-evaluating
         );
 
         let indicatorText = '';
         let indicatorClass = '';
 
-        switch (this.status) {
-            case 'pending':
-                indicatorClass = 'pending-rating';
-                indicatorText = '⏳';
-                break;
-            case 'streaming':
-                indicatorClass = 'streaming-rating';
-                indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '🔄';
-                break;
-            case 'error':
-                indicatorClass = 'error-rating';
-                indicatorText = '⚠️';
-                break;
-            case 'cached':
-                indicatorClass = 'cached-rating';
-                indicatorText = String(this.score);
-                break;
-            case 'blacklisted':
-                indicatorClass = 'blacklisted-rating';
-                indicatorText = String(this.score); // Usually 10
-                break;
-            case 'rated':
-            default:
-                indicatorClass = 'rated-rating';
-                indicatorText = String(this.score);
-                break;
+        if (this.isAuthorBlacklisted) { // Author blacklist takes visual precedence
+            indicatorClass = 'blacklisted-author-indicator'; // Purple class
+            indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '?';
+        } else { // Not a blacklisted author, proceed with normal status
+            switch (this.status) {
+                case 'pending':
+                    indicatorClass = 'pending-rating';
+                    indicatorText = '⏳';
+                    break;
+                case 'streaming':
+                    indicatorClass = 'streaming-rating';
+                    indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '🔄';
+                    break;
+                case 'error':
+                    indicatorClass = 'error-rating';
+                    indicatorText = '⚠️';
+                    break;
+                case 'cached':
+                    indicatorClass = 'cached-rating';
+                    indicatorText = String(this.score);
+                    break;
+                case 'blacklisted': // This is for TWEET status being blacklisted (amber color)
+                    indicatorClass = 'blacklisted-rating';
+                    indicatorText = String(this.score);
+                    break;
+                case 'rated':
+                default:
+                    indicatorClass = 'rated-rating';
+                    indicatorText = String(this.score);
+                    break;
+            }
         }
 
         if (indicatorClass) {
@@ -420,7 +455,7 @@ class ScoreIndicator {
     /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
         // Ensure required elements exist
-        if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement) {
+        if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement || !this.metadataDropdown) {
             return;
         }
 
@@ -556,14 +591,17 @@ class ScoreIndicator {
             contentChanged = true;
         }
 
-        // --- Update Metadata Display ---
+        // --- Update Metadata Display (now in a dropdown) ---
         let metadataHTML = '';
-        let showMetadata = false;
+        let showMetadataDropdown = false; // Renamed from showMetadata for clarity
         const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
         const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
 
         if (hasFullMetadata) {
-            metadataHTML += '<hr class="metadata-separator">';
+            // No <hr> here, reasoning-dropdown class provides border-top styling if needed
+            if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
+                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
+            }
             metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
             metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
             if (this.metadata.reasoningTokens > 0) {
@@ -574,20 +612,25 @@ class ScoreIndicator {
                 metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
             }
             metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
-            showMetadata = true;
+            showMetadataDropdown = true;
         } else if (hasOnlyGenId) {
-            metadataHTML += '<hr class="metadata-separator">';
             metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
-            showMetadata = true;
+            showMetadataDropdown = true;
         }
 
-        if (this.metadataElement.innerHTML !== metadataHTML) {
+        if (this.metadataElement.innerHTML !== metadataHTML) { // this.metadataElement is the inner content holder
             this.metadataElement.innerHTML = metadataHTML;
             contentChanged = true;
         }
-        if ((this.metadataElement.style.display === 'none') === showMetadata) {
-            this.metadataElement.style.display = showMetadata ? 'block' : 'none';
-            contentChanged = true;
+
+        // Show/hide the entire dropdown based on whether there's metadata
+        if (this.metadataDropdown) {
+            const currentDisplay = this.metadataDropdown.style.display;
+            const newDisplay = showMetadataDropdown ? 'block' : 'none';
+            if (currentDisplay !== newDisplay) {
+                this.metadataDropdown.style.display = newDisplay;
+                contentChanged = true;
+            }
         }
         // --- End Metadata Display Update ---
 
@@ -663,6 +706,30 @@ class ScoreIndicator {
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                     .replace(/\*(.*?)\*/g, '<em>$1</em>')
                     .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    // Process Markdown Tables before line breaks
+                    .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                        const rows = match.trim().split('\n');
+                        const headerRow = rows[0];
+                        // const separatorRow = rows[1]; // Not strictly needed here for formatting
+                        const bodyRows = rows.slice(2);
+                        let html = '<table class="markdown-table">';
+                        html += '<thead><tr>';
+                        headerRow.slice(1, -1).split('|').forEach(cell => {
+                            html += `<th>${cell.trim()}</th>`;
+                        });
+                        html += '</tr></thead>';
+                        html += '<tbody>';
+                        bodyRows.forEach(rowStr => {
+                            if (!rowStr.trim()) return;
+                            html += '<tr>';
+                            rowStr.slice(1, -1).split('|').forEach(cell => {
+                                html += `<td>${cell.trim()}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        return html;
+                    })
                     .replace(/\n/g, '<br>');
             }
 
@@ -918,7 +985,7 @@ class ScoreIndicator {
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
                 this.hide();
             }
-        }, 100);
+        }, 500);
     }
 
     _handleIndicatorClick(event) {
@@ -936,36 +1003,14 @@ class ScoreIndicator {
 
     _handleTooltipMouseLeave() {
         // If not pinned, hide the tooltip when mouse leaves it
-        if (!this.isPinned) {
-            this.hide();
-        }
+        setTimeout(() => {
+            if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
+                this.hide();
+            }
+        }, 500);
     }
 
-    _handleTooltipClick(event) {
-        // If the click is directly on the tooltip background (not its children),
-        // and it's not pinned, maybe hide? Let's disable this for now to rely on the X button.
-        // This prevents accidental closures when selecting text.
-
-        /* --- Removed Background Click Close ---
-        if (!this.isPinned && event.target === this.tooltipElement) {
-             // Check if the click is on interactive elements or their container
-             if (!event.target.closest('.tooltip-controls') &&
-                 !event.target.closest('.reasoning-toggle') &&
-                 !event.target.closest('.scroll-to-bottom-button') &&
-                 !event.target.closest('.follow-up-question-button') &&
-                 !event.target.closest('.tooltip-custom-question-container') &&
-                 !event.target.closest('a') && // Prevent closing when clicking links
-                 window.getSelection().toString().length === 0) // Prevent closing during text selection
-             {
-                 this.hide();
-             }
-        }
-        */
-        // Clicks on specific buttons are handled by their own listeners.
-        // We might still want to stop propagation for clicks inside the tooltip
-        // to prevent them from reaching document-level listeners if any exist.
-        // event.stopPropagation(); // Optional: uncomment if needed
-    }
+    
 
     _handleTooltipScroll() {
         if (!this.tooltipScrollableContentElement) return; // MODIFIED
@@ -1088,6 +1133,7 @@ class ScoreIndicator {
             uploadedImages: [...this.uploadedImageDataUrls], // Store a copy of the image URLs array
             reasoning: '' // Initialize reasoning for this turn
         });
+        this._clearFollowUpImage(); // Clear preview after data is captured
         this._updateTooltipUI(); // Update UI to show pending state
         this.questions = []; // Clear suggested questions
         this._updateTooltipUI(); // Update UI again to remove suggested questions
@@ -1156,11 +1202,16 @@ class ScoreIndicator {
         if (!this.customQuestionInput || !this.customQuestionButton) return;
 
         const questionText = this.customQuestionInput.value.trim();
-        if (!questionText) {
-            showStatus("Please enter a question.", "warning");
+        const hasImages = this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0;
+
+        if (!questionText && !hasImages) {
+            showStatus("Please enter a question or attach an image.", "warning");
             this.customQuestionInput.focus();
             return;
         }
+
+        // If there's no text but there are images, use a placeholder space.
+        const submissionText = questionText || (hasImages ? "[image only message]" : "");
 
         // This reuses the logic from _handleFollowUpQuestionClick for sending the question
         // The actual API call happens there. We just need to trigger it.
@@ -1168,7 +1219,7 @@ class ScoreIndicator {
         // or refactor to a common sending function. For now, let's simulate a click.
 
         const mockButton = {
-            dataset: { questionText: questionText },
+            dataset: { questionText: submissionText },
             disabled: false,
             textContent: ''
         };
@@ -1287,7 +1338,7 @@ class ScoreIndicator {
                 this.customQuestionButton.textContent = 'Ask';
             }
         }
-        this._clearFollowUpImage(); // Clear any uploaded images for the follow-up
+        // this._clearFollowUpImage(); // Clear any uploaded images for the follow-up -- MOVED
         this.currentFollowUpSource = null; // Reset the source tracker
     }
 
@@ -1415,6 +1466,30 @@ class ScoreIndicator {
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Process Markdown Tables before line breaks
+                .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                    const rows = match.trim().split('\n');
+                    const headerRow = rows[0];
+                    // const separatorRow = rows[1]; // Not strictly needed here for formatting
+                    const bodyRows = rows.slice(2);
+                    let html = '<table class="markdown-table">';
+                    html += '<thead><tr>';
+                    headerRow.slice(1, -1).split('|').forEach(cell => {
+                        html += `<th>${cell.trim()}</th>`;
+                    });
+                    html += '</tr></thead>';
+                    html += '<tbody>';
+                    bodyRows.forEach(rowStr => {
+                        if (!rowStr.trim()) return;
+                        html += '<tr>';
+                        rowStr.slice(1, -1).split('|').forEach(cell => {
+                            html += `<td>${cell.trim()}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    return html;
+                })
                 .replace(/\n/g, '<br>');
 
             // Update the innerHTML directly, adding the cursor
@@ -1590,16 +1665,18 @@ class ScoreIndicator {
         this.pinButton?.removeEventListener('click', this._handlePinClick);
         this.copyButton?.removeEventListener('click', this._handleCopyClick);
         this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick);
-        this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick);
-        this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick);
-        this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick);
-        this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick);
+        this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick.bind(this));
+        this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick.bind(this));
+        this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick.bind(this));
+        this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick.bind(this));
         this.customQuestionInput?.removeEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault(); // Prevent default form submission/newline
                 this._handleCustomQuestionClick();
             }
         });
+        this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
+        this.refreshButton?.removeEventListener('click', this._handleRefreshClick.bind(this));
 
 
         this.indicatorElement?.remove();
@@ -1632,11 +1709,16 @@ class ScoreIndicator {
         // --- New: Nullify Image Upload Elements ---
         this.followUpImageContainer = null;
         this.followUpImageInput = null;
-        this.followUpImagePreview = null;
-        this.followUpRemoveImageButton = null;
-        this.attachImageButton = null; // Added for cleanup
         this.uploadedImageDataUrls = []; // Ensure it's reset here too
+        this.refreshButton = null; // Nullify refresh button
         // --- End New ---
+        // --- Nullify Metadata Dropdown Elements ---
+        this.metadataDropdown = null;
+        this.metadataToggle = null;
+        this.metadataArrow = null;
+        this.metadataContent = null;
+        // this.metadataElement is already nulled above as part of original cleanup
+
         this.tooltipScrollableContentElement = null; // NEW: cleanup
     }
 
@@ -1845,6 +1927,85 @@ class ScoreIndicator {
         this._updateTooltipUI();
         this.updateDatasetAttributes();
     }
+
+    _handleMetadataToggleClick(e) {
+        e.stopPropagation();
+        if (!this.metadataDropdown || !this.metadataContent || !this.metadataArrow) return;
+
+        const isExpanded = this.metadataDropdown.classList.toggle('expanded');
+        this.metadataArrow.textContent = isExpanded ? '▼' : '▶';
+
+        if (isExpanded) {
+            this.metadataContent.style.maxHeight = '300px'; // Or appropriate max-height, matching reasoning for consistency
+            this.metadataContent.style.padding = '10px'; // Match reasoning
+        } else {
+            this.metadataContent.style.maxHeight = '0';
+            this.metadataContent.style.padding = '0 10px'; // Match reasoning
+        }
+    }
+
+    _handleRefreshClick(e) {
+        e.stopPropagation();
+        if (!this.tweetId) return;
+
+        console.log(`[ScoreIndicator ${this.tweetId}] Refresh clicked.`);
+
+        // Abort active streaming request if any
+        if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
+            console.log(`[ScoreIndicator ${this.tweetId}] Aborting existing streaming request.`);
+            window.activeStreamingRequests[this.tweetId].abort();
+            delete window.activeStreamingRequests[this.tweetId];
+        }
+
+        // Clear from cache
+        if (tweetCache.has(this.tweetId)) {
+            tweetCache.delete(this.tweetId);
+            console.log(`[ScoreIndicator ${this.tweetId}] Removed from tweetCache.`);
+        }
+
+        // Clear from processed set
+        if (processedTweets.has(this.tweetId)) {
+            processedTweets.delete(this.tweetId);
+            console.log(`[ScoreIndicator ${this.tweetId}] Removed from processedTweets.`);
+        }
+
+        // Find current article element
+        const currentArticle = this.findCurrentArticleElement();
+        if (!currentArticle) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find current article element for refresh.`);
+            // Hide tooltip and update indicator to a neutral or error state if article not found
+            this.hide();
+            this.update({ status: 'error', score: null, description: 'Could not find tweet to refresh.'});
+            return;
+        }
+
+        // Update indicator to pending immediately
+        this.update({
+            status: 'pending',
+            score: null,
+            description: 'Re-rating... ',
+            reasoning: '',
+            questions: [],
+            metadata: null
+        });
+        // Conversation history will be rebuilt by the new rating process
+        this.conversationHistory = [];
+        this.qaConversationHistory = [];
+        this._updateTooltipUI(); // Update tooltip to reflect pending state
+
+        // Hide the tooltip
+        this.hide();
+
+        // Schedule for re-processing
+        // Ensure scheduleTweetProcessing is available (it should be global in Tampermonkey context)
+        if (typeof scheduleTweetProcessing === 'function') {
+            console.log(`[ScoreIndicator ${this.tweetId}] Scheduling for re-processing.`);
+            scheduleTweetProcessing(currentArticle);
+        } else {
+            console.error('[ScoreIndicator] scheduleTweetProcessing function not found.');
+            this.update({ status: 'error', score: null, description: 'Error: Refresh mechanism failed.'});
+        }
+    }
 }
 
 // --- Registry for Managing Instances ---
@@ -1868,10 +2029,7 @@ const ScoreIndicatorRegistry = {
         if (this.managers.has(tweetId)) {
             const existingManager = this.managers.get(tweetId);
             // Ensure the existing manager's article is still valid if possible
-            if (tweetArticle && existingManager.tweetArticle !== tweetArticle) {
-                // This might happen if the DOM is manipulated strangely. Log a warning.
-                console.warn(`[Registry] Mismatch between provided article and existing manager for tweet ${tweetId}. Using existing manager.`);
-            }
+            
             return existingManager;
         } else if (tweetArticle) {
             try {
@@ -1979,12 +2137,42 @@ function formatTooltipDescription(description = "", reasoning = "") {
             .replace(/\*(.*?)\*/g, '<em>$1</em>')     // Italic
             .replace(/`([^`]+)`/g, '<code>$1</code>')   // Inline code
             .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>') // Score highlight class
+            // Process Markdown Tables before line breaks
+            .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                const rows = match.trim().split('\n');
+                const headerRow = rows[0];
+                const separatorRow = rows[1]; // We use this to confirm it's a table
+                const bodyRows = rows.slice(2);
+
+                let html = '<table class="markdown-table">';
+
+                // Header
+                html += '<thead><tr>';
+                headerRow.slice(1, -1).split('|').forEach(cell => {
+                    html += `<th>${cell.trim()}</th>`;
+                });
+                html += '</tr></thead>';
+
+                // Body
+                html += '<tbody>';
+                bodyRows.forEach(rowStr => {
+                    if (!rowStr.trim()) return; // Skip empty lines that might be caught by regex
+                    html += '<tr>';
+                    rowStr.slice(1, -1).split('|').forEach(cell => {
+                        html += `<td>${cell.trim()}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                return html;
+            })
             .replace(/\n\n/g, '<br><br>') // Paragraph breaks
             .replace(/\n/g, '<br>');      // Line breaks
 
     let formattedReasoning = '';
     if (reasoning && reasoning.trim()) {
         formattedReasoning = reasoning
+            .replace(/\\n/g, '\n') // Convert literal '\n' to actual newline characters
             .replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')

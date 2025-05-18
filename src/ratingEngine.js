@@ -12,11 +12,19 @@ function filterSingleTweet(tweetArticle) {
         return;
     }
 
-    // Get the author handle
     const handles = getUserHandles(tweetArticle);
     const authorHandle = handles.length > 0 ? handles[0] : '';
+    const isAuthorActuallyBlacklisted = authorHandle && isUserBlacklisted(authorHandle);
 
-    // If it's already a known ad author, hide it immediately
+    // Always store tweet data in dataset regardless of filtering
+    const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || '';
+    const mediaUrls = extractMediaLinksSync(tweetArticle);
+    const tid = getTweetID(tweetArticle);
+    cell.dataset.tweetText = tweetText;
+    cell.dataset.authorHandle = authorHandle;
+    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
+    cell.dataset.tweetId = tid;
+
     if (authorHandle && adAuthorCache.has(authorHandle)) {
         const tweetId = getTweetID(tweetArticle);
         if (tweetId) {
@@ -30,23 +38,39 @@ function filterSingleTweet(tweetArticle) {
 
     const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
     const tweetId = getTweetID(tweetArticle);
-    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
 
-    // Ensure the indicator is attached to *this specific* article element
     indicatorInstance?.ensureIndicatorAttached();
     const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     const ratingStatus = tweetArticle.dataset.ratingStatus;
 
-    // If the tweet is still pending/streaming a rating, keep it visible
-    if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
-        // Do nothing - let it stay visible
+    if (indicatorInstance) {
+        indicatorInstance.isAuthorBlacklisted = isAuthorActuallyBlacklisted;
+    }
+
+    if (isAuthorActuallyBlacklisted) {
         delete cell.dataset.filtered;
-    } else if (isNaN(score) || score < currentFilterThreshold) {
-        if (tweetId) {
-            ScoreIndicatorRegistry.get(tweetId)?.destroy();
+        cell.dataset.authorBlacklisted = 'true';
+        if (indicatorInstance) {
+            indicatorInstance._updateIndicatorUI();
         }
-        cell.innerHTML = '';
-        cell.dataset.filtered = 'true';
+    } else {
+        delete cell.dataset.authorBlacklisted;
+        if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
+            delete cell.dataset.filtered;
+        } else if (isNaN(score) || score < currentFilterThreshold) {
+            const existingInstanceToDestroy = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (existingInstanceToDestroy) {
+                existingInstanceToDestroy.destroy();
+            }
+            cell.innerHTML = '';
+            cell.dataset.filtered = 'true';
+        } else {
+            delete cell.dataset.filtered;
+            if (indicatorInstance) {
+                indicatorInstance._updateIndicatorUI();
+            }
+        }
     }
 }
 
@@ -61,58 +85,6 @@ async function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const handles = getUserHandles(tweetArticle);
     const userHandle = handles.length > 0 ? handles[0] : '';
-
-    // Blacklisted users are automatically given a score of 10
-    if (userHandle && isUserBlacklisted(userHandle)) {
-        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
-        if (indicatorInstance) {
-            const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "[Tweet text not found]";
-            const mediaUrls = await extractMediaLinks(tweetArticle); // extractMediaLinks is async
-
-            const blacklistResponse = `<ANALYSIS>
-            This user is on the blacklist. Tweets from this user are not rated by the AI and are always shown.
-            </ANALYSIS>
-            <SCORE>
-            SCORE_10
-            </SCORE>
-            <FOLLOW_UP_QUESTIONS>
-            Q_1. Rate this tweet anyway.
-            Q_2. N/A
-            Q_3. N/A
-            </FOLLOW_UP_QUESTIONS>`;
-            indicatorInstance.updateInitialReviewAndBuildHistory({
-                fullContext: tweetText,
-                mediaUrls: mediaUrls,
-                apiResponseContent: blacklistResponse,
-                reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Assumed global
-                followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Assumed global
-            });
-
-            tweetCache.set(tweetId, {
-                score: 10,
-                description: indicatorInstance.description,
-                reasoning: "",
-                questions: indicatorInstance.questions,
-                lastAnswer: "",
-                tweetContent: tweetText,
-                mediaUrls: mediaUrls,
-                streaming: false,
-                blacklisted: true,
-                timestamp: Date.now(),
-                qaConversationHistory: indicatorInstance.qaConversationHistory
-            });
-        } else {
-            console.warn(`[applyTweetCachedRating] Could not get/create ScoreIndicator for blacklisted tweet ${tweetId}.`);
-            // Fallback to dataset attributes if indicator fails, though qaHistory won't be built.
-            tweetArticle.dataset.sloppinessScore = '10';
-            tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'blacklisted';
-            tweetArticle.dataset.ratingDescription = 'User is blacklisted';
-        }
-
-        filterSingleTweet(tweetArticle); // Apply filtering immediately
-        return true;
-    }
 
     // Check cache for rating
     const cachedRating = tweetCache.get(tweetId);
@@ -191,6 +163,9 @@ function isUserBlacklisted(handle) {
 // Add near the top with other globals
 const VALID_FINAL_STATES = ['rated', 'cached', 'blacklisted'];
 const VALID_INTERIM_STATES = ['pending', 'streaming'];
+
+// Add near other global variables
+const getFullContextPromises = new Map();
 
 function isValidFinalState(status) {
     return VALID_FINAL_STATES.includes(status);
@@ -319,6 +294,22 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             // Remove duplicates and empty URLs
             mediaURLs = [...new Set(mediaURLs.filter(url => url.trim()))];
 
+            // ---- Start of new check for media extraction failure ----
+            const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]'); // Check for photo or video containers
+            const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
+
+            if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
+                // Heuristic: If image/video containers are in the DOM, but we extracted no media URLs,
+                // and either image descriptions are on OR the model supports images (meaning URLs are important),
+                // then it's likely an extraction failure.
+                const warningMessage = `Tweet ${tweetId}: Potential media containers found in DOM, but no media URLs were extracted by getFullContext. Forcing error for retry.`;
+                console.warn(warningMessage);
+                // Throw an error that will be caught by the generic catch block below,
+                // which will set the status to 'error' and trigger the retry mechanism.
+                throw new Error("Media URLs not extracted despite presence of media containers.");
+            }
+            // ---- End of new check ----
+
             // --- API Call or Fallback ---
             if (fullContextWithImageDescription) {
                 try {
@@ -443,6 +434,14 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
 
         } catch (error) {
             console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
+
+            if (error.message === "Media URLs not extracted despite presence of media containers.") {
+                if (tweetCache.has(tweetId)) {
+                    tweetCache.delete(tweetId);
+                    console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
+                }
+            }
+
             // Ensure some error state is shown if processing fails unexpectedly
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: 'error',
@@ -490,10 +489,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
     }
 }
 
-/**
- * Schedules processing of a tweet if it hasn't been processed yet.
- * @param {Element} tweetArticle - The tweet element.
- */
+// Add near the top with other global variables
+const MAPPING_INCOMPLETE_TWEETS = new Set();
+
+// Modify scheduleTweetProcessing to check for incomplete mapping
 async function scheduleTweetProcessing(tweetArticle) {
     // First, ensure the tweet has a valid ID
     const tweetId = getTweetID(tweetArticle);
@@ -547,56 +546,50 @@ async function scheduleTweetProcessing(tweetArticle) {
         processedTweets.delete(tweetId);
     }
 
-    // Fast-path: if author is blacklisted, assign score immediately
-    if (authorHandle && isUserBlacklisted(authorHandle)) {
-        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
-        if (indicatorInstance) {
-            const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || "[Tweet text not found]";
-            const mediaUrls = await extractMediaLinks(tweetArticle); // extractMediaLinks is async
+    // Check if we're in a conversation view
+    const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
+        document.querySelector('div[aria-label^="Timeline: Conversation"]');
 
-            const blacklistResponse = `<ANALYSIS>
-            This user is on the blacklist. Tweets from this user are not rated by the AI and are always shown.
-            </ANALYSIS>
-            <SCORE>
-            SCORE_10
-            </SCORE>
-            <FOLLOW_UP_QUESTIONS>
-            Q_1. Rate this tweet anyway.
-            Q_2. N/A
-            Q_3. N/A
-            </FOLLOW_UP_QUESTIONS>`;
-            
-            indicatorInstance.updateInitialReviewAndBuildHistory({
-                fullContext: tweetText,
-                mediaUrls: mediaUrls,
-                apiResponseContent: blacklistResponse,
-                reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Assumed global
-                followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Assumed global
-            });
-
-            tweetCache.set(tweetId, {
-                score: 10,
-                description: indicatorInstance.description,
-                reasoning: "",
-                questions: indicatorInstance.questions,
-                lastAnswer: "",
-                tweetContent: tweetText,
-                mediaUrls: mediaUrls,
-                streaming: false,
-                blacklisted: true,
-                timestamp: Date.now(),
-                qaConversationHistory: indicatorInstance.qaConversationHistory
-            });
-        } else {
-            console.warn(`[scheduleTweetProcessing] Could not get/create ScoreIndicator for blacklisted tweet ${tweetId}.`);
-            // Fallback to dataset attributes if indicator fails
-            tweetArticle.dataset.sloppinessScore = '10';
-            tweetArticle.dataset.blacklisted = 'true';
-            tweetArticle.dataset.ratingStatus = 'blacklisted';
-            tweetArticle.dataset.ratingDescription = 'User is blacklisted';
+    if (conversation) {
+        // If we're in a conversation and mapping is not complete, mark this tweet for later processing
+        if (!conversation.dataset.threadMapping) {
+            console.log(`[scheduleTweetProcessing] Tweet ${tweetId} waiting for thread mapping`);
+            MAPPING_INCOMPLETE_TWEETS.add(tweetId);
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (indicatorInstance) {
+                indicatorInstance.update({ 
+                    status: 'pending', 
+                    score: null, 
+                    description: 'Waiting for thread context...', 
+                    questions: [], 
+                    lastAnswer: "" 
+                });
+            }
+            return;
         }
-        filterSingleTweet(tweetArticle);
-        return;
+
+        // If we have thread mapping, check if this tweet is in it
+        try {
+            const mapping = JSON.parse(conversation.dataset.threadMapping);
+            const tweetMapping = mapping.find(m => m.tweetId === tweetId);
+            if (!tweetMapping) {
+                console.log(`[scheduleTweetProcessing] Tweet ${tweetId} not found in thread mapping, waiting`);
+                MAPPING_INCOMPLETE_TWEETS.add(tweetId);
+                const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+                if (indicatorInstance) {
+                    indicatorInstance.update({ 
+                        status: 'pending', 
+                        score: null, 
+                        description: 'Waiting for thread context...', 
+                        questions: [], 
+                        lastAnswer: "" 
+                    });
+                }
+                return;
+            }
+        } catch (e) {
+            console.error("Error parsing thread mapping:", e);
+        }
     }
 
     // Check for a cached rating, but be careful with streaming cache entries
@@ -665,8 +658,9 @@ async function scheduleTweetProcessing(tweetArticle) {
 // Add this near the beginning of the file with other global variables
 // Store reply relationships across sessions
 let threadRelationships = {};
-const THREAD_CHECK_INTERVAL = 2500; // 2 seconds between thread checks
-const SWEEP_INTERVAL = 1000; // 2.5 seconds between full sweeps
+const THREAD_CHECK_INTERVAL = 1000; // Reduce from 2500ms to 1000ms
+const SWEEP_INTERVAL = 1000; // Keep at 1000ms
+const THREAD_MAPPING_TIMEOUT = 2000; // Reduce from 5000ms to 2000ms
 let threadMappingInProgress = false; // Add a memory-based flag for more reliable state tracking
 
 // Load thread relationships from storage on script initialization
@@ -756,173 +750,189 @@ async function buildReplyChain(tweetId, maxDepth = 5) {
  * @returns {Promise<string>} - The full context string.
  */
 async function getFullContext(tweetArticle, tweetId, apiKey) {
-    const handles = getUserHandles(tweetArticle);
-
-    const userHandle = handles.length > 0 ? handles[0] : '';
-    const quotedHandle = handles.length > 1 ? handles[1] : '';
-    // --- Extract Main Tweet Content ---
-    const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
-
-    let allMediaLinks = await extractMediaLinks(tweetArticle);
-
-    // --- Extract Quoted Tweet Content (if any) ---
-    let quotedText = "";
-    let quotedMediaLinks = [];
-    let quotedTweetId = null;
-
-    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
-    if (quoteContainer) {
-        // Try to get the quoted tweet ID from the link
-        const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
-        if (quotedLink) {
-            const href = quotedLink.getAttribute('href');
-            const match = href.match(/\/status\/(\d+)/);
-            if (match && match[1]) {
-                quotedTweetId = match[1];
-            }
-        }
-
-        quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-        // No need to wait for image load just to get URLs
-        // await waitForImagesToLoad(quoteContainer);
-        quotedMediaLinks = await extractMediaLinks(quoteContainer);
+    if (getFullContextPromises.has(tweetId)) {
+        // console.log(`[getFullContext] Waiting for existing promise for ${tweetId}`);
+        return getFullContextPromises.get(tweetId);
     }
 
-    // Get thread media URLs from cache if available
-    const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
-        document.querySelector('div[aria-label^="Timeline: Conversation"]');
-
-    let threadMediaUrls = [];
-    if (conversation && conversation.dataset.threadMapping && tweetCache.has(tweetId) && tweetCache.get(tweetId).threadContext?.threadMediaUrls) {
-        // Get thread media URLs from cache if available
-        threadMediaUrls = tweetCache.get(tweetId).threadContext.threadMediaUrls || [];
-    } else if (conversation && conversation.dataset.threadMediaUrls) {
-        // Or get them from the dataset if available
+    const contextPromise = (async () => {
         try {
-            const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
-            threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
-        } catch (e) {
-            console.error("Error parsing thread media URLs:", e);
-        }
-    }
+            // --- Original getFullContext logic starts here ---
+            const handles = getUserHandles(tweetArticle);
 
-    let allAvailableMediaLinks = [...allMediaLinks];
+            const userHandle = handles.length > 0 ? handles[0] : '';
+            const quotedHandle = handles.length > 1 ? handles[1] : '';
+            // --- Extract Main Tweet Content ---
+            const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
 
-    let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+            let allMediaLinks = await extractMediaLinks(tweetArticle);
 
-    // --- Extract Engagement Stats ---
-    let engagementStats = "";
-    const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
-    if (engagementDiv) {
-        engagementStats = engagementDiv.getAttribute('aria-label')?.trim() || "";
-    }
+            // --- Extract Quoted Tweet Content (if any) ---
+            let quotedText = "";
+            let quotedMediaLinks = [];
+            let quotedTweetId = null;
 
-    // Start building the context
-    let fullContextWithImageDescription = `[TWEET ${tweetId}]
+            const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+            if (quoteContainer) {
+                const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
+                if (quotedLink) {
+                    const href = quotedLink.getAttribute('href');
+                    const match = href.match(/\/status\/(\d+)/);
+                    if (match && match[1]) {
+                        quotedTweetId = match[1];
+                    }
+                }
+
+                quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
+                quotedMediaLinks = await extractMediaLinks(quoteContainer);
+            }
+
+            const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
+                document.querySelector('div[aria-label^="Timeline: Conversation"]');
+
+            let threadMediaUrls = [];
+            if (conversation && conversation.dataset.threadMapping && tweetCache.has(tweetId) && tweetCache.get(tweetId).threadContext?.threadMediaUrls) {
+                threadMediaUrls = tweetCache.get(tweetId).threadContext.threadMediaUrls || [];
+            } else if (conversation && conversation.dataset.threadMediaUrls) {
+                try {
+                    const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
+                    threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
+                } catch (e) {
+                    console.error("Error parsing thread media URLs:", e);
+                }
+            }
+
+            let allAvailableMediaLinks = [...(allMediaLinks || [])];
+            let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+
+            let engagementStats = "";
+            const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
+            if (engagementDiv) {
+                engagementStats = engagementDiv.getAttribute('aria-label')?.trim() || "";
+            }
+
+            let fullContextWithImageDescription = `[TWEET ${tweetId}]
  Author:@${userHandle}:
 ` + mainText;
 
-    // Add media from the current tweet
-    if (mainMediaLinks.length > 0) {
-        // Process main tweet images only if image descriptions are enabled
-        if (enableImageDescriptions = browserGet('enableImageDescriptions', false)) {
-            let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
-            fullContextWithImageDescription += `
+            if (mainMediaLinks.length > 0) {
+                if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions, as it might have changed
+                    let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                    fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
 ${mainMediaLinksDescription}`;
-        }
-        // Just add the URLs when descriptions are disabled
-        fullContextWithImageDescription += `
+                }
+                fullContextWithImageDescription += `
 [MEDIA_URLS]:
 ${mainMediaLinks.join(", ")}`;
-    }
+            }
 
-    // Add engagement stats if found
-    if (engagementStats) {
-        fullContextWithImageDescription += `
+            if (engagementStats) {
+                fullContextWithImageDescription += `
 [ENGAGEMENT_STATS]:
 ${engagementStats}`;
-    }
+            }
 
-    // Add thread media URLs if this is a reply and we have previous media
-    if (!isOriginalTweet(tweetArticle) && threadMediaUrls.length > 0) {
-        // Filter out duplicates
-        const uniqueThreadMediaUrls = threadMediaUrls.filter(url =>
-            !mainMediaLinks.includes(url) && !quotedMediaLinks.includes(url));
+            if (!isOriginalTweet(tweetArticle) && threadMediaUrls.length > 0) {
+                const uniqueThreadMediaUrls = threadMediaUrls.filter(url =>
+                    !mainMediaLinks.includes(url) && !quotedMediaLinks.includes(url));
 
-        if (uniqueThreadMediaUrls.length > 0) {
-            fullContextWithImageDescription += `
+                if (uniqueThreadMediaUrls.length > 0) {
+                    fullContextWithImageDescription += `
 [THREAD_MEDIA_URLS]:
 ${uniqueThreadMediaUrls.join(", ")}`;
-        }
-    }
+                }
+            }
 
-    // --- Quoted Tweet Handling ---
-    if (quotedText || quotedMediaLinks.length > 0) {
-        fullContextWithImageDescription += `
+            if (quotedText || quotedMediaLinks.length > 0) {
+                fullContextWithImageDescription += `
 [QUOTED_TWEET${quotedTweetId ? ' ' + quotedTweetId : ''}]:
  Author:@${quotedHandle}:
 ${quotedText}`;
-        if (quotedMediaLinks.length > 0) {
-            // Process quoted tweet images only if image descriptions are enabled
-            if (enableImageDescriptions) {
-                let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle);
-                fullContextWithImageDescription += `
+                if (quotedMediaLinks.length > 0) {
+                    if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions
+                        let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle); // tweetId and userHandle are from main tweet for context
+                        fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaLinksDescription}`;
-            }
-            // Just add the URLs when descriptions are disabled
-            fullContextWithImageDescription += `
+                    }
+                    fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
 ${quotedMediaLinks.join(", ")}`;
-        }
-    }
-    if (document.querySelector('div[aria-label="Timeline: Conversation"]', 'div[aria-label^="Timeline: Conversation"]')) {
-        // --- Get complete reply chain using persistent relationships ---
-        const replyChain = await buildReplyChain(tweetId);
-
-        // --- Conversation Thread Handling ---
-        let threadHistoryIncluded = false;
-        if (conversation && conversation.dataset.threadHist) {
-            // If this tweet is not the original tweet, prepend the thread history.
-            if (!isOriginalTweet(tweetArticle)) {
-                fullContextWithImageDescription = conversation.dataset.threadHist + `
-[REPLY]
-` + fullContextWithImageDescription;
-                threadHistoryIncluded = true;
-            }
-        }
-
-        // Add recursive reply chain information if available and not already included in thread history
-        if (replyChain.length > 0 && !threadHistoryIncluded) {
-            // Build the context by fetching parent tweets from cache
-            let parentContexts = "";
-            for (let i = replyChain.length - 1; i >= 0; i--) {
-                const link = replyChain[i];
-                const parentId = link.toId;
-                const parentCache = tweetCache.get(parentId);
-                const parentContent = parentCache?.tweetContent; // Get the stored context
-
-                if (parentContent) {
-                    // Prepend the parent context, followed by the [REPLY] marker
-                    parentContexts = parentContent + "\n[REPLY]\n" + parentContexts;
-                } else {
-                    // Add a placeholder if parent context is not in cache
-                    parentContexts = `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${link.to || 'unknown'}]\n[REPLY]\n` + parentContexts;
                 }
             }
-            // Prepend the constructed parent contexts to the current tweet's context
-            fullContextWithImageDescription = parentContexts + fullContextWithImageDescription;
-        }
 
-        // Individual reply marker if needed (only if no chain and no history)
-        const replyInfo = getTweetReplyInfo(tweetId);
-        if (replyInfo && replyInfo.replyTo && !threadHistoryIncluded && replyChain.length === 0) {
-            fullContextWithImageDescription = `[REPLY TO TWEET ${replyInfo.replyTo}]\n` + fullContextWithImageDescription;
+            // --- Thread/Reply Logic ---
+            const conversationElement = document.querySelector('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]');
+            if (conversationElement) {
+                const replyChain = await buildReplyChain(tweetId);
+                let threadHistoryIncluded = false;
+
+                if (conversationElement.dataset.threadHist) {
+                    if (!isOriginalTweet(tweetArticle)) {
+                        // Prepend thread history from conversation dataset
+                        fullContextWithImageDescription = conversationElement.dataset.threadHist + `\n[REPLY]\n` + fullContextWithImageDescription;
+                        threadHistoryIncluded = true;
+                    }
+                }
+
+                if (replyChain.length > 0 && !threadHistoryIncluded) {
+                    let parentContextsString = "";
+                    for (let i = replyChain.length - 1; i >= 0; i--) { // Iterate from top-most parent downwards
+                        const link = replyChain[i];
+                        const parentId = link.toId;
+                        const parentUser = link.to || 'unknown';
+                        let currentParentContent = null;
+
+                        const parentCache = tweetCache.get(parentId);
+                        if (parentCache?.tweetContent) {
+                            currentParentContent = parentCache.tweetContent;
+                        } else {
+                            const parentArticleElement = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
+                                .find(el => getTweetID(el) === parentId);
+
+                            if (parentArticleElement) {
+                                if (parentArticleElement.dataset.fullContext) {
+                                    currentParentContent = parentArticleElement.dataset.fullContext;
+                                    // console.log(`[getFullContext] Parent ${parentId} (for ${tweetId}) context found in dataset.`);
+                                } else {
+                                    // console.log(`[getFullContext] Parent ${parentId} (for ${tweetId}) context not in cache/dataset, attempting to await its getFullContext.`);
+                                    try {
+                                        // This will use the promise registry if parent's getFullContext is already running
+                                        currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey);
+                                    } catch (e) {
+                                        console.error(`[getFullContext] Error recursively getting context for parent ${parentId} (for ${tweetId}):`, e);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (currentParentContent) {
+                            parentContextsString = parentContextsString + currentParentContent + "\n[REPLY]\n";
+                        } else {
+                            parentContextsString = parentContextsString + `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${parentUser}]\n[REPLY]\n`;
+                        }
+                    }
+                    fullContextWithImageDescription = parentContextsString + fullContextWithImageDescription;
+                }
+
+                const replyInfo = getTweetReplyInfo(tweetId);
+                if (replyInfo && replyInfo.replyTo && !threadHistoryIncluded && replyChain.length === 0) {
+                    fullContextWithImageDescription = `[REPLY TO TWEET ${replyInfo.replyTo}]\n` + fullContextWithImageDescription;
+                }
+            }
+            // --- End of Thread/Reply Logic ---
+
+            tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+            return fullContextWithImageDescription;
+            // --- Original getFullContext logic ends here ---
+        } finally {
+            getFullContextPromises.delete(tweetId);
         }
-    }
-    tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-    return fullContextWithImageDescription;
+    })();
+
+    getFullContextPromises.set(tweetId, contextPromise);
+    return contextPromise;
 }
 
 
@@ -937,6 +947,10 @@ function applyFilteringToAll() {
 
 
 function ensureAllTweetsRated() {
+    if(document.querySelector('div[aria-label="Timeline: Conversation"]')) {
+        //this breaks thread handling logic, handlethreads calls scheduleTweetProcessing
+        return;
+    }
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
 
@@ -977,24 +991,15 @@ async function handleThreads() {
 
         if (!conversation) return;
 
-        // More reliable state checking with both DOM and memory-based flags
-        if (threadMappingInProgress || conversation.dataset.threadHist === "pending") {
-            return; // Don't interrupt pending operations
+        // If already in progress, skip
+        if (threadMappingInProgress || conversation.dataset.threadMappingInProgress === "true") {
+            return;
         }
 
-        // Add protection to avoid re-processing if we already mapped this thread recently
-        if (conversation.dataset.threadMappedAt) {
-            const lastMappedTime = parseInt(conversation.dataset.threadMappedAt, 10);
-            // If we've mapped this thread in the last 10 seconds, skip
-            if (Date.now() - lastMappedTime < 10000) {
-                return;
-            }
-        }
-
-        // Extract the tweet ID from the URL (may not be the true root)
+        // Extract the tweet ID from the URL
         const match = location.pathname.match(/status\/(\d+)/);
         const pageTweetId = match ? match[1] : null;
-        if (!pageTweetId) return; // Only proceed if we can identify a tweet
+        if (!pageTweetId) return;
 
         // Determine the actual root tweet ID by climbing persistent threadRelationships
         let rootTweetId = pageTweetId;
@@ -1002,116 +1007,22 @@ async function handleThreads() {
             rootTweetId = threadRelationships[rootTweetId].replyTo;
         }
 
-        // Initialize thread history
-        if (conversation.dataset.threadHist === undefined) {
-            // Initialize thread history from the true root tweet in view
-            threadHist = "";
-            // Try to find the DOM element corresponding to the actual root
-            const rootArticle = Array.from(conversation.querySelectorAll('article[data-testid="tweet"]'))
-                .find(el => getTweetID(el) === rootTweetId)
-                || document.querySelector('article[data-testid="tweet"]');
-            if (rootArticle) {
-                conversation.dataset.threadHist = 'pending';
-                threadMappingInProgress = true;
+        // Run the mapping immediately
+        await mapThreadStructure(conversation, rootTweetId);
 
-                try {
-                    const tweetId = getTweetID(rootArticle);
-                    if (!tweetId) {
-                        throw new Error("Failed to get tweet ID from first article");
-                    }
-
-                    // Get the full context of the root tweet
-                    const apiKey = browserGet('openrouter-api-key', '');
-                    const fullcxt = await getFullContext(rootArticle, tweetId, apiKey);
-                    if (!fullcxt) {
-                        throw new Error("Failed to get full context for root tweet");
-                    }
-
-                    threadHist = fullcxt;
-                    conversation.dataset.threadHist = threadHist;
-
-                    if (conversation.firstChild) {
-                        conversation.firstChild.dataset.canary = "true";
-                    }
-
-                    // Schedule processing for the root tweet
-                    if (!processedTweets.has(tweetId)) {
-                        scheduleTweetProcessing(rootArticle);
-                    }
-
-                    // Use improved thread detection to map the structure
-                    setTimeout(() => {
-                        mapThreadStructure(conversation, rootTweetId);
-                    }, 10);
-                } catch (error) {
-                    console.error("Error initializing thread history:", error);
-                    // Clean up on error
-                    threadMappingInProgress = false;
-                    delete conversation.dataset.threadHist;
-                }
-
-                return;
-            }
-        } else if (conversation.dataset.threadHist !== "pending" &&
-            conversation.firstChild &&
-            conversation.firstChild.dataset.canary === undefined) {
-            // Original behavior for deep-diving into replies
-            if (conversation.firstChild) {
-                conversation.firstChild.dataset.canary = "pending";
-            }
-            threadMappingInProgress = true; // Set memory-based flag
-
-            try {
-                const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
-                if (nextArticle) {
-                    const tweetId = getTweetID(nextArticle);
-                    if (!tweetId) {
-                        throw new Error("Failed to get tweet ID from next article");
-                    }
-
-                    if (tweetCache.has(tweetId) && tweetCache.get(tweetId).tweetContent) {
-                        threadHist = threadHist + "\n[REPLY]\n" + tweetCache.get(tweetId).tweetContent;
-                    } else {
-                        const apiKey = browserGet('openrouter-api-key', '');
-                        await new Promise(resolve => setTimeout(resolve, 10));
-                        const newContext = await getFullContext(nextArticle, tweetId, apiKey);
-                        if (!newContext) {
-                            throw new Error("Failed to get context for next article");
-                        }
-                        threadHist = threadHist + "\n[REPLY]\n" + newContext;
-                    }
-                    conversation.dataset.threadHist = threadHist;
-                }
-
-                // Map thread structure after updating history
-                setTimeout(() => {
-                    mapThreadStructure(conversation, rootTweetId);
-                }, 500);
-            } catch (error) {
-                console.error("Error processing reply:", error);
-                // Clean up on error
-                threadMappingInProgress = false;
-                if (conversation.firstChild) {
-                    delete conversation.firstChild.dataset.canary;
-                }
-            }
-        } else if (!threadMappingInProgress && !conversation.dataset.threadMappingInProgress) {
-            // Run thread mapping periodically to catch new tweets loaded during scrolling
-            threadMappingInProgress = true; // Set memory-based flag
-
-            setTimeout(() => {
-                mapThreadStructure(conversation, rootTweetId);
-            }, 250);
-        }
     } catch (error) {
         console.error("Error in handleThreads:", error);
-        // Clean up all state on error
         threadMappingInProgress = false;
     }
 }
 
-// Enhance the thread mapping to associate usernames with tweet IDs
+// Modify mapThreadStructure to trigger processing of waiting tweets
 async function mapThreadStructure(conversation, localRootTweetId) {
+    // If already in progress, don't start another one
+    if (threadMappingInProgress || conversation.dataset.threadMappingInProgress) {
+        return;
+    }
+
     // Mark mapping in progress to prevent duplicate processing
     conversation.dataset.threadMappingInProgress = "true";
     conversation.dataset.threadMappedAt = Date.now().toString();
@@ -1120,13 +1031,21 @@ async function mapThreadStructure(conversation, localRootTweetId) {
     try {
         // Use a timeout promise to prevent hanging
         const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Thread mapping timed out')), 5000)
+            setTimeout(() => reject(new Error('Thread mapping timed out')), THREAD_MAPPING_TIMEOUT)
         );
 
         // The actual mapping function
         const mapping = async () => {
+            // Get the tweet ID from the URL
+            const urlMatch = location.pathname.match(/status\/(\d+)/);
+            const urlTweetId = urlMatch ? urlMatch[1] : null;
+            console.log("[mapThreadStructure] URL Tweet ID:", urlTweetId);
+
             // Process all visible tweets using the cellInnerDiv structure for improved mapping
-            let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
+            // Use a more specific selector to ensure we get ALL cells in the conversation
+            let cellDivs = Array.from(conversation.querySelectorAll('div[data-testid="cellInnerDiv"]'));
+            console.log("[mapThreadStructure] Found cellDivs:", cellDivs.length);
+
             if (!cellDivs.length) {
                 console.log("No cell divs found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
@@ -1134,18 +1053,40 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 return;
             }
 
+            // Debug log each cell's position and tweet ID
+            cellDivs.forEach((cell, idx) => {
+                const tweetId = cell.dataset.tweetId;
+                const authorHandle = cell.dataset.authorHandle;
+                console.log(`[mapThreadStructure] Cell ${idx}: TweetID=${tweetId}, Author=${authorHandle}, Y=${cell.style.transform}`);
+            });
+
+            // Sort cells by their vertical position to ensure correct order
+            cellDivs.sort((a, b) => {
+                const aY = parseInt(a.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
+                const bY = parseInt(b.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
+                return aY - bY;
+            });
+
+            // Debug log sorted positions
+            cellDivs.forEach((cell, idx) => {
+                const tweetId = cell.dataset.tweetId;
+                const authorHandle = cell.dataset.authorHandle;
+                console.log(`[mapThreadStructure] Sorted Cell ${idx}: TweetID=${tweetId}, Author=${authorHandle}, Y=${cell.style.transform}`);
+            });
+
             let tweetCells = [];
             let processedCount = 0;
+            let urlTweetIndex = -1;
 
             // First pass: collect all tweet data
             for (let idx = 0; idx < cellDivs.length; idx++) {
                 const cell = cellDivs[idx];
-                const article = cell.querySelector('article[data-testid="tweet"]');
-                if (!article) continue;
+                let tweetId, username, text, mediaLinks = [], quotedMediaLinks = [];
+                let article = cell.querySelector('article[data-testid="tweet"]');
 
-                // Extract tweet metadata with proper error handling
-                try {
-                    let tweetId = getTweetID(article);
+                // Try to get data from article first
+                if (article) {
+                    tweetId = getTweetID(article);
                     if (!tweetId) {
                         let tweetLink = article.querySelector('a[href*="/status/"]');
                         if (tweetLink) {
@@ -1153,64 +1094,69 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             if (match) tweetId = match[1];
                         }
                     }
-
-                    // Skip if we still can't get a tweet ID
-                    if (!tweetId) continue;
-
-                    // Extract username using existing functions if available
                     const handles = getUserHandles(article);
-                    let username = handles.length > 0 ? handles[0] : null;
-
-                    // Skip if we can't get a username
-                    if (!username) continue;
-
-                    // Extract tweet text
+                    username = handles.length > 0 ? handles[0] : null;
                     let tweetTextSpan = article.querySelector('[data-testid="tweetText"]');
-                    let text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
-
-                    // Extract media links from this tweet
-                    let mediaLinks = await extractMediaLinks(article);
-
-                    // Extract quoted tweet media if any
-                    let quotedMediaLinks = [];
+                    text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
+                    mediaLinks = await extractMediaLinks(article);
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {
                         quotedMediaLinks = await extractMediaLinks(quoteContainer);
                     }
+                }
 
-                    // Detect reply structure based on DOM
-                    let prevCell = cellDivs[idx - 1] || null;
-                    let isReplyToRoot = false;
-                    if (prevCell && prevCell.childElementCount === 1) {
-                        let onlyChild = prevCell.children[0];
-                        if (onlyChild && onlyChild.children.length === 0 && onlyChild.innerHTML.trim() === '') {
-                            isReplyToRoot = true;
-                        }
+                // If article doesn't exist or data is missing, try cell dataset
+                if (!tweetId) {
+                    tweetId = cell.dataset.tweetId;
+                }
+                if (!username) {
+                    username = cell.dataset.authorHandle;
+                }
+                if (!text) {
+                    text = cell.dataset.tweetText || '';
+                }
+                if ((!mediaLinks || !mediaLinks.length) && cell.dataset.mediaUrls) {
+                    try {
+                        mediaLinks = JSON.parse(cell.dataset.mediaUrls);
+                    } catch (e) {
+                        console.error("Error parsing mediaUrls from dataset:", e);
+                        mediaLinks = [];
                     }
+                }
 
-                    tweetCells.push({
-                        tweetNode: article,
-                        username,
-                        tweetId,
-                        text,
-                        mediaLinks,
-                        quotedMediaLinks,
-                        cellIndex: idx,
-                        isReplyToRoot,
-                        cellDiv: cell,
-                        index: processedCount++
-                    });
-
-                    // Schedule processing for this tweet if not already processed
-                    if (!processedTweets.has(tweetId)) {
-                        scheduleTweetProcessing(article);
-                    }
-                } catch (err) {
-                    console.error("Error processing tweet in mapThreadStructure:", err);
-                    // Continue with next tweet
+                // Skip if we still can't get essential data
+                if (!tweetId || !username) {
+                    console.log(`[mapThreadStructure] Skipping cell ${idx} due to missing data:`, { tweetId, username });
                     continue;
                 }
+
+                // Check if this is the tweet from the URL
+                if (tweetId === urlTweetId) {
+                    console.log(`[mapThreadStructure] Found URL tweet at index ${idx}`);
+                    urlTweetIndex = idx;
+                }
+
+                tweetCells.push({
+                    tweetNode: article,
+                    username,
+                    tweetId,
+                    text,
+                    mediaLinks,
+                    quotedMediaLinks,
+                    cellIndex: idx,
+                    cellDiv: cell,
+                    index: processedCount++
+                });
+
+                // Schedule processing for this tweet if not already processed
+                if (article && !processedTweets.has(tweetId)) {
+                    scheduleTweetProcessing(article);
+                }
             }
+
+            // Debug log collected tweets
+            console.log("[mapThreadStructure] Collected tweets:", tweetCells.map(t => ({ id: t.tweetId, user: t.username })));
+            console.log("[mapThreadStructure] URL tweet index:", urlTweetIndex);
 
             // Build reply structure only if we have tweets to process
             if (tweetCells.length === 0) {
@@ -1220,37 +1166,50 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 return;
             }
 
-            // Second pass: build the reply structure with the right relationship chain
+            // Second pass: build the reply structure based on URL tweet position and DOM order
             for (let i = 0; i < tweetCells.length; ++i) {
                 let tw = tweetCells[i];
-                const persistentRelation = threadRelationships[tw.tweetId];
-
-                if (tw.tweetId === localRootTweetId) {
-                    tw.replyTo = null;
-                    tw.replyToId = null; // Explicitly set null
-                    tw.isRoot = true;
-                } else if (persistentRelation && persistentRelation.replyTo) {
-                    // Prioritize persistent relationship data if it exists
-                    tw.replyTo = persistentRelation.to;
-                    tw.replyToId = persistentRelation.replyTo;
-                    tw.isRoot = false;
-                } else if (tw.isReplyToRoot) {
-                    // Fallback: Use DOM structure if persistent data is missing
-                    let root = tweetCells.find(tk => tk.tweetId === localRootTweetId);
-                    tw.replyTo = root ? root.username : null;
-                    tw.replyToId = root ? root.tweetId : null;
-                    tw.isRoot = false;
-                } else if (i > 0) {
-                    // Fallback: Assume previous tweet in DOM is parent if persistent data is missing
-                    tw.replyTo = tweetCells[i - 1].username;
-                    tw.replyToId = tweetCells[i - 1].tweetId;
-                    tw.isRoot = false;
+                
+                if (urlTweetIndex !== -1) {
+                    if (i === 0) {
+                        // First tweet is always root
+                        tw.replyTo = null;
+                        tw.replyToId = null;
+                        tw.isRoot = true;
+                        console.log(`[mapThreadStructure] Tweet ${tw.tweetId} is root`);
+                    } else if (i <= urlTweetIndex) {
+                        // Tweets up to and including the URL tweet reply to their predecessor
+                        tw.replyTo = tweetCells[i - 1].username;
+                        tw.replyToId = tweetCells[i - 1].tweetId;
+                        tw.isRoot = false;
+                        console.log(`[mapThreadStructure] Tweet ${tw.tweetId} replies to ${tw.replyToId}`);
+                    } else {
+                        // Tweets after the URL tweet are replies to the URL tweet
+                        tw.replyTo = tweetCells[urlTweetIndex].username;
+                        tw.replyToId = tweetCells[urlTweetIndex].tweetId;
+                        tw.isRoot = false;
+                        console.log(`[mapThreadStructure] Tweet ${tw.tweetId} replies to URL tweet ${tw.replyToId}`);
+                    }
                 } else {
-                    // If it's the first tweet seen but not the root and no persistent data,
-                    // we can't determine parent from current view
-                    tw.replyTo = null;
-                    tw.replyToId = null;
-                    tw.isRoot = false; // Cannot assume it's root
+                    // Fallback to old logic if URL tweet not found
+                    const persistentRelation = threadRelationships[tw.tweetId];
+                    if (tw.tweetId === localRootTweetId) {
+                        tw.replyTo = null;
+                        tw.replyToId = null;
+                        tw.isRoot = true;
+                    } else if (persistentRelation && persistentRelation.replyTo) {
+                        tw.replyTo = persistentRelation.to;
+                        tw.replyToId = persistentRelation.replyTo;
+                        tw.isRoot = false;
+                    } else if (i > 0) {
+                        tw.replyTo = tweetCells[i - 1].username;
+                        tw.replyToId = tweetCells[i - 1].tweetId;
+                        tw.isRoot = false;
+                    } else {
+                        tw.replyTo = null;
+                        tw.replyToId = null;
+                        tw.isRoot = false;
+                    }
                 }
             }
 
@@ -1266,26 +1225,30 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 quotedMediaLinks: tw.quotedMediaLinks || []
             }));
 
-            // Third pass: enhance with additional relationship information
-            // If a tweet is a reply to another tweet not in this view, check 
-            // our persistent relationships to add that info
-            for (let tw of tweetCells) {
-                if (!tw.replyToId && !tw.isRoot && threadRelationships[tw.tweetId]?.replyTo) {
-                    // Found a reply relationship from persistent storage that isn't captured in this view
-                    tw.replyToId = threadRelationships[tw.tweetId].replyTo;
-                    tw.replyTo = threadRelationships[tw.tweetId].to;
-
-                    // Update the corresponding replyDoc
-                    const doc = replyDocs.find(d => d.tweetId === tw.tweetId);
-                    if (doc) {
-                        doc.toId = tw.replyToId;
-                        doc.to = tw.replyTo;
-                    }
-                }
-            }
+            // Debug log final mapping
+            console.log("[mapThreadStructure] Final reply mapping:", replyDocs.map(d => ({
+                from: d.from,
+                tweetId: d.tweetId,
+                replyTo: d.to,
+                replyToId: d.toId
+            })));
 
             // Store the thread mapping in a dataset attribute for debugging
             conversation.dataset.threadMapping = JSON.stringify(replyDocs);
+
+            // Process any tweets that were waiting for mapping
+            for (const waitingTweetId of MAPPING_INCOMPLETE_TWEETS) {
+                const mappedTweet = replyDocs.find(doc => doc.tweetId === waitingTweetId);
+                if (mappedTweet) {
+                    console.log(`[mapThreadStructure] Processing previously waiting tweet ${waitingTweetId}`);
+                    const tweetArticle = tweetCells.find(tc => tc.tweetId === waitingTweetId)?.tweetNode;
+                    if (tweetArticle) {
+                        processedTweets.delete(waitingTweetId);
+                        scheduleTweetProcessing(tweetArticle);
+                    }
+                }
+            }
+            MAPPING_INCOMPLETE_TWEETS.clear();
 
             // Update the global thread relationships
             const timestamp = Date.now();
@@ -1311,47 +1274,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             // Save relationships to persistent storage
             saveThreadRelationships();
 
-            // Build thread history with full context including media links
-            let completeThreadHistory = "";
-
-            // Start with the root post
-            const rootTweet = replyDocs.find(t => t.isRoot === true);
-            if (rootTweet && rootTweet.tweetId) {
-                const rootTweetElement = tweetCells.find(t => t.tweetId === rootTweet.tweetId)?.tweetNode;
-                if (rootTweetElement) {
-                    try {
-                        const apiKey = browserGet('openrouter-api-key', '');
-                        const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
-                        if (rootContext) {
-                            completeThreadHistory = rootContext;
-                            // Store the thread history in dataset for getFullContext to use
-                            conversation.dataset.threadHist = completeThreadHistory;
-
-                            // Also store the comprehensive media URLs from the entire thread
-                            const allMediaUrls = [];
-                            replyDocs.forEach(doc => {
-                                if (doc.mediaLinks && doc.mediaLinks.length) {
-                                    allMediaUrls.push(...doc.mediaLinks);
-                                }
-                                if (doc.quotedMediaLinks && doc.quotedMediaLinks.length) {
-                                    allMediaUrls.push(...doc.quotedMediaLinks);
-                                }
-                            });
-
-                            if (allMediaUrls.length > 0) {
-                                conversation.dataset.threadMediaUrls = JSON.stringify(allMediaUrls);
-                            }
-                        }
-                    } catch (error) {
-                        console.error("Error getting root context:", error);
-                        // Continue processing even if full context fails
-                    }
-                }
-            }
-
-
-            // Fourth pass: Update the cache with thread context
-            // but with a limit on how many we process at once
+            // Update the cache with thread context
             const batchSize = 10;
             for (let i = 0; i < replyDocs.length; i += batchSize) {
                 const batch = replyDocs.slice(i, i + batchSize);
@@ -1432,7 +1355,7 @@ function getTweetReplyInfo(tweetId) {
     return null;
 }
 
-// Add the setInterval call at the end of the file or in an init function
+// At the end of the file
 setInterval(handleThreads, THREAD_CHECK_INTERVAL);
 setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
 setInterval(applyFilteringToAll, SWEEP_INTERVAL);

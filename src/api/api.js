@@ -89,6 +89,7 @@ function extractFollowUpQuestions(content) {
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
  */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
+    console.log("given tweettext\n", tweetText);
     const cleanupRequest = () => {
         pendingRequests = Math.max(0, pendingRequests - 1);
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
@@ -132,8 +133,10 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     }
 
     const currentInstructions = instructionsManager.getCurrentInstructions();
+    const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
+
     const requestBody = {
-        model: selectedModel,
+        model: effectiveModel,
         messages: [
             {
                 role: "system",
@@ -156,7 +159,7 @@ EXPECTED_RESPONSE_FORMAT:\n
   </ANALYSIS>\n
 
   <SCORE>\n
-    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\N
+    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\n
   </SCORE>\n
 
   <FOLLOW_UP_QUESTIONS>\n
@@ -213,7 +216,7 @@ EXPECTED_RESPONSE_FORMAT:\n
         const now = Date.now();
         const timeElapsed = now - lastAPICallTime;
         if (timeElapsed < API_CALL_DELAY_MS) {
-            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS - timeElapsed));
+            await new Promise(resolve => setTimeout(resolve, Math.max(0, API_CALL_DELAY_MS - timeElapsed)));
         }
         lastAPICallTime = now;
 
@@ -656,7 +659,8 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
                 reasoningTokens: meta.native_tokens_reasoning || 0, // Specific reasoning tokens if available
                 latency: meta.latency !== undefined ? (meta.latency / 1000).toFixed(2) + 's' : 'N/A', // Convert ms to s
                 mediaInputs: meta.num_media_prompt || 0,
-                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A' // Add total cost
+                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A', // Add total cost
+                providerName: meta.provider_name || 'N/A' // Add provider_name
             };
 
             // Update the cache
@@ -718,8 +722,10 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         return msg; // Return other messages (system prompts, previous assistant messages, previous user messages) as is
     });
     
+    const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
+
     const request = {
-        model: selectedModel,
+        model: effectiveModel,
         messages: messagesForApi, // Use the history with the last user message templated
         temperature: modelTemperature,
         top_p: modelTopP,

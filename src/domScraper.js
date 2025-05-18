@@ -101,7 +101,7 @@ async function extractMediaLinks(scopeElement) {
     
     // --- Retry Logic --- 
     let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    const RETRY_DELAY = 100; // ms
+    const RETRY_DELAY = 20; // ms
     let retries = 0;
 
     while (mediaElements.length === 0 && retries < MAX_RETRIES) {
@@ -113,6 +113,63 @@ async function extractMediaLinks(scopeElement) {
     // --- End Retry Logic ---
     
     // If no media found after retries and this is a quoted tweet, try more aggressive selectors
+    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
+        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
+    }
+    
+    mediaElements.forEach(mediaEl => {
+        // Get the source URL (src for images, poster for videos)
+        const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
+        
+        // Skip if not a Twitter media URL or if undefined or if it's a profile image
+        if (!sourceUrl || 
+           !(sourceUrl.includes('pbs.twimg.com/')) ||
+           sourceUrl.includes('profile_images')) {
+            return;
+        }
+        
+        try {
+            // Parse the URL to handle format parameters
+            const url = new URL(sourceUrl);
+            const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+            
+            // Create the final URL with the right format and size
+            let finalUrl = sourceUrl;
+            
+            // Try to get the original size by removing size indicator
+            if (name && name !== 'orig') {
+                // Replace format=jpg&name=x with format=jpg&name=small
+                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+            }
+            
+            mediaLinks.add(finalUrl);
+        } catch (error) {
+            // Fallback: just add the raw URL as is
+            mediaLinks.add(sourceUrl);
+        }
+    });
+    
+    return Array.from(mediaLinks);
+}
+
+/**
+ * Synchronous version of extractMediaLinks without retry logic.
+ * @param {Element} scopeElement - The tweet element.
+ * @returns {string[]} An array of media URLs.
+ */
+function extractMediaLinksSync(scopeElement) {
+    if (!scopeElement) return [];
+    
+    const mediaLinks = new Set();
+    
+    // Find all images and videos in the tweet
+    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
+    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    const combinedSelector = `${imgSelector}, ${videoSelector}`;
+    
+    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
+    
+    // If no media found and this is a quoted tweet, try more aggressive selectors
     if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
