@@ -340,7 +340,7 @@ const instructionsManager = new InstructionsManager();
     // ----- config.js -----
 const processedTweets = new Set();
 const adAuthorCache = new Set();
-const PROCESSING_DELAY_MS = 200;
+const PROCESSING_DELAY_MS = 40;
 const API_CALL_DELAY_MS = 5;
 let userDefinedInstructions = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
 let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5'));
@@ -494,13 +494,44 @@ async function extractMediaLinks(scopeElement) {
     const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
     const combinedSelector = `${imgSelector}, ${videoSelector}`;
     let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    const RETRY_DELAY = 100;
+    const RETRY_DELAY = 20;
     let retries = 0;
     while (mediaElements.length === 0 && retries < MAX_RETRIES) {
         retries++;
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         mediaElements = scopeElement.querySelectorAll(combinedSelector);
     }
+    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
+        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
+    }
+    mediaElements.forEach(mediaEl => {
+        const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
+        if (!sourceUrl || 
+           !(sourceUrl.includes('pbs.twimg.com/')) ||
+           sourceUrl.includes('profile_images')) {
+            return;
+        }
+        try {
+            const url = new URL(sourceUrl);
+            const name = url.searchParams.get('name');
+            let finalUrl = sourceUrl;
+            if (name && name !== 'orig') {
+                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+            }
+            mediaLinks.add(finalUrl);
+        } catch (error) {
+            mediaLinks.add(sourceUrl);
+        }
+    });
+    return Array.from(mediaLinks);
+}
+function extractMediaLinksSync(scopeElement) {
+    if (!scopeElement) return [];
+    const mediaLinks = new Set();
+    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
+    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    const combinedSelector = `${imgSelector}, ${videoSelector}`;
+    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
     if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
@@ -2166,8 +2197,6 @@ const ScoreIndicatorRegistry = {
         }
         if (this.managers.has(tweetId)) {
             const existingManager = this.managers.get(tweetId);
-            if (tweetArticle && existingManager.tweetArticle !== tweetArticle) {
-            }
             return existingManager;
         } else if (tweetArticle) {
             try {
@@ -2992,6 +3021,13 @@ function filterSingleTweet(tweetArticle) {
     const handles = getUserHandles(tweetArticle);
     const authorHandle = handles.length > 0 ? handles[0] : '';
     const isAuthorActuallyBlacklisted = authorHandle && isUserBlacklisted(authorHandle);
+    const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || '';
+    const mediaUrls = extractMediaLinksSync(tweetArticle);
+    const tid = getTweetID(tweetArticle);
+    cell.dataset.tweetText = tweetText;
+    cell.dataset.authorHandle = authorHandle;
+    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
+    cell.dataset.tweetId = tid;
     if (authorHandle && adAuthorCache.has(authorHandle)) {
         const tweetId = getTweetID(tweetArticle);
         if (tweetId) {
@@ -3269,6 +3305,11 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             }
             filterSingleTweet(tweetArticle);
         } catch (error) {
+            if (error.message === "Media URLs not extracted despite presence of media containers.") {
+                if (tweetCache.has(tweetId)) {
+                    tweetCache.delete(tweetId);
+                }
+            }
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: 'error',
                 score: 5,
@@ -3310,6 +3351,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
         }
     }
 }
+const MAPPING_INCOMPLETE_TWEETS = new Set();
 async function scheduleTweetProcessing(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     if (!tweetId) {
@@ -3343,6 +3385,43 @@ async function scheduleTweetProcessing(tweetArticle) {
             return;
         }
         processedTweets.delete(tweetId);
+    }
+    const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
+        document.querySelector('div[aria-label^="Timeline: Conversation"]');
+    if (conversation) {
+        if (!conversation.dataset.threadMapping) {
+            MAPPING_INCOMPLETE_TWEETS.add(tweetId);
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (indicatorInstance) {
+                indicatorInstance.update({ 
+                    status: 'pending', 
+                    score: null, 
+                    description: 'Waiting for thread context...', 
+                    questions: [], 
+                    lastAnswer: "" 
+                });
+            }
+            return;
+        }
+        try {
+            const mapping = JSON.parse(conversation.dataset.threadMapping);
+            const tweetMapping = mapping.find(m => m.tweetId === tweetId);
+            if (!tweetMapping) {
+                MAPPING_INCOMPLETE_TWEETS.add(tweetId);
+                const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+                if (indicatorInstance) {
+                    indicatorInstance.update({ 
+                        status: 'pending', 
+                        score: null, 
+                        description: 'Waiting for thread context...', 
+                        questions: [], 
+                        lastAnswer: "" 
+                    });
+                }
+                return;
+            }
+        } catch (e) {
+        }
     }
     if (tweetCache.has(tweetId)) {
         const isIncompleteStreaming =
@@ -3391,8 +3470,9 @@ async function scheduleTweetProcessing(tweetArticle) {
     }, PROCESSING_DELAY_MS);
 }
 let threadRelationships = {};
-const THREAD_CHECK_INTERVAL = 2500;
+const THREAD_CHECK_INTERVAL = 1000;
 const SWEEP_INTERVAL = 1000;
+const THREAD_MAPPING_TIMEOUT = 2000;
 let threadMappingInProgress = false;
 function loadThreadRelationships() {
     try {
@@ -3474,7 +3554,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
                 } catch (e) {
                 }
             }
-            let allAvailableMediaLinks = [...allMediaLinks];
+            let allAvailableMediaLinks = [...(allMediaLinks || [])];
             let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
             let engagementStats = "";
             const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
@@ -3588,6 +3668,9 @@ function applyFilteringToAll() {
     tweets.forEach(filterSingleTweet);
 }
 function ensureAllTweetsRated() {
+    if(document.querySelector('div[aria-label="Timeline: Conversation"]')) {
+        return;
+    }
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
     if (tweets.length > 0) {
@@ -3618,14 +3701,8 @@ async function handleThreads() {
             conversation = document.querySelector('div[aria-label^="Timeline: Conversation"]');
         }
         if (!conversation) return;
-        if (threadMappingInProgress || conversation.dataset.threadHist === "pending") {
+        if (threadMappingInProgress || conversation.dataset.threadMappingInProgress === "true") {
             return;
-        }
-        if (conversation.dataset.threadMappedAt) {
-            const lastMappedTime = parseInt(conversation.dataset.threadMappedAt, 10);
-            if (Date.now() - lastMappedTime < 10000) {
-                return;
-            }
         }
         const match = location.pathname.match(/status\/(\d+)/);
         const pageTweetId = match ? match[1] : null;
@@ -3634,110 +3711,53 @@ async function handleThreads() {
         while (threadRelationships[rootTweetId] && threadRelationships[rootTweetId].replyTo) {
             rootTweetId = threadRelationships[rootTweetId].replyTo;
         }
-        if (conversation.dataset.threadHist === undefined) {
-            threadHist = "";
-            const rootArticle = Array.from(conversation.querySelectorAll('article[data-testid="tweet"]'))
-                .find(el => getTweetID(el) === rootTweetId)
-                || document.querySelector('article[data-testid="tweet"]');
-            if (rootArticle) {
-                conversation.dataset.threadHist = 'pending';
-                threadMappingInProgress = true;
-                try {
-                    const tweetId = getTweetID(rootArticle);
-                    if (!tweetId) {
-                        throw new Error("Failed to get tweet ID from first article");
-                    }
-                    const apiKey = browserGet('openrouter-api-key', '');
-                    const fullcxt = await getFullContext(rootArticle, tweetId, apiKey);
-                    if (!fullcxt) {
-                        throw new Error("Failed to get full context for root tweet");
-                    }
-                    threadHist = fullcxt;
-                    conversation.dataset.threadHist = threadHist;
-                    if (conversation.firstChild) {
-                        conversation.firstChild.dataset.canary = "true";
-                    }
-                    if (!processedTweets.has(tweetId)) {
-                        scheduleTweetProcessing(rootArticle);
-                    }
-                    setTimeout(() => {
-                        mapThreadStructure(conversation, rootTweetId);
-                    }, 10);
-                } catch (error) {
-                    threadMappingInProgress = false;
-                    delete conversation.dataset.threadHist;
-                }
-                return;
-            }
-        } else if (conversation.dataset.threadHist !== "pending" &&
-            conversation.firstChild &&
-            conversation.firstChild.dataset.canary === undefined) {
-            if (conversation.firstChild) {
-                conversation.firstChild.dataset.canary = "pending";
-            }
-            threadMappingInProgress = true;
-            try {
-                const nextArticle = document.querySelector('article[data-testid="tweet"]:has(~ div[data-testid="inline_reply_offscreen"])');
-                if (nextArticle) {
-                    const tweetId = getTweetID(nextArticle);
-                    if (!tweetId) {
-                        throw new Error("Failed to get tweet ID from next article");
-                    }
-                    if (tweetCache.has(tweetId) && tweetCache.get(tweetId).tweetContent) {
-                        threadHist = threadHist + "\n[REPLY]\n" + tweetCache.get(tweetId).tweetContent;
-                    } else {
-                        const apiKey = browserGet('openrouter-api-key', '');
-                        await new Promise(resolve => setTimeout(resolve, 10));
-                        const newContext = await getFullContext(nextArticle, tweetId, apiKey);
-                        if (!newContext) {
-                            throw new Error("Failed to get context for next article");
-                        }
-                        threadHist = threadHist + "\n[REPLY]\n" + newContext;
-                    }
-                    conversation.dataset.threadHist = threadHist;
-                }
-                setTimeout(() => {
-                    mapThreadStructure(conversation, rootTweetId);
-                }, 500);
-            } catch (error) {
-                threadMappingInProgress = false;
-                if (conversation.firstChild) {
-                    delete conversation.firstChild.dataset.canary;
-                }
-            }
-        } else if (!threadMappingInProgress && !conversation.dataset.threadMappingInProgress) {
-            threadMappingInProgress = true;
-            setTimeout(() => {
-                mapThreadStructure(conversation, rootTweetId);
-            }, 250);
-        }
+        await mapThreadStructure(conversation, rootTweetId);
     } catch (error) {
         threadMappingInProgress = false;
     }
 }
 async function mapThreadStructure(conversation, localRootTweetId) {
+    if (threadMappingInProgress || conversation.dataset.threadMappingInProgress) {
+        return;
+    }
     conversation.dataset.threadMappingInProgress = "true";
     conversation.dataset.threadMappedAt = Date.now().toString();
     threadMappingInProgress = true;
     try {
         const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Thread mapping timed out')), 5000)
+            setTimeout(() => reject(new Error('Thread mapping timed out')), THREAD_MAPPING_TIMEOUT)
         );
         const mapping = async () => {
-            let cellDivs = Array.from(document.querySelectorAll('div[data-testid="cellInnerDiv"]'));
+            const urlMatch = location.pathname.match(/status\/(\d+)/);
+            const urlTweetId = urlMatch ? urlMatch[1] : null;
+            let cellDivs = Array.from(conversation.querySelectorAll('div[data-testid="cellInnerDiv"]'));
             if (!cellDivs.length) {
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
             }
+            cellDivs.forEach((cell, idx) => {
+                const tweetId = cell.dataset.tweetId;
+                const authorHandle = cell.dataset.authorHandle;
+            });
+            cellDivs.sort((a, b) => {
+                const aY = parseInt(a.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
+                const bY = parseInt(b.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
+                return aY - bY;
+            });
+            cellDivs.forEach((cell, idx) => {
+                const tweetId = cell.dataset.tweetId;
+                const authorHandle = cell.dataset.authorHandle;
+            });
             let tweetCells = [];
             let processedCount = 0;
+            let urlTweetIndex = -1;
             for (let idx = 0; idx < cellDivs.length; idx++) {
                 const cell = cellDivs[idx];
-                const article = cell.querySelector('article[data-testid="tweet"]');
-                if (!article) continue;
-                try {
-                    let tweetId = getTweetID(article);
+                let tweetId, username, text, mediaLinks = [], quotedMediaLinks = [];
+                let article = cell.querySelector('article[data-testid="tweet"]');
+                if (article) {
+                    tweetId = getTweetID(article);
                     if (!tweetId) {
                         let tweetLink = article.querySelector('a[href*="/status/"]');
                         if (tweetLink) {
@@ -3745,43 +3765,51 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             if (match) tweetId = match[1];
                         }
                     }
-                    if (!tweetId) continue;
                     const handles = getUserHandles(article);
-                    let username = handles.length > 0 ? handles[0] : null;
-                    if (!username) continue;
+                    username = handles.length > 0 ? handles[0] : null;
                     let tweetTextSpan = article.querySelector('[data-testid="tweetText"]');
-                    let text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
-                    let mediaLinks = await extractMediaLinks(article);
-                    let quotedMediaLinks = [];
+                    text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
+                    mediaLinks = await extractMediaLinks(article);
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {
                         quotedMediaLinks = await extractMediaLinks(quoteContainer);
                     }
-                    let prevCell = cellDivs[idx - 1] || null;
-                    let isReplyToRoot = false;
-                    if (prevCell && prevCell.childElementCount === 1) {
-                        let onlyChild = prevCell.children[0];
-                        if (onlyChild && onlyChild.children.length === 0 && onlyChild.innerHTML.trim() === '') {
-                            isReplyToRoot = true;
-                        }
+                }
+                if (!tweetId) {
+                    tweetId = cell.dataset.tweetId;
+                }
+                if (!username) {
+                    username = cell.dataset.authorHandle;
+                }
+                if (!text) {
+                    text = cell.dataset.tweetText || '';
+                }
+                if ((!mediaLinks || !mediaLinks.length) && cell.dataset.mediaUrls) {
+                    try {
+                        mediaLinks = JSON.parse(cell.dataset.mediaUrls);
+                    } catch (e) {
+                        mediaLinks = [];
                     }
-                    tweetCells.push({
-                        tweetNode: article,
-                        username,
-                        tweetId,
-                        text,
-                        mediaLinks,
-                        quotedMediaLinks,
-                        cellIndex: idx,
-                        isReplyToRoot,
-                        cellDiv: cell,
-                        index: processedCount++
-                    });
-                    if (!processedTweets.has(tweetId)) {
-                        scheduleTweetProcessing(article);
-                    }
-                } catch (err) {
+                }
+                if (!tweetId || !username) {
                     continue;
+                }
+                if (tweetId === urlTweetId) {
+                    urlTweetIndex = idx;
+                }
+                tweetCells.push({
+                    tweetNode: article,
+                    username,
+                    tweetId,
+                    text,
+                    mediaLinks,
+                    quotedMediaLinks,
+                    cellIndex: idx,
+                    cellDiv: cell,
+                    index: processedCount++
+                });
+                if (article && !processedTweets.has(tweetId)) {
+                    scheduleTweetProcessing(article);
                 }
             }
             if (tweetCells.length === 0) {
@@ -3791,28 +3819,39 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             }
             for (let i = 0; i < tweetCells.length; ++i) {
                 let tw = tweetCells[i];
-                const persistentRelation = threadRelationships[tw.tweetId];
-                if (tw.tweetId === localRootTweetId) {
-                    tw.replyTo = null;
-                    tw.replyToId = null;
-                    tw.isRoot = true;
-                } else if (persistentRelation && persistentRelation.replyTo) {
-                    tw.replyTo = persistentRelation.to;
-                    tw.replyToId = persistentRelation.replyTo;
-                    tw.isRoot = false;
-                } else if (tw.isReplyToRoot) {
-                    let root = tweetCells.find(tk => tk.tweetId === localRootTweetId);
-                    tw.replyTo = root ? root.username : null;
-                    tw.replyToId = root ? root.tweetId : null;
-                    tw.isRoot = false;
-                } else if (i > 0) {
-                    tw.replyTo = tweetCells[i - 1].username;
-                    tw.replyToId = tweetCells[i - 1].tweetId;
-                    tw.isRoot = false;
+                if (urlTweetIndex !== -1) {
+                    if (i === 0) {
+                        tw.replyTo = null;
+                        tw.replyToId = null;
+                        tw.isRoot = true;
+                    } else if (i <= urlTweetIndex) {
+                        tw.replyTo = tweetCells[i - 1].username;
+                        tw.replyToId = tweetCells[i - 1].tweetId;
+                        tw.isRoot = false;
+                    } else {
+                        tw.replyTo = tweetCells[urlTweetIndex].username;
+                        tw.replyToId = tweetCells[urlTweetIndex].tweetId;
+                        tw.isRoot = false;
+                    }
                 } else {
-                    tw.replyTo = null;
-                    tw.replyToId = null;
-                    tw.isRoot = false;
+                    const persistentRelation = threadRelationships[tw.tweetId];
+                    if (tw.tweetId === localRootTweetId) {
+                        tw.replyTo = null;
+                        tw.replyToId = null;
+                        tw.isRoot = true;
+                    } else if (persistentRelation && persistentRelation.replyTo) {
+                        tw.replyTo = persistentRelation.to;
+                        tw.replyToId = persistentRelation.replyTo;
+                        tw.isRoot = false;
+                    } else if (i > 0) {
+                        tw.replyTo = tweetCells[i - 1].username;
+                        tw.replyToId = tweetCells[i - 1].tweetId;
+                        tw.isRoot = false;
+                    } else {
+                        tw.replyTo = null;
+                        tw.replyToId = null;
+                        tw.isRoot = false;
+                    }
                 }
             }
             const replyDocs = tweetCells.map(tw => ({
@@ -3825,18 +3864,24 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 mediaLinks: tw.mediaLinks || [],
                 quotedMediaLinks: tw.quotedMediaLinks || []
             }));
-            for (let tw of tweetCells) {
-                if (!tw.replyToId && !tw.isRoot && threadRelationships[tw.tweetId]?.replyTo) {
-                    tw.replyToId = threadRelationships[tw.tweetId].replyTo;
-                    tw.replyTo = threadRelationships[tw.tweetId].to;
-                    const doc = replyDocs.find(d => d.tweetId === tw.tweetId);
-                    if (doc) {
-                        doc.toId = tw.replyToId;
-                        doc.to = tw.replyTo;
+            console.log("[mapThreadStructure] Final reply mapping:", replyDocs.map(d => ({
+                from: d.from,
+                tweetId: d.tweetId,
+                replyTo: d.to,
+                replyToId: d.toId
+            })));
+            conversation.dataset.threadMapping = JSON.stringify(replyDocs);
+            for (const waitingTweetId of MAPPING_INCOMPLETE_TWEETS) {
+                const mappedTweet = replyDocs.find(doc => doc.tweetId === waitingTweetId);
+                if (mappedTweet) {
+                    const tweetArticle = tweetCells.find(tc => tc.tweetId === waitingTweetId)?.tweetNode;
+                    if (tweetArticle) {
+                        processedTweets.delete(waitingTweetId);
+                        scheduleTweetProcessing(tweetArticle);
                     }
                 }
             }
-            conversation.dataset.threadMapping = JSON.stringify(replyDocs);
+            MAPPING_INCOMPLETE_TWEETS.clear();
             const timestamp = Date.now();
             replyDocs.forEach(doc => {
                 if (doc.tweetId && doc.toId) {
@@ -3857,34 +3902,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 }
             });
             saveThreadRelationships();
-            let completeThreadHistory = "";
-            const rootTweet = replyDocs.find(t => t.isRoot === true);
-            if (rootTweet && rootTweet.tweetId) {
-                const rootTweetElement = tweetCells.find(t => t.tweetId === rootTweet.tweetId)?.tweetNode;
-                if (rootTweetElement) {
-                    try {
-                        const apiKey = browserGet('openrouter-api-key', '');
-                        const rootContext = await getFullContext(rootTweetElement, rootTweet.tweetId, apiKey);
-                        if (rootContext) {
-                            completeThreadHistory = rootContext;
-                            conversation.dataset.threadHist = completeThreadHistory;
-                            const allMediaUrls = [];
-                            replyDocs.forEach(doc => {
-                                if (doc.mediaLinks && doc.mediaLinks.length) {
-                                    allMediaUrls.push(...doc.mediaLinks);
-                                }
-                                if (doc.quotedMediaLinks && doc.quotedMediaLinks.length) {
-                                    allMediaUrls.push(...doc.quotedMediaLinks);
-                                }
-                            });
-                            if (allMediaUrls.length > 0) {
-                                conversation.dataset.threadMediaUrls = JSON.stringify(allMediaUrls);
-                            }
-                        }
-                    } catch (error) {
-                    }
-                }
-            }
             const batchSize = 10;
             for (let i = 0; i < replyDocs.length; i += batchSize) {
                 const batch = replyDocs.slice(i, i + batchSize);
@@ -5001,8 +5018,6 @@ const VERSION = '1.5.1';
                 showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
-            observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
-            applyFilteringToAll();
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
             window.addEventListener('beforeunload', () => {

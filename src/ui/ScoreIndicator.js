@@ -2029,10 +2029,7 @@ const ScoreIndicatorRegistry = {
         if (this.managers.has(tweetId)) {
             const existingManager = this.managers.get(tweetId);
             // Ensure the existing manager's article is still valid if possible
-            if (tweetArticle && existingManager.tweetArticle !== tweetArticle) {
-                // This might happen if the DOM is manipulated strangely. Log a warning.
-                console.warn(`[Registry] Mismatch between provided article and existing manager for tweet ${tweetId}. Using existing manager.`);
-            }
+            
             return existingManager;
         } else if (tweetArticle) {
             try {

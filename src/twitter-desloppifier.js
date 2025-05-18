@@ -64,8 +64,8 @@ const VERSION = '1.5.1';
                 showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
-            observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
-            applyFilteringToAll();
+            //observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+            
 
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });
