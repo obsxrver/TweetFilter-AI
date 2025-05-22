@@ -66,43 +66,88 @@ class TweetCache {
     /**
      * Sets a tweet rating in the cache.
      * @param {string} tweetId - The ID of the tweet.
-     * @param {Object} rating - The rating object: {score(required), description, reasoning, timestamp, streaming, blacklisted, fromStorage, metadata: {model, promptTokens, completionTokens, latency, mediaInputs, price}}
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
+     * @param {Object} rating - The rating object. Can be a partial update.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or use debounced save.
      */
-    set(tweetId, rating, saveImmediately = true) { // saveImmediately is now ignored
-        // Standardize the rating object structure
-        this.cache[tweetId] = {
-            score: rating.score,
-            fullContext: rating.fullContext || '',
-            description: rating.description || '',
-            reasoning: rating.reasoning || '',
-            questions: rating.questions || [],
-            lastAnswer: rating.lastAnswer || '',
-            mediaUrls: rating.mediaUrls || [],
-            timestamp: rating.timestamp || Date.now(),
-            streaming: rating.streaming || false,
-            blacklisted: rating.blacklisted || false,
-            fromStorage: rating.fromStorage || false,
-            metadata: {
-                model: rating.metadata?.model || null,
-                promptTokens: rating.metadata?.promptTokens || null,
-                completionTokens: rating.metadata?.completionTokens || null,
-                latency: rating.metadata?.latency || null,
-                mediaInputs: rating.metadata?.mediaInputs || null,
-                price: rating.metadata?.price || null
-            },
-            qaConversationHistory: rating.qaConversationHistory || []
-        };
+    set(tweetId, rating, saveImmediately = false) {
+        const existingEntry = this.cache[tweetId] || {};
+        const updatedEntry = { ...existingEntry }; // Start with a copy
 
-        if(!saveImmediately) {
+        // Update standard fields if provided in rating object
+        if (rating.score !== undefined) updatedEntry.score = rating.score;
+        if (rating.fullContext !== undefined) updatedEntry.fullContext = rating.fullContext;
+        if (rating.description !== undefined) updatedEntry.description = rating.description;
+        if (rating.reasoning !== undefined) updatedEntry.reasoning = rating.reasoning;
+        if (rating.questions !== undefined) updatedEntry.questions = rating.questions;
+        if (rating.lastAnswer !== undefined) updatedEntry.lastAnswer = rating.lastAnswer;
+        if (rating.mediaUrls !== undefined) updatedEntry.mediaUrls = rating.mediaUrls; // These are for full context
+        if (rating.timestamp !== undefined) updatedEntry.timestamp = rating.timestamp;
+        else if (updatedEntry.timestamp === undefined) updatedEntry.timestamp = Date.now(); // Ensure timestamp exists
+        if (rating.streaming !== undefined) updatedEntry.streaming = rating.streaming;
+        if (rating.blacklisted !== undefined) updatedEntry.blacklisted = rating.blacklisted;
+        if (rating.fromStorage !== undefined) updatedEntry.fromStorage = rating.fromStorage;
+        
+        if (rating.metadata) {
+            updatedEntry.metadata = { ...(existingEntry.metadata || {}), ...rating.metadata };
+        } else if (!existingEntry.metadata) {
+            updatedEntry.metadata = { model: null, promptTokens: null, completionTokens: null, latency: null, mediaInputs: null, price: null };
+        }
+
+        if (rating.qaConversationHistory !== undefined) updatedEntry.qaConversationHistory = rating.qaConversationHistory;
+
+        // Initialize new/specific fields if they don't exist on updatedEntry from existingEntry
+        updatedEntry.authorHandle = updatedEntry.authorHandle || '';
+        updatedEntry.individualTweetText = updatedEntry.individualTweetText || '';
+        updatedEntry.individualMediaUrls = updatedEntry.individualMediaUrls || [];
+        updatedEntry.qaConversationHistory = updatedEntry.qaConversationHistory || [];
+
+
+        // Specific update logic for authorHandle
+        if (rating.authorHandle !== undefined) {
+            updatedEntry.authorHandle = rating.authorHandle;
+        }
+
+        // Specific update logic for individualTweetText
+        if (rating.individualTweetText !== undefined) {
+            if (!updatedEntry.individualTweetText || rating.individualTweetText.length > updatedEntry.individualTweetText.length) {
+                updatedEntry.individualTweetText = rating.individualTweetText;
+            }
+        }
+
+        // Specific update logic for individualMediaUrls
+        if (rating.individualMediaUrls !== undefined && Array.isArray(rating.individualMediaUrls)) {
+            if (!updatedEntry.individualMediaUrls || updatedEntry.individualMediaUrls.length === 0 || rating.individualMediaUrls.length > updatedEntry.individualMediaUrls.length) {
+                updatedEntry.individualMediaUrls = rating.individualMediaUrls;
+            }
+        }
+        
+        // Ensure defaults for any fields that might still be undefined after merge
+        updatedEntry.score = updatedEntry.score; // Remains undefined if not set
+        updatedEntry.authorHandle = updatedEntry.authorHandle || '';
+        updatedEntry.fullContext = updatedEntry.fullContext || '';
+        updatedEntry.description = updatedEntry.description || '';
+        updatedEntry.reasoning = updatedEntry.reasoning || '';
+        updatedEntry.questions = updatedEntry.questions || [];
+        updatedEntry.lastAnswer = updatedEntry.lastAnswer || '';
+        updatedEntry.mediaUrls = updatedEntry.mediaUrls || [];
+        updatedEntry.streaming = updatedEntry.streaming || false;
+        updatedEntry.blacklisted = updatedEntry.blacklisted || false;
+        updatedEntry.fromStorage = updatedEntry.fromStorage || false;
+
+
+        this.cache[tweetId] = updatedEntry;
+
+        if (!saveImmediately) {
             this.debouncedSaveToStorage();
         } else {
             this.#saveToStorageInternal();
         }
     }
+
     has(tweetId) {
         return this.cache[tweetId] !== undefined;
     }
+
     /**
      * Removes a tweet rating from the cache.
      * @param {string} tweetId - The ID of the tweet to remove.

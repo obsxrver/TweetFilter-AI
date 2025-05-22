@@ -76,8 +76,6 @@ class ScoreIndicator {
             this._addEventListeners();
             // Add to registry
             ScoreIndicatorRegistry.add(this.tweetId, this);
-            // Set initial dataset attributes on the initial article
-            this.updateDatasetAttributes(tweetArticle);
         } catch (error) {
             console.error(`[ScoreIndicator ${this.tweetId}] Failed initialization:`, error);
             // Attempt cleanup if elements were partially created
@@ -375,27 +373,6 @@ class ScoreIndicator {
         //     this.followUpRemoveImageButton.addEventListener('click', this._handleRemoveFollowUpImage.bind(this));
         // }
         // --- End New ---
-    }
-
-    /** 
-     * Updates the tweet article's dataset attributes based on the instance's state.
-     * Requires the current tweet article element to be passed or found.
-     * @param {Element} [currentTweetArticle] - Optional: The current article element.
-     */
-    updateDatasetAttributes(currentTweetArticle) {
-        const article = currentTweetArticle || this.findCurrentArticleElement();
-        if (!article) {
-            // console.warn(`[ScoreIndicator ${this.tweetId}] Could not find article element to update dataset.`);
-            return;
-        }
-        article.dataset.ratingStatus = this.status;
-        article.dataset.sloppinessScore = this.score !== null ? String(this.score) : '';
-        article.dataset.ratingDescription = this.description;
-        article.dataset.ratingReasoning = this.reasoning;
-        article.dataset.blacklisted = String(this.status === 'blacklisted');
-        article.dataset.cachedRating = String(this.status === 'cached');
-        // Store indicator/tooltip existence for checks elsewhere if needed
-        // article.dataset.hasScoreIndicator = 'true'; // Less reliable now
     }
 
     /** Updates the visual appearance of the indicator (icon/text, class). */
@@ -985,7 +962,7 @@ class ScoreIndicator {
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
                 this.hide();
             }
-        }, 500);
+        }, 100);
     }
 
     _handleIndicatorClick(event) {
@@ -1007,7 +984,7 @@ class ScoreIndicator {
             if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
                 this.hide();
             }
-        }, 500);
+        }, 100);
     }
 
     
@@ -1566,9 +1543,6 @@ class ScoreIndicator {
             // If only score changed, ensure scroll button visibility is correct
             this._updateScrollButtonVisibility();
         }
-
-        // Update dataset attributes on the article
-        this.updateDatasetAttributes();
     }
 
 
@@ -1740,8 +1714,6 @@ class ScoreIndicator {
             }
             currentArticle.appendChild(this.indicatorElement);
         }
-        // Ensure dataset is up-to-date on the *current* article
-        this.updateDatasetAttributes(currentArticle);
     }
 
     /** Finds the current DOM element for the tweet article based on tweetId. */
@@ -1810,7 +1782,6 @@ class ScoreIndicator {
         // Update UI elements
         this._updateIndicatorUI();
         this._updateTooltipUI();
-        this.updateDatasetAttributes();
     }
 
     /**
@@ -1836,15 +1807,11 @@ class ScoreIndicator {
             const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
             if (lastTurn.answer === 'pending') {
                 lastTurn.answer = answerText;
-                // Assuming reasoning might be part of assistantResponseContent or handled elsewhere
-                // For now, let's assume reasoning isn't explicitly parsed here for simplicity
-                // lastTurn.reasoning = ...;
             }
         }
 
         // Refresh the tooltip UI
         this._updateTooltipUI();
-        this.updateDatasetAttributes(); // Ensure dataset reflects any score/status change if applicable
     }
 
     /**
@@ -1925,7 +1892,6 @@ class ScoreIndicator {
         
         this._updateIndicatorUI();
         this._updateTooltipUI();
-        this.updateDatasetAttributes();
     }
 
     _handleMetadataToggleClick(e) {
@@ -1969,41 +1935,26 @@ class ScoreIndicator {
             console.log(`[ScoreIndicator ${this.tweetId}] Removed from processedTweets.`);
         }
 
-        // Find current article element
+        // Find current article element *before* destroying this instance
         const currentArticle = this.findCurrentArticleElement();
+
+        // Destroy the current instance. This removes it from DOM and registry.
+        this.destroy();
+
         if (!currentArticle) {
-            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find current article element for refresh.`);
-            // Hide tooltip and update indicator to a neutral or error state if article not found
-            this.hide();
-            this.update({ status: 'error', score: null, description: 'Could not find tweet to refresh.'});
+            console.warn(`[ScoreIndicator Refresh] Could not find current article element for tweet ${this.tweetId} after destroy. Cannot re-schedule.`);
+            // No indicator to update to an error state, as it's destroyed.
             return;
         }
 
-        // Update indicator to pending immediately
-        this.update({
-            status: 'pending',
-            score: null,
-            description: 'Re-rating... ',
-            reasoning: '',
-            questions: [],
-            metadata: null
-        });
-        // Conversation history will be rebuilt by the new rating process
-        this.conversationHistory = [];
-        this.qaConversationHistory = [];
-        this._updateTooltipUI(); // Update tooltip to reflect pending state
-
-        // Hide the tooltip
-        this.hide();
-
-        // Schedule for re-processing
-        // Ensure scheduleTweetProcessing is available (it should be global in Tampermonkey context)
+        // Schedule for re-processing. This will create a new ScoreIndicator instance.
         if (typeof scheduleTweetProcessing === 'function') {
-            console.log(`[ScoreIndicator ${this.tweetId}] Scheduling for re-processing.`);
+            console.log(`[ScoreIndicator Refresh] Scheduling tweet ${this.tweetId} for re-processing.`);
             scheduleTweetProcessing(currentArticle);
         } else {
-            console.error('[ScoreIndicator] scheduleTweetProcessing function not found.');
-            this.update({ status: 'error', score: null, description: 'Error: Refresh mechanism failed.'});
+            console.error('[ScoreIndicator Refresh] scheduleTweetProcessing function not found. Cannot re-schedule tweet ${this.tweetId}.');
+            // If scheduleTweetProcessing is missing, we can't do much here.
+            // The old indicator is gone. A new one won't be created.
         }
     }
 }

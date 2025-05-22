@@ -2,7 +2,7 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const adAuthorCache = new Set(); // Cache of handles that post ads
 
-const PROCESSING_DELAY_MS = 40; // Delay before processing a tweet (ms)
+const PROCESSING_DELAY_MS = 10; // Delay before processing a tweet (ms)
 const API_CALL_DELAY_MS = 5; // Minimum delay between API calls
 let userDefinedInstructions = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
 let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5')); // Filter threshold for tweet visibility

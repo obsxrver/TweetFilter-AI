@@ -64,7 +64,11 @@ const VERSION = '1.5.1';
                 showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
                 fetchAvailableModels();
             }
-            //observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+            if(document.querySelector('[aria-label="Timeline: Conversation"]')){
+                handleThreads();
+            }else{
+                observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+            }
             
 
             const observer = new MutationObserver(handleMutations);
@@ -81,7 +85,7 @@ const VERSION = '1.5.1';
                 console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
-            setTimeout(initializeObserver, 1000);
+            setTimeout(initializeObserver, 10);
         }
     }
     initializeObserver();
