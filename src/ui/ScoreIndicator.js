@@ -70,6 +70,15 @@ class ScoreIndicator {
         this.uploadedImageDataUrls = []; // Initialize
         this.qaConversationHistory = []; // Stores the full conversation history for API calls
         this.currentFollowUpSource = null; // Tracks if 'custom' or 'suggested'
+        this._lastScrollPosition = 0; // Add property to track scroll position on mobile
+
+        // Bind event handlers for proper cleanup
+        this._boundHandlers = {
+            handleMobileFocus: null,
+            handleMobileTouchStart: null,
+            handleAttachImageClick: null,
+            handleKeyDown: null
+        };
 
         try {
             this._createElements(tweetArticle);
@@ -108,6 +117,11 @@ class ScoreIndicator {
         this.tooltipElement.style.display = 'none';
         this.tooltipElement.dataset.tweetId = this.tweetId; // Link tooltip to tweetId
         this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+        
+        // Add touch-action to prevent scrolling on mobile when interacting with tooltip
+        if (isMobileDevice()) {
+            this.tooltipElement.style.touchAction = 'pan-x pan-y pinch-zoom';
+        }
 
         // --- Tooltip Controls ---
         this.tooltipControls = document.createElement('div');
@@ -145,6 +159,12 @@ class ScoreIndicator {
         // --- NEW: Scrollable Content Wrapper ---
         this.tooltipScrollableContentElement = document.createElement('div');
         this.tooltipScrollableContentElement.className = 'tooltip-scrollable-content';
+        
+        // Prevent default scrolling behavior on mobile for better control
+        if (isMobileDevice()) {
+            this.tooltipScrollableContentElement.style.webkitOverflowScrolling = 'touch';
+            this.tooltipScrollableContentElement.style.overscrollBehavior = 'contain';
+        }
 
         // --- Reasoning Dropdown ---
         this.reasoningDropdown = document.createElement('div');
@@ -353,19 +373,49 @@ class ScoreIndicator {
         // Custom Question Button
         this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
         // Allow submitting custom question with Enter key
-        this.customQuestionInput?.addEventListener('keydown', (event) => {
+        this._boundHandlers.handleKeyDown = (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault(); // Prevent default form submission/newline
-                this._handleCustomQuestionClick();
+                this._handleCustomQuestionClick(event); // Pass event parameter
             }
-        });
+        };
+        this.customQuestionInput?.addEventListener('keydown', this._boundHandlers.handleKeyDown);
+        
+        // Add focus handler for mobile to prevent scrolling
+        if (isMobileDevice() && this.customQuestionInput) {
+            this._boundHandlers.handleMobileFocus = (event) => {
+                event.preventDefault();
+                // Store current scroll position
+                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                // Restore scroll position after a brief delay
+                setTimeout(() => {
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                }, 0);
+            };
+            
+            this._boundHandlers.handleMobileTouchStart = (event) => {
+                // Don't prevent default completely as it would prevent input
+                // Just store scroll position
+                this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
+            };
+            
+            this.customQuestionInput.addEventListener('focus', this._boundHandlers.handleMobileFocus);
+            this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
+        }
 
         // Metadata Toggle
         this.metadataToggle?.addEventListener('click', this._handleMetadataToggleClick.bind(this));
 
         // --- New: Event Listeners for Image Upload (conditional) ---
         if (this.attachImageButton && this.followUpImageInput) {
-            this.attachImageButton.addEventListener('click', () => this.followUpImageInput.click());
+            this._boundHandlers.handleAttachImageClick = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.followUpImageInput.click();
+            };
+            this.attachImageButton.addEventListener('click', this._boundHandlers.handleAttachImageClick);
             this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
         }
         // No global remove button listener now
@@ -771,6 +821,7 @@ class ScoreIndicator {
             const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
             if (!toggleButton) return;
 
+            e.preventDefault(); // Add this to prevent scrolling
             e.stopPropagation();
             const dropdown = toggleButton.closest('.reasoning-dropdown');
             const content = dropdown?.querySelector('.reasoning-content');
@@ -1014,6 +1065,7 @@ class ScoreIndicator {
     }
 
     _handlePinClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         if (this.isPinned) {
             this.unpin();
@@ -1023,6 +1075,7 @@ class ScoreIndicator {
     }
 
     _handleCopyClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         if (!this.descriptionElement || !this.reasoningTextElement || !this.copyButton) return;
 
@@ -1047,6 +1100,7 @@ class ScoreIndicator {
     }
 
     _handleReasoningToggleClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         if (!this.reasoningDropdown || !this.reasoningContent || !this.reasoningArrow) return;
 
@@ -1064,6 +1118,7 @@ class ScoreIndicator {
 
 
     _handleScrollButtonClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         if (!this.tooltipScrollableContentElement) return; // MODIFIED
 
@@ -1074,6 +1129,11 @@ class ScoreIndicator {
     }
 
     _handleFollowUpQuestionClick(event) {
+        // Prevent default to avoid mobile scrolling issues
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        
         // If called from _handleCustomQuestionClick, event.target will be our mockButton
         // Otherwise, it's a real DOM event and we need to find the button.
         const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
@@ -1176,7 +1236,13 @@ class ScoreIndicator {
         }
     }
 
-    _handleCustomQuestionClick() {
+    _handleCustomQuestionClick(event) {
+        // Add event parameter and prevent default
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
         if (!this.customQuestionInput || !this.customQuestionButton) return;
 
         const questionText = this.customQuestionInput.value.trim();
@@ -1205,7 +1271,11 @@ class ScoreIndicator {
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
 
         // Call the handler, it will manage UI updates and API call
-        this._handleFollowUpQuestionClick({ target: mockButton, stopPropagation: () => {} });
+        this._handleFollowUpQuestionClick({ 
+            target: mockButton, 
+            stopPropagation: () => {},
+            preventDefault: () => {} // Add preventDefault to mock event
+        });
 
         // Clear the input field after initiating the send for custom questions
         if (this.customQuestionInput) {
@@ -1215,6 +1285,10 @@ class ScoreIndicator {
 
     // --- New: Image Handling Methods for Follow-up ---
     _handleFollowUpImageSelect(event) {
+        if (event) {
+            event.preventDefault();
+        }
+        
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
@@ -1259,6 +1333,7 @@ class ScoreIndicator {
         removeBtn.className = 'follow-up-image-remove-btn';
         removeBtn.title = 'Remove this image';
         removeBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // Add this
             e.stopPropagation();
             this._removeSpecificUploadedImage(imageDataUrl);
         });
@@ -1614,6 +1689,7 @@ class ScoreIndicator {
 
     // --- New Event Handler for Close Button ---
     _handleCloseClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         this.hide(); // Simply hide the tooltip
     }
@@ -1644,15 +1720,24 @@ class ScoreIndicator {
         this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick.bind(this));
         this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick.bind(this));
         this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick.bind(this));
-        this.customQuestionInput?.removeEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // Prevent default form submission/newline
-                this._handleCustomQuestionClick();
-            }
-        });
+        this.customQuestionInput?.removeEventListener('keydown', this._boundHandlers.handleKeyDown);
+        
+        // Remove mobile-specific event listeners
+        if (isMobileDevice() && this.customQuestionInput) {
+            this.customQuestionInput.removeEventListener('focus', this._boundHandlers.handleMobileFocus);
+            this.customQuestionInput.removeEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
+        }
+        
         this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
         this.refreshButton?.removeEventListener('click', this._handleRefreshClick.bind(this));
-
+        
+        // Remove image button listeners
+        if (this.attachImageButton) {
+            this.attachImageButton.removeEventListener('click', this._boundHandlers.handleAttachImageClick);
+        }
+        if (this.followUpImageInput) {
+            this.followUpImageInput.removeEventListener('change', this._handleFollowUpImageSelect.bind(this));
+        }
 
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
@@ -1903,6 +1988,7 @@ class ScoreIndicator {
     }
 
     _handleMetadataToggleClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         if (!this.metadataDropdown || !this.metadataContent || !this.metadataArrow) return;
 
@@ -1919,6 +2005,7 @@ class ScoreIndicator {
     }
 
     _handleRefreshClick(e) {
+        e.preventDefault(); // Add this
         e.stopPropagation();
         if (!this.tweetId) return;
 
