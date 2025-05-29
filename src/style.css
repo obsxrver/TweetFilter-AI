@@ -1648,6 +1648,12 @@ input:checked+.toggle-slider:before {
     transition: background-color 0.2s ease, border-color 0.2s ease;
     white-space: normal; /* Allow wrapping */
     line-height: 1.3;
+    /* Prevent touch scrolling */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    /* Prevent focus outline that might cause layout shift */
+    outline: none;
 }
 
 .follow-up-question-button:hover {
@@ -1657,6 +1663,11 @@ input:checked+.toggle-slider:before {
 
 .follow-up-question-button:active {
     background-color: rgba(60, 160, 240, 0.5);
+}
+
+.follow-up-question-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 

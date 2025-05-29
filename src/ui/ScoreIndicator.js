@@ -77,7 +77,9 @@ class ScoreIndicator {
             handleMobileFocus: null,
             handleMobileTouchStart: null,
             handleAttachImageClick: null,
-            handleKeyDown: null
+            handleKeyDown: null,
+            handleFollowUpTouchStart: null,
+            handleFollowUpTouchEnd: null
         };
 
         try {
@@ -369,6 +371,49 @@ class ScoreIndicator {
 
         // Follow-up Questions (using delegation on the container)
         this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
+        
+        // Add touch event handling for mobile to prevent scrolling
+        if (isMobileDevice() && this.followUpQuestionsElement) {
+            this._boundHandlers.handleFollowUpTouchStart = (e) => {
+                const button = e.target.closest('.follow-up-question-button');
+                if (button) {
+                    e.preventDefault(); // Prevent any default touch behavior
+                    // Store the touch position to detect if it's a tap
+                    button.dataset.touchStartX = e.touches[0].clientX;
+                    button.dataset.touchStartY = e.touches[0].clientY;
+                }
+            };
+            
+            this._boundHandlers.handleFollowUpTouchEnd = (e) => {
+                const button = e.target.closest('.follow-up-question-button');
+                if (button && button.dataset.touchStartX) {
+                    e.preventDefault(); // Prevent any default behavior
+                    
+                    // Check if it was a tap (not a swipe)
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    const deltaX = Math.abs(touchEndX - parseFloat(button.dataset.touchStartX));
+                    const deltaY = Math.abs(touchEndY - parseFloat(button.dataset.touchStartY));
+                    
+                    // If movement is minimal, treat it as a tap
+                    if (deltaX < 10 && deltaY < 10) {
+                        // Trigger the click handler directly
+                        this._handleFollowUpQuestionClick({
+                            target: button,
+                            preventDefault: () => {},
+                            stopPropagation: () => {}
+                        });
+                    }
+                    
+                    // Clean up
+                    delete button.dataset.touchStartX;
+                    delete button.dataset.touchStartY;
+                }
+            };
+            
+            this.followUpQuestionsElement.addEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+            this.followUpQuestionsElement.addEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+        }
 
         // Custom Question Button
         this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
@@ -609,6 +654,22 @@ class ScoreIndicator {
                     questionButton.textContent = `🤔 ${question}`;
                     questionButton.dataset.questionIndex = index;
                     questionButton.dataset.questionText = question; // Store text for handler
+                    
+                    // Prevent focus scrolling on mobile
+                    if (isMobileDevice()) {
+                        questionButton.addEventListener('focus', (e) => {
+                            e.preventDefault();
+                            // Store current scroll position
+                            const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                            // Blur immediately to prevent focus styling
+                            e.target.blur();
+                            // Restore scroll position
+                            if (this.tooltipScrollableContentElement) {
+                                this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                            }
+                        });
+                    }
+                    
                     this.followUpQuestionsElement.appendChild(questionButton);
                 });
                 this.followUpQuestionsElement.style.display = 'block';
@@ -1723,9 +1784,17 @@ class ScoreIndicator {
         this.customQuestionInput?.removeEventListener('keydown', this._boundHandlers.handleKeyDown);
         
         // Remove mobile-specific event listeners
-        if (isMobileDevice() && this.customQuestionInput) {
-            this.customQuestionInput.removeEventListener('focus', this._boundHandlers.handleMobileFocus);
-            this.customQuestionInput.removeEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
+        if (isMobileDevice()) {
+            if (this.customQuestionInput && this._boundHandlers.handleMobileFocus) {
+                this.customQuestionInput.removeEventListener('focus', this._boundHandlers.handleMobileFocus);
+                this.customQuestionInput.removeEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
+            }
+            
+            // Remove follow-up questions touch handlers
+            if (this.followUpQuestionsElement && this._boundHandlers.handleFollowUpTouchStart) {
+                this.followUpQuestionsElement.removeEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+                this.followUpQuestionsElement.removeEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+            }
         }
         
         this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
@@ -2001,6 +2070,16 @@ class ScoreIndicator {
         } else {
             this.metadataContent.style.maxHeight = '0';
             this.metadataContent.style.padding = '0 10px'; // Match reasoning
+        }
+        
+        // Prevent any scroll jump on mobile
+        if (isMobileDevice() && this.tooltipScrollableContentElement) {
+            const scrollTop = this.tooltipScrollableContentElement.scrollTop;
+            setTimeout(() => {
+                if (this.tooltipScrollableContentElement) {
+                    this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                }
+            }, 0);
         }
     }
 
