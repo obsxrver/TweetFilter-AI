@@ -343,6 +343,12 @@ class ScoreIndicator {
 
         this._updateIndicatorUI(); // Set initial UI state
         this._updateTooltipUI(); // Set initial tooltip content (e.g., placeholders)
+
+        // In constructor or _createElements, after creating this.conversationContainerElement:
+        this.autoScrollConversation = true;
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.addEventListener('scroll', this._handleConversationScroll.bind(this));
+        }
     }
 
 
@@ -828,7 +834,7 @@ class ScoreIndicator {
 
             // --- Add Reasoning Dropdown (if present) ---
             let reasoningHtml = '';
-            if (turn.reasoning && turn.reasoning.trim() !== '') {
+            if (turn.reasoning && turn.reasoning.trim() !== '' && turn.answer !== 'pending') {
                 const formattedReasoning = formatTooltipDescription("", turn.reasoning).reasoning;
                 // Check if this dropdown was expanded
                 const wasExpanded = expandedStates.get(index);
@@ -1504,69 +1510,47 @@ class ScoreIndicator {
             return;
         }
 
-        // --- Handle Reasoning Dropdown ---
-        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        // --- Handle Streaming Reasoning Container ---
+        let streamingReasoningContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
         const hasReasoning = reasoningText && reasoningText.trim() !== '';
 
-        if (hasReasoning && !reasoningDropdown) {
-            // Create reasoning dropdown elements if they don't exist for this turn
-            reasoningDropdown = document.createElement('div');
-            reasoningDropdown.className = 'reasoning-dropdown conversation-reasoning'; // Add specific class
+        if (hasReasoning && !streamingReasoningContainer) {
+            // Create streaming reasoning container if it doesn't exist
+            streamingReasoningContainer = document.createElement('div');
+            streamingReasoningContainer.className = 'streaming-reasoning-container active';
+            streamingReasoningContainer.style.display = 'block';
 
-            const reasoningToggle = document.createElement('div');
-            reasoningToggle.className = 'reasoning-toggle';
+            const streamingReasoningText = document.createElement('div');
+            streamingReasoningText.className = 'streaming-reasoning-text';
+            streamingReasoningContainer.appendChild(streamingReasoningText);
 
-            const reasoningArrow = document.createElement('span');
-            reasoningArrow.className = 'reasoning-arrow';
-            reasoningArrow.textContent = '▶';
-
-            reasoningToggle.appendChild(reasoningArrow);
-            reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
-
-            const reasoningContent = document.createElement('div');
-            reasoningContent.className = 'reasoning-content';
-            const reasoningTextElement = document.createElement('p');
-            reasoningTextElement.className = 'reasoning-text';
-            reasoningContent.appendChild(reasoningTextElement);
-
-            reasoningDropdown.appendChild(reasoningToggle);
-            reasoningDropdown.appendChild(reasoningContent);
-
-            // Insert the dropdown *before* the answer element within the turn
+            // Insert before the answer element
             const answerElement = lastTurnElement.querySelector('.conversation-answer');
             if (answerElement) {
-                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+                lastTurnElement.insertBefore(streamingReasoningContainer, answerElement);
             } else {
-                lastTurnElement.appendChild(reasoningDropdown); // Fallback
+                lastTurnElement.appendChild(streamingReasoningContainer);
             }
-
-            // Add toggle listener specifically for this dropdown
-            reasoningToggle.addEventListener('click', (e) => {
-                 e.stopPropagation();
-                 const dropdown = e.target.closest('.reasoning-dropdown');
-                 const content = dropdown?.querySelector('.reasoning-content');
-                 const arrow = dropdown?.querySelector('.reasoning-arrow');
-                 if (!dropdown || !content || !arrow) return;
-
-                 const isExpanded = dropdown.classList.toggle('expanded');
-                 arrow.textContent = isExpanded ? '▼' : '▶';
-                 content.style.maxHeight = isExpanded ? '200px' : '0'; // Adjust max-height as needed
-                 content.style.padding = isExpanded ? '8px' : '0 8px';
-            });
         }
 
-        // Update reasoning content if dropdown exists and reasoning is present
-        if (reasoningDropdown && hasReasoning) {
-            const reasoningTextElement = reasoningDropdown.querySelector('.reasoning-text');
-            if (reasoningTextElement) {
-                const formattedReasoning = formatTooltipDescription("", reasoningText).reasoning;
-                if (reasoningTextElement.innerHTML !== formattedReasoning) {
-                    reasoningTextElement.innerHTML = formattedReasoning;
+        // Update streaming reasoning text if present
+        if (streamingReasoningContainer && hasReasoning) {
+            const streamingTextElement = streamingReasoningContainer.querySelector('.streaming-reasoning-text');
+            if (streamingTextElement) {
+                // Show only the rightmost N characters if too long
+                const maxDisplayLength = 200; // Characters to display
+                let displayText = reasoningText;
+                if (reasoningText.length > maxDisplayLength) {
+                    displayText = reasoningText.slice(-maxDisplayLength);
                 }
+                streamingTextElement.textContent = displayText;
             }
-            reasoningDropdown.style.display = 'block';
-        } else if (reasoningDropdown) {
-            // Hide dropdown if reasoning disappears (shouldn't normally happen mid-stream)
+        }
+
+        // --- Handle Reasoning Dropdown (hidden during streaming, will be shown on completion) ---
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        if (reasoningDropdown) {
+            // Hide the dropdown during streaming
             reasoningDropdown.style.display = 'none';
         }
 
@@ -1612,11 +1596,14 @@ class ScoreIndicator {
              console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
         }
 
-
         // Ensure autoscroll if needed
         if (this.autoScroll) {
             this._performAutoScroll();
         }
+
+        // In _renderStreamingAnswer, after updating the answer, call this._performConversationAutoScroll() instead of this._performAutoScroll().
+        // Remove or comment out the call to this._performAutoScroll() in _renderStreamingAnswer.
+        this._performConversationAutoScroll();
     }
 
     /**
@@ -1969,11 +1956,98 @@ class ScoreIndicator {
             const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
             if (lastTurn.answer === 'pending') {
                 lastTurn.answer = answerText;
+                // Reasoning should already be set by answerFollowUpQuestion during streaming
             }
         }
 
+        // Remove streaming reasoning container and create proper reasoning dropdown
+        this._convertStreamingToDropdown();
+
         // Refresh the tooltip UI
         this._updateTooltipUI();
+    }
+
+    /**
+     * Converts the streaming reasoning container to a proper reasoning dropdown after streaming completes.
+     * @private
+     */
+    _convertStreamingToDropdown() {
+        if (!this.conversationContainerElement) return;
+
+        const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
+        const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
+
+        if (!lastTurnElement) return;
+
+        // Find and remove streaming container
+        const streamingContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
+        if (streamingContainer) {
+            streamingContainer.remove();
+        }
+
+        // Get the reasoning from the last conversation history turn
+        const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length - 1] : null;
+        if (!lastHistoryEntry || !lastHistoryEntry.reasoning || lastHistoryEntry.reasoning.trim() === '') {
+            return; // No reasoning to show
+        }
+
+        // Create reasoning dropdown if it doesn't exist
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        if (!reasoningDropdown) {
+            reasoningDropdown = document.createElement('div');
+            reasoningDropdown.className = 'reasoning-dropdown conversation-reasoning';
+
+            const reasoningToggle = document.createElement('div');
+            reasoningToggle.className = 'reasoning-toggle';
+
+            const reasoningArrow = document.createElement('span');
+            reasoningArrow.className = 'reasoning-arrow';
+            reasoningArrow.textContent = '▶';
+
+            reasoningToggle.appendChild(reasoningArrow);
+            reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
+
+            const reasoningContent = document.createElement('div');
+            reasoningContent.className = 'reasoning-content';
+            const reasoningTextElement = document.createElement('p');
+            reasoningTextElement.className = 'reasoning-text';
+            reasoningContent.appendChild(reasoningTextElement);
+
+            reasoningDropdown.appendChild(reasoningToggle);
+            reasoningDropdown.appendChild(reasoningContent);
+
+            // Insert before the answer element
+            const answerElement = lastTurnElement.querySelector('.conversation-answer');
+            if (answerElement) {
+                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+            } else {
+                lastTurnElement.appendChild(reasoningDropdown);
+            }
+
+            // Add toggle listener
+            reasoningToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const dropdown = e.target.closest('.reasoning-dropdown');
+                const content = dropdown?.querySelector('.reasoning-content');
+                const arrow = dropdown?.querySelector('.reasoning-arrow');
+                if (!dropdown || !content || !arrow) return;
+
+                const isExpanded = dropdown.classList.toggle('expanded');
+                arrow.textContent = isExpanded ? '▼' : '▶';
+                content.style.maxHeight = isExpanded ? '200px' : '0';
+                content.style.padding = isExpanded ? '8px' : '0 8px';
+            });
+        }
+
+        // Update reasoning content
+        const reasoningTextElement = reasoningDropdown.querySelector('.reasoning-text');
+        if (reasoningTextElement) {
+            const formattedReasoning = formatTooltipDescription("", lastHistoryEntry.reasoning).reasoning;
+            reasoningTextElement.innerHTML = formattedReasoning;
+        }
+
+        // Show the dropdown
+        reasoningDropdown.style.display = 'block';
     }
 
     /**
@@ -2130,6 +2204,36 @@ class ScoreIndicator {
             // If scheduleTweetProcessing is missing, we can't do much here.
             // The old indicator is gone. A new one won't be created.
         }
+    }
+
+    /**
+     * Handle scroll events in the conversation history area for granular auto-scroll.
+     */
+    _handleConversationScroll() {
+        if (!this.conversationContainerElement) return;
+        const isNearBottom = this.conversationContainerElement.scrollHeight - this.conversationContainerElement.scrollTop - this.conversationContainerElement.clientHeight < 40;
+        if (!isNearBottom) {
+            if (this.autoScrollConversation) {
+                this.autoScrollConversation = false;
+            }
+        } else {
+            if (!this.autoScrollConversation) {
+                this.autoScrollConversation = true;
+            }
+        }
+    }
+
+    /**
+     * Auto-scroll the conversation history area to the bottom if allowed.
+     */
+    _performConversationAutoScroll() {
+        if (!this.conversationContainerElement || !this.autoScrollConversation) return;
+        requestAnimationFrame(() => {
+            this.conversationContainerElement.scrollTo({
+                top: this.conversationContainerElement.scrollHeight,
+                behavior: 'instant'
+            });
+        });
     }
 }
 

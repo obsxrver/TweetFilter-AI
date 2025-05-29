@@ -756,23 +756,31 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             if (useStreaming) {
                 await new Promise((resolve, reject) => {
                     let aggregatedContent = "";
-                    // Reasoning is part of the assistant's message in qaHistory, not a separate stream here.
-                    // We will parse it after the full message is received.
+                    let aggregatedReasoning = ""; // Add reasoning tracking
 
                     getCompletionStreaming(
                         request, apiKey,
                         // onChunk
                         (chunkData) => {
                             aggregatedContent = chunkData.content || aggregatedContent;
-                            // Render streaming answer directly to UI.
-                            // The reasoning part of the UI will be updated once the full message is available.
-                            indicatorInstance._renderStreamingAnswer(aggregatedContent, "");
+                            aggregatedReasoning = chunkData.reasoning || aggregatedReasoning; // Track reasoning
+                            // Render streaming answer with reasoning
+                            indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
                         },
                         // onComplete
                         (result) => {
                             finalAnswerContent = result.content || aggregatedContent;
+                            const finalReasoning = result.reasoning || aggregatedReasoning; // Get final reasoning
                             const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                             finalQaHistory.push(assistantMessage);
+
+                            // Store reasoning in last conversation history turn
+                            if (indicatorInstance.conversationHistory.length > 0) {
+                                const lastTurn = indicatorInstance.conversationHistory[indicatorInstance.conversationHistory.length - 1];
+                                if (lastTurn.answer === 'pending') {
+                                    lastTurn.reasoning = finalReasoning;
+                                }
+                            }
 
                             indicatorInstance.updateAfterFollowUp({
                                 assistantResponseContent: finalAnswerContent,
