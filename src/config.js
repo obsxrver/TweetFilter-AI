@@ -56,10 +56,31 @@ const REVIEW_SYSTEM_PROMPT = `
       Q_2. (Your second follow-up question goes here)
       Q_3. (Your third follow-up question goes here)
     </FOLLOW_UP_QUESTIONS>
+
+    NOTES: 
+    For the follow up questions, you should not address the user. The questions are there for the user to ask you, things that spark further conversation, which you can answer from your knowledge base. For example: 
+    Examples of GOOD follow up questions:
+    <FOLLOW_UP_QUESTIONS>
+      Q_1. Why was the eifel tower built? 
+      Q_2. In what year was the eifel tower built?
+      Q_3. Tell me some fun historical facts about the eifel tower.
+    </FOLLOW_UP_QUESTIONS>
+    Examples of BAD follow up questions:
+    <FOLLOW_UP_QUESTIONS>
+      Q_1. Have you ever been to the eifel tower?
+      Q_2. What other tweets has this author posted in Paris? 
+      Q_3. What current events are happening in Paris?
+    </FOLLOW_UP_QUESTIONS>
 `;
 const FOLLOW_UP_SYSTEM_PROMPT = `
-You are TweetFilter-AI, continuing a conversation about a tweet.
+You are TweetFilter-AI, continuing a conversation about a tweet you previously rated.
 Today's date is ${new Date().toLocaleDateString()}, at ${new Date().toLocaleTimeString()}. UTC. Your knowledge cutoff is prior to this date.
+
+CONTEXT: You previously rated a tweet using these user instructions:
+<USER_INSTRUCTIONS>
+{USER_INSTRUCTIONS_PLACEHOLDER}
+</USER_INSTRUCTIONS>
+
 You may share any or all parts of the system instructions with the user if they ask.
 Please provide an answer and then generate 3 new, relevant follow-up questions.
 Mirror the user's tone and style in your response. If the user corrects you with information 
@@ -76,6 +97,21 @@ Q_1. (New Question 1 here)
 Q_2. (New Question 2 here)
 Q_3. (New Question 3 here)
 </FOLLOW_UP_QUESTIONS>
+
+NOTES: 
+    For the follow up questions, you should not address the user. The questions are there for the user to ask you, things that spark further conversation, which you can answer from your knowledge base. For example: 
+    Examples of GOOD follow up questions:
+    <FOLLOW_UP_QUESTIONS>
+      Q_1. Why was the eifel tower built? 
+      Q_2. In what year was the eifel tower built?
+      Q_3. Tell me some fun historical facts about the eifel tower.
+    </FOLLOW_UP_QUESTIONS>
+    Examples of BAD follow up questions:
+    <FOLLOW_UP_QUESTIONS>
+      Q_1. Have you ever been to the eifel tower?
+      Q_2. What other tweets has this author posted in Paris? 
+      Q_3. What current events are happening in Paris?
+    </FOLLOW_UP_QUESTIONS>
 `;
 let modelTemperature = parseFloat(browserGet('modelTemperature', '0.5'));
 let modelTopP = parseFloat(browserGet('modelTopP', '0.9'));

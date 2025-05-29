@@ -69,7 +69,7 @@ class TweetCache {
      * @param {Object} rating - The rating object. Can be a partial update.
      * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or use debounced save.
      */
-    set(tweetId, rating, saveImmediately = false) {
+    set(tweetId, rating, saveImmediately = true) {
         const existingEntry = this.cache[tweetId] || {};
         const updatedEntry = { ...existingEntry }; // Start with a copy
 

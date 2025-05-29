@@ -119,7 +119,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             mediaUrls: [],
             apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Globally available from config.js
-            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Globally available from config.js
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, // Globally available from config.js
+            userInstructions: currentInstructions
         });
         return {
             score: 0,
@@ -140,7 +141,10 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         messages: [
             {
                 role: "system",
-                content: [{ type: "text", text: REVIEW_SYSTEM_PROMPT}]
+                content: [{ type: "text", text: REVIEW_SYSTEM_PROMPT + `
+
+USER'S CUSTOM INSTRUCTIONS:
+${currentInstructions}`}]
             },
             {
                 role: "user",
@@ -148,8 +152,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     { 
                         type: "text", 
                         text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
-
-<USER_INSTRUCTIONS>[${currentInstructions}]</USER_INSTRUCTIONS>
 
 <TWEET>[${tweetText}]</TWEET>
 Follow this expected response format exactly, or you break the UI:
@@ -239,7 +241,8 @@ EXPECTED_RESPONSE_FORMAT:\n
                     mediaUrls: mediaUrls,   // The media URLs associated with that tweet
                     apiResponseContent: result.content,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
-                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+                    userInstructions: currentInstructions
                 });
 
                 const finalScore = indicatorInstance.score;
@@ -295,7 +298,8 @@ EXPECTED_RESPONSE_FORMAT:\n
                     mediaUrls: mediaUrls,
                     apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
-                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+                    userInstructions: currentInstructions
                 });
                 tweetCache.set(tweetId, {
                     score: 5,
@@ -332,7 +336,8 @@ EXPECTED_RESPONSE_FORMAT:\n
         mediaUrls: mediaUrls,
         apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
         reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
-        followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+        followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+        userInstructions: currentInstructions
     });
     return {
         score: 5,

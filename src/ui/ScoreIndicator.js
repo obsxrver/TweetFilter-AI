@@ -1110,12 +1110,8 @@ class ScoreIndicator {
             uploadedImages: [...this.uploadedImageDataUrls], // Store a copy of the image URLs array
             reasoning: '' // Initialize reasoning for this turn
         });
-        this._clearFollowUpImage(); // Clear preview after data is captured
-        this._updateTooltipUI(); // Update UI to show pending state
-        this.questions = []; // Clear suggested questions
-        this._updateTooltipUI(); // Update UI again to remove suggested questions
 
-        // Construct the user message for the API history (raw question text)
+        // Construct the user message for the API history (raw question text) BEFORE clearing images
         const userMessageContentForHistory = [{ type: "text", text: questionText }];
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
@@ -1126,6 +1122,11 @@ class ScoreIndicator {
 
         // Create a new history array for the API call, including the new raw user message
         const historyForApiCall = [...this.qaConversationHistory, userApiMessage];
+
+        this._clearFollowUpImage(); // Clear preview after data is captured AND API message is constructed
+        this._updateTooltipUI(); // Update UI to show pending state
+        this.questions = []; // Clear suggested questions
+        this._updateTooltipUI(); // Update UI again to remove suggested questions
 
         if (!apiKey) {
             showStatus('API key missing. Cannot answer question.', 'error');
@@ -1753,8 +1754,9 @@ class ScoreIndicator {
      * @param {string} params.apiResponseContent - The raw content from the API response.
      * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
      * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
+     * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
      */
-    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt }) {
+    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
         // Parse apiResponseContent for analysis, score, and initial questions
         const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
         const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
@@ -1772,11 +1774,17 @@ class ScoreIndicator {
             userMessageContent.push({ type: "image_url", image_url: { "url": url } });
         });
 
+        // Substitute user instructions into the follow-up system prompt
+        const followUpSystemPromptWithInstructions = followUpSystemPrompt.replace(
+            '{USER_INSTRUCTIONS_PLACEHOLDER}', 
+            userInstructions || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'
+        );
+
         this.qaConversationHistory = [
             { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
             { role: "user", content: userMessageContent },
             { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
-            { role: "system", content: [{ type: "text", text: followUpSystemPrompt }] }
+            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] }
         ];
 
         // Update UI elements
