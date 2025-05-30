@@ -435,25 +435,29 @@ class ScoreIndicator {
         // Add focus handler for mobile to prevent scrolling
         if (isMobileDevice() && this.customQuestionInput) {
             this._boundHandlers.handleMobileFocus = (event) => {
-                event.preventDefault();
+                // Don't prevent default - let the textarea receive focus naturally
+                // Just track that we're focusing to handle scroll later
+                this._isFocusing = true;
+                
                 // Store current scroll position
                 const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
-                // Restore scroll position after a brief delay
-                setTimeout(() => {
-                    if (this.tooltipScrollableContentElement) {
+                
+                // Use RAF to restore scroll position after browser handles focus
+                requestAnimationFrame(() => {
+                    if (this.tooltipScrollableContentElement && this._isFocusing) {
                         this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                        this._isFocusing = false;
                     }
-                }, 0);
+                });
             };
             
             this._boundHandlers.handleMobileTouchStart = (event) => {
-                // Don't prevent default completely as it would prevent input
-                // Just store scroll position
+                // Store scroll position but don't interfere with touch
                 this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
             };
             
             this.customQuestionInput.addEventListener('focus', this._boundHandlers.handleMobileFocus);
-            this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
+            this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: true }); // Make passive
         }
 
         // Metadata Toggle
@@ -664,16 +668,9 @@ class ScoreIndicator {
                     // Prevent focus scrolling on mobile
                     if (isMobileDevice()) {
                         questionButton.addEventListener('focus', (e) => {
-                            e.preventDefault();
-                            // Store current scroll position
-                            const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
-                            // Blur immediately to prevent focus styling
+                            // Blur immediately to prevent focus styling and scrolling
                             e.target.blur();
-                            // Restore scroll position
-                            if (this.tooltipScrollableContentElement) {
-                                this.tooltipScrollableContentElement.scrollTop = scrollTop;
-                            }
-                        });
+                        }, { passive: true });
                     }
                     
                     this.followUpQuestionsElement.appendChild(questionButton);
@@ -888,19 +885,35 @@ class ScoreIndicator {
             const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
             if (!toggleButton) return;
 
-            e.preventDefault(); // Add this to prevent scrolling
-            e.stopPropagation();
+            // Only prevent default on non-touch events or if we're sure it's a tap
+            if (e.type === 'click' && !e.isTrusted) {
+                // This might be a synthetic click from touch, let it through
+                return;
+            }
+            
             const dropdown = toggleButton.closest('.reasoning-dropdown');
             const content = dropdown?.querySelector('.reasoning-content');
             const arrow = dropdown?.querySelector('.reasoning-arrow');
 
             if (!dropdown || !content || !arrow) return;
+            
+            // Store scroll position before toggle
+            const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
             const isExpanded = dropdown.classList.toggle('expanded');
             arrow.textContent = isExpanded ? '▼' : '▶';
             toggleButton.setAttribute('aria-expanded', isExpanded);
             content.style.maxHeight = isExpanded ? '200px' : '0';
             content.style.padding = isExpanded ? '8px' : '0 8px';
+            
+            // Restore scroll position if on mobile
+            if (isMobileDevice() && this.tooltipScrollableContentElement) {
+                requestAnimationFrame(() => {
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                });
+            }
         });
     }
 
@@ -1132,8 +1145,9 @@ class ScoreIndicator {
     }
 
     _handlePinClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (this.isPinned) {
             this.unpin();
         } else {
@@ -1142,8 +1156,9 @@ class ScoreIndicator {
     }
 
     _handleCopyClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.descriptionElement || !this.reasoningTextElement || !this.copyButton) return;
 
         let textToCopy = this.descriptionElement.textContent || ''; // Use textContent to avoid HTML
@@ -1167,9 +1182,13 @@ class ScoreIndicator {
     }
 
     _handleReasoningToggleClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.reasoningDropdown || !this.reasoningContent || !this.reasoningArrow) return;
+
+        // Store scroll position before toggle
+        const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
         const isExpanded = this.reasoningDropdown.classList.toggle('expanded');
         this.reasoningArrow.textContent = isExpanded ? '▼' : '▶';
@@ -1181,12 +1200,22 @@ class ScoreIndicator {
             this.reasoningContent.style.maxHeight = '0';
             this.reasoningContent.style.padding = '0 10px'; // Keep horizontal padding
         }
+        
+        // Restore scroll position on mobile to prevent jumping
+        if (isMobileDevice() && this.tooltipScrollableContentElement) {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement) {
+                    this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                }
+            });
+        }
     }
 
 
     _handleScrollButtonClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.tooltipScrollableContentElement) return; // MODIFIED
 
         this.autoScroll = true;
@@ -1737,8 +1766,9 @@ class ScoreIndicator {
 
     // --- New Event Handler for Close Button ---
     _handleCloseClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         this.hide(); // Simply hide the tooltip
     }
     // --- End New Event Handler ---
@@ -1761,9 +1791,9 @@ class ScoreIndicator {
         this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
         this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
         this.tooltipScrollableContentElement?.removeEventListener('scroll', this._handleTooltipScroll.bind(this));
-        this.pinButton?.removeEventListener('click', this._handlePinClick);
-        this.copyButton?.removeEventListener('click', this._handleCopyClick);
-        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick);
+        this.pinButton?.removeEventListener('click', this._handlePinClick.bind(this));
+        this.copyButton?.removeEventListener('click', this._handleCopyClick.bind(this));
+        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick.bind(this));
         this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick.bind(this));
         this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick.bind(this));
         this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick.bind(this));
@@ -2131,9 +2161,13 @@ class ScoreIndicator {
     }
 
     _handleMetadataToggleClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.metadataDropdown || !this.metadataContent || !this.metadataArrow) return;
+
+        // Store scroll position before toggle  
+        const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
         const isExpanded = this.metadataDropdown.classList.toggle('expanded');
         this.metadataArrow.textContent = isExpanded ? '▼' : '▶';
@@ -2146,20 +2180,20 @@ class ScoreIndicator {
             this.metadataContent.style.padding = '0 10px'; // Match reasoning
         }
         
-        // Prevent any scroll jump on mobile
+        // Restore scroll position on mobile to prevent jumping
         if (isMobileDevice() && this.tooltipScrollableContentElement) {
-            const scrollTop = this.tooltipScrollableContentElement.scrollTop;
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 if (this.tooltipScrollableContentElement) {
                     this.tooltipScrollableContentElement.scrollTop = scrollTop;
                 }
-            }, 0);
+            });
         }
     }
 
     _handleRefreshClick(e) {
-        e.preventDefault(); // Add this
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.tweetId) return;
 
         console.log(`[ScoreIndicator ${this.tweetId}] Refresh clicked.`);
