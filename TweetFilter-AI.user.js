@@ -1243,7 +1243,8 @@ class ScoreIndicator {
             handleAttachImageClick: null,
             handleKeyDown: null,
             handleFollowUpTouchStart: null,
-            handleFollowUpTouchEnd: null
+            handleFollowUpTouchEnd: null,
+            handleConversationReasoningToggle: null // Add this to store the bound handler
         };
         try {
             this._createElements(tweetArticle);
@@ -1464,6 +1465,183 @@ class ScoreIndicator {
         if (this.conversationContainerElement) {
             this.conversationContainerElement.addEventListener('scroll', this._handleConversationScroll.bind(this));
         }
+        // Simulate initial taps on mobile to bypass first-tap issues
+        if (isMobileDevice()) {
+            this._initializeMobileInteractionFix();
+        }
+    }
+    /**
+     * Initializes a fix for mobile first-tap scrolling issues by adding
+     * a CSS class and tracking first interactions on elements.
+     * @private
+     */
+    _initializeMobileInteractionFix() {
+        // Track if we've had the first interaction to prevent scroll jumps
+        this._hasFirstInteraction = false;
+        // Create a wrapper function to handle first tap logic
+        const handleFirstTap = (e) => {
+            if (!this._hasFirstInteraction) {
+                // Mark that we've had first interaction
+                this._hasFirstInteraction = true;
+                // Store current scroll position before any potential jump
+                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                // Use a small timeout to catch any scroll jumps that happen after the event
+                setTimeout(() => {
+                    if (this.tooltipScrollableContentElement && 
+                        this.tooltipScrollableContentElement.scrollTop !== scrollTop) {
+                        // Restore the scroll position if it jumped
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                }, 0);
+                // For input elements, we need to handle focus differently
+                if (e.target === this.customQuestionInput && e.type === 'touchstart') {
+                    // Allow the default behavior but track scroll
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                        }
+                    });
+                }
+            }
+        };
+        // Add passive touchstart listeners to all interactive elements
+        const interactiveElements = [
+            this.customQuestionInput,
+            this.customQuestionButton,
+            this.reasoningToggle,
+            this.metadataToggle,
+            this.pinButton,
+            this.copyButton,
+            this.tooltipCloseButton,
+            this.refreshButton,
+            this.scrollButton
+        ].filter(el => el);
+        interactiveElements.forEach(element => {
+            element.addEventListener('touchstart', handleFirstTap, { passive: true, capture: true });
+        });
+        // Special handling for the textarea to prevent scroll on focus
+        if (this.customQuestionInput) {
+            let scrollBeforeFocus = 0;
+            this.customQuestionInput.addEventListener('touchstart', (e) => {
+                scrollBeforeFocus = this.tooltipScrollableContentElement?.scrollTop || 0;
+            }, { passive: true });
+            this.customQuestionInput.addEventListener('focus', (e) => {
+                // On first focus, restore scroll position
+                if (!this._hasFirstInteraction || scrollBeforeFocus > 0) {
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollBeforeFocus;
+                        }
+                    });
+                }
+            });
+        }
+        // Handle conversation container for dynamically created reasoning toggles
+        if (this.conversationContainerElement) {
+            // Use capturing phase to catch events before they bubble
+            this.conversationContainerElement.addEventListener('touchstart', (e) => {
+                const toggle = e.target.closest('.reasoning-toggle');
+                if (toggle) {
+                    handleFirstTap(e);
+                }
+            }, { passive: true, capture: true });
+        }
+        // Also handle the main scrollable content to prevent unwanted scrolls
+        if (this.tooltipScrollableContentElement) {
+            let lastTouchY = 0;
+            let scrollLocked = false;
+            this.tooltipScrollableContentElement.addEventListener('touchstart', (e) => {
+                lastTouchY = e.touches[0].clientY;
+                scrollLocked = false;
+                // If this is the first interaction and we're tapping an interactive element
+                if (!this._hasFirstInteraction) {
+                    const interactiveTarget = e.target.closest('button, textarea, .reasoning-toggle');
+                    if (interactiveTarget) {
+                        scrollLocked = true;
+                        const scrollTop = this.tooltipScrollableContentElement.scrollTop;
+                        // Prevent scroll for a brief moment
+                        requestAnimationFrame(() => {
+                            if (scrollLocked && this.tooltipScrollableContentElement) {
+                                this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                            }
+                        });
+                        // Unlock after a short delay
+                        setTimeout(() => {
+                            scrollLocked = false;
+                        }, 100);
+                    }
+                }
+            }, { passive: true });
+        }
+    }
+    /**
+     * Simulates initial tap events on mobile interactive elements to bypass
+     * the first-tap scrolling issue that occurs on some mobile browsers.
+     * @private
+     */
+    _simulateInitialMobileTaps() {
+        // Use setTimeout to ensure DOM is fully ready
+        setTimeout(() => {
+            // List of elements that need the initial tap simulation
+            const elementsToTap = [
+                this.customQuestionInput,
+                this.customQuestionButton,
+                this.reasoningToggle,
+                this.metadataToggle
+            ].filter(el => el); // Filter out null/undefined elements
+            elementsToTap.forEach(element => {
+                try {
+                    // Create and dispatch a touchstart event
+                    const touchEvent = new TouchEvent('touchstart', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        touches: [new Touch({
+                            identifier: Date.now(),
+                            target: element,
+                            clientX: 0,
+                            clientY: 0,
+                            screenX: 0,
+                            screenY: 0,
+                            pageX: 0,
+                            pageY: 0,
+                        })]
+                    });
+                    element.dispatchEvent(touchEvent);
+                    // Immediately dispatch touchend
+                    const touchEndEvent = new TouchEvent('touchend', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        changedTouches: [new Touch({
+                            identifier: Date.now(),
+                            target: element,
+                            clientX: 0,
+                            clientY: 0,
+                            screenX: 0,
+                            screenY: 0,
+                            pageX: 0,
+                            pageY: 0,
+                        })]
+                    });
+                    element.dispatchEvent(touchEndEvent);
+                } catch (e) {
+                    // Fallback for browsers that don't support Touch constructor
+                    try {
+                        const event = document.createEvent('TouchEvent');
+                        event.initTouchEvent('touchstart', true, true);
+                        element.dispatchEvent(event);
+                    } catch (fallbackError) {
+                        // If touch events aren't supported, try a click
+                        element.click();
+                        // Immediately blur to prevent any focus issues
+                        if (element.blur) {
+                            element.blur();
+                        }
+                    }
+                }
+            });
+        }, 100); // Small delay to ensure everything is ready
     }
     /** Adds necessary event listeners to the indicator and tooltip. */
     _addEventListeners() {
@@ -1740,6 +1918,19 @@ class ScoreIndicator {
                     questionButton.dataset.questionText = question; // Store text for handler
                     // Prevent focus scrolling on mobile
                     if (isMobileDevice()) {
+                        // Track if this specific button has been tapped before
+                        let hasBeenTapped = false;
+                        questionButton.addEventListener('touchstart', (e) => {
+                            if (!hasBeenTapped) {
+                                hasBeenTapped = true;
+                                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                                requestAnimationFrame(() => {
+                                    if (this.tooltipScrollableContentElement) {
+                                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                                    }
+                                });
+                            }
+                        }, { passive: true });
                         questionButton.addEventListener('focus', (e) => {
                             // Blur immediately to prevent focus styling and scrolling
                             e.target.blur();
@@ -1931,10 +2122,12 @@ class ScoreIndicator {
      */
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
-        // Remove any existing listener
-        this.conversationContainerElement.removeEventListener('click', this._handleConversationReasoningToggle);
-        // Add the new listener, making sure to bind 'this'
-        this.conversationContainerElement.addEventListener('click', (e) => {
+        // Remove any existing listener using the stored reference
+        if (this._boundHandlers.handleConversationReasoningToggle) {
+            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+        }
+        // Create and store the new bound handler
+        this._boundHandlers.handleConversationReasoningToggle = (e) => {
             const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
             if (!toggleButton) return;
             // Only prevent default on non-touch events or if we're sure it's a tap
@@ -1961,7 +2154,9 @@ class ScoreIndicator {
                     }
                 });
             }
-        });
+        };
+        // Add the new listener using the stored reference
+        this.conversationContainerElement.addEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
     }
     _performAutoScroll() {
         if (!this.tooltipScrollableContentElement || !this.autoScroll || !this.isVisible) return; // MODIFIED
@@ -2734,6 +2929,10 @@ class ScoreIndicator {
         }
         if (this.followUpImageInput) {
             this.followUpImageInput.removeEventListener('change', this._handleFollowUpImageSelect.bind(this));
+        }
+        // Remove conversation reasoning toggle listener
+        if (this.conversationContainerElement && this._boundHandlers.handleConversationReasoningToggle) {
+            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
         }
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
