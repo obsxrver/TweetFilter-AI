@@ -233,8 +233,14 @@ class ScoreIndicator {
 
         // Add event listener for dynamic height adjustment
         this.customQuestionInput.addEventListener('input', function() {
-            this.style.height = 'auto'; // Reset height to recalculate
-            this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
+            // If empty, reset to single row
+            if (this.value.trim() === '') {
+                this.style.height = 'auto';
+                this.rows = 1;
+            } else {
+                this.style.height = 'auto'; // Reset height to recalculate
+                this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
+            }
             // Optionally, adjust rows attribute if preferred, but direct height is often smoother
             // const computedStyle = window.getComputedStyle(this);
             // const lineHeight = parseFloat(computedStyle.lineHeight);
@@ -279,7 +285,8 @@ class ScoreIndicator {
             }
         }
         this.customQuestionContainer.appendChild(this.customQuestionButton);
-        this.tooltipScrollableContentElement.appendChild(this.customQuestionContainer); // MODIFIED: Append to scrollable
+        // REMOVED: No longer appending to scrollable content
+        // this.tooltipScrollableContentElement.appendChild(this.customQuestionContainer);
 
         // Pre-trigger focus on mobile to handle Safari's first-focus scroll behavior
         if (isMobileDevice() && this.customQuestionInput) {
@@ -318,7 +325,8 @@ class ScoreIndicator {
             this.followUpImageContainer = document.createElement('div');
             this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container'; // New class for styling
             // this.followUpImageContainer.style.display = 'none'; // Display handled by content
-            this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer);
+            // MOVED: Image preview should also be fixed at bottom with the input
+            // this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer);
         }
         // --- End Image Preview and Remove Area ---
 
@@ -347,11 +355,24 @@ class ScoreIndicator {
         this.metadataContent.appendChild(this.metadataElement);
         this.metadataDropdown.appendChild(this.metadataToggle);
         this.metadataDropdown.appendChild(this.metadataContent);
-        this.tooltipScrollableContentElement.appendChild(this.metadataDropdown);
+        // REMOVED: No longer appending to scrollable content
+        // this.tooltipScrollableContentElement.appendChild(this.metadataDropdown);
         // --- End Metadata Dropdown Area ---
 
         // --- ADD Scrollable Content Wrapper to Tooltip Element ---
         this.tooltipElement.appendChild(this.tooltipScrollableContentElement);
+
+        // --- Fixed Bottom Input Area ---
+        // Add image preview container if it exists (above the input)
+        if (this.followUpImageContainer) {
+            this.tooltipElement.appendChild(this.followUpImageContainer);
+        }
+        
+        // Add custom question container (fixed at bottom)
+        this.tooltipElement.appendChild(this.customQuestionContainer);
+        
+        // Add metadata dropdown (below input area)
+        this.tooltipElement.appendChild(this.metadataDropdown);
 
         // --- Scroll-to-Bottom Button ---
         this.scrollButton = document.createElement('div');
@@ -663,28 +684,20 @@ class ScoreIndicator {
         
         // Add focus handler for mobile to prevent scrolling
         if (isMobileDevice() && this.customQuestionInput) {
-            // Since we pre-trigger focus during creation, we can use a simpler handler
+            // With the input outside scrollable area, we only need basic tracking
             this._boundHandlers.handleMobileFocus = (event) => {
-                // Just maintain scroll position during any focus event
-                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
-                
-                // Use double RAF to ensure scroll restoration happens after any browser adjustments
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        if (this.tooltipScrollableContentElement) {
-                            this.tooltipScrollableContentElement.scrollTop = scrollTop;
-                        }
-                    });
-                });
+                // No longer need to prevent scrolling since input is outside scrollable content
+                // Just track focus state if needed for other purposes
             };
             
             this._boundHandlers.handleMobileTouchStart = (event) => {
-                // Store scroll position before potential focus
+                // Store any state if needed
                 this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
             };
             
-            this.customQuestionInput.addEventListener('focus', this._boundHandlers.handleMobileFocus);
-            this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: true });
+            // Only add listeners if we actually need them for something
+            // this.customQuestionInput.addEventListener('focus', this._boundHandlers.handleMobileFocus);
+            // this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: true });
         }
 
         // Metadata Toggle
@@ -1624,6 +1637,9 @@ class ScoreIndicator {
         // Clear the input field after initiating the send for custom questions
         if (this.customQuestionInput) {
             this.customQuestionInput.value = '';
+            // Reset the textarea height to single row
+            this.customQuestionInput.style.height = 'auto';
+            this.customQuestionInput.rows = 1;
         }
     }
 
@@ -1961,41 +1977,6 @@ class ScoreIndicator {
         }
         // Ensure scroll button visibility is correct on show
         this._updateScrollButtonVisibility();
-        
-        // Pre-trigger focus on mobile to handle Safari's focus scroll behavior
-        if (isMobileDevice() && this.customQuestionInput && this.tooltipScrollableContentElement) {
-            // Use a small delay to ensure the tooltip is fully rendered
-            setTimeout(() => {
-                if (!this.isVisible || !this.customQuestionInput || !this.tooltipScrollableContentElement) return;
-                
-                // Store current scroll position
-                const currentScroll = this.tooltipScrollableContentElement.scrollTop;
-                
-                // Temporarily prevent scroll
-                const preventScroll = (e) => {
-                    if (this.tooltipScrollableContentElement) {
-                        this.tooltipScrollableContentElement.scrollTop = currentScroll;
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
-                };
-                
-                // Add scroll prevention
-                this.tooltipScrollableContentElement.addEventListener('scroll', preventScroll, { passive: false });
-                
-                // Focus and blur to trigger Safari's behavior
-                this.customQuestionInput.focus({ preventScroll: true });
-                this.customQuestionInput.blur();
-                
-                // Clean up and restore scroll
-                setTimeout(() => {
-                    this.tooltipScrollableContentElement?.removeEventListener('scroll', preventScroll);
-                    if (this.tooltipScrollableContentElement) {
-                        this.tooltipScrollableContentElement.scrollTop = currentScroll;
-                    }
-                }, 100);
-            }, 50);
-        }
     }
 
     /** Hides the tooltip unless it's pinned. */
