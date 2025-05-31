@@ -1961,6 +1961,41 @@ class ScoreIndicator {
         }
         // Ensure scroll button visibility is correct on show
         this._updateScrollButtonVisibility();
+        
+        // Pre-trigger focus on mobile to handle Safari's focus scroll behavior
+        if (isMobileDevice() && this.customQuestionInput && this.tooltipScrollableContentElement) {
+            // Use a small delay to ensure the tooltip is fully rendered
+            setTimeout(() => {
+                if (!this.isVisible || !this.customQuestionInput || !this.tooltipScrollableContentElement) return;
+                
+                // Store current scroll position
+                const currentScroll = this.tooltipScrollableContentElement.scrollTop;
+                
+                // Temporarily prevent scroll
+                const preventScroll = (e) => {
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = currentScroll;
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                };
+                
+                // Add scroll prevention
+                this.tooltipScrollableContentElement.addEventListener('scroll', preventScroll, { passive: false });
+                
+                // Focus and blur to trigger Safari's behavior
+                this.customQuestionInput.focus({ preventScroll: true });
+                this.customQuestionInput.blur();
+                
+                // Clean up and restore scroll
+                setTimeout(() => {
+                    this.tooltipScrollableContentElement?.removeEventListener('scroll', preventScroll);
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = currentScroll;
+                    }
+                }, 100);
+            }, 50);
+        }
     }
 
     /** Hides the tooltip unless it's pinned. */
