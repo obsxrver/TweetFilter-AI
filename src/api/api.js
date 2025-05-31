@@ -119,7 +119,8 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             mediaUrls: [],
             apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Globally available from config.js
-            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT // Globally available from config.js
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, // Globally available from config.js
+            userInstructions: currentInstructions
         });
         return {
             score: 0,
@@ -140,7 +141,10 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         messages: [
             {
                 role: "system",
-                content: [{ type: "text", text: REVIEW_SYSTEM_PROMPT}]
+                content: [{ type: "text", text: REVIEW_SYSTEM_PROMPT + `
+
+USER'S CUSTOM INSTRUCTIONS:
+${currentInstructions}`}]
             },
             {
                 role: "user",
@@ -148,8 +152,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
                     { 
                         type: "text", 
                         text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
-
-<USER_INSTRUCTIONS>[${currentInstructions}]</USER_INSTRUCTIONS>
 
 <TWEET>[${tweetText}]</TWEET>
 Follow this expected response format exactly, or you break the UI:
@@ -239,7 +241,8 @@ EXPECTED_RESPONSE_FORMAT:\n
                     mediaUrls: mediaUrls,   // The media URLs associated with that tweet
                     apiResponseContent: result.content,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
-                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+                    userInstructions: currentInstructions
                 });
 
                 const finalScore = indicatorInstance.score;
@@ -295,7 +298,8 @@ EXPECTED_RESPONSE_FORMAT:\n
                     mediaUrls: mediaUrls,
                     apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
-                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+                    userInstructions: currentInstructions
                 });
                 tweetCache.set(tweetId, {
                     score: 5,
@@ -332,7 +336,8 @@ EXPECTED_RESPONSE_FORMAT:\n
         mediaUrls: mediaUrls,
         apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
         reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
-        followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT
+        followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+        userInstructions: currentInstructions
     });
     return {
         score: 5,
@@ -751,23 +756,31 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             if (useStreaming) {
                 await new Promise((resolve, reject) => {
                     let aggregatedContent = "";
-                    // Reasoning is part of the assistant's message in qaHistory, not a separate stream here.
-                    // We will parse it after the full message is received.
+                    let aggregatedReasoning = ""; // Add reasoning tracking
 
                     getCompletionStreaming(
                         request, apiKey,
                         // onChunk
                         (chunkData) => {
                             aggregatedContent = chunkData.content || aggregatedContent;
-                            // Render streaming answer directly to UI.
-                            // The reasoning part of the UI will be updated once the full message is available.
-                            indicatorInstance._renderStreamingAnswer(aggregatedContent, "");
+                            aggregatedReasoning = chunkData.reasoning || aggregatedReasoning; // Track reasoning
+                            // Render streaming answer with reasoning
+                            indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
                         },
                         // onComplete
                         (result) => {
                             finalAnswerContent = result.content || aggregatedContent;
+                            const finalReasoning = result.reasoning || aggregatedReasoning; // Get final reasoning
                             const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                             finalQaHistory.push(assistantMessage);
+
+                            // Store reasoning in last conversation history turn
+                            if (indicatorInstance.conversationHistory.length > 0) {
+                                const lastTurn = indicatorInstance.conversationHistory[indicatorInstance.conversationHistory.length - 1];
+                                if (lastTurn.answer === 'pending') {
+                                    lastTurn.reasoning = finalReasoning;
+                                }
+                            }
 
                             indicatorInstance.updateAfterFollowUp({
                                 assistantResponseContent: finalAnswerContent,

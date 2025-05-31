@@ -164,7 +164,7 @@ function extractMediaLinksSync(scopeElement) {
     
     // Find all images and videos in the tweet
     const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
-    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
+    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, [poster*="pbs.twimg.com"], video`;
     const combinedSelector = `${imgSelector}, ${videoSelector}`;
     
     let mediaElements = scopeElement.querySelectorAll(combinedSelector);
@@ -243,6 +243,9 @@ function handleMutations(mutationsList) {
     
 
     const shouldSkipProcessing = (element) => {
+        //if url has /compose/ return true
+        if (window.location.pathname.includes('/compose/')) return true;
+        
         if (!element) return true;
         
         // Skip if the element itself is marked as filtered or ad

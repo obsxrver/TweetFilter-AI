@@ -70,14 +70,24 @@ class ScoreIndicator {
         this.uploadedImageDataUrls = []; // Initialize
         this.qaConversationHistory = []; // Stores the full conversation history for API calls
         this.currentFollowUpSource = null; // Tracks if 'custom' or 'suggested'
+        this._lastScrollPosition = 0; // Add property to track scroll position on mobile
+
+        // Bind event handlers for proper cleanup
+        this._boundHandlers = {
+            handleMobileFocus: null,
+            handleMobileTouchStart: null,
+            handleAttachImageClick: null,
+            handleKeyDown: null,
+            handleFollowUpTouchStart: null,
+            handleFollowUpTouchEnd: null,
+            handleConversationReasoningToggle: null // Add this to store the bound handler
+        };
 
         try {
             this._createElements(tweetArticle);
             this._addEventListeners();
             // Add to registry
             ScoreIndicatorRegistry.add(this.tweetId, this);
-            // Set initial dataset attributes on the initial article
-            this.updateDatasetAttributes(tweetArticle);
         } catch (error) {
             console.error(`[ScoreIndicator ${this.tweetId}] Failed initialization:`, error);
             // Attempt cleanup if elements were partially created
@@ -110,6 +120,11 @@ class ScoreIndicator {
         this.tooltipElement.style.display = 'none';
         this.tooltipElement.dataset.tweetId = this.tweetId; // Link tooltip to tweetId
         this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+        
+        // Add touch-action to prevent scrolling on mobile when interacting with tooltip
+        if (isMobileDevice()) {
+            this.tooltipElement.style.touchAction = 'pan-x pan-y pinch-zoom';
+        }
 
         // --- Tooltip Controls ---
         this.tooltipControls = document.createElement('div');
@@ -147,6 +162,12 @@ class ScoreIndicator {
         // --- NEW: Scrollable Content Wrapper ---
         this.tooltipScrollableContentElement = document.createElement('div');
         this.tooltipScrollableContentElement.className = 'tooltip-scrollable-content';
+        
+        // Prevent default scrolling behavior on mobile for better control
+        if (isMobileDevice()) {
+            this.tooltipScrollableContentElement.style.webkitOverflowScrolling = 'touch';
+            this.tooltipScrollableContentElement.style.overscrollBehavior = 'contain';
+        }
 
         // --- Reasoning Dropdown ---
         this.reasoningDropdown = document.createElement('div');
@@ -212,8 +233,14 @@ class ScoreIndicator {
 
         // Add event listener for dynamic height adjustment
         this.customQuestionInput.addEventListener('input', function() {
-            this.style.height = 'auto'; // Reset height to recalculate
-            this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
+            // If empty, reset to single row
+            if (this.value.trim() === '') {
+                this.style.height = 'auto';
+                this.rows = 1;
+            } else {
+                this.style.height = 'auto'; // Reset height to recalculate
+                this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
+            }
             // Optionally, adjust rows attribute if preferred, but direct height is often smoother
             // const computedStyle = window.getComputedStyle(this);
             // const lineHeight = parseFloat(computedStyle.lineHeight);
@@ -258,14 +285,48 @@ class ScoreIndicator {
             }
         }
         this.customQuestionContainer.appendChild(this.customQuestionButton);
-        this.tooltipScrollableContentElement.appendChild(this.customQuestionContainer); // MODIFIED: Append to scrollable
+        // REMOVED: No longer appending to scrollable content
+        // this.tooltipScrollableContentElement.appendChild(this.customQuestionContainer);
+
+        // Pre-trigger focus on mobile to handle Safari's first-focus scroll behavior
+        if (isMobileDevice() && this.customQuestionInput) {
+            // Store current scroll position (should be 0 or minimal during creation)
+            const initialScroll = this.tooltipScrollableContentElement?.scrollTop || 0;
+            
+            // Use a small delay to ensure DOM is fully ready
+            setTimeout(() => {
+                if (this.customQuestionInput && this.tooltipScrollableContentElement) {
+                    // Temporarily suppress any scroll behavior
+                    const preventScroll = (e) => {
+                        this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                        e.preventDefault();
+                    };
+                    
+                    this.tooltipScrollableContentElement.addEventListener('scroll', preventScroll, { passive: false });
+                    
+                    // Focus and immediately blur
+                    this.customQuestionInput.focus({ preventScroll: true });
+                    this.customQuestionInput.blur();
+                    
+                    // Clean up after a short delay
+                    setTimeout(() => {
+                        this.tooltipScrollableContentElement?.removeEventListener('scroll', preventScroll);
+                        // Ensure scroll is back to initial position
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                        }
+                    }, 100);
+                }
+            }, 50);
+        }
 
         // --- Image Preview and Remove Area (conditionally created) ---
         if (supportsImages) {
             this.followUpImageContainer = document.createElement('div');
             this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container'; // New class for styling
             // this.followUpImageContainer.style.display = 'none'; // Display handled by content
-            this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer);
+            // MOVED: Image preview should also be fixed at bottom with the input
+            // this.tooltipScrollableContentElement.appendChild(this.followUpImageContainer);
         }
         // --- End Image Preview and Remove Area ---
 
@@ -294,11 +355,24 @@ class ScoreIndicator {
         this.metadataContent.appendChild(this.metadataElement);
         this.metadataDropdown.appendChild(this.metadataToggle);
         this.metadataDropdown.appendChild(this.metadataContent);
-        this.tooltipScrollableContentElement.appendChild(this.metadataDropdown);
+        // REMOVED: No longer appending to scrollable content
+        // this.tooltipScrollableContentElement.appendChild(this.metadataDropdown);
         // --- End Metadata Dropdown Area ---
 
         // --- ADD Scrollable Content Wrapper to Tooltip Element ---
         this.tooltipElement.appendChild(this.tooltipScrollableContentElement);
+
+        // --- Fixed Bottom Input Area ---
+        // Add image preview container if it exists (above the input)
+        if (this.followUpImageContainer) {
+            this.tooltipElement.appendChild(this.followUpImageContainer);
+        }
+        
+        // Add custom question container (fixed at bottom)
+        this.tooltipElement.appendChild(this.customQuestionContainer);
+        
+        // Add metadata dropdown (below input area)
+        this.tooltipElement.appendChild(this.metadataDropdown);
 
         // --- Scroll-to-Bottom Button ---
         this.scrollButton = document.createElement('div');
@@ -323,8 +397,210 @@ class ScoreIndicator {
 
         this._updateIndicatorUI(); // Set initial UI state
         this._updateTooltipUI(); // Set initial tooltip content (e.g., placeholders)
+
+        // In constructor or _createElements, after creating this.conversationContainerElement:
+        this.autoScrollConversation = true;
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.addEventListener('scroll', this._handleConversationScroll.bind(this));
+        }
+        
+        // Simulate initial taps on mobile to bypass first-tap issues
+        if (isMobileDevice()) {
+            this._initializeMobileInteractionFix();
+        }
     }
 
+    /**
+     * Initializes a fix for mobile first-tap scrolling issues by adding
+     * a CSS class and tracking first interactions on elements.
+     * @private
+     */
+    _initializeMobileInteractionFix() {
+        // Track if we've had the first interaction to prevent scroll jumps
+        this._hasFirstInteraction = false;
+        
+        // Create a wrapper function to handle first tap logic
+        const handleFirstTap = (e) => {
+            if (!this._hasFirstInteraction) {
+                // Mark that we've had first interaction
+                this._hasFirstInteraction = true;
+                
+                // Store current scroll position before any potential jump
+                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                
+                // Use a small timeout to catch any scroll jumps that happen after the event
+                setTimeout(() => {
+                    if (this.tooltipScrollableContentElement && 
+                        this.tooltipScrollableContentElement.scrollTop !== scrollTop) {
+                        // Restore the scroll position if it jumped
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                }, 0);
+                
+                // For input elements, we need to handle focus differently
+                if (e.target === this.customQuestionInput && e.type === 'touchstart') {
+                    // Allow the default behavior but track scroll
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                        }
+                    });
+                }
+            }
+        };
+        
+        // Add passive touchstart listeners to all interactive elements
+        const interactiveElements = [
+            this.customQuestionInput,
+            this.customQuestionButton,
+            this.reasoningToggle,
+            this.metadataToggle,
+            this.pinButton,
+            this.copyButton,
+            this.tooltipCloseButton,
+            this.refreshButton,
+            this.scrollButton
+        ].filter(el => el);
+        
+        interactiveElements.forEach(element => {
+            element.addEventListener('touchstart', handleFirstTap, { passive: true, capture: true });
+        });
+        
+        // Special handling for the textarea to prevent scroll on focus
+        if (this.customQuestionInput) {
+            let scrollBeforeFocus = 0;
+            
+            this.customQuestionInput.addEventListener('touchstart', (e) => {
+                scrollBeforeFocus = this.tooltipScrollableContentElement?.scrollTop || 0;
+            }, { passive: true });
+            
+            this.customQuestionInput.addEventListener('focus', (e) => {
+                // On focus, restore scroll position
+                if (scrollBeforeFocus > 0) {
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollBeforeFocus;
+                        }
+                    });
+                }
+            });
+        }
+        
+        // Handle conversation container for dynamically created reasoning toggles
+        if (this.conversationContainerElement) {
+            // Use capturing phase to catch events before they bubble
+            this.conversationContainerElement.addEventListener('touchstart', (e) => {
+                const toggle = e.target.closest('.reasoning-toggle');
+                if (toggle) {
+                    handleFirstTap(e);
+                }
+            }, { passive: true, capture: true });
+        }
+        
+        // Also handle the main scrollable content to prevent unwanted scrolls
+        if (this.tooltipScrollableContentElement) {
+            let lastTouchY = 0;
+            let scrollLocked = false;
+            
+            this.tooltipScrollableContentElement.addEventListener('touchstart', (e) => {
+                lastTouchY = e.touches[0].clientY;
+                scrollLocked = false;
+                
+                // If this is the first interaction and we're tapping an interactive element
+                if (!this._hasFirstInteraction) {
+                    const interactiveTarget = e.target.closest('button, textarea, .reasoning-toggle');
+                    if (interactiveTarget) {
+                        scrollLocked = true;
+                        const scrollTop = this.tooltipScrollableContentElement.scrollTop;
+                        
+                        // Prevent scroll for a brief moment
+                        requestAnimationFrame(() => {
+                            if (scrollLocked && this.tooltipScrollableContentElement) {
+                                this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                            }
+                        });
+                        
+                        // Unlock after a short delay
+                        setTimeout(() => {
+                            scrollLocked = false;
+                        }, 100);
+                    }
+                }
+            }, { passive: true });
+        }
+    }
+
+    /**
+     * Simulates initial tap events on mobile interactive elements to bypass
+     * the first-tap scrolling issue that occurs on some mobile browsers.
+     * @private
+     */
+    _simulateInitialMobileTaps() {
+        // Use setTimeout to ensure DOM is fully ready
+        setTimeout(() => {
+            // List of elements that need the initial tap simulation
+            const elementsToTap = [
+                this.customQuestionInput,
+                this.customQuestionButton,
+                this.reasoningToggle,
+                this.metadataToggle
+            ].filter(el => el); // Filter out null/undefined elements
+
+            elementsToTap.forEach(element => {
+                try {
+                    // Create and dispatch a touchstart event
+                    const touchEvent = new TouchEvent('touchstart', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        touches: [new Touch({
+                            identifier: Date.now(),
+                            target: element,
+                            clientX: 0,
+                            clientY: 0,
+                            screenX: 0,
+                            screenY: 0,
+                            pageX: 0,
+                            pageY: 0,
+                        })]
+                    });
+                    element.dispatchEvent(touchEvent);
+                    
+                    // Immediately dispatch touchend
+                    const touchEndEvent = new TouchEvent('touchend', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        changedTouches: [new Touch({
+                            identifier: Date.now(),
+                            target: element,
+                            clientX: 0,
+                            clientY: 0,
+                            screenX: 0,
+                            screenY: 0,
+                            pageX: 0,
+                            pageY: 0,
+                        })]
+                    });
+                    element.dispatchEvent(touchEndEvent);
+                } catch (e) {
+                    // Fallback for browsers that don't support Touch constructor
+                    try {
+                        const event = document.createEvent('TouchEvent');
+                        event.initTouchEvent('touchstart', true, true);
+                        element.dispatchEvent(event);
+                    } catch (fallbackError) {
+                        // If touch events aren't supported, try a click
+                        element.click();
+                        // Immediately blur to prevent any focus issues
+                        if (element.blur) {
+                            element.blur();
+                        }
+                    }
+                }
+            });
+        }, 100); // Small delay to ensure everything is ready
+    }
 
     /** Adds necessary event listeners to the indicator and tooltip. */
     _addEventListeners() {
@@ -351,23 +627,90 @@ class ScoreIndicator {
 
         // Follow-up Questions (using delegation on the container)
         this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
+        
+        // Add touch event handling for mobile to prevent scrolling
+        if (isMobileDevice() && this.followUpQuestionsElement) {
+            this._boundHandlers.handleFollowUpTouchStart = (e) => {
+                const button = e.target.closest('.follow-up-question-button');
+                if (button) {
+                    e.preventDefault(); // Prevent any default touch behavior
+                    // Store the touch position to detect if it's a tap
+                    button.dataset.touchStartX = e.touches[0].clientX;
+                    button.dataset.touchStartY = e.touches[0].clientY;
+                }
+            };
+            
+            this._boundHandlers.handleFollowUpTouchEnd = (e) => {
+                const button = e.target.closest('.follow-up-question-button');
+                if (button && button.dataset.touchStartX) {
+                    e.preventDefault(); // Prevent any default behavior
+                    
+                    // Check if it was a tap (not a swipe)
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    const deltaX = Math.abs(touchEndX - parseFloat(button.dataset.touchStartX));
+                    const deltaY = Math.abs(touchEndY - parseFloat(button.dataset.touchStartY));
+                    
+                    // If movement is minimal, treat it as a tap
+                    if (deltaX < 10 && deltaY < 10) {
+                        // Trigger the click handler directly
+                        this._handleFollowUpQuestionClick({
+                            target: button,
+                            preventDefault: () => {},
+                            stopPropagation: () => {}
+                        });
+                    }
+                    
+                    // Clean up
+                    delete button.dataset.touchStartX;
+                    delete button.dataset.touchStartY;
+                }
+            };
+            
+            this.followUpQuestionsElement.addEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+            this.followUpQuestionsElement.addEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+        }
 
         // Custom Question Button
         this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
         // Allow submitting custom question with Enter key
-        this.customQuestionInput?.addEventListener('keydown', (event) => {
+        this._boundHandlers.handleKeyDown = (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault(); // Prevent default form submission/newline
-                this._handleCustomQuestionClick();
+                this._handleCustomQuestionClick(event); // Pass event parameter
             }
-        });
+        };
+        this.customQuestionInput?.addEventListener('keydown', this._boundHandlers.handleKeyDown);
+        
+        // Add focus handler for mobile to prevent scrolling
+        if (isMobileDevice() && this.customQuestionInput) {
+            // With the input outside scrollable area, we only need basic tracking
+            this._boundHandlers.handleMobileFocus = (event) => {
+                // No longer need to prevent scrolling since input is outside scrollable content
+                // Just track focus state if needed for other purposes
+            };
+            
+            this._boundHandlers.handleMobileTouchStart = (event) => {
+                // Store any state if needed
+                this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
+            };
+            
+            // Only add listeners if we actually need them for something
+            // this.customQuestionInput.addEventListener('focus', this._boundHandlers.handleMobileFocus);
+            // this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: true });
+        }
 
         // Metadata Toggle
         this.metadataToggle?.addEventListener('click', this._handleMetadataToggleClick.bind(this));
 
         // --- New: Event Listeners for Image Upload (conditional) ---
         if (this.attachImageButton && this.followUpImageInput) {
-            this.attachImageButton.addEventListener('click', () => this.followUpImageInput.click());
+            this._boundHandlers.handleAttachImageClick = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.followUpImageInput.click();
+            };
+            this.attachImageButton.addEventListener('click', this._boundHandlers.handleAttachImageClick);
             this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
         }
         // No global remove button listener now
@@ -375,27 +718,6 @@ class ScoreIndicator {
         //     this.followUpRemoveImageButton.addEventListener('click', this._handleRemoveFollowUpImage.bind(this));
         // }
         // --- End New ---
-    }
-
-    /** 
-     * Updates the tweet article's dataset attributes based on the instance's state.
-     * Requires the current tweet article element to be passed or found.
-     * @param {Element} [currentTweetArticle] - Optional: The current article element.
-     */
-    updateDatasetAttributes(currentTweetArticle) {
-        const article = currentTweetArticle || this.findCurrentArticleElement();
-        if (!article) {
-            // console.warn(`[ScoreIndicator ${this.tweetId}] Could not find article element to update dataset.`);
-            return;
-        }
-        article.dataset.ratingStatus = this.status;
-        article.dataset.sloppinessScore = this.score !== null ? String(this.score) : '';
-        article.dataset.ratingDescription = this.description;
-        article.dataset.ratingReasoning = this.reasoning;
-        article.dataset.blacklisted = String(this.status === 'blacklisted');
-        article.dataset.cachedRating = String(this.status === 'cached');
-        // Store indicator/tooltip existence for checks elsewhere if needed
-        // article.dataset.hasScoreIndicator = 'true'; // Less reliable now
     }
 
     /** Updates the visual appearance of the indicator (icon/text, class). */
@@ -582,6 +904,30 @@ class ScoreIndicator {
                     questionButton.textContent = `🤔 ${question}`;
                     questionButton.dataset.questionIndex = index;
                     questionButton.dataset.questionText = question; // Store text for handler
+                    
+                    // Prevent focus scrolling on mobile
+                    if (isMobileDevice()) {
+                        // Track if this specific button has been tapped before
+                        let hasBeenTapped = false;
+                        
+                        questionButton.addEventListener('touchstart', (e) => {
+                            if (!hasBeenTapped) {
+                                hasBeenTapped = true;
+                                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                                requestAnimationFrame(() => {
+                                    if (this.tooltipScrollableContentElement) {
+                                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                                    }
+                                });
+                            }
+                        }, { passive: true });
+                        
+                        questionButton.addEventListener('focus', (e) => {
+                            // Blur immediately to prevent focus styling and scrolling
+                            e.target.blur();
+                        }, { passive: true });
+                    }
+                    
                     this.followUpQuestionsElement.appendChild(questionButton);
                 });
                 this.followUpQuestionsElement.style.display = 'block';
@@ -740,7 +1086,7 @@ class ScoreIndicator {
 
             // --- Add Reasoning Dropdown (if present) ---
             let reasoningHtml = '';
-            if (turn.reasoning && turn.reasoning.trim() !== '') {
+            if (turn.reasoning && turn.reasoning.trim() !== '' && turn.answer !== 'pending') {
                 const formattedReasoning = formatTooltipDescription("", turn.reasoning).reasoning;
                 // Check if this dropdown was expanded
                 const wasExpanded = expandedStates.get(index);
@@ -787,26 +1133,49 @@ class ScoreIndicator {
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
 
-        // Remove any existing listener
-        this.conversationContainerElement.removeEventListener('click', this._handleConversationReasoningToggle);
-        // Add the new listener, making sure to bind 'this'
-        this.conversationContainerElement.addEventListener('click', (e) => {
+        // Remove any existing listener using the stored reference
+        if (this._boundHandlers.handleConversationReasoningToggle) {
+            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+        }
+        
+        // Create and store the new bound handler
+        this._boundHandlers.handleConversationReasoningToggle = (e) => {
             const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
             if (!toggleButton) return;
 
-            e.stopPropagation();
+            // Only prevent default on non-touch events or if we're sure it's a tap
+            if (e.type === 'click' && !e.isTrusted) {
+                // This might be a synthetic click from touch, let it through
+                return;
+            }
+            
             const dropdown = toggleButton.closest('.reasoning-dropdown');
             const content = dropdown?.querySelector('.reasoning-content');
             const arrow = dropdown?.querySelector('.reasoning-arrow');
 
             if (!dropdown || !content || !arrow) return;
+            
+            // Store scroll position before toggle
+            const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
             const isExpanded = dropdown.classList.toggle('expanded');
             arrow.textContent = isExpanded ? '▼' : '▶';
             toggleButton.setAttribute('aria-expanded', isExpanded);
             content.style.maxHeight = isExpanded ? '200px' : '0';
             content.style.padding = isExpanded ? '8px' : '0 8px';
-        });
+            
+            // Restore scroll position if on mobile
+            if (isMobileDevice() && this.tooltipScrollableContentElement) {
+                requestAnimationFrame(() => {
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                });
+            }
+        };
+        
+        // Add the new listener using the stored reference
+        this.conversationContainerElement.addEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
     }
 
     _performAutoScroll() {
@@ -985,7 +1354,7 @@ class ScoreIndicator {
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
                 this.hide();
             }
-        }, 500);
+        }, 100);
     }
 
     _handleIndicatorClick(event) {
@@ -1007,7 +1376,7 @@ class ScoreIndicator {
             if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
                 this.hide();
             }
-        }, 500);
+        }, 100);
     }
 
     
@@ -1037,7 +1406,9 @@ class ScoreIndicator {
     }
 
     _handlePinClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (this.isPinned) {
             this.unpin();
         } else {
@@ -1046,7 +1417,9 @@ class ScoreIndicator {
     }
 
     _handleCopyClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.descriptionElement || !this.reasoningTextElement || !this.copyButton) return;
 
         let textToCopy = this.descriptionElement.textContent || ''; // Use textContent to avoid HTML
@@ -1070,8 +1443,13 @@ class ScoreIndicator {
     }
 
     _handleReasoningToggleClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.reasoningDropdown || !this.reasoningContent || !this.reasoningArrow) return;
+
+        // Store scroll position before toggle
+        const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
         const isExpanded = this.reasoningDropdown.classList.toggle('expanded');
         this.reasoningArrow.textContent = isExpanded ? '▼' : '▶';
@@ -1083,11 +1461,22 @@ class ScoreIndicator {
             this.reasoningContent.style.maxHeight = '0';
             this.reasoningContent.style.padding = '0 10px'; // Keep horizontal padding
         }
+        
+        // Restore scroll position on mobile to prevent jumping
+        if (isMobileDevice() && this.tooltipScrollableContentElement) {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement) {
+                    this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                }
+            });
+        }
     }
 
 
     _handleScrollButtonClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.tooltipScrollableContentElement) return; // MODIFIED
 
         this.autoScroll = true;
@@ -1097,6 +1486,11 @@ class ScoreIndicator {
     }
 
     _handleFollowUpQuestionClick(event) {
+        // Prevent default to avoid mobile scrolling issues
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        
         // If called from _handleCustomQuestionClick, event.target will be our mockButton
         // Otherwise, it's a real DOM event and we need to find the button.
         const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
@@ -1133,12 +1527,8 @@ class ScoreIndicator {
             uploadedImages: [...this.uploadedImageDataUrls], // Store a copy of the image URLs array
             reasoning: '' // Initialize reasoning for this turn
         });
-        this._clearFollowUpImage(); // Clear preview after data is captured
-        this._updateTooltipUI(); // Update UI to show pending state
-        this.questions = []; // Clear suggested questions
-        this._updateTooltipUI(); // Update UI again to remove suggested questions
 
-        // Construct the user message for the API history (raw question text)
+        // Construct the user message for the API history (raw question text) BEFORE clearing images
         const userMessageContentForHistory = [{ type: "text", text: questionText }];
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
@@ -1149,6 +1539,11 @@ class ScoreIndicator {
 
         // Create a new history array for the API call, including the new raw user message
         const historyForApiCall = [...this.qaConversationHistory, userApiMessage];
+
+        this._clearFollowUpImage(); // Clear preview after data is captured AND API message is constructed
+        this._updateTooltipUI(); // Update UI to show pending state
+        this.questions = []; // Clear suggested questions
+        this._updateTooltipUI(); // Update UI again to remove suggested questions
 
         if (!apiKey) {
             showStatus('API key missing. Cannot answer question.', 'error');
@@ -1198,7 +1593,13 @@ class ScoreIndicator {
         }
     }
 
-    _handleCustomQuestionClick() {
+    _handleCustomQuestionClick(event) {
+        // Add event parameter and prevent default
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
         if (!this.customQuestionInput || !this.customQuestionButton) return;
 
         const questionText = this.customQuestionInput.value.trim();
@@ -1227,16 +1628,27 @@ class ScoreIndicator {
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
 
         // Call the handler, it will manage UI updates and API call
-        this._handleFollowUpQuestionClick({ target: mockButton, stopPropagation: () => {} });
+        this._handleFollowUpQuestionClick({ 
+            target: mockButton, 
+            stopPropagation: () => {},
+            preventDefault: () => {} // Add preventDefault to mock event
+        });
 
         // Clear the input field after initiating the send for custom questions
         if (this.customQuestionInput) {
             this.customQuestionInput.value = '';
+            // Reset the textarea height to single row
+            this.customQuestionInput.style.height = 'auto';
+            this.customQuestionInput.rows = 1;
         }
     }
 
     // --- New: Image Handling Methods for Follow-up ---
     _handleFollowUpImageSelect(event) {
+        if (event) {
+            event.preventDefault();
+        }
+        
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
@@ -1281,6 +1693,7 @@ class ScoreIndicator {
         removeBtn.className = 'follow-up-image-remove-btn';
         removeBtn.title = 'Remove this image';
         removeBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // Add this
             e.stopPropagation();
             this._removeSpecificUploadedImage(imageDataUrl);
         });
@@ -1390,69 +1803,47 @@ class ScoreIndicator {
             return;
         }
 
-        // --- Handle Reasoning Dropdown ---
-        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        // --- Handle Streaming Reasoning Container ---
+        let streamingReasoningContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
         const hasReasoning = reasoningText && reasoningText.trim() !== '';
 
-        if (hasReasoning && !reasoningDropdown) {
-            // Create reasoning dropdown elements if they don't exist for this turn
-            reasoningDropdown = document.createElement('div');
-            reasoningDropdown.className = 'reasoning-dropdown conversation-reasoning'; // Add specific class
+        if (hasReasoning && !streamingReasoningContainer) {
+            // Create streaming reasoning container if it doesn't exist
+            streamingReasoningContainer = document.createElement('div');
+            streamingReasoningContainer.className = 'streaming-reasoning-container active';
+            streamingReasoningContainer.style.display = 'block';
 
-            const reasoningToggle = document.createElement('div');
-            reasoningToggle.className = 'reasoning-toggle';
+            const streamingReasoningText = document.createElement('div');
+            streamingReasoningText.className = 'streaming-reasoning-text';
+            streamingReasoningContainer.appendChild(streamingReasoningText);
 
-            const reasoningArrow = document.createElement('span');
-            reasoningArrow.className = 'reasoning-arrow';
-            reasoningArrow.textContent = '▶';
-
-            reasoningToggle.appendChild(reasoningArrow);
-            reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
-
-            const reasoningContent = document.createElement('div');
-            reasoningContent.className = 'reasoning-content';
-            const reasoningTextElement = document.createElement('p');
-            reasoningTextElement.className = 'reasoning-text';
-            reasoningContent.appendChild(reasoningTextElement);
-
-            reasoningDropdown.appendChild(reasoningToggle);
-            reasoningDropdown.appendChild(reasoningContent);
-
-            // Insert the dropdown *before* the answer element within the turn
+            // Insert before the answer element
             const answerElement = lastTurnElement.querySelector('.conversation-answer');
             if (answerElement) {
-                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+                lastTurnElement.insertBefore(streamingReasoningContainer, answerElement);
             } else {
-                lastTurnElement.appendChild(reasoningDropdown); // Fallback
+                lastTurnElement.appendChild(streamingReasoningContainer);
             }
-
-            // Add toggle listener specifically for this dropdown
-            reasoningToggle.addEventListener('click', (e) => {
-                 e.stopPropagation();
-                 const dropdown = e.target.closest('.reasoning-dropdown');
-                 const content = dropdown?.querySelector('.reasoning-content');
-                 const arrow = dropdown?.querySelector('.reasoning-arrow');
-                 if (!dropdown || !content || !arrow) return;
-
-                 const isExpanded = dropdown.classList.toggle('expanded');
-                 arrow.textContent = isExpanded ? '▼' : '▶';
-                 content.style.maxHeight = isExpanded ? '200px' : '0'; // Adjust max-height as needed
-                 content.style.padding = isExpanded ? '8px' : '0 8px';
-            });
         }
 
-        // Update reasoning content if dropdown exists and reasoning is present
-        if (reasoningDropdown && hasReasoning) {
-            const reasoningTextElement = reasoningDropdown.querySelector('.reasoning-text');
-            if (reasoningTextElement) {
-                const formattedReasoning = formatTooltipDescription("", reasoningText).reasoning;
-                if (reasoningTextElement.innerHTML !== formattedReasoning) {
-                    reasoningTextElement.innerHTML = formattedReasoning;
+        // Update streaming reasoning text if present
+        if (streamingReasoningContainer && hasReasoning) {
+            const streamingTextElement = streamingReasoningContainer.querySelector('.streaming-reasoning-text');
+            if (streamingTextElement) {
+                // Show only the rightmost N characters if too long
+                const maxDisplayLength = 200; // Characters to display
+                let displayText = reasoningText;
+                if (reasoningText.length > maxDisplayLength) {
+                    displayText = reasoningText.slice(-maxDisplayLength);
                 }
+                streamingTextElement.textContent = displayText;
             }
-            reasoningDropdown.style.display = 'block';
-        } else if (reasoningDropdown) {
-            // Hide dropdown if reasoning disappears (shouldn't normally happen mid-stream)
+        }
+
+        // --- Handle Reasoning Dropdown (hidden during streaming, will be shown on completion) ---
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        if (reasoningDropdown) {
+            // Hide the dropdown during streaming
             reasoningDropdown.style.display = 'none';
         }
 
@@ -1498,11 +1889,14 @@ class ScoreIndicator {
              console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
         }
 
-
         // Ensure autoscroll if needed
         if (this.autoScroll) {
             this._performAutoScroll();
         }
+
+        // In _renderStreamingAnswer, after updating the answer, call this._performConversationAutoScroll() instead of this._performAutoScroll().
+        // Remove or comment out the call to this._performAutoScroll() in _renderStreamingAnswer.
+        this._performConversationAutoScroll();
     }
 
     /**
@@ -1566,9 +1960,6 @@ class ScoreIndicator {
             // If only score changed, ensure scroll button visibility is correct
             this._updateScrollButtonVisibility();
         }
-
-        // Update dataset attributes on the article
-        this.updateDatasetAttributes();
     }
 
 
@@ -1639,7 +2030,9 @@ class ScoreIndicator {
 
     // --- New Event Handler for Close Button ---
     _handleCloseClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         this.hide(); // Simply hide the tooltip
     }
     // --- End New Event Handler ---
@@ -1662,22 +2055,44 @@ class ScoreIndicator {
         this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
         this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
         this.tooltipScrollableContentElement?.removeEventListener('scroll', this._handleTooltipScroll.bind(this));
-        this.pinButton?.removeEventListener('click', this._handlePinClick);
-        this.copyButton?.removeEventListener('click', this._handleCopyClick);
-        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick);
+        this.pinButton?.removeEventListener('click', this._handlePinClick.bind(this));
+        this.copyButton?.removeEventListener('click', this._handleCopyClick.bind(this));
+        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick.bind(this));
         this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick.bind(this));
         this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick.bind(this));
         this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick.bind(this));
         this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick.bind(this));
-        this.customQuestionInput?.removeEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // Prevent default form submission/newline
-                this._handleCustomQuestionClick();
+        this.customQuestionInput?.removeEventListener('keydown', this._boundHandlers.handleKeyDown);
+        
+        // Remove mobile-specific event listeners
+        if (isMobileDevice()) {
+            if (this.customQuestionInput && this._boundHandlers.handleMobileFocus) {
+                this.customQuestionInput.removeEventListener('focus', this._boundHandlers.handleMobileFocus);
+                this.customQuestionInput.removeEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
             }
-        });
+            
+            // Remove follow-up questions touch handlers
+            if (this.followUpQuestionsElement && this._boundHandlers.handleFollowUpTouchStart) {
+                this.followUpQuestionsElement.removeEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+                this.followUpQuestionsElement.removeEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+            }
+        }
+        
         this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
         this.refreshButton?.removeEventListener('click', this._handleRefreshClick.bind(this));
-
+        
+        // Remove image button listeners
+        if (this.attachImageButton) {
+            this.attachImageButton.removeEventListener('click', this._boundHandlers.handleAttachImageClick);
+        }
+        if (this.followUpImageInput) {
+            this.followUpImageInput.removeEventListener('change', this._handleFollowUpImageSelect.bind(this));
+        }
+        
+        // Remove conversation reasoning toggle listener
+        if (this.conversationContainerElement && this._boundHandlers.handleConversationReasoningToggle) {
+            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+        }
 
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
@@ -1740,8 +2155,6 @@ class ScoreIndicator {
             }
             currentArticle.appendChild(this.indicatorElement);
         }
-        // Ensure dataset is up-to-date on the *current* article
-        this.updateDatasetAttributes(currentArticle);
     }
 
     /** Finds the current DOM element for the tweet article based on tweetId. */
@@ -1781,8 +2194,9 @@ class ScoreIndicator {
      * @param {string} params.apiResponseContent - The raw content from the API response.
      * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
      * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
+     * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
      */
-    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt }) {
+    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
         // Parse apiResponseContent for analysis, score, and initial questions
         const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
         const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
@@ -1800,17 +2214,22 @@ class ScoreIndicator {
             userMessageContent.push({ type: "image_url", image_url: { "url": url } });
         });
 
+        // Substitute user instructions into the follow-up system prompt
+        const followUpSystemPromptWithInstructions = followUpSystemPrompt.replace(
+            '{USER_INSTRUCTIONS_PLACEHOLDER}', 
+            userInstructions || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'
+        );
+
         this.qaConversationHistory = [
             { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
             { role: "user", content: userMessageContent },
             { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
-            { role: "system", content: [{ type: "text", text: followUpSystemPrompt }] }
+            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] }
         ];
 
         // Update UI elements
         this._updateIndicatorUI();
         this._updateTooltipUI();
-        this.updateDatasetAttributes();
     }
 
     /**
@@ -1836,15 +2255,98 @@ class ScoreIndicator {
             const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
             if (lastTurn.answer === 'pending') {
                 lastTurn.answer = answerText;
-                // Assuming reasoning might be part of assistantResponseContent or handled elsewhere
-                // For now, let's assume reasoning isn't explicitly parsed here for simplicity
-                // lastTurn.reasoning = ...;
+                // Reasoning should already be set by answerFollowUpQuestion during streaming
             }
         }
 
+        // Remove streaming reasoning container and create proper reasoning dropdown
+        this._convertStreamingToDropdown();
+
         // Refresh the tooltip UI
         this._updateTooltipUI();
-        this.updateDatasetAttributes(); // Ensure dataset reflects any score/status change if applicable
+    }
+
+    /**
+     * Converts the streaming reasoning container to a proper reasoning dropdown after streaming completes.
+     * @private
+     */
+    _convertStreamingToDropdown() {
+        if (!this.conversationContainerElement) return;
+
+        const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
+        const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
+
+        if (!lastTurnElement) return;
+
+        // Find and remove streaming container
+        const streamingContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
+        if (streamingContainer) {
+            streamingContainer.remove();
+        }
+
+        // Get the reasoning from the last conversation history turn
+        const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length - 1] : null;
+        if (!lastHistoryEntry || !lastHistoryEntry.reasoning || lastHistoryEntry.reasoning.trim() === '') {
+            return; // No reasoning to show
+        }
+
+        // Create reasoning dropdown if it doesn't exist
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        if (!reasoningDropdown) {
+            reasoningDropdown = document.createElement('div');
+            reasoningDropdown.className = 'reasoning-dropdown conversation-reasoning';
+
+            const reasoningToggle = document.createElement('div');
+            reasoningToggle.className = 'reasoning-toggle';
+
+            const reasoningArrow = document.createElement('span');
+            reasoningArrow.className = 'reasoning-arrow';
+            reasoningArrow.textContent = '▶';
+
+            reasoningToggle.appendChild(reasoningArrow);
+            reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
+
+            const reasoningContent = document.createElement('div');
+            reasoningContent.className = 'reasoning-content';
+            const reasoningTextElement = document.createElement('p');
+            reasoningTextElement.className = 'reasoning-text';
+            reasoningContent.appendChild(reasoningTextElement);
+
+            reasoningDropdown.appendChild(reasoningToggle);
+            reasoningDropdown.appendChild(reasoningContent);
+
+            // Insert before the answer element
+            const answerElement = lastTurnElement.querySelector('.conversation-answer');
+            if (answerElement) {
+                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+            } else {
+                lastTurnElement.appendChild(reasoningDropdown);
+            }
+
+            // Add toggle listener
+            reasoningToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const dropdown = e.target.closest('.reasoning-dropdown');
+                const content = dropdown?.querySelector('.reasoning-content');
+                const arrow = dropdown?.querySelector('.reasoning-arrow');
+                if (!dropdown || !content || !arrow) return;
+
+                const isExpanded = dropdown.classList.toggle('expanded');
+                arrow.textContent = isExpanded ? '▼' : '▶';
+                content.style.maxHeight = isExpanded ? '200px' : '0';
+                content.style.padding = isExpanded ? '8px' : '0 8px';
+            });
+        }
+
+        // Update reasoning content
+        const reasoningTextElement = reasoningDropdown.querySelector('.reasoning-text');
+        if (reasoningTextElement) {
+            const formattedReasoning = formatTooltipDescription("", lastHistoryEntry.reasoning).reasoning;
+            reasoningTextElement.innerHTML = formattedReasoning;
+        }
+
+        // Show the dropdown
+        reasoningDropdown.style.display = 'block';
     }
 
     /**
@@ -1925,12 +2427,16 @@ class ScoreIndicator {
         
         this._updateIndicatorUI();
         this._updateTooltipUI();
-        this.updateDatasetAttributes();
     }
 
     _handleMetadataToggleClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.metadataDropdown || !this.metadataContent || !this.metadataArrow) return;
+
+        // Store scroll position before toggle  
+        const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
         const isExpanded = this.metadataDropdown.classList.toggle('expanded');
         this.metadataArrow.textContent = isExpanded ? '▼' : '▶';
@@ -1942,10 +2448,21 @@ class ScoreIndicator {
             this.metadataContent.style.maxHeight = '0';
             this.metadataContent.style.padding = '0 10px'; // Match reasoning
         }
+        
+        // Restore scroll position on mobile to prevent jumping
+        if (isMobileDevice() && this.tooltipScrollableContentElement) {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement) {
+                    this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                }
+            });
+        }
     }
 
     _handleRefreshClick(e) {
-        e.stopPropagation();
+        if (e) {
+            e.stopPropagation();
+        }
         if (!this.tweetId) return;
 
         console.log(`[ScoreIndicator ${this.tweetId}] Refresh clicked.`);
@@ -1969,42 +2486,57 @@ class ScoreIndicator {
             console.log(`[ScoreIndicator ${this.tweetId}] Removed from processedTweets.`);
         }
 
-        // Find current article element
+        // Find current article element *before* destroying this instance
         const currentArticle = this.findCurrentArticleElement();
+
+        // Destroy the current instance. This removes it from DOM and registry.
+        this.destroy();
+
         if (!currentArticle) {
-            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find current article element for refresh.`);
-            // Hide tooltip and update indicator to a neutral or error state if article not found
-            this.hide();
-            this.update({ status: 'error', score: null, description: 'Could not find tweet to refresh.'});
+            console.warn(`[ScoreIndicator Refresh] Could not find current article element for tweet ${this.tweetId} after destroy. Cannot re-schedule.`);
+            // No indicator to update to an error state, as it's destroyed.
             return;
         }
 
-        // Update indicator to pending immediately
-        this.update({
-            status: 'pending',
-            score: null,
-            description: 'Re-rating... ',
-            reasoning: '',
-            questions: [],
-            metadata: null
-        });
-        // Conversation history will be rebuilt by the new rating process
-        this.conversationHistory = [];
-        this.qaConversationHistory = [];
-        this._updateTooltipUI(); // Update tooltip to reflect pending state
-
-        // Hide the tooltip
-        this.hide();
-
-        // Schedule for re-processing
-        // Ensure scheduleTweetProcessing is available (it should be global in Tampermonkey context)
+        // Schedule for re-processing. This will create a new ScoreIndicator instance.
         if (typeof scheduleTweetProcessing === 'function') {
-            console.log(`[ScoreIndicator ${this.tweetId}] Scheduling for re-processing.`);
+            console.log(`[ScoreIndicator Refresh] Scheduling tweet ${this.tweetId} for re-processing.`);
             scheduleTweetProcessing(currentArticle);
         } else {
-            console.error('[ScoreIndicator] scheduleTweetProcessing function not found.');
-            this.update({ status: 'error', score: null, description: 'Error: Refresh mechanism failed.'});
+            console.error('[ScoreIndicator Refresh] scheduleTweetProcessing function not found. Cannot re-schedule tweet ${this.tweetId}.');
+            // If scheduleTweetProcessing is missing, we can't do much here.
+            // The old indicator is gone. A new one won't be created.
         }
+    }
+
+    /**
+     * Handle scroll events in the conversation history area for granular auto-scroll.
+     */
+    _handleConversationScroll() {
+        if (!this.conversationContainerElement) return;
+        const isNearBottom = this.conversationContainerElement.scrollHeight - this.conversationContainerElement.scrollTop - this.conversationContainerElement.clientHeight < 40;
+        if (!isNearBottom) {
+            if (this.autoScrollConversation) {
+                this.autoScrollConversation = false;
+            }
+        } else {
+            if (!this.autoScrollConversation) {
+                this.autoScrollConversation = true;
+            }
+        }
+    }
+
+    /**
+     * Auto-scroll the conversation history area to the bottom if allowed.
+     */
+    _performConversationAutoScroll() {
+        if (!this.conversationContainerElement || !this.autoScrollConversation) return;
+        requestAnimationFrame(() => {
+            this.conversationContainerElement.scrollTo({
+                top: this.conversationContainerElement.scrollHeight,
+                behavior: 'instant'
+            });
+        });
     }
 }
 
