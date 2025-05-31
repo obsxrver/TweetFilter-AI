@@ -106,6 +106,12 @@ async function applyTweetCachedRating(tweetArticle) {
 
         // Ensure the score exists before applying it
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
+            // Update tweet article dataset properties - this is crucial for filterSingleTweet to work
+            tweetArticle.dataset.sloppinessScore = cachedRating.score.toString();
+            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? 'cached' : 'rated';
+            tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
+            tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
+            
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (indicatorInstance) {
                 indicatorInstance.rehydrateFromCache(cachedRating);

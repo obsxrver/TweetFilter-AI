@@ -1410,6 +1410,33 @@ class ScoreIndicator {
         }
         this.customQuestionContainer.appendChild(this.customQuestionButton);
         this.tooltipScrollableContentElement.appendChild(this.customQuestionContainer); // MODIFIED: Append to scrollable
+        // Pre-trigger focus on mobile to handle Safari's first-focus scroll behavior
+        if (isMobileDevice() && this.customQuestionInput) {
+            // Store current scroll position (should be 0 or minimal during creation)
+            const initialScroll = this.tooltipScrollableContentElement?.scrollTop || 0;
+            // Use a small delay to ensure DOM is fully ready
+            setTimeout(() => {
+                if (this.customQuestionInput && this.tooltipScrollableContentElement) {
+                    // Temporarily suppress any scroll behavior
+                    const preventScroll = (e) => {
+                        this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                        e.preventDefault();
+                    };
+                    this.tooltipScrollableContentElement.addEventListener('scroll', preventScroll, { passive: false });
+                    // Focus and immediately blur
+                    this.customQuestionInput.focus({ preventScroll: true });
+                    this.customQuestionInput.blur();
+                    // Clean up after a short delay
+                    setTimeout(() => {
+                        this.tooltipScrollableContentElement?.removeEventListener('scroll', preventScroll);
+                        // Ensure scroll is back to initial position
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                        }
+                    }, 100);
+                }
+            }, 50);
+        }
         // --- Image Preview and Remove Area (conditionally created) ---
         if (supportsImages) {
             this.followUpImageContainer = document.createElement('div');
@@ -1526,8 +1553,8 @@ class ScoreIndicator {
                 scrollBeforeFocus = this.tooltipScrollableContentElement?.scrollTop || 0;
             }, { passive: true });
             this.customQuestionInput.addEventListener('focus', (e) => {
-                // On first focus, restore scroll position
-                if (!this._hasFirstInteraction || scrollBeforeFocus > 0) {
+                // On focus, restore scroll position
+                if (scrollBeforeFocus > 0) {
                     requestAnimationFrame(() => {
                         if (this.tooltipScrollableContentElement) {
                             this.tooltipScrollableContentElement.scrollTop = scrollBeforeFocus;
@@ -1713,26 +1740,25 @@ class ScoreIndicator {
         this.customQuestionInput?.addEventListener('keydown', this._boundHandlers.handleKeyDown);
         // Add focus handler for mobile to prevent scrolling
         if (isMobileDevice() && this.customQuestionInput) {
+            // Since we pre-trigger focus during creation, we can use a simpler handler
             this._boundHandlers.handleMobileFocus = (event) => {
-                // Don't prevent default - let the textarea receive focus naturally
-                // Just track that we're focusing to handle scroll later
-                this._isFocusing = true;
-                // Store current scroll position
+                // Just maintain scroll position during any focus event
                 const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
-                // Use RAF to restore scroll position after browser handles focus
+                // Use double RAF to ensure scroll restoration happens after any browser adjustments
                 requestAnimationFrame(() => {
-                    if (this.tooltipScrollableContentElement && this._isFocusing) {
-                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
-                        this._isFocusing = false;
-                    }
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                        }
+                    });
                 });
             };
             this._boundHandlers.handleMobileTouchStart = (event) => {
-                // Store scroll position but don't interfere with touch
+                // Store scroll position before potential focus
                 this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
             };
             this.customQuestionInput.addEventListener('focus', this._boundHandlers.handleMobileFocus);
-            this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: true }); // Make passive
+            this.customQuestionInput.addEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: true });
         }
         // Metadata Toggle
         this.metadataToggle?.addEventListener('click', this._handleMetadataToggleClick.bind(this));
@@ -4437,6 +4463,11 @@ async function applyTweetCachedRating(tweetArticle) {
         }
         // Ensure the score exists before applying it
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
+            // Update tweet article dataset properties - this is crucial for filterSingleTweet to work
+            tweetArticle.dataset.sloppinessScore = cachedRating.score.toString();
+            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? 'cached' : 'rated';
+            tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
+            tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (indicatorInstance) {
                 indicatorInstance.rehydrateFromCache(cachedRating);
