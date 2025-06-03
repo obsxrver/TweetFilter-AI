@@ -191,10 +191,22 @@ EXPECTED_RESPONSE_FORMAT:\n
     }
     if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
         mediaUrls.forEach(url => {
-            requestBody.messages[1].content.push({
-                type: "image_url",
-                image_url: { "url": url }
-            });
+            if (url.startsWith('data:application/pdf')) {
+                // Handle PDF format for models that support it
+                requestBody.messages[1].content.push({
+                    type: "file",
+                    file: {
+                        filename: "attachment.pdf",
+                        file_data: url
+                    }
+                });
+            } else {
+                // Handle images as before
+                requestBody.messages[1].content.push({
+                    type: "image_url",
+                    image_url: { "url": url }
+                });
+            }
         });
     }
     if (providerSort) {

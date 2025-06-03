@@ -1394,10 +1394,10 @@ class ScoreIndicator {
             this.attachImageButton = document.createElement('button');
             this.attachImageButton.textContent = '📎'; // Paperclip Icon
             this.attachImageButton.className = 'tooltip-attach-image-button';
-            this.attachImageButton.title = 'Attach image(s)'; // Updated title
+            this.attachImageButton.title = 'Attach image(s) or PDF(s)'; // Updated title
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
-            this.followUpImageInput.accept = 'image/' + '*';
+            this.followUpImageInput.accept = 'image/*,application/pdf'; // Accept both images and PDFs
             this.followUpImageInput.multiple = true; // Allow multiple files
             this.followUpImageInput.style.display = 'none'; // Hide the actual input
         }
@@ -2068,9 +2068,20 @@ class ScoreIndicator {
             if (turn.uploadedImages && turn.uploadedImages.length > 0) {
                 uploadedImageHtml = `
                     <div class="conversation-image-container">
-                        ${turn.uploadedImages.map(imageUrl => `
-                            <img src="${imageUrl}" alt="User uploaded image" class="conversation-uploaded-image">
-                        `).join('')}
+                        ${turn.uploadedImages.map(url => {
+                            if (url.startsWith('data:application/pdf')) {
+                                // Display PDF icon for PDFs
+                                return `
+                                    <div class="conversation-uploaded-pdf" style="display: inline-block; text-align: center; margin: 4px;">
+                                        <span style="font-size: 48px;">📄</span>
+                                        <div style="font-size: 12px;">PDF Document</div>
+                                    </div>
+                                `;
+                            } else {
+                                // Display image preview
+                                return `<img src="${url}" alt="User uploaded image" class="conversation-uploaded-image">`;
+                            }
+                        }).join('')}
                     </div>
                 `;
             }
@@ -2496,7 +2507,24 @@ class ScoreIndicator {
         const userMessageContentForHistory = [{ type: "text", text: questionText }];
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
-                userMessageContentForHistory.push({ type: "image_url", image_url: { "url": url } });
+                if (url.startsWith('data:application/pdf')) {
+                    // Extract filename from PDF preview if available
+                    const previewItem = this.followUpImageContainer?.querySelector(`[data-image-data-url="${CSS.escape(url)}"]`);
+                    const fileName = previewItem?.querySelector('.follow-up-pdf-preview span:last-child')?.textContent || 'document.pdf';
+                    userMessageContentForHistory.push({ 
+                        type: "file", 
+                        file: {
+                            filename: fileName,
+                            file_data: url
+                        }
+                    });
+                } else {
+                    // Images use the existing format
+                    userMessageContentForHistory.push({ 
+                        type: "image_url", 
+                        image_url: { "url": url } 
+                    });
+                }
             });
         }
         const userApiMessage = { role: "user", content: userMessageContentForHistory };
@@ -2559,12 +2587,12 @@ class ScoreIndicator {
         const questionText = this.customQuestionInput.value.trim();
         const hasImages = this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0;
         if (!questionText && !hasImages) {
-            showStatus("Please enter a question or attach an image.", "warning");
+            showStatus("Please enter a question or attach a file.", "warning");
             this.customQuestionInput.focus();
             return;
         }
         // If there's no text but there are images, use a placeholder space.
-        const submissionText = questionText || (hasImages ? "[image only message]" : "");
+        const submissionText = questionText || (hasImages ? "[file only message]" : "");
         // This reuses the logic from _handleFollowUpQuestionClick for sending the question
         // The actual API call happens there. We just need to trigger it.
         // Create a temporary "button" like object to pass to _handleFollowUpQuestionClick
@@ -2606,36 +2634,65 @@ class ScoreIndicator {
                 resizeImage(file, 1024) // Resize to max 1024px
                     .then(resizedDataUrl => {
                         this.uploadedImageDataUrls.push(resizedDataUrl);
-                        this._addPreviewToContainer(resizedDataUrl);
+                        this._addPreviewToContainer(resizedDataUrl, 'image');
                     })
                     .catch(error => {
                         showStatus(`Could not process image ${file.name}: ${error.message}`, "error");
                     });
+            } else if (file && file.type === 'application/pdf') {
+                // Handle PDF files - convert to base64 data URL
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const dataUrl = e.target.result;
+                    this.uploadedImageDataUrls.push(dataUrl); // Using same array for simplicity
+                    this._addPreviewToContainer(dataUrl, 'pdf', file.name);
+                };
+                reader.onerror = (error) => {
+                    showStatus(`Could not process PDF ${file.name}: ${error.message}`, "error");
+                };
+                reader.readAsDataURL(file);
             } else if (file) {
-                showStatus(`Skipping non-image file: ${file.name}`, "warning");
-        }
+                showStatus(`Skipping unsupported file type: ${file.name}`, "warning");
+            }
         });
         // Reset file input to allow selecting the same file again if removed
         event.target.value = null;
     }
-    _addPreviewToContainer(imageDataUrl) {
+    _addPreviewToContainer(dataUrl, fileType = 'image', fileName = '') {
         if (!this.followUpImageContainer) return;
         const previewItem = document.createElement('div');
         previewItem.className = 'follow-up-image-preview-item';
-        previewItem.dataset.imageDataUrl = imageDataUrl; // Store for easy removal
-        const img = document.createElement('img');
-        img.src = imageDataUrl;
-        img.className = 'follow-up-image-preview-thumbnail';
+        previewItem.dataset.imageDataUrl = dataUrl; // Store for easy removal
+        if (fileType === 'pdf') {
+            // For PDFs, show a PDF icon or text instead of image preview
+            const pdfIcon = document.createElement('div');
+            pdfIcon.className = 'follow-up-pdf-preview';
+            pdfIcon.innerHTML = `<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${fileName || 'PDF'}</span>`;
+            pdfIcon.style.textAlign = 'center';
+            pdfIcon.style.padding = '8px';
+            pdfIcon.style.width = '60px';
+            pdfIcon.style.height = '60px';
+            pdfIcon.style.display = 'flex';
+            pdfIcon.style.flexDirection = 'column';
+            pdfIcon.style.justifyContent = 'center';
+            pdfIcon.style.alignItems = 'center';
+            previewItem.appendChild(pdfIcon);
+        } else {
+            // Existing image preview
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.className = 'follow-up-image-preview-thumbnail';
+            previewItem.appendChild(img);
+        }
         const removeBtn = document.createElement('button');
         removeBtn.textContent = '×'; // 'X' character for close
         removeBtn.className = 'follow-up-image-remove-btn';
-        removeBtn.title = 'Remove this image';
+        removeBtn.title = 'Remove this file';
         removeBtn.addEventListener('click', (e) => {
             e.preventDefault(); // Add this
             e.stopPropagation();
-            this._removeSpecificUploadedImage(imageDataUrl);
+            this._removeSpecificUploadedImage(dataUrl);
         });
-        previewItem.appendChild(img);
         previewItem.appendChild(removeBtn);
         this.followUpImageContainer.appendChild(previewItem);
     }
@@ -6246,10 +6303,22 @@ EXPECTED_RESPONSE_FORMAT:\n
     }
     if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
         mediaUrls.forEach(url => {
-            requestBody.messages[1].content.push({
-                type: "image_url",
-                image_url: { "url": url }
-            });
+            if (url.startsWith('data:application/pdf')) {
+                // Handle PDF format for models that support it
+                requestBody.messages[1].content.push({
+                    type: "file",
+                    file: {
+                        filename: "attachment.pdf",
+                        file_data: url
+                    }
+                });
+            } else {
+                // Handle images as before
+                requestBody.messages[1].content.push({
+                    type: "image_url",
+                    image_url: { "url": url }
+                });
+            }
         });
     }
     if (providerSort) {
