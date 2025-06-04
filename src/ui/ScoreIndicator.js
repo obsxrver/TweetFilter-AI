@@ -674,9 +674,10 @@ class ScoreIndicator {
         // Custom Question Button
         this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
         // Allow submitting custom question with Enter key
+        // Shift + Enter should insert a newline instead of submitting
         this._boundHandlers.handleKeyDown = (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // Prevent default form submission/newline
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent newline
                 this._handleCustomQuestionClick(event); // Pass event parameter
             }
         };
