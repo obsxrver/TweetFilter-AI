@@ -1058,6 +1058,7 @@ class ScoreIndicator {
             } else {
                 // Apply formatting similar to the main description/reasoning
                 formattedAnswer = turn.answer
+                    .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
                     .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
                     // Format markdown links: [text](url) -> <a href="url">text</a>
                     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>') // Added class
@@ -1912,6 +1913,7 @@ class ScoreIndicator {
         if (lastAnswerElement) {
             // Format the streaming answer
             const formattedStreamingAnswer = streamingText
+                .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
                 .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
                 .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -2720,7 +2722,11 @@ function formatTooltipDescription(description = "", reasoning = "") {
     // Only format description if it's not the placeholder
     let formattedDescription = description === "*Waiting for analysis...*" ? description :
         (description || "*waiting for content...*")
+            // Format fenced code blocks ```code```
+            .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
             .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape HTML tags first
+            // Hyperlinks [text](url)
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
             .replace(/^# (.*$)/gm, '<h1>$1</h1>')
             .replace(/^## (.*$)/gm, '<h2>$1</h2>')
             .replace(/^### (.*$)/gm, '<h3>$1</h3>')
@@ -2765,7 +2771,10 @@ function formatTooltipDescription(description = "", reasoning = "") {
     if (reasoning && reasoning.trim()) {
         formattedReasoning = reasoning
             .replace(/\\n/g, '\n') // Convert literal '\n' to actual newline characters
+            // Format fenced code blocks ```code```
+            .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
             .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')

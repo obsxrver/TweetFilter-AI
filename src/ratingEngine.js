@@ -650,9 +650,9 @@ async function scheduleTweetProcessing(tweetArticle) {
 // Add this near the beginning of the file with other global variables
 // Store reply relationships across sessions
 let threadRelationships = {};
-const THREAD_CHECK_INTERVAL = 1000; // Reduce from 2500ms to 1000ms
-const SWEEP_INTERVAL = 1000; // Keep at 1000ms
-const THREAD_MAPPING_TIMEOUT = 2000; // Reduce from 5000ms to 2000ms
+const THREAD_CHECK_INTERVAL = 500; // Reduce from 2500ms to 500ms
+const SWEEP_INTERVAL = 500; // Check for unrated tweets twice as often
+const THREAD_MAPPING_TIMEOUT = 1000; // Reduce from 5000ms to 1000ms
 let threadMappingInProgress = false; // Add a memory-based flag for more reliable state tracking
 
 // Load thread relationships from storage on script initialization
@@ -1021,7 +1021,7 @@ async function handleThreads() {
 
         // Check if a mapping was completed very recently
         const lastMappedTimestamp = parseInt(conversation.dataset.threadMappedAt || '0', 10);
-        const MAPPING_COOLDOWN_MS = 5000; // 5 seconds cooldown
+        const MAPPING_COOLDOWN_MS = 1000; // 1 second cooldown
         if (Date.now() - lastMappedTimestamp < MAPPING_COOLDOWN_MS) {
             // console.log(`[handleThreads] Skipping, last map was too recent (${Date.now() - lastMappedTimestamp}ms ago).`);
             return;

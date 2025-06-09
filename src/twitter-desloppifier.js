@@ -85,7 +85,7 @@ const VERSION = '1.5.2';
                 console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
-            setTimeout(initializeObserver, 10);
+            setTimeout(initializeObserver, 1);
         }
     }
     initializeObserver();

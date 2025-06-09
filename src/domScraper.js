@@ -101,7 +101,7 @@ async function extractMediaLinks(scopeElement) {
     
     // --- Retry Logic --- 
     let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    const RETRY_DELAY = 20; // ms
+    const RETRY_DELAY = 5; // ms
     let retries = 0;
 
     while (mediaElements.length === 0 && retries < MAX_RETRIES) {
@@ -300,7 +300,7 @@ function handleMutations(mutationsList) {
                             console.log("[handleMutations] Conversation timeline detected. Triggering handleThreads.");
                             // Call handleThreads immediately. The internal checks within handleThreads
                             // should prevent redundant processing if it's already running.
-                            setTimeout(handleThreads, 50); // Short delay to potentially allow elements to settle
+                            setTimeout(handleThreads, 5); // Short delay to potentially allow elements to settle
                         }
 
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
