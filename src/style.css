@@ -1872,6 +1872,25 @@ input:checked+.toggle-slider:before {
     text-decoration: underline;
 }
 
+/* Styling for fenced and inline code blocks in AI answers */
+.score-description pre,
+.tooltip-scrollable-content pre {
+    background-color: rgba(255, 255, 255, 0.07);
+    padding: 8px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+    white-space: pre-wrap;
+}
+
+.score-description code,
+.tooltip-scrollable-content code {
+    background-color: rgba(255, 255, 255, 0.12);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
 /* Style for the new tooltip close button */
 .tooltip-close-button {
     /* Reuse general close button styles */
