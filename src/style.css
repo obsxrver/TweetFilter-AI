@@ -135,6 +135,12 @@
     color: white !important;
 }
 
+.manual-rating {
+    background-color: rgba(33, 150, 243, 0.7) !important;
+    color: white !important;
+    border: 2px dashed rgba(33, 150, 243, 0.8) !important;
+}
+
 /* New style for blacklisted author indicator */
 .blacklisted-author-indicator {
     background-color: purple !important; 
@@ -1140,6 +1146,26 @@ input:checked+.toggle-slider:before {
     transform: scale(0.95) !important;
 }
 
+.tooltip-rate-button {
+    background: none !important;
+    border: none !important;
+    color: #8899a6 !important;
+    cursor: pointer !important;
+    font-size: 16px !important;
+    padding: 4px 8px !important;
+    margin-left: 8px !important;
+    border-radius: 4px !important;
+    transition: all 0.2s !important;
+}
+
+.tooltip-rate-button:hover {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+    color: #ffc107 !important;
+}
+
+.tooltip-rate-button:active {
+    transform: scale(0.95) !important;
+}
 
 .reasoning-text {
     font-size: 14px !important;
@@ -2199,4 +2225,25 @@ input:checked+.toggle-slider:before {
 
 .markdown-table tbody tr:nth-child(odd) {
     background-color: #222; /* Darker zebra striping for dark theme */
+}
+
+.tooltip-refresh-button {
+    background: none !important;
+    border: none !important;
+    color: #8899a6 !important;
+    cursor: pointer !important;
+    font-size: 16px !important;
+    padding: 4px 8px !important;
+    margin-left: 8px !important;
+    border-radius: 4px !important;
+    transition: all 0.2s !important;
+}
+
+.tooltip-refresh-button:hover {
+    background-color: rgba(76, 175, 80, 0.1) !important;
+    color: #4caf50 !important;
+}
+
+.tooltip-refresh-button:active {
+    transform: scale(0.95) !important;
 }

@@ -442,6 +442,10 @@ function handleSettingChange(target, settingName) {
     if (settingName === 'enableWebSearch') {
         showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
     }
+    
+    if (settingName === 'enableAutoRating') {
+        showStatus('Auto-rating ' + (value ? 'enabled' : 'disabled'));
+    }
 }
 
 /**
@@ -920,6 +924,7 @@ function resetSettings(noconfirm = false) {
             enableImageDescriptions: false,
             enableStreaming: true,
             enableWebSearch: false,
+            enableAutoRating: true,
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,

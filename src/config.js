@@ -26,6 +26,7 @@ let threadHist = "";
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 let enableWebSearch = browserGet('enableWebSearch', false); // For appending :online to model slug
+let enableAutoRating = browserGet('enableAutoRating', true); // Enable auto-rating by default to maintain current behavior
 
 // Model parameters
 const REVIEW_SYSTEM_PROMPT = `
