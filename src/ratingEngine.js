@@ -888,6 +888,8 @@ ${quotedMediaLinks.join(", ")}`;
 
                 if (replyChain.length > 0 && !threadHistoryIncluded) {
                     let parentContextsString = "";
+                    let previousParentAuthor = null;
+
                     for (let i = replyChain.length - 1; i >= 0; i--) { // Iterate from top-most parent downwards
                         const link = replyChain[i];
                         const parentId = link.toId;
@@ -896,52 +898,56 @@ ${quotedMediaLinks.join(", ")}`;
 
                         const parentCacheEntry = tweetCache.get(parentId);
 
-                        if (parentCacheEntry && parentCacheEntry.fullContext) {
-                            currentParentContent = parentCacheEntry.fullContext;
-                            // console.log(`[getFullContext] Parent ${parentId} (for ${tweetId}) context found in tweetCache.fullContext.`);
+                        // Prioritize individual text from cache to break recursion
+                        if (parentCacheEntry && parentCacheEntry.individualTweetText) {
+                            currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
+                            if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
+                                currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
+                            }
                         } else {
                             const parentArticleElement = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
                                 .find(el => getTweetID(el) === parentId);
 
                             if (parentArticleElement) {
-                                // Check dataset as a fallback
-                                if (parentArticleElement.dataset.fullContext) {
-                                    currentParentContent = parentArticleElement.dataset.fullContext;
-                                    // console.log(`[getFullContext] Parent ${parentId} (for ${tweetId}) context found in dataset.fullContext.`);
-
-                                    // Update cache with this found context if cache didn't have it
-                                    const entryToUpdate = tweetCache.get(parentId) || { timestamp: Date.now(), score: undefined };
-                                    if (!entryToUpdate.fullContext) { // Only update if fullContext is missing
-                                        entryToUpdate.fullContext = currentParentContent;
-                                        tweetCache.set(parentId, entryToUpdate, false); // Debounced save
-                                    }
-                                } else {
-                                    // console.log(`[getFullContext] Parent ${parentId} (for ${tweetId}) context not in cache/dataset, attempting to await its getFullContext.`);
-                                    try {
-                                        // Recursive call will populate cache for parentId via its own execution path
-                                        currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey);
-                                        // console.log(`[getFullContext] Recursively called getFullContext for parent ${parentId}.`);
-                                    } catch (e) {
-                                        console.error(`[getFullContext] Error recursively getting context for parent ${parentId} (for ${tweetId}):`, e);
-                                        // currentParentContent remains null
+                                const originalParentRelationship = threadRelationships[parentId];
+                                delete threadRelationships[parentId];
+                                try {
+                                    currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey);
+                                } finally {
+                                    if (originalParentRelationship) {
+                                        threadRelationships[parentId] = originalParentRelationship;
                                     }
                                 }
                             }
-                            // If parentArticleElement is not found (e.g., de-rendered and not in cache), currentParentContent remains null
+                        }
+
+                        if (previousParentAuthor) {
+                            parentContextsString += `\n[REPLY TO @${previousParentAuthor}]\n`;
                         }
 
                         if (currentParentContent) {
-                            parentContextsString = parentContextsString + currentParentContent + "\n[REPLY]\n";
+                            // Safeguard: In case of runaway recursion, strip everything before the last [TWEET marker
+                            const lastTweetMarker = currentParentContent.lastIndexOf('[TWEET ');
+                            if (lastTweetMarker > 0) {
+                                currentParentContent = currentParentContent.substring(lastTweetMarker);
+                            }
+                            parentContextsString += currentParentContent;
                         } else {
-                            parentContextsString = parentContextsString + `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${parentUser}]\n[REPLY]\n`;
+                            parentContextsString += `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${parentUser}]`;
                         }
+                        previousParentAuthor = parentUser;
                     }
+
+                    if (previousParentAuthor) {
+                        parentContextsString += `\n[REPLY TO @${previousParentAuthor}]\n`;
+                    }
+
                     fullContextWithImageDescription = parentContextsString + fullContextWithImageDescription;
                 }
 
                 const replyInfo = getTweetReplyInfo(tweetId);
-                if (replyInfo && replyInfo.replyTo && !threadHistoryIncluded && replyChain.length === 0) {
-                    fullContextWithImageDescription = `[REPLY TO TWEET ${replyInfo.replyTo}]\n` + fullContextWithImageDescription;
+                if (replyInfo && replyInfo.to && !threadHistoryIncluded && replyChain.length === 0) {
+                    fullContextWithImageDescription = `[REPLY TO @${replyInfo.to}]\n` + fullContextWithImageDescription;
                 }
             }
             // --- End of Thread/Reply Logic ---
