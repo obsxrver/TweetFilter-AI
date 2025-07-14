@@ -152,10 +152,17 @@ class ScoreIndicator {
         this.refreshButton.innerHTML = '🔄'; // Refresh icon
         this.refreshButton.title = 'Re-rate this tweet';
 
+        this.rateButton = document.createElement('button');
+        this.rateButton.className = 'tooltip-rate-button';
+        this.rateButton.innerHTML = '⭐'; // Star icon
+        this.rateButton.title = 'Rate this tweet';
+        this.rateButton.style.display = 'none'; // Hidden by default, shown only in manual mode
+
         this.tooltipControls.appendChild(this.pinButton);
         this.tooltipControls.appendChild(this.copyButton);
         this.tooltipControls.appendChild(this.tooltipCloseButton); // Add the close button to controls
         this.tooltipControls.appendChild(this.refreshButton);
+        this.tooltipControls.appendChild(this.rateButton);
 
         this.tooltipElement.appendChild(this.tooltipControls);
 
@@ -459,6 +466,7 @@ class ScoreIndicator {
             this.copyButton,
             this.tooltipCloseButton,
             this.refreshButton,
+            this.rateButton,
             this.scrollButton
         ].filter(el => el);
         
@@ -624,6 +632,7 @@ class ScoreIndicator {
         this.reasoningToggle?.addEventListener('click', this._handleReasoningToggleClick.bind(this));
         this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
         this.refreshButton?.addEventListener('click', this._handleRefreshClick.bind(this));
+        this.rateButton?.addEventListener('click', this._handleRateClick.bind(this));
 
         // Follow-up Questions (using delegation on the container)
         this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
@@ -674,9 +683,10 @@ class ScoreIndicator {
         // Custom Question Button
         this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
         // Allow submitting custom question with Enter key
+        // Shift + Enter should insert a newline instead of submitting
         this._boundHandlers.handleKeyDown = (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // Prevent default form submission/newline
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent newline
                 this._handleCustomQuestionClick(event); // Pass event parameter
             }
         };
@@ -729,7 +739,7 @@ class ScoreIndicator {
         classList.remove(
             'pending-rating', 'rated-rating', 'error-rating',
             'cached-rating', 'blacklisted-rating', 'streaming-rating',
-            'blacklisted-author-indicator' // Ensure to remove this as well before re-evaluating
+            'manual-rating', 'blacklisted-author-indicator' // Ensure to remove this as well before re-evaluating
         );
 
         let indicatorText = '';
@@ -759,6 +769,10 @@ class ScoreIndicator {
                 case 'blacklisted': // This is for TWEET status being blacklisted (amber color)
                     indicatorClass = 'blacklisted-rating';
                     indicatorText = String(this.score);
+                    break;
+                case 'manual':
+                    indicatorClass = 'manual-rating';
+                    indicatorText = '💭';
                     break;
                 case 'rated':
                 default:
@@ -987,6 +1001,17 @@ class ScoreIndicator {
              contentChanged = true; // Class change might affect layout/appearance
         }
 
+        // Show/hide rate button based on status
+        if (this.rateButton) {
+            const showRateButton = this.status === 'manual';
+            const currentDisplay = this.rateButton.style.display;
+            const newDisplay = showRateButton ? 'inline-block' : 'none';
+            if (currentDisplay !== newDisplay) {
+                this.rateButton.style.display = newDisplay;
+                contentChanged = true;
+            }
+        }
+
         // Handle scrolling after content update
         if (contentChanged) {
             requestAnimationFrame(() => {
@@ -1057,6 +1082,7 @@ class ScoreIndicator {
             } else {
                 // Apply formatting similar to the main description/reasoning
                 formattedAnswer = turn.answer
+                    .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
                     .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
                     // Format markdown links: [text](url) -> <a href="url">text</a>
                     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>') // Added class
@@ -1911,6 +1937,7 @@ class ScoreIndicator {
         if (lastAnswerElement) {
             // Format the streaming answer
             const formattedStreamingAnswer = streamingText
+                .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
                 .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape potential raw HTML first
                 .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -2139,6 +2166,7 @@ class ScoreIndicator {
         
         this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
         this.refreshButton?.removeEventListener('click', this._handleRefreshClick.bind(this));
+        this.rateButton?.removeEventListener('click', this._handleRateClick.bind(this));
         
         // Remove image button listeners
         if (this.attachImageButton) {
@@ -2185,6 +2213,7 @@ class ScoreIndicator {
         this.followUpImageInput = null;
         this.uploadedImageDataUrls = []; // Ensure it's reset here too
         this.refreshButton = null; // Nullify refresh button
+        this.rateButton = null; // Nullify rate button
         // --- End New ---
         // --- Nullify Metadata Dropdown Elements ---
         this.metadataDropdown = null;
@@ -2519,52 +2548,58 @@ class ScoreIndicator {
     }
 
     _handleRefreshClick(e) {
-        if (e) {
-            e.stopPropagation();
-        }
+        e && e.stopPropagation();
+
         if (!this.tweetId) return;
 
-        console.log(`[ScoreIndicator ${this.tweetId}] Refresh clicked.`);
-
-        // Abort active streaming request if any
+        // Abort any streaming requests if active
         if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
-            console.log(`[ScoreIndicator ${this.tweetId}] Aborting existing streaming request.`);
             window.activeStreamingRequests[this.tweetId].abort();
             delete window.activeStreamingRequests[this.tweetId];
         }
 
-        // Clear from cache
+        // Clear cache entry if it exists
         if (tweetCache.has(this.tweetId)) {
             tweetCache.delete(this.tweetId);
-            console.log(`[ScoreIndicator ${this.tweetId}] Removed from tweetCache.`);
         }
 
-        // Clear from processed set
+        // Remove from processedTweets set if it exists
         if (processedTweets.has(this.tweetId)) {
             processedTweets.delete(this.tweetId);
-            console.log(`[ScoreIndicator ${this.tweetId}] Removed from processedTweets.`);
         }
 
-        // Find current article element *before* destroying this instance
+        // Find current tweet article and destroy this indicator
         const currentArticle = this.findCurrentArticleElement();
-
-        // Destroy the current instance. This removes it from DOM and registry.
         this.destroy();
 
-        if (!currentArticle) {
-            console.warn(`[ScoreIndicator Refresh] Could not find current article element for tweet ${this.tweetId} after destroy. Cannot re-schedule.`);
-            // No indicator to update to an error state, as it's destroyed.
-            return;
-        }
-
-        // Schedule for re-processing. This will create a new ScoreIndicator instance.
-        if (typeof scheduleTweetProcessing === 'function') {
-            console.log(`[ScoreIndicator Refresh] Scheduling tweet ${this.tweetId} for re-processing.`);
+        // Re-process the tweet if found and scheduleTweetProcessing is available
+        if (currentArticle && typeof scheduleTweetProcessing === 'function') {
             scheduleTweetProcessing(currentArticle);
-        } else {
-            console.error('[ScoreIndicator Refresh] scheduleTweetProcessing function not found. Cannot re-schedule tweet ${this.tweetId}.');
-            // If scheduleTweetProcessing is missing, we can't do much here.
-            // The old indicator is gone. A new one won't be created.
+        }
+    }
+
+    _handleRateClick(e) {
+        e && e.stopPropagation();
+
+        if (!this.tweetId) return;
+
+        // Change status to pending and trigger rating
+        this.update({
+            status: 'pending',
+            score: null,
+            description: 'Rating tweet...',
+            reasoning: '',
+            questions: []
+        });
+
+        // Find current tweet article and trigger manual rating
+        const currentArticle = this.findCurrentArticleElement();
+        if (currentArticle && typeof scheduleTweetProcessing === 'function') {
+            // Remove from processedTweets to allow re-processing
+            if (processedTweets.has(this.tweetId)) {
+                processedTweets.delete(this.tweetId);
+            }
+            scheduleTweetProcessing(currentArticle, true); // rateAnyway = true
         }
     }
 
@@ -2719,7 +2754,11 @@ function formatTooltipDescription(description = "", reasoning = "") {
     // Only format description if it's not the placeholder
     let formattedDescription = description === "*Waiting for analysis...*" ? description :
         (description || "*waiting for content...*")
+            // Format fenced code blocks ```code```
+            .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
             .replace(/</g, '&lt;').replace(/>/g, '&gt;') // Escape HTML tags first
+            // Hyperlinks [text](url)
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
             .replace(/^# (.*$)/gm, '<h1>$1</h1>')
             .replace(/^## (.*$)/gm, '<h2>$1</h2>')
             .replace(/^### (.*$)/gm, '<h3>$1</h3>')
@@ -2764,7 +2803,10 @@ function formatTooltipDescription(description = "", reasoning = "") {
     if (reasoning && reasoning.trim()) {
         formattedReasoning = reasoning
             .replace(/\\n/g, '\n') // Convert literal '\n' to actual newline characters
+            // Format fenced code blocks ```code```
+            .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
             .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')

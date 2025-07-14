@@ -113,6 +113,8 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             
             // Setup timeout to prevent hanging indefinitely
             
+            let streamTimeout = null;
+            let firstChunkReceived = false;
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
@@ -128,27 +130,30 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                             timedOut: true
                         });
                     }
-                }, 30000); // 10 second timeout without activity
+                }, 30000);
             };
-            let streamTimeout = null;
             // Process the stream
             const processStream = async () => {
                 try {
-                    resetStreamTimeout()
                     let isDone = false;
                     let emptyChunksCount = 0;
                     
                     while (!isDone && !streamComplete) {
                         const { done, value } = await reader.read();
-                        
+
                         if (done) {
                             isDone = true;
                             break;
                         }
-                        
+
+                        if (!firstChunkReceived) {
+                            firstChunkReceived = true;
+                            resetStreamTimeout();
+                        }
+
                         // Convert the chunk to text
                         const chunk = new TextDecoder().decode(value);
-                        
+
                         clearTimeout(streamTimeout);
                         // Reset timeout on activity
                         resetStreamTimeout();

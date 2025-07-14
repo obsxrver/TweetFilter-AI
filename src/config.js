@@ -2,8 +2,8 @@
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
 const adAuthorCache = new Set(); // Cache of handles that post ads
 
-const PROCESSING_DELAY_MS = 10; // Delay before processing a tweet (ms)
-const API_CALL_DELAY_MS = 5; // Minimum delay between API calls
+const PROCESSING_DELAY_MS = 1; // Delay before processing a tweet (ms)
+const API_CALL_DELAY_MS = 1; // Minimum delay between API calls
 let userDefinedInstructions = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
 let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5')); // Filter threshold for tweet visibility
 let observedTargetNode = null;
@@ -26,6 +26,7 @@ let threadHist = "";
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true); // Enable streaming by default for better UX
 let enableWebSearch = browserGet('enableWebSearch', false); // For appending :online to model slug
+let enableAutoRating = browserGet('enableAutoRating', true); // Enable auto-rating by default to maintain current behavior
 
 // Model parameters
 const REVIEW_SYSTEM_PROMPT = `
