@@ -112,7 +112,7 @@ class Tweet {
         
         
         // Extract text content
-        this.textContent = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || '';
+        this.textContent = getTweetText(tweetArticle) || '';
         
         // Extract media URLs synchronously
         this.mediaURLs = extractMediaLinks(tweetArticle);

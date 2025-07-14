@@ -17,7 +17,7 @@ function filterSingleTweet(tweetArticle) {
     const isAuthorActuallyBlacklisted = authorHandle && isUserBlacklisted(authorHandle);
 
     // Always store tweet data in dataset regardless of filtering
-    const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || '';
+    const tweetText = getTweetText(tweetArticle) || '';
     const mediaUrls = extractMediaLinksSync(tweetArticle);
     const tid = getTweetID(tweetArticle);
     cell.dataset.tweetText = tweetText;
@@ -773,7 +773,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const userHandle = handles.length > 0 ? handles[0] : '';
             const quotedHandle = handles.length > 1 ? handles[1] : '';
             // --- Extract Main Tweet Content ---
-            const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+            const mainText = getTweetText(tweetArticle);
 
             let allMediaLinks = await extractMediaLinks(tweetArticle);
 
@@ -1149,8 +1149,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     }
                     const handles = getUserHandles(article);
                     username = handles.length > 0 ? handles[0] : null;
-                    let tweetTextSpan = article.querySelector('[data-testid="tweetText"]');
-                    text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
+                    text = getTweetText(article).replace(/\n+/g, ' ⏎ ');
                     mediaLinks = await extractMediaLinks(article);
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {

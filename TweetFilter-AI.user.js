@@ -682,6 +682,24 @@ function getElementText(elements) {
     return '';
 }
 /**
+ * Extracts the text of a tweet, excluding any text from quoted tweets.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {string} The text of the main tweet.
+ */
+function getTweetText(tweetArticle) {
+    const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
+    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+    for (const textElement of allTextElements) {
+        // If the text element is not inside the quote container, it's the main tweet's text.
+        if (!quoteContainer || !quoteContainer.contains(textElement)) {
+            return textElement.textContent.trim();
+        }
+    }
+    // If loop finishes, it means all found text elements were inside a quote,
+    // so the main tweet has no text.
+    return ''; 
+}
+/**
  * Extracts the tweet ID from a tweet article element.
  * @param {Element} tweetArticle - The tweet article element.
  * @returns {string} The tweet ID.
@@ -4559,7 +4577,7 @@ function filterSingleTweet(tweetArticle) {
     const authorHandle = handles.length > 0 ? handles[0] : '';
     const isAuthorActuallyBlacklisted = authorHandle && isUserBlacklisted(authorHandle);
     // Always store tweet data in dataset regardless of filtering
-    const tweetText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR)) || '';
+    const tweetText = getTweetText(tweetArticle) || '';
     const mediaUrls = extractMediaLinksSync(tweetArticle);
     const tid = getTweetID(tweetArticle);
     cell.dataset.tweetText = tweetText;
@@ -5231,7 +5249,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const userHandle = handles.length > 0 ? handles[0] : '';
             const quotedHandle = handles.length > 1 ? handles[1] : '';
             // --- Extract Main Tweet Content ---
-            const mainText = getElementText(tweetArticle.querySelector(TWEET_TEXT_SELECTOR));
+            const mainText = getTweetText(tweetArticle);
             let allMediaLinks = await extractMediaLinks(tweetArticle);
             // --- Extract Quoted Tweet Content (if any) ---
             let quotedText = "";
@@ -5549,8 +5567,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     }
                     const handles = getUserHandles(article);
                     username = handles.length > 0 ? handles[0] : null;
-                    let tweetTextSpan = article.querySelector('[data-testid="tweetText"]');
-                    text = tweetTextSpan ? tweetTextSpan.innerText.trim().replace(/\n+/g, ' ⏎ ') : '';
+                    text = getTweetText(article).replace(/\n+/g, ' ⏎ ');
                     mediaLinks = await extractMediaLinks(article);
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {
