@@ -5193,8 +5193,8 @@ function saveThreadRelationships() {
 }
 // Initialize thread relationships on load
 loadThreadRelationships();
-// Add this function to build a complete chain of replies
-async function buildReplyChain(tweetId, maxDepth = 10) {
+// Add this function to build a complete chain of replies with no depth limit
+async function buildReplyChain(tweetId, maxDepth = Infinity) {
     if (!tweetId || maxDepth <= 0) return [];
     // Start with empty chain
     const chain = [];
