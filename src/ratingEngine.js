@@ -265,10 +265,13 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     }
                 }
             }
-            // Get all media URLs from any section in one go
+            // Get all media URLs and video descriptions from any section
             const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
             const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+            const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
+            const videoMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
 
+            // Extract image URLs
             for (const match of mediaMatches1) {
                 if (match[1]) {
                     mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
@@ -279,22 +282,47 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
                 }
             }
-            // Remove duplicates and empty URLs
-            mediaURLs = [...new Set(mediaURLs.filter(url => url.trim()))];
+            
+            // Extract video descriptions and add them back as formatted items
+            for (const match of videoMatches1) {
+                if (match[1]) {
+                    const videoLines = match[1].trim().split('\n').filter(line => line.trim());
+                    videoLines.forEach(line => {
+                        if (line.startsWith('[VIDEO ')) {
+                            const desc = line.replace(/^\[VIDEO \d+\]: /, '');
+                            mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                        }
+                    });
+                }
+            }
+            for (const match of videoMatches2) {
+                if (match[1]) {
+                    const videoLines = match[1].trim().split('\n').filter(line => line.trim());
+                    videoLines.forEach(line => {
+                        if (line.startsWith('[VIDEO ')) {
+                            const desc = line.replace(/^\[VIDEO \d+\]: /, '');
+                            mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                        }
+                    });
+                }
+            }
+            
+            // Remove duplicates and empty items
+            mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
 
             // ---- Start of new check for media extraction failure ----
             const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]'); // Check for photo or video containers
             const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
 
             if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
-                // Heuristic: If image/video containers are in the DOM, but we extracted no media URLs,
+                // Heuristic: If image/video containers are in the DOM, but we extracted no media content (URLs or video descriptions),
                 // and either image descriptions are on OR the model supports images (meaning URLs are important),
                 // then it's likely an extraction failure.
-                const warningMessage = `Tweet ${tweetId}: Potential media containers found in DOM, but no media URLs were extracted by getFullContext. Forcing error for retry.`;
+                const warningMessage = `Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext. Forcing error for retry.`;
                 console.warn(warningMessage);
                 // Throw an error that will be caught by the generic catch block below,
                 // which will set the status to 'error' and trigger the retry mechanism.
-                throw new Error("Media URLs not extracted despite presence of media containers.");
+                throw new Error("Media content not extracted despite presence of media containers.");
             }
             // ---- End of new check ----
 
@@ -336,8 +364,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     }
 
                     // If not cached, proceed with API call
+                    // Filter out video descriptions from mediaURLs before passing to API
+                    const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
                     // rateTweetWithOpenRouter now returns questions as well
-                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs, 3, tweetArticle, authorHandle);
+                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
                     score = rating.score;
                     description = rating.content;
                     reasoning = rating.reasoning || '';
@@ -427,7 +457,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
         } catch (error) {
             console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
 
-            if (error.message === "Media URLs not extracted despite presence of media containers.") {
+            if (error.message === "Media content not extracted despite presence of media containers.") {
                 if (tweetCache.has(tweetId)) {
                     tweetCache.delete(tweetId);
                     console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
@@ -815,6 +845,18 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             let allAvailableMediaLinks = [...(allMediaLinks || [])];
             let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
 
+            // Separate video descriptions from image URLs for main media
+            const mainImageUrls = [];
+            const mainVideoDescriptions = [];
+            
+            mainMediaLinks.forEach(item => {
+                if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                    mainVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
+                } else {
+                    mainImageUrls.push(item);
+                }
+            });
+
             let engagementStats = "";
             const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
             if (engagementDiv) {
@@ -825,16 +867,24 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
  Author:@${userHandle}:
 ` + mainText;
 
-            if (mainMediaLinks.length > 0) {
+            // Handle video descriptions
+            if (mainVideoDescriptions.length > 0) {
+                fullContextWithImageDescription += `
+[VIDEO_DESCRIPTIONS]:
+${mainVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
+            }
+
+            // Handle image URLs and descriptions
+            if (mainImageUrls.length > 0) {
                 if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions, as it might have changed
-                    let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                    let mainMediaLinksDescription = await getImageDescription(mainImageUrls, apiKey, tweetId, userHandle);
                     fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
 ${mainMediaLinksDescription}`;
                 }
                 fullContextWithImageDescription += `
 [MEDIA_URLS]:
-${mainMediaLinks.join(", ")}`;
+${mainImageUrls.join(", ")}`;
             }
 
             if (engagementStats) {
@@ -860,15 +910,37 @@ ${uniqueThreadMediaUrls.join(", ")}`;
  Author:@${quotedHandle}:
 ${quotedText}`;
                 if (quotedMediaLinks.length > 0) {
-                    if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions
-                        let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle); // tweetId and userHandle are from main tweet for context
+                    // Separate video descriptions from image URLs for quoted media
+                    const quotedImageUrls = [];
+                    const quotedVideoDescriptions = [];
+                    
+                    quotedMediaLinks.forEach(item => {
+                        if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                            quotedVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
+                        } else {
+                            quotedImageUrls.push(item);
+                        }
+                    });
+
+                    // Handle quoted video descriptions
+                    if (quotedVideoDescriptions.length > 0) {
                         fullContextWithImageDescription += `
+[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:
+${quotedVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
+                    }
+
+                    // Handle quoted image URLs and descriptions
+                    if (quotedImageUrls.length > 0) {
+                        if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions
+                            let quotedMediaLinksDescription = await getImageDescription(quotedImageUrls, apiKey, tweetId, userHandle); // tweetId and userHandle are from main tweet for context
+                            fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaLinksDescription}`;
-                    }
-                    fullContextWithImageDescription += `
+                        }
+                        fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
-${quotedMediaLinks.join(", ")}`;
+${quotedImageUrls.join(", ")}`;
+                    }
                 }
             }
 

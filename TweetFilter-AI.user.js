@@ -764,9 +764,9 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 /**
- * Extracts and returns an array of media URLs from the tweet element.
+ * Extracts and returns an array of media URLs and video descriptions from the tweet element.
  * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs.
+ * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
  */
 async function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
@@ -791,29 +791,53 @@ async function extractMediaLinks(scopeElement) {
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
     mediaElements.forEach(mediaEl => {
-        // Get the source URL (src for images, poster for videos)
-        const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
-        // Skip if not a Twitter media URL or if undefined or if it's a profile image
-        if (!sourceUrl || 
-           !(sourceUrl.includes('pbs.twimg.com/')) ||
-           sourceUrl.includes('profile_images')) {
-            return;
-        }
-        try {
-            // Parse the URL to handle format parameters
-            const url = new URL(sourceUrl);
-            const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
-            // Create the final URL with the right format and size
-            let finalUrl = sourceUrl;
-            // Try to get the original size by removing size indicator
-            if (name && name !== 'orig') {
-                // Replace format=jpg&name=x with format=jpg&name=small
-                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+        if (mediaEl.tagName === 'VIDEO') {
+            // For videos, try to get the aria-label description
+            const videoDescription = mediaEl.getAttribute('aria-label');
+            if (videoDescription && videoDescription.trim()) {
+                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
+            } else {
+                // Fallback to poster URL if no aria-label
+                const posterUrl = mediaEl.poster;
+                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
+                    try {
+                        const url = new URL(posterUrl);
+                        const name = url.searchParams.get('name');
+                        let finalUrl = posterUrl;
+                        if (name && name !== 'orig') {
+                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
+                        }
+                        mediaLinks.add(finalUrl);
+                    } catch (error) {
+                        mediaLinks.add(posterUrl);
+                    }
+                }
             }
-            mediaLinks.add(finalUrl);
-        } catch (error) {
-            // Fallback: just add the raw URL as is
-            mediaLinks.add(sourceUrl);
+        } else if (mediaEl.tagName === 'IMG') {
+            // For images, continue with URL extraction as before
+            const sourceUrl = mediaEl.src;
+            // Skip if not a Twitter media URL or if undefined or if it's a profile image
+            if (!sourceUrl || 
+               !(sourceUrl.includes('pbs.twimg.com/')) ||
+               sourceUrl.includes('profile_images')) {
+                return;
+            }
+            try {
+                // Parse the URL to handle format parameters
+                const url = new URL(sourceUrl);
+                const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+                // Create the final URL with the right format and size
+                let finalUrl = sourceUrl;
+                // Try to get the original size by removing size indicator
+                if (name && name !== 'orig') {
+                    // Replace format=jpg&name=x with format=jpg&name=small
+                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+                }
+                mediaLinks.add(finalUrl);
+            } catch (error) {
+                // Fallback: just add the raw URL as is
+                mediaLinks.add(sourceUrl);
+            }
         }
     });
     return Array.from(mediaLinks);
@@ -821,7 +845,7 @@ async function extractMediaLinks(scopeElement) {
 /**
  * Synchronous version of extractMediaLinks without retry logic.
  * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs.
+ * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
  */
 function extractMediaLinksSync(scopeElement) {
     if (!scopeElement) return [];
@@ -836,29 +860,53 @@ function extractMediaLinksSync(scopeElement) {
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
     mediaElements.forEach(mediaEl => {
-        // Get the source URL (src for images, poster for videos)
-        const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
-        // Skip if not a Twitter media URL or if undefined or if it's a profile image
-        if (!sourceUrl || 
-           !(sourceUrl.includes('pbs.twimg.com/')) ||
-           sourceUrl.includes('profile_images')) {
-            return;
-        }
-        try {
-            // Parse the URL to handle format parameters
-            const url = new URL(sourceUrl);
-            const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
-            // Create the final URL with the right format and size
-            let finalUrl = sourceUrl;
-            // Try to get the original size by removing size indicator
-            if (name && name !== 'orig') {
-                // Replace format=jpg&name=x with format=jpg&name=small
-                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+        if (mediaEl.tagName === 'VIDEO') {
+            // For videos, try to get the aria-label description
+            const videoDescription = mediaEl.getAttribute('aria-label');
+            if (videoDescription && videoDescription.trim()) {
+                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
+            } else {
+                // Fallback to poster URL if no aria-label
+                const posterUrl = mediaEl.poster;
+                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
+                    try {
+                        const url = new URL(posterUrl);
+                        const name = url.searchParams.get('name');
+                        let finalUrl = posterUrl;
+                        if (name && name !== 'orig') {
+                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
+                        }
+                        mediaLinks.add(finalUrl);
+                    } catch (error) {
+                        mediaLinks.add(posterUrl);
+                    }
+                }
             }
-            mediaLinks.add(finalUrl);
-        } catch (error) {
-            // Fallback: just add the raw URL as is
-            mediaLinks.add(sourceUrl);
+        } else if (mediaEl.tagName === 'IMG') {
+            // For images, continue with URL extraction as before
+            const sourceUrl = mediaEl.src;
+            // Skip if not a Twitter media URL or if undefined or if it's a profile image
+            if (!sourceUrl || 
+               !(sourceUrl.includes('pbs.twimg.com/')) ||
+               sourceUrl.includes('profile_images')) {
+                return;
+            }
+            try {
+                // Parse the URL to handle format parameters
+                const url = new URL(sourceUrl);
+                const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+                // Create the final URL with the right format and size
+                let finalUrl = sourceUrl;
+                // Try to get the original size by removing size indicator
+                if (name && name !== 'orig') {
+                    // Replace format=jpg&name=x with format=jpg&name=small
+                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+                }
+                mediaLinks.add(finalUrl);
+            } catch (error) {
+                // Fallback: just add the raw URL as is
+                mediaLinks.add(sourceUrl);
+            }
         }
     });
     return Array.from(mediaLinks);
@@ -1029,8 +1077,8 @@ function isAd(tweetArticle) {
  * @returns {boolean} true if mobile device detected
  */
 function isMobileDevice() {
-    return (window.innerWidth <= 600 || 
-            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    // Treat as mobile only based on user agent, not viewport width
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 /**
  * Displays a temporary status message on the screen.
@@ -4796,9 +4844,12 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     }
                 }
             }
-            // Get all media URLs from any section in one go
+            // Get all media URLs and video descriptions from any sectionco
             const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
             const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+            const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
+            const videoMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
+            // Extract image URLs
             for (const match of mediaMatches1) {
                 if (match[1]) {
                     mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
@@ -4809,20 +4860,43 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
                 }
             }
-            // Remove duplicates and empty URLs
-            mediaURLs = [...new Set(mediaURLs.filter(url => url.trim()))];
+            // Extract video descriptions and add them back as formatted items
+            for (const match of videoMatches1) {
+                if (match[1]) {
+                    const videoLines = match[1].trim().split('\n').filter(line => line.trim());
+                    videoLines.forEach(line => {
+                        if (line.startsWith('[VIDEO ')) {
+                            const desc = line.replace(/^\[VIDEO \d+\]: /, '');
+                            mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                        }
+                    });
+                }
+            }
+            for (const match of videoMatches2) {
+                if (match[1]) {
+                    const videoLines = match[1].trim().split('\n').filter(line => line.trim());
+                    videoLines.forEach(line => {
+                        if (line.startsWith('[VIDEO ')) {
+                            const desc = line.replace(/^\[VIDEO \d+\]: /, '');
+                            mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                        }
+                    });
+                }
+            }
+            // Remove duplicates and empty items
+            mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
             // ---- Start of new check for media extraction failure ----
             const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]'); // Check for photo or video containers
             const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
             if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
-                // Heuristic: If image/video containers are in the DOM, but we extracted no media URLs,
+                // Heuristic: If image/video containers are in the DOM, but we extracted no media content (URLs or video descriptions),
                 // and either image descriptions are on OR the model supports images (meaning URLs are important),
                 // then it's likely an extraction failure.
-                const warningMessage = `Tweet ${tweetId}: Potential media containers found in DOM, but no media URLs were extracted by getFullContext. Forcing error for retry.`;
+                const warningMessage = `Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext. Forcing error for retry.`;
                 console.warn(warningMessage);
                 // Throw an error that will be caught by the generic catch block below,
                 // which will set the status to 'error' and trigger the retry mechanism.
-                throw new Error("Media URLs not extracted despite presence of media containers.");
+                throw new Error("Media content not extracted despite presence of media containers.");
             }
             // ---- End of new check ----
             // --- API Call or Fallback ---
@@ -4860,8 +4934,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         return; // Exit after using cache
                     }
                     // If not cached, proceed with API call
+                    // Filter out video descriptions from mediaURLs before passing to API
+                    const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
                     // rateTweetWithOpenRouter now returns questions as well
-                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, mediaURLs, 3, tweetArticle, authorHandle);
+                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
                     score = rating.score;
                     description = rating.content;
                     reasoning = rating.reasoning || '';
@@ -4939,7 +5015,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             filterSingleTweet(tweetArticle);
         } catch (error) {
             console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
-            if (error.message === "Media URLs not extracted despite presence of media containers.") {
+            if (error.message === "Media content not extracted despite presence of media containers.") {
                 if (tweetCache.has(tweetId)) {
                     tweetCache.delete(tweetId);
                     console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
@@ -5283,6 +5359,16 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             }
             let allAvailableMediaLinks = [...(allMediaLinks || [])];
             let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+            // Separate video descriptions from image URLs for main media
+            const mainImageUrls = [];
+            const mainVideoDescriptions = [];
+            mainMediaLinks.forEach(item => {
+                if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                    mainVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
+                } else {
+                    mainImageUrls.push(item);
+                }
+            });
             let engagementStats = "";
             const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
             if (engagementDiv) {
@@ -5291,16 +5377,23 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             let fullContextWithImageDescription = `[TWEET ${tweetId}]
  Author:@${userHandle}:
 ` + mainText;
-            if (mainMediaLinks.length > 0) {
+            // Handle video descriptions
+            if (mainVideoDescriptions.length > 0) {
+                fullContextWithImageDescription += `
+[VIDEO_DESCRIPTIONS]:
+${mainVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
+            }
+            // Handle image URLs and descriptions
+            if (mainImageUrls.length > 0) {
                 if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions, as it might have changed
-                    let mainMediaLinksDescription = await getImageDescription(mainMediaLinks, apiKey, tweetId, userHandle);
+                    let mainMediaLinksDescription = await getImageDescription(mainImageUrls, apiKey, tweetId, userHandle);
                     fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
 ${mainMediaLinksDescription}`;
                 }
                 fullContextWithImageDescription += `
 [MEDIA_URLS]:
-${mainMediaLinks.join(", ")}`;
+${mainImageUrls.join(", ")}`;
             }
             if (engagementStats) {
                 fullContextWithImageDescription += `
@@ -5322,15 +5415,34 @@ ${uniqueThreadMediaUrls.join(", ")}`;
  Author:@${quotedHandle}:
 ${quotedText}`;
                 if (quotedMediaLinks.length > 0) {
-                    if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions
-                        let quotedMediaLinksDescription = await getImageDescription(quotedMediaLinks, apiKey, tweetId, userHandle); // tweetId and userHandle are from main tweet for context
+                    // Separate video descriptions from image URLs for quoted media
+                    const quotedImageUrls = [];
+                    const quotedVideoDescriptions = [];
+                    quotedMediaLinks.forEach(item => {
+                        if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                            quotedVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
+                        } else {
+                            quotedImageUrls.push(item);
+                        }
+                    });
+                    // Handle quoted video descriptions
+                    if (quotedVideoDescriptions.length > 0) {
                         fullContextWithImageDescription += `
+[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:
+${quotedVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
+                    }
+                    // Handle quoted image URLs and descriptions
+                    if (quotedImageUrls.length > 0) {
+                        if (browserGet('enableImageDescriptions', false)) { // Re-check enableImageDescriptions
+                            let quotedMediaLinksDescription = await getImageDescription(quotedImageUrls, apiKey, tweetId, userHandle); // tweetId and userHandle are from main tweet for context
+                            fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
 ${quotedMediaLinksDescription}`;
-                    }
-                    fullContextWithImageDescription += `
+                        }
+                        fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
-${quotedMediaLinks.join(", ")}`;
+${quotedImageUrls.join(", ")}`;
+                    }
                 }
             }
             // --- Thread/Reply Logic ---
@@ -6516,25 +6628,41 @@ EXPECTED_RESPONSE_FORMAT:\n
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
-    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
-        mediaUrls.forEach(url => {
-            if (url.startsWith('data:application/pdf')) {
-                // Handle PDF format for models that support it
-                requestBody.messages[1].content.push({
-                    type: "file",
-                    file: {
-                        filename: "attachment.pdf",
-                        file_data: url
-                    }
-                });
+    if (mediaUrls?.length > 0) {
+        // Separate video descriptions from image URLs
+        const imageUrls = [];
+        const videoDescriptions = [];
+        mediaUrls.forEach(item => {
+            if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                videoDescriptions.push(item);
             } else {
-                // Handle images as before
-                requestBody.messages[1].content.push({
-                    type: "image_url",
-                    image_url: { "url": url }
-                });
+                imageUrls.push(item);
             }
         });
+        // Add image URLs for vision models
+        if (imageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+            imageUrls.forEach(url => {
+                if (url.startsWith('data:application/pdf')) {
+                    // Handle PDF format for models that support it
+                    requestBody.messages[1].content.push({
+                        type: "file",
+                        file: {
+                            filename: "attachment.pdf",
+                            file_data: url
+                        }
+                    });
+                } else if (url.startsWith('http://') || url.startsWith('https://')) {
+                    // Only process valid HTTP/HTTPS URLs as images
+                    requestBody.messages[1].content.push({
+                        type: "image_url",
+                        image_url: { "url": url }
+                    });
+                } else {
+                    // Skip invalid URLs (like video descriptions that shouldn't be here)
+                    console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
+                }
+            });
+        }
     }
     if (providerSort) {
         requestBody.provider = { sort: providerSort, allow_fallbacks: true };

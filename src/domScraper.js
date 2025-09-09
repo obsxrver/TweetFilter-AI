@@ -105,9 +105,9 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 /**
- * Extracts and returns an array of media URLs from the tweet element.
+ * Extracts and returns an array of media URLs and video descriptions from the tweet element.
  * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs.
+ * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
  */
 async function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
@@ -138,34 +138,58 @@ async function extractMediaLinks(scopeElement) {
     }
     
     mediaElements.forEach(mediaEl => {
-        // Get the source URL (src for images, poster for videos)
-        const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
-        
-        // Skip if not a Twitter media URL or if undefined or if it's a profile image
-        if (!sourceUrl || 
-           !(sourceUrl.includes('pbs.twimg.com/')) ||
-           sourceUrl.includes('profile_images')) {
-            return;
-        }
-        
-        try {
-            // Parse the URL to handle format parameters
-            const url = new URL(sourceUrl);
-            const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+        if (mediaEl.tagName === 'VIDEO') {
+            // For videos, try to get the aria-label description
+            const videoDescription = mediaEl.getAttribute('aria-label');
+            if (videoDescription && videoDescription.trim()) {
+                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
+            } else {
+                // Fallback to poster URL if no aria-label
+                const posterUrl = mediaEl.poster;
+                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
+                    try {
+                        const url = new URL(posterUrl);
+                        const name = url.searchParams.get('name');
+                        let finalUrl = posterUrl;
+                        if (name && name !== 'orig') {
+                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
+                        }
+                        mediaLinks.add(finalUrl);
+                    } catch (error) {
+                        mediaLinks.add(posterUrl);
+                    }
+                }
+            }
+        } else if (mediaEl.tagName === 'IMG') {
+            // For images, continue with URL extraction as before
+            const sourceUrl = mediaEl.src;
             
-            // Create the final URL with the right format and size
-            let finalUrl = sourceUrl;
-            
-            // Try to get the original size by removing size indicator
-            if (name && name !== 'orig') {
-                // Replace format=jpg&name=x with format=jpg&name=small
-                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+            // Skip if not a Twitter media URL or if undefined or if it's a profile image
+            if (!sourceUrl || 
+               !(sourceUrl.includes('pbs.twimg.com/')) ||
+               sourceUrl.includes('profile_images')) {
+                return;
             }
             
-            mediaLinks.add(finalUrl);
-        } catch (error) {
-            // Fallback: just add the raw URL as is
-            mediaLinks.add(sourceUrl);
+            try {
+                // Parse the URL to handle format parameters
+                const url = new URL(sourceUrl);
+                const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+                
+                // Create the final URL with the right format and size
+                let finalUrl = sourceUrl;
+                
+                // Try to get the original size by removing size indicator
+                if (name && name !== 'orig') {
+                    // Replace format=jpg&name=x with format=jpg&name=small
+                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+                }
+                
+                mediaLinks.add(finalUrl);
+            } catch (error) {
+                // Fallback: just add the raw URL as is
+                mediaLinks.add(sourceUrl);
+            }
         }
     });
     
@@ -175,7 +199,7 @@ async function extractMediaLinks(scopeElement) {
 /**
  * Synchronous version of extractMediaLinks without retry logic.
  * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs.
+ * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
  */
 function extractMediaLinksSync(scopeElement) {
     if (!scopeElement) return [];
@@ -195,34 +219,58 @@ function extractMediaLinksSync(scopeElement) {
     }
     
     mediaElements.forEach(mediaEl => {
-        // Get the source URL (src for images, poster for videos)
-        const sourceUrl = mediaEl.tagName === 'IMG' ? mediaEl.src : mediaEl.poster;
-        
-        // Skip if not a Twitter media URL or if undefined or if it's a profile image
-        if (!sourceUrl || 
-           !(sourceUrl.includes('pbs.twimg.com/')) ||
-           sourceUrl.includes('profile_images')) {
-            return;
-        }
-        
-        try {
-            // Parse the URL to handle format parameters
-            const url = new URL(sourceUrl);
-            const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+        if (mediaEl.tagName === 'VIDEO') {
+            // For videos, try to get the aria-label description
+            const videoDescription = mediaEl.getAttribute('aria-label');
+            if (videoDescription && videoDescription.trim()) {
+                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
+            } else {
+                // Fallback to poster URL if no aria-label
+                const posterUrl = mediaEl.poster;
+                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
+                    try {
+                        const url = new URL(posterUrl);
+                        const name = url.searchParams.get('name');
+                        let finalUrl = posterUrl;
+                        if (name && name !== 'orig') {
+                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
+                        }
+                        mediaLinks.add(finalUrl);
+                    } catch (error) {
+                        mediaLinks.add(posterUrl);
+                    }
+                }
+            }
+        } else if (mediaEl.tagName === 'IMG') {
+            // For images, continue with URL extraction as before
+            const sourceUrl = mediaEl.src;
             
-            // Create the final URL with the right format and size
-            let finalUrl = sourceUrl;
-            
-            // Try to get the original size by removing size indicator
-            if (name && name !== 'orig') {
-                // Replace format=jpg&name=x with format=jpg&name=small
-                finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+            // Skip if not a Twitter media URL or if undefined or if it's a profile image
+            if (!sourceUrl || 
+               !(sourceUrl.includes('pbs.twimg.com/')) ||
+               sourceUrl.includes('profile_images')) {
+                return;
             }
             
-            mediaLinks.add(finalUrl);
-        } catch (error) {
-            // Fallback: just add the raw URL as is
-            mediaLinks.add(sourceUrl);
+            try {
+                // Parse the URL to handle format parameters
+                const url = new URL(sourceUrl);
+                const name = url.searchParams.get('name'); // 'small', 'medium', 'large', etc.
+                
+                // Create the final URL with the right format and size
+                let finalUrl = sourceUrl;
+                
+                // Try to get the original size by removing size indicator
+                if (name && name !== 'orig') {
+                    // Replace format=jpg&name=x with format=jpg&name=small
+                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
+                }
+                
+                mediaLinks.add(finalUrl);
+            } catch (error) {
+                // Fallback: just add the raw URL as is
+                mediaLinks.add(sourceUrl);
+            }
         }
     });
     

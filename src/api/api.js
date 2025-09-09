@@ -189,25 +189,44 @@ EXPECTED_RESPONSE_FORMAT:\n
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
-    if (mediaUrls?.length > 0 && modelSupportsImages(selectedModel)) {
-        mediaUrls.forEach(url => {
-            if (url.startsWith('data:application/pdf')) {
-                // Handle PDF format for models that support it
-                requestBody.messages[1].content.push({
-                    type: "file",
-                    file: {
-                        filename: "attachment.pdf",
-                        file_data: url
-                    }
-                });
+    if (mediaUrls?.length > 0) {
+        // Separate video descriptions from image URLs
+        const imageUrls = [];
+        const videoDescriptions = [];
+        
+        mediaUrls.forEach(item => {
+            if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                videoDescriptions.push(item);
             } else {
-                // Handle images as before
-                requestBody.messages[1].content.push({
-                    type: "image_url",
-                    image_url: { "url": url }
-                });
+                imageUrls.push(item);
             }
         });
+       
+        
+        // Add image URLs for vision models
+        if (imageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+            imageUrls.forEach(url => {
+                if (url.startsWith('data:application/pdf')) {
+                    // Handle PDF format for models that support it
+                    requestBody.messages[1].content.push({
+                        type: "file",
+                        file: {
+                            filename: "attachment.pdf",
+                            file_data: url
+                        }
+                    });
+                } else if (url.startsWith('http://') || url.startsWith('https://')) {
+                    // Only process valid HTTP/HTTPS URLs as images
+                    requestBody.messages[1].content.push({
+                        type: "image_url",
+                        image_url: { "url": url }
+                    });
+                } else {
+                    // Skip invalid URLs (like video descriptions that shouldn't be here)
+                    console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
+                }
+            });
+        }
     }
     if (providerSort) {
         requestBody.provider = { sort: providerSort, allow_fallbacks: true };

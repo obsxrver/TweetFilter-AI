@@ -3,8 +3,8 @@
  * @returns {boolean} true if mobile device detected
  */
 function isMobileDevice() {
-    return (window.innerWidth <= 600 || 
-            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    // Treat as mobile only based on user agent, not viewport width
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 /**
  * Displays a temporary status message on the screen.
