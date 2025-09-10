@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.5.4
+// @version      Version 1.5.5
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -486,16 +486,29 @@ class InstructionsManager {
         if (typeof USER_DEFINED_INSTRUCTIONS !== 'undefined') {
             USER_DEFINED_INSTRUCTIONS = instructions;
         }
-        // Get 5-word summary for the instructions
-        const summary = await getCustomInstructionsDescription(instructions);
-        if (!summary.error) {
-            await this.history.add(instructions, summary.content);
-        }
-        return { 
-            success: true, 
+        // Create a title from the first three words and the last word
+        const summary = this.#generateSummary(instructions);
+        await this.history.add(instructions, summary);
+        return {
+            success: true,
             message: 'Scoring instructions saved! New tweets will use these instructions.',
             shouldClearCache: true
         };
+    }
+    /**
+     * Creates a summary title using the first three words and the last word
+     * @private
+     * @param {string} instructions - Full instruction text
+     * @returns {string} Generated title
+     */
+    #generateSummary(instructions) {
+        const words = instructions.trim().split(/\s+/);
+        if (words.length <= 3) {
+            return words.join(' ');
+        }
+        const firstThree = words.slice(0, 3).join(' ');
+        const lastWord = words[words.length - 1];
+        return `${firstThree} … ${lastWord}`;
     }
     /**
      * Gets the current instructions
@@ -527,7 +540,7 @@ class InstructionsManager {
     }
 }
 // Create and export the singleton instance
-const instructionsManager = new InstructionsManager(); 
+const instructionsManager = new InstructionsManager();
     // ----- config.js -----
 //src/config.js
 const processedTweets = new Set(); // Set of tweet IDs already processed in this session
@@ -4844,7 +4857,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     }
                 }
             }
-            // Get all media URLs and video descriptions from any sectionco
+            // Get all media URLs and video descriptions from any section
             const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
             const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
             const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
@@ -7274,7 +7287,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 // };
     // ----- twitter-desloppifier.js -----
 //src/twitter-desloppifier.js
-const VERSION = '1.5.4'; 
+const VERSION = '1.5.5'; 
 (function () {
     'use strict';
     console.log("X/Twitter Tweet De-Sloppification Activated (v1.5.4- Enhanced)");

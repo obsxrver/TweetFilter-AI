@@ -31,17 +31,31 @@ class InstructionsManager {
             USER_DEFINED_INSTRUCTIONS = instructions;
         }
 
-        // Get 5-word summary for the instructions
-        const summary = await getCustomInstructionsDescription(instructions);
-        if (!summary.error) {
-            await this.history.add(instructions, summary.content);
-        }
+        // Create a title from the first three words and the last word
+        const summary = this.#generateSummary(instructions);
+        await this.history.add(instructions, summary);
 
-        return { 
-            success: true, 
+        return {
+            success: true,
             message: 'Scoring instructions saved! New tweets will use these instructions.',
             shouldClearCache: true
         };
+    }
+
+    /**
+     * Creates a summary title using the first three words and the last word
+     * @private
+     * @param {string} instructions - Full instruction text
+     * @returns {string} Generated title
+     */
+    #generateSummary(instructions) {
+        const words = instructions.trim().split(/\s+/);
+        if (words.length <= 3) {
+            return words.join(' ');
+        }
+        const firstThree = words.slice(0, 3).join(' ');
+        const lastWord = words[words.length - 1];
+        return `${firstThree} … ${lastWord}`;
     }
 
     /**
@@ -78,4 +92,4 @@ class InstructionsManager {
 }
 
 // Create and export the singleton instance
-const instructionsManager = new InstructionsManager(); 
+const instructionsManager = new InstructionsManager();
