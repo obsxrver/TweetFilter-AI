@@ -2298,9 +2298,11 @@ class ScoreIndicator {
 
         // Construct qaConversationHistory
         const userMessageContent = [{ type: "text", text: fullContext }];
+        if(modelSupportsImages(selectedModel)) {
         mediaUrls.forEach(url => {
-            userMessageContent.push({ type: "image_url", image_url: { "url": url } });
-        });
+                userMessageContent.push({ type: "image_url", image_url: { "url": url } });
+            });
+        }
 
         // Substitute user instructions into the follow-up system prompt
         const followUpSystemPromptWithInstructions = followUpSystemPrompt.replace(

@@ -437,7 +437,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                 content: [
                     {
                         type: "text",
-                        text: "Describe what you see in this image in a concise way, focusing on the main elements and any text visible. Keep the description under 100 words."
+                        text: "Describe this image. Include any text visible in the image, try to describe the image in a way that preserves all of the information and context present in the image."
                     },
                     {
                         type: "image_url",

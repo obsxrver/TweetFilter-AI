@@ -382,54 +382,6 @@ EXPECTED_RESPONSE_FORMAT:\n
     };
 }
 
-/**
- * Summarizes the custom instructions for the user
- * 
- * @param {Object} request - The formatted request body
- * @param {string} apiKey - API key for authentication
- * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
- */
-async function getCustomInstructionsDescription(instructions) {
-    const INSTRUCTION_SUMMARY_MODEL = "google/gemini-2.5-flash-preview";
-    const request={
-        model: INSTRUCTION_SUMMARY_MODEL,
-        messages: [{
-            role: "system",
-            content: [{
-                type: "text",
-                text: `
-                Please come up with a 5-word summary of the following instructions.
-                `
-            }]
-        },
-    {
-        role: "user",
-        content: [{
-            type: "text",
-            text: `Please come up with a 5-word summary of the following instructions:
-            ${instructions}
-            `
-        }]
-    }]
-}
-    let key = browserGet('openrouter-api-key');
-    const result = await getCompletion(request,key);
-    
-    if (!result.error && result.data?.choices?.[0]?.message) {
-        const content = result.data.choices[0].message.content || "";
-        
-        
-        return {
-            content,
-            error: false,
-        };
-    }
-
-    return {
-        error: true,
-        content: result.error || "Unknown error"
-    };
-}
 
 /**
  * Performs a non-streaming tweet rating request
