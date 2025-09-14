@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.5.5
+// @version      Version 1.5.6
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -5422,12 +5422,6 @@ ${engagementStats}`;
                     fullContextWithImageDescription += `
 [THREAD_MEDIA_URLS]:
 ${uniqueThreadMediaUrls.join(", ")}`;
-                    if (browserGet('enableImageDescriptions', false)) {
-                        let threadMediaLinksDescription = await getImageDescription(uniqueThreadMediaUrls, apiKey, tweetId, userHandle);
-                        fullContextWithImageDescription += `
-[THREAD_MEDIA_DESCRIPTION]:
-${threadMediaLinksDescription}`;
-                    }
                 }
             }
             if (quotedText || quotedMediaLinks.length > 0) {
@@ -5487,13 +5481,11 @@ ${quotedImageUrls.join(", ")}`;
                         const parentUser = link.to || 'unknown';
                         let currentParentContent = null;
                         const parentCacheEntry = tweetCache.get(parentId);
-                        // Prioritize individual text from cache to break recursion
-                        if (parentCacheEntry && parentCacheEntry.individualTweetText) {
-                            currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
-                            if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
-                                currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
-                            }
+                        // Prefer parent's cached fullContext (contains media descriptions and quoted text)
+                        if (parentCacheEntry && parentCacheEntry.fullContext) {
+                            currentParentContent = parentCacheEntry.fullContext;
                         } else {
+                            // Next, try to recompute from DOM if the parent article is present
                             const parentArticleElement = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
                                 .find(el => getTweetID(el) === parentId);
                             if (parentArticleElement) {
@@ -5505,6 +5497,25 @@ ${quotedImageUrls.join(", ")}`;
                                     if (originalParentRelationship) {
                                         threadRelationships[parentId] = originalParentRelationship;
                                     }
+                                }
+                            } else if (parentCacheEntry && parentCacheEntry.individualTweetText) {
+                                // Minimal fallback using cached text; augment with media description if enabled
+                                currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
+                                if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
+                                    try {
+                                        if (browserGet('enableImageDescriptions', false)) {
+                                            const parentMediaDesc = await getImageDescription(
+                                                parentCacheEntry.individualMediaUrls,
+                                                apiKey,
+                                                parentId,
+                                                parentCacheEntry.authorHandle || parentUser
+                                            );
+                                            currentParentContent += `\n[MEDIA_DESCRIPTION]:\n${parentMediaDesc}`;
+                                        }
+                                    } catch (e) {
+                                        console.warn(`[getFullContext] Failed to fetch parent media descriptions for ${parentId}:`, e);
+                                    }
+                                    currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
                                 }
                             }
                         }
@@ -6582,13 +6593,12 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         };
     }
     if (adAuthorCache.has(authorHandle)) {
-        // ... existing ad author handling ...
         indicatorInstance.updateInitialReviewAndBuildHistory({
-            fullContext: tweetText, // or a specific ad message
+            fullContext: tweetText, 
             mediaUrls: [],
             apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
-            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Globally available from config.js
-            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, // Globally available from config.js
+            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, 
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, 
             userInstructions: currentInstructions
         });
         return {
@@ -7251,10 +7261,10 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 // };
     // ----- twitter-desloppifier.js -----
 //src/twitter-desloppifier.js
-const VERSION = '1.5.5'; 
+const VERSION = '1.5.6'; 
 (function () {
     'use strict';
-    console.log("X/Twitter Tweet De-Sloppification Activated (v1.5.4- Enhanced)");
+    console.log(`X/Twitter Tweet De-Sloppification Activated (v${VERSION}- Enhanced)`);
     // Load CSS stylesheet
     //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");

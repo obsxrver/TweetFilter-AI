@@ -971,13 +971,11 @@ ${quotedImageUrls.join(", ")}`;
 
                         const parentCacheEntry = tweetCache.get(parentId);
 
-                        // Prioritize individual text from cache to break recursion
-                        if (parentCacheEntry && parentCacheEntry.individualTweetText) {
-                            currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
-                            if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
-                                currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
-                            }
+                        // Prefer parent's cached fullContext (contains media descriptions and quoted text)
+                        if (parentCacheEntry && parentCacheEntry.fullContext) {
+                            currentParentContent = parentCacheEntry.fullContext;
                         } else {
+                            // Next, try to recompute from DOM if the parent article is present
                             const parentArticleElement = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
                                 .find(el => getTweetID(el) === parentId);
 
@@ -990,6 +988,25 @@ ${quotedImageUrls.join(", ")}`;
                                     if (originalParentRelationship) {
                                         threadRelationships[parentId] = originalParentRelationship;
                                     }
+                                }
+                            } else if (parentCacheEntry && parentCacheEntry.individualTweetText) {
+                                // Minimal fallback using cached text; augment with media description if enabled
+                                currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
+                                if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
+                                    try {
+                                        if (browserGet('enableImageDescriptions', false)) {
+                                            const parentMediaDesc = await getImageDescription(
+                                                parentCacheEntry.individualMediaUrls,
+                                                apiKey,
+                                                parentId,
+                                                parentCacheEntry.authorHandle || parentUser
+                                            );
+                                            currentParentContent += `\n[MEDIA_DESCRIPTION]:\n${parentMediaDesc}`;
+                                        }
+                                    } catch (e) {
+                                        console.warn(`[getFullContext] Failed to fetch parent media descriptions for ${parentId}:`, e);
+                                    }
+                                    currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
                                 }
                             }
                         }

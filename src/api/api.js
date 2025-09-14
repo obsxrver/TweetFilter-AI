@@ -113,13 +113,13 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     }
 
     if (adAuthorCache.has(authorHandle)) {
-        // ... existing ad author handling ...
+        
         indicatorInstance.updateInitialReviewAndBuildHistory({
-            fullContext: tweetText, // or a specific ad message
+            fullContext: tweetText, 
             mediaUrls: [],
             apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
-            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, // Globally available from config.js
-            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, // Globally available from config.js
+            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, 
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, 
             userInstructions: currentInstructions
         });
         return {
