@@ -17,22 +17,15 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-//src/twitter-desloppifier.js
-const VERSION = '1.5.6'; 
+const VERSION = '1.5.6';
 (function () {
-    
+
     'use strict';
     console.log(`X/Twitter Tweet De-Sloppification Activated (v${VERSION}- Enhanced)`);
 
-    // Load CSS stylesheet
-    //const css = GM_getResourceText('STYLESHEET');
     let menuhtml = GM_getResourceText("MENU_HTML");
     browserSet('menuHTML', menuhtml);
     let firstRun = browserGet('firstRun', true);
-
-    //GM_addStyle(css);
-
-    // ----- Initialization -----
 
     /**
      * Initializes the observer on the main content area, adds the UI elements,
@@ -48,17 +41,12 @@ const VERSION = '1.5.6';
                 resetSettings(true);
                 browserSet('firstRun', false);
             }
-            // If no API key is found, prompt the user
+
             let apiKey = browserGet('openrouter-api-key', '');
             if(!apiKey){
                 alert("No API Key found. Please enter your API Key in Settings > General.")
             }
-            /*
-            if (!apiKey){
-                //key is dead
-                apiKey = '*'
-                showStatus(`No API Key Found. Using Promotional Key`);
-            }*/
+
             if (apiKey) {
                 browserSet('openrouter-api-key', apiKey);
                 showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
@@ -69,7 +57,6 @@ const VERSION = '1.5.6';
             }else{
                 observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
             }
-            
 
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });

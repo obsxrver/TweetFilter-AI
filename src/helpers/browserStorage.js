@@ -1,4 +1,3 @@
-//src/helpers/browserStorage.js
 /**
  * Browser storage wrapper functions for userscript compatibility
  */
@@ -31,4 +30,3 @@ function browserSet(key, value) {
     }
 }
 
-//export { browserGet, browserSet }; 

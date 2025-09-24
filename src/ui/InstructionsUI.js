@@ -5,7 +5,7 @@
 async function saveInstructions() {
     const instructionsTextarea = document.getElementById('user-instructions');
     const result = await instructionsManager.saveInstructions(instructionsTextarea.value);
-    
+
     showStatus(result.message);
     if (result.success && result.shouldClearCache) {
         if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
@@ -13,7 +13,6 @@ async function saveInstructions() {
         }
     }
 
-    // Refresh the history list if save was successful
     if (result.success) {
         refreshInstructionsHistory();
     }
@@ -27,7 +26,7 @@ function refreshInstructionsHistory() {
     if (!listElement) return;
 
     const history = instructionsManager.getHistory();
-    listElement.innerHTML = ''; // Clear existing list
+    listElement.innerHTML = '';
 
     if (history.length === 0) {
         const emptyMsg = document.createElement('div');
@@ -57,7 +56,7 @@ function createHistoryItem(entry, index) {
     const text = document.createElement('div');
     text.className = 'instruction-text';
     text.textContent = entry.summary;
-    text.title = entry.instructions; // Show full instructions on hover
+    text.title = entry.instructions;
     item.appendChild(text);
 
     const buttons = document.createElement('div');
