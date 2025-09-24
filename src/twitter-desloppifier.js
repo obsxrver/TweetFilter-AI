@@ -1,3 +1,22 @@
+// ==UserScript==
+// @name         TweetFilter AI
+// @namespace    http://tampermonkey.net/
+// @version      Version 1.5.6
+// @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
+// @author       Obsxrver(3than)
+// @match        *://twitter.com/*
+// @match        *://x.com/*
+// @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getResourceText
+// @connect      openrouter.ai
+// @resource     MENU_HTML https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/Menu.html
+// @resource     STYLESHEET https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/dev/src/style.css
+// @run-at       document-idle
+// @license      MIT
+// ==/UserScript==
 const VERSION = '1.5.6';
 (function () {
 
