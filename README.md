@@ -6,9 +6,6 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
   <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-General.jpg" width="800" alt="General UI"/>
 </div>
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-SlopScore.jpg" width="800" alt="Slop Score Display" style="margin-top: 10px;"/>
-</div>
 
 ## Key Features
 
