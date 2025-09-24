@@ -239,8 +239,122 @@ class ScoreIndicator {
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
             this.followUpImageInput.accept = 'image/*,application/pdf';
-    _initializeMobileInteractionFix() {
+            this.followUpImageInput.multiple = true;
+            this.followUpImageInput.style.display = 'none';
+        }
 
+        this.customQuestionButton = document.createElement('button');
+        this.customQuestionButton.textContent = 'Ask';
+        this.customQuestionButton.className = 'tooltip-custom-question-button';
+
+        this.customQuestionContainer.appendChild(this.customQuestionInput);
+        if (this.attachImageButton) {
+            this.customQuestionContainer.appendChild(this.attachImageButton);
+            if (this.followUpImageInput) {
+                this.customQuestionContainer.appendChild(this.followUpImageInput);
+            }
+        }
+        this.customQuestionContainer.appendChild(this.customQuestionButton);
+
+        if (isMobileDevice() && this.customQuestionInput) {
+            const initialScroll = this.tooltipScrollableContentElement?.scrollTop || 0;
+
+            setTimeout(() => {
+                if (!this.customQuestionInput || !this.tooltipScrollableContentElement) {
+                    return;
+                }
+
+                const preventScroll = (e) => {
+                    this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                    e.preventDefault();
+                };
+
+                this.tooltipScrollableContentElement.addEventListener('scroll', preventScroll, { passive: false });
+                this.customQuestionInput.focus({ preventScroll: true });
+                this.customQuestionInput.blur();
+
+                setTimeout(() => {
+                    this.tooltipScrollableContentElement?.removeEventListener('scroll', preventScroll);
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                    }
+                }, 100);
+            }, 50);
+        }
+
+        if (supportsImages) {
+            this.followUpImageContainer = document.createElement('div');
+            this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container';
+        }
+
+        this.metadataDropdown = document.createElement('div');
+        this.metadataDropdown.className = 'reasoning-dropdown';
+        this.metadataDropdown.style.display = 'none';
+
+        this.metadataToggle = document.createElement('div');
+        this.metadataToggle.className = 'reasoning-toggle';
+
+        this.metadataArrow = document.createElement('span');
+        this.metadataArrow.className = 'reasoning-arrow';
+        this.metadataArrow.textContent = '▶';
+
+        this.metadataToggle.appendChild(this.metadataArrow);
+        this.metadataToggle.appendChild(document.createTextNode(' Show Metadata'));
+
+        this.metadataContent = document.createElement('div');
+        this.metadataContent.className = 'reasoning-content';
+
+        this.metadataElement = document.createElement('div');
+        this.metadataElement.className = 'tooltip-metadata';
+
+        this.metadataContent.appendChild(this.metadataElement);
+        this.metadataDropdown.appendChild(this.metadataToggle);
+        this.metadataDropdown.appendChild(this.metadataContent);
+
+        this.tooltipElement.appendChild(this.tooltipScrollableContentElement);
+
+        if (this.followUpImageContainer) {
+            this.tooltipElement.appendChild(this.followUpImageContainer);
+        }
+
+        this.tooltipElement.appendChild(this.customQuestionContainer);
+        this.tooltipElement.appendChild(this.metadataDropdown);
+
+        this.scrollButton = document.createElement('div');
+        this.scrollButton.className = 'scroll-to-bottom-button';
+        this.scrollButton.innerHTML = '⬇ Scroll to bottom';
+        this.scrollButton.style.display = 'none';
+        this.tooltipElement.appendChild(this.scrollButton);
+
+        const bottomSpacer = document.createElement('div');
+        bottomSpacer.className = 'tooltip-bottom-spacer';
+        this.tooltipScrollableContentElement.appendChild(bottomSpacer);
+
+        document.body.appendChild(this.tooltipElement);
+
+        if (isMobileDevice()) {
+            this.indicatorElement?.classList.add('mobile-indicator');
+            this.tooltipElement?.classList.add('mobile-tooltip');
+        }
+
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+
+        this.autoScrollConversation = true;
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.addEventListener('scroll', this._handleConversationScroll.bind(this));
+        }
+
+        if (isMobileDevice()) {
+            this._initializeMobileInteractionFix();
+        }
+    }
+
+    /**
+     * Initializes the mobile scroll interaction workaround.
+     * @private
+     */
+    _initializeMobileInteractionFix() {
         this._hasFirstInteraction = false;
 
         const handleFirstTap = (e) => {
