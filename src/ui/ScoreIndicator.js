@@ -238,7 +238,7 @@ class ScoreIndicator {
 
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
-            this.followUpImageInput.accept = 'image
+            this.followUpImageInput.accept = 'image/*,application/pdf';
     _initializeMobileInteractionFix() {
 
         this._hasFirstInteraction = false;
