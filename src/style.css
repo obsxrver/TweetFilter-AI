@@ -15,7 +15,7 @@
 .score-highlight {
     display: inline-block;
     background-color: #1d9bf0;
-    /* Twitter blue */
+    
     color: white;
     padding: 3px 10px;
     border-radius: 9999px;
@@ -25,9 +25,9 @@
 }
 
 .mobile-tooltip {
-    /* Add specific mobile tooltip styles if needed */
+    
     max-width: 90vw;
-    /* Example */
+    
 }
 
 .score-description.streaming-tooltip {
@@ -141,7 +141,7 @@
     border: 2px dashed rgba(33, 150, 243, 0.8) !important;
 }
 
-/* New style for blacklisted author indicator */
+
 .blacklisted-author-indicator {
     background-color: purple !important; 
     color: white !important;
@@ -318,7 +318,7 @@ input:checked+.toggle-slider:before {
     display: none !important;
 }
 
-/* Only override hidden for our specific containers */
+
 #tweet-filter-container.hidden,
 #settings-container.hidden {
     display: flex !important;
@@ -1544,7 +1544,7 @@ input:checked+.toggle-slider:before {
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
-    /* Ensure it stays hidden even if Twitter tries to show it */
+    
     position: absolute !important;
     z-index: -9999 !important;
     height: 0 !important;
@@ -1574,7 +1574,7 @@ input:checked+.toggle-slider:before {
     text-align: center;
 }
 
-/* Hide number input spinners */
+
 .filter-controls input[type="number"]::-webkit-inner-spin-button,
 .filter-controls input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
@@ -1585,7 +1585,7 @@ input:checked+.toggle-slider:before {
     -moz-appearance: textfield;
 }
 
-/* --- Metadata Specific Styling --- */
+
 .tooltip-metadata {
     font-size: 0.8em;
     opacity: 0.7;
@@ -1596,7 +1596,7 @@ input:checked+.toggle-slider:before {
     line-height: 1.5;
 }
 
-/* When metadata is in the fixed bottom area */
+
 .score-description > .reasoning-dropdown:last-of-type {
     background-color: rgba(22, 24, 28, 0.98);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -1630,54 +1630,54 @@ input:checked+.toggle-slider:before {
 }
 
 
-/* --- Specific Indicator Styles --- */
+
 .score-indicator.pending-rating {
 }
 
-/* --- Tooltip Styles --- */
+
 .score-description {
-    /* ... existing styles ... */
+    
     max-width: 500px;
-    padding-bottom: 35px; /* Add padding for scroll button */
-    /* ... existing styles ... */
+    padding-bottom: 35px; 
+    
 }
 
 .score-description.streaming-tooltip {
-    border-color: #ffa500; /* Orange border for streaming */
+    border-color: #ffa500; 
 }
 
-/* ... existing .tooltip-controls, .tooltip-pin-button, .tooltip-copy-button styles ... */
 
-/* --- Reasoning Dropdown --- */
+
+
 .reasoning-dropdown {
-    /* ... existing styles ... */
+    
 }
 
 .reasoning-toggle {
-    /* ... existing styles ... */
+    
 }
 
 .reasoning-arrow {
-    /* ... existing styles ... */
+    
 }
 
 .reasoning-content {
-    /* ... existing styles ... */
+    
 }
 
 .reasoning-text {
-    /* ... existing styles ... */
+    
 }
 
 .description-text {
-    /* ... existing styles ... */
+    
 }
 
-/* --- Last Answer Area --- */
+
 .tooltip-last-answer {
     margin-top: 10px;
     padding: 10px;
-    background-color: rgba(255, 255, 255, 0.05); /* Slightly different background */
+    background-color: rgba(255, 255, 255, 0.05); 
     border-radius: 4px;
     font-size: 0.9em;
     line-height: 1.4;
@@ -1689,31 +1689,31 @@ input:checked+.toggle-slider:before {
     margin: 10px 0;
 }
 
-/* --- Follow-Up Questions Area --- */
+
 .tooltip-follow-up-questions {
     margin-top: 10px;
     display: flex;
     flex-direction: column;
-    gap: 8px; /* INCREASED Spacing between buttons */
+    gap: 8px; 
 }
 
 .follow-up-question-button {
-    background-color: rgba(60, 160, 240, 0.2); /* Light blue background */
+    background-color: rgba(60, 160, 240, 0.2); 
     border: 1px solid rgba(60, 160, 240, 0.5);
-    color: #e1e8ed; /* Light text */
+    color: #e1e8ed; 
     padding: 8px 12px;
-    border-radius: 15px; /* Pill shape */
+    border-radius: 15px; 
     cursor: pointer;
     font-size: 0.85em;
     text-align: left;
     transition: background-color 0.2s ease, border-color 0.2s ease;
-    white-space: normal; /* Allow wrapping */
+    white-space: normal; 
     line-height: 1.3;
-    /* Prevent touch scrolling */
+    
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    /* Prevent focus outline that might cause layout shift */
+    
     outline: none;
 }
 
@@ -1732,12 +1732,12 @@ input:checked+.toggle-slider:before {
 }
 
 
-/* --- Metadata Area --- */
+
 .tooltip-metadata {
     margin-top: 12px;
     padding-top: 8px;
     font-size: 0.8em;
-    color: #8899a6; /* Muted color */
+    color: #8899a6; 
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -1755,21 +1755,21 @@ input:checked+.toggle-slider:before {
     margin-bottom: 0;
 }
 
-/* --- Score Highlight --- */
+
 .score-highlight {
-    /* ... existing styles ... */
+    
 }
 
-/* --- Scroll Button --- */
+
 .scroll-to-bottom-button {
-    /* ... existing styles ... */
+    
 }
 
 .tooltip-bottom-spacer {
-    /* ... existing styles ... */
+    
 }
 
-/* --- Custom Question Input Area --- */
+
 .tooltip-custom-question-container {
     display: flex;
     gap: 8px;
@@ -1824,14 +1824,14 @@ input:checked+.toggle-slider:before {
     cursor: not-allowed;
 }
 
-/* --- Conversation History Styling --- */
+
 .tooltip-conversation-history {
     margin-top: 15px;
     padding-top: 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
-    gap: 12px; /* Space between conversation turns */
+    gap: 12px; 
 }
 
 .conversation-turn {
@@ -1843,42 +1843,42 @@ input:checked+.toggle-slider:before {
 
 .conversation-question {
     font-size: 0.9em;
-    color: #b0bec5; /* Lighter grey for user question */
+    color: #b0bec5; 
     margin-bottom: 6px;
 }
 
 .conversation-question strong {
-    color: #cfd8dc; /* Slightly brighter for "You:" */
+    color: #cfd8dc; 
 }
 
 .conversation-answer {
     font-size: 0.95em;
-    color: #e1e8ed; /* Main text color for AI answer */
+    color: #e1e8ed; 
 }
 
 .conversation-answer strong {
-    color: #1d9bf0; /* Twitter blue for "AI:" */
+    color: #1d9bf0; 
 }
 
 .conversation-separator {
     border: none;
     border-top: 1px dashed rgba(255, 255, 255, 0.15);
-    margin: 0; /* Reset margin, gap handles spacing */
+    margin: 0; 
 }
 
 .pending-answer {
-    color: #ffa726; /* Orange for pending state */
+    color: #ffa726; 
     font-style: italic;
 }
 
-/* Blinking cursor for streaming answers */
+
 .pending-cursor {
     display: inline-block;
-    color: #1d9bf0; /* Twitter blue */
+    color: #1d9bf0; 
     animation: blink 0.7s infinite;
     font-weight: bold;
     margin-left: 2px;
-    font-style: normal; /* Override italic from pending-answer if nested */
+    font-style: normal; 
 }
 
 @keyframes blink {
@@ -1886,19 +1886,19 @@ input:checked+.toggle-slider:before {
     50% { opacity: 1; }
 }
 
-/* Styling for links generated from markdown in AI answers */
+
 .ai-generated-link {
-    color: #1d9bf0; /* Twitter blue */
+    color: #1d9bf0; 
     text-decoration: underline;
     transition: color 0.2s ease;
 }
 
 .ai-generated-link:hover {
-    color: #1a8cd8; /* Slightly darker blue on hover */
+    color: #1a8cd8; 
     text-decoration: underline;
 }
 
-/* Styling for fenced and inline code blocks in AI answers */
+
 .score-description pre,
 .tooltip-scrollable-content pre {
     background-color: rgba(255, 255, 255, 0.07);
@@ -1917,67 +1917,67 @@ input:checked+.toggle-slider:before {
     font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* Style for the new tooltip close button */
+
 .tooltip-close-button {
-    /* Reuse general close button styles */
+    
     background: none !important;
     border: none !important;
-    color: #8899a6 !important; /* Match other control button colors */
+    color: #8899a6 !important; 
     cursor: pointer !important;
-    font-size: 20px !important; /* Slightly larger for easier tapping */
+    font-size: 20px !important; 
     line-height: 1 !important;
     padding: 4px 8px !important;
-    margin-left: 8px !important; /* Space from other buttons */
-    border-radius: 50% !important; /* Make it round */
-    width: 28px !important; /* Explicit size */
-    height: 28px !important; /* Explicit size */
+    margin-left: 8px !important; 
+    border-radius: 50% !important; 
+    width: 28px !important; 
+    height: 28px !important; 
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     transition: all 0.2s !important;
-    order: 3; /* Ensure it comes after pin and copy */
+    order: 3; 
 }
 
 .tooltip-close-button:hover {
-    background-color: rgba(255, 92, 92, 0.1) !important; /* Reddish background on hover */
-    color: #ff5c5c !important; /* Red color on hover */
+    background-color: rgba(255, 92, 92, 0.1) !important; 
+    color: #ff5c5c !important; 
 }
 
 .tooltip-close-button:active {
     transform: scale(0.95) !important;
 }
 
-/* Adjust mobile close button specifically if needed */
+
 @media (max-width: 600px) {
     .tooltip-close-button {
-        font-size: 22px !important; /* Even larger on mobile */
+        font-size: 22px !important; 
         width: 32px !important;
         height: 32px !important;
     }
 
-    /* Ensure controls container accommodates button */
+    
     .tooltip-controls {
-        padding-right: 40px !important; /* Add padding to prevent overlap if button was absolute */
+        padding-right: 40px !important; 
     }
 }
 
-/* --- Streaming Reasoning Trace Effect --- */
+
 .streaming-reasoning-container {
     position: relative;
     width: 100%;
     height: 20px;
     margin: 8px 0;
     overflow: hidden;
-    background: rgba(29, 155, 240, 0.05); /* Very subtle blue background */
+    background: rgba(29, 155, 240, 0.05); 
     border-radius: 4px;
-    display: none; /* Hidden by default, shown when streaming */
+    display: none; 
 }
 
 .streaming-reasoning-text {
     display: block;
     width: 100%;
     white-space: nowrap;
-    color: #1d9bf0; /* Twitter blue */
+    color: #1d9bf0; 
     font-style: italic;
     font-size: 0.85em;
     line-height: 20px;
@@ -1989,29 +1989,29 @@ input:checked+.toggle-slider:before {
     text-overflow: clip;
 }
 
-/* Remove animation and pulse for this effect */
+
 .streaming-reasoning-container.active {
     box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);
     border: 1px solid rgba(29, 155, 240, 0.3);
 }
 
-/* --- End Streaming Reasoning Trace Effect --- */
 
-/* --- Styling for Reasoning Dropdown within Conversation Turn --- */
+
+
 .conversation-turn .reasoning-dropdown {
-    margin-top: 8px; /* Space above the dropdown */
-    margin-bottom: 8px; /* Space below the dropdown, before the answer */
+    margin-top: 8px; 
+    margin-bottom: 8px; 
     border-radius: 4px;
-    background-color: rgba(255, 255, 255, 0.02); /* Slightly different background from turn itself */
+    background-color: rgba(255, 255, 255, 0.02); 
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .conversation-turn .reasoning-toggle {
     display: flex;
     align-items: center;
-    color: #b0bec5; /* Muted color for toggle text */
+    color: #b0bec5; 
     cursor: pointer;
-    font-weight: normal; /* Less prominent than main reasoning toggle */
+    font-weight: normal; 
     font-size: 0.85em;
     padding: 6px 8px;
     user-select: none;
@@ -2035,13 +2035,13 @@ input:checked+.toggle-slider:before {
     transition: max-height 0.3s ease-out, padding 0.3s ease-out;
     background-color: rgba(0, 0, 0, 0.1);
     border-radius: 0 0 4px 4px;
-    padding: 0 8px; /* Horizontal padding only when collapsed */
+    padding: 0 8px; 
 }
 
 .conversation-turn .reasoning-dropdown.expanded .reasoning-content {
-    max-height: 200px; /* Adjust as needed */
+    max-height: 200px; 
     overflow-y: auto;
-    padding: 8px; /* Full padding when expanded */
+    padding: 8px; 
 }
 
 .conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {
@@ -2049,14 +2049,14 @@ input:checked+.toggle-slider:before {
 }
 
 .conversation-turn .reasoning-text {
-    font-size: 0.85em; /* Smaller text for reasoning */
+    font-size: 0.85em; 
     line-height: 1.4;
-    color: #ccc; /* Similar to main reasoning text */
+    color: #ccc; 
     margin: 0;
-    padding: 0; /* Padding is on the content container */
+    padding: 0; 
 }
 
-/* Ensure scrollbars look consistent */
+
 .conversation-turn .reasoning-content::-webkit-scrollbar {
     width: 5px;
 }
@@ -2072,18 +2072,18 @@ input:checked+.toggle-slider:before {
     background: rgba(255, 255, 255, 0.3);
 }
 
-/* --- Styling for Image Upload in Follow-up --- */
+
 .tooltip-attach-image-button {
     background: none;
     border: none;
-    color: #8899a6; /* Muted color, similar to other controls */
-    font-size: 1.2em; /* Slightly larger for icon visibility */
+    color: #8899a6; 
+    font-size: 1.2em; 
     cursor: pointer;
-    padding: 6px 8px; /* Adjust padding to align with input/button height */
-    margin: 0 4px; /* Space around the icon */
+    padding: 6px 8px; 
+    margin: 0 4px; 
     border-radius: 4px;
     transition: all 0.2s ease;
-    align-self: center; /* Vertically align with input and Ask button */
+    align-self: center; 
 }
 
 .tooltip-attach-image-button:hover {
@@ -2093,21 +2093,21 @@ input:checked+.toggle-slider:before {
 
 .tooltip-follow-up-image-preview-container {
     padding: 10px 15px;
-    padding-bottom: 0; /* No bottom padding since input area follows */
-    background-color: rgba(22, 24, 28, 0.98); /* Match input area background */
+    padding-bottom: 0; 
+    background-color: rgba(22, 24, 28, 0.98); 
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex; /* Changed to flex for easier alignment of preview and button */
-    flex-direction: row; /* Lay out previews in a row */
-    flex-wrap: wrap; /* Allow previews to wrap to the next line */
-    gap: 10px; /* Spacing between preview items */
+    display: flex; 
+    flex-direction: row; 
+    flex-wrap: wrap; 
+    gap: 10px; 
     align-items: flex-start;
     position: relative;
     z-index: 10;
-    flex-shrink: 0; /* Prevent shrinking */
+    flex-shrink: 0; 
 }
 
 .follow-up-image-preview-item {
-    position: relative; /* For positioning the remove button */
+    position: relative; 
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2118,11 +2118,11 @@ input:checked+.toggle-slider:before {
 }
 
 .follow-up-image-preview-thumbnail {
-    max-width: 80px; /* Smaller thumbnails for multiple previews */
+    max-width: 80px; 
     max-height: 80px;
     border-radius: 4px;
-    object-fit: cover; /* Or contain, depending on desired look */
-    margin-bottom: 5px; /* Space between image and potential future captions */
+    object-fit: cover; 
+    margin-bottom: 5px; 
 }
 
 .follow-up-image-remove-btn {
@@ -2132,12 +2132,12 @@ input:checked+.toggle-slider:before {
     background-color: rgba(40, 40, 40, 0.8);
     color: white;
     border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 50%; /* Circular button */
+    border-radius: 50%; 
     width: 20px;
     height: 20px;
     font-size: 12px;
     font-weight: bold;
-    line-height: 18px; /* Adjust for vertical centering of X */
+    line-height: 18px; 
     text-align: center;
     cursor: pointer;
     padding: 0;
@@ -2149,82 +2149,82 @@ input:checked+.toggle-slider:before {
     transform: scale(1.1);
 }
 
-/* Adjust custom question container to be flex for alignment */
+
 .tooltip-custom-question-container {
-    /* ... existing styles ... */
-    display: flex; /* Ensures items are in a row */
-    align-items: center; /* Vertically aligns items in the middle */
+    
+    display: flex; 
+    align-items: center; 
 }
 
 .tooltip-custom-question-input {
-    /* ... existing styles ... */
-    margin-right: 0; /* Remove right margin if any, gap handles spacing */
+    
+    margin-right: 0; 
 }
 
-/* --- Styling for Uploaded Image in Conversation History --- */
+
 .conversation-image-container {
-    margin-top: 8px; /* Space above the image */
-    margin-bottom: 8px; /* Space below the image, before reasoning/answer */
-    display: flex; /* Use flex for multiple images */
-    flex-wrap: wrap; /* Allow images to wrap */
-    gap: 8px; /* Space between images */
+    margin-top: 8px; 
+    margin-bottom: 8px; 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 8px; 
 }
 
 .conversation-uploaded-image {
-    max-width: 80%; /* Limit width to not dominate the tooltip */
-    max-height: 120px; /* Slightly larger than preview, but still constrained */
+    max-width: 80%; 
+    max-height: 120px; 
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    object-fit: contain; /* Maintain aspect ratio */
-    display: block; /* Ensure it takes its own line if needed */
-    cursor: pointer; /* Indicate it can be clicked (e.g., for lightbox in future) */
+    object-fit: contain; 
+    display: block; 
+    cursor: pointer; 
     transition: transform 0.2s ease;
 }
 
 .conversation-uploaded-image:hover {
-    transform: scale(1.02); /* Slight zoom on hover */
+    transform: scale(1.02); 
 }
 
-/* Mobile-specific opacities for collapsed toggle buttons */
+
 @media (max-width: 600px) {
     #filter-toggle {
-        /* Applies when filter-toggle is visible (i.e., filter panel is closed on mobile) */
-        /* .toggle-button already provides transition: all 0.2s ease; */
+        
+        
         opacity: 0.3;
     }
 
     #settings-toggle {
-        /* Default opacity for settings-toggle when its panel is initially closed on mobile, */
-        /* or when it's subsequently closed by the user on mobile. */
-        /* JS will manage opacity when settings panel is open. */
-        /* .toggle-button already provides transition: all 0.2s ease; */
+        
+        
+        
+        
         opacity: 0.3;
     }
 }
 
-/* Add this to your stylesheet */
+
 .markdown-table {
     border-collapse: collapse;
     margin: 1em 0;
-    width: 100%; /* Or a specific width */
+    width: 100%; 
     font-size: 0.9em;
-    color: #e7e9ea; /* Light text for table cells */
+    color: #e7e9ea; 
 }
 
 .markdown-table th,
 .markdown-table td {
-    border: 1px solid #555; /* Darker border for dark theme */
+    border: 1px solid #555; 
     padding: 8px;
     text-align: left;
 }
 
 .markdown-table th {
-    background-color: #333; /* Darker header for dark theme */
+    background-color: #333; 
     font-weight: bold;
 }
 
 .markdown-table tbody tr:nth-child(odd) {
-    background-color: #222; /* Darker zebra striping for dark theme */
+    background-color: #222; 
 }
 
 .tooltip-refresh-button {

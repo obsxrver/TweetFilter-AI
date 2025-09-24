@@ -1,4 +1,3 @@
-//src/backends/InstructionsHistory.js
 /**
  * Manages the history of custom instructions
  */
@@ -8,7 +7,7 @@ class InstructionsHistory {
             return InstructionsHistory.instance;
         }
         InstructionsHistory.instance = this;
-        
+
         this.history = [];
         this.maxEntries = 10;
         this.loadFromStorage();
@@ -25,9 +24,9 @@ class InstructionsHistory {
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32-bit integer
+            hash = hash & hash;
         }
-        return hash.toString(36); // Convert to base36 for shorter hash
+        return hash.toString(36);
     }
 
     /**
@@ -38,13 +37,11 @@ class InstructionsHistory {
         try {
             const stored = browserGet('instructionsHistory', '[]');
             this.history = JSON.parse(stored);
-            
-            // Ensure it's an array
+
             if (!Array.isArray(this.history)) {
                 throw new Error('Stored history is not an array');
             }
 
-            // Add hashes to existing entries if they don't have them
             this.history = this.history.map(entry => ({
                 ...entry,
                 hash: entry.hash || this.#hashString(entry.instructions)
@@ -81,19 +78,17 @@ class InstructionsHistory {
             }
 
             const hash = this.#hashString(instructions.trim());
-            
-            // Check if these instructions already exist
+
             const existingIndex = this.history.findIndex(entry => entry.hash === hash);
             if (existingIndex !== -1) {
-                // Update the existing entry's timestamp and summary
+
                 this.history[existingIndex].timestamp = Date.now();
                 this.history[existingIndex].summary = summary;
-                
-                // Move it to the top of the list
+
                 const entry = this.history.splice(existingIndex, 1)[0];
                 this.history.unshift(entry);
             } else {
-                // Add new entry
+
                 this.history.unshift({
                     instructions: instructions.trim(),
                     summary: summary.trim(),
@@ -101,7 +96,6 @@ class InstructionsHistory {
                     hash
                 });
 
-                // Keep only the most recent entries
                 if (this.history.length > this.maxEntries) {
                     this.history = this.history.slice(0, this.maxEntries);
                 }

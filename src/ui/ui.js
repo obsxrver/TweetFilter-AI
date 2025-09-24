@@ -9,49 +9,46 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
     if (!element || !toggleButton) return;
 
     const isCurrentlyHidden = element.classList.contains('hidden');
-    
-    // Update button text immediately
+
     toggleButton.innerHTML = isCurrentlyHidden ? openText : closedText;
 
     if (isCurrentlyHidden) {
-        // Opening
+
         element.style.display = 'flex';
-        // Force reflow
+
         element.offsetHeight;
         element.classList.remove('hidden');
     } else {
-        // Closing
+
         element.classList.add('hidden');
-        // Wait for animation to complete before changing display
+
         setTimeout(() => {
             if (element.classList.contains('hidden')) {
                 element.style.display = 'none';
             }
-        }, 500); // Match the CSS transition duration
+        }, 500);
     }
 
-    // Update opacity for settings-toggle on mobile based on settings-container state
     if (element.id === 'settings-container' && toggleButton.id === 'settings-toggle') {
-        if (isMobileDevice()) { // isMobileDevice() is from utils.js
-            if (element.classList.contains('hidden')) { // Settings panel is NOW hidden (i.e., "collapsed")
+        if (isMobileDevice()) {
+            if (element.classList.contains('hidden')) {
                 toggleButton.style.opacity = '0.3';
-            } else { // Settings panel is NOW visible (i.e., "open")
-                toggleButton.style.opacity = ''; // Revert to default CSS opacity (effectively 1)
+            } else {
+                toggleButton.style.opacity = '';
             }
         } else {
-            // On non-mobile, ensure opacity always reverts to default CSS regardless of panel state
+
             toggleButton.style.opacity = '';
         }
     }
 
-    // Special case for filter slider button
     if (element.id === 'tweet-filter-container') {
         const filterToggle = document.getElementById('filter-toggle');
         if (filterToggle) {
-            if (!isCurrentlyHidden) { // We're closing the filter
+            if (!isCurrentlyHidden) {
                 setTimeout(() => {
                     filterToggle.style.display = 'block';
-                }, 500); // Match the CSS transition duration
+                }, 500);
             } else {
                 filterToggle.style.display = 'none';
             }
@@ -59,13 +56,11 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
     }
 }
 
-// --- Core UI Logic ---
-
 /**
  * Injects the UI elements from the HTML resource into the page.
  */
 function injectUI() {
-    //combined userscript has a const named MENU. If it exists, use it.
+
     let menuHTML;
     if (MENU) {
         menuHTML = MENU;
@@ -78,29 +73,26 @@ function injectUI() {
         return null;
     }
 
-    // Create a container to inject HTML
-    const containerId = 'tweetfilter-root-container'; // Use the ID from the updated HTML
+    const containerId = 'tweetfilter-root-container';
     let uiContainer = document.getElementById(containerId);
     if (uiContainer) {
         console.warn('UI container already exists. Skipping injection.');
-        return uiContainer; // Return existing container
+        return uiContainer;
     }
 
     uiContainer = document.createElement('div');
     uiContainer.id = containerId;
     uiContainer.innerHTML = menuHTML;
 
-    // Append the rest of the UI elements
     document.body.appendChild(uiContainer);
     console.log('TweetFilter UI Injected from HTML resource.');
 
-    // Set version number
     const versionInfo = uiContainer.querySelector('#version-info');
     if (versionInfo) {
         versionInfo.textContent = `Twitter De-Sloppifier v${VERSION}`;
     }
 
-    return uiContainer; // Return the newly created container
+    return uiContainer;
 }
 
 /**
@@ -120,7 +112,6 @@ function initializeEventListeners(uiContainer) {
     const settingsToggleBtn = uiContainer.querySelector('#settings-toggle');
     const filterToggleBtn = uiContainer.querySelector('#filter-toggle');
 
-    // --- Delegated Event Listener for Clicks ---
     uiContainer.addEventListener('click', (event) => {
         const target = event.target;
         const actionElement = target.closest('[data-action]');
@@ -130,7 +121,6 @@ function initializeEventListeners(uiContainer) {
         const tab = target.dataset.tab;
         const toggleTargetId = target.closest('[data-toggle]')?.dataset.toggle;
 
-        // Button Actions
         if (action) {
             switch (action) {
                 case 'close-filter':
@@ -164,44 +154,37 @@ function initializeEventListeners(uiContainer) {
             }
         }
 
-        // Handle List Removal (delegated)
         if (target.classList.contains('remove-handle')) {
             const handleItem = target.closest('.handle-item');
             const handleTextElement = handleItem?.querySelector('.handle-text');
             if (handleTextElement) {
-                const handle = handleTextElement.textContent.substring(1); // Remove '@'
+                const handle = handleTextElement.textContent.substring(1);
                 removeHandleFromBlacklist(handle);
             }
         }
 
-        // Tab Switching
         if (tab) {
             switchTab(tab);
         }
 
-        // Advanced Options Toggle
         if (toggleTargetId) {
             toggleAdvancedOptions(toggleTargetId);
         }
     });
 
-    // --- Delegated Event Listener for Input/Change ---
     uiContainer.addEventListener('input', (event) => {
         const target = event.target;
         const setting = target.dataset.setting;
         const paramName = target.closest('.parameter-row')?.dataset.paramName;
 
-        // Settings Inputs / Toggles
         if (setting) {
             handleSettingChange(target, setting);
         }
 
-        // Parameter Controls (Sliders/Number Inputs)
         if (paramName) {
             handleParameterChange(target, paramName);
         }
 
-        // Filter Slider
         if (target.id === 'tweet-filter-slider') {
             handleFilterSliderChange(target);
         }
@@ -214,26 +197,21 @@ function initializeEventListeners(uiContainer) {
         const target = event.target;
         const setting = target.dataset.setting;
 
-        // Settings Inputs / Toggles (for selects like sort order)
         if (setting === 'modelSortOrder') {
             handleSettingChange(target, setting);
-            fetchAvailableModels(); // Refresh models on sort change
+            fetchAvailableModels();
         }
 
-        // Settings Checkbox toggle (need change event for checkboxes)
         if (setting === 'enableImageDescriptions') {
             handleSettingChange(target, setting);
         }
     });
 
-    // --- Direct Event Listeners (Less common cases) ---
-
-    // Filter Toggle Button
     if (filterToggleBtn) {
         filterToggleBtn.onclick = () => {
             if (filterContainer) {
                 filterContainer.style.display = 'flex';
-                // Force a reflow
+
                 filterContainer.offsetHeight;
                 filterContainer.classList.remove('hidden');
             }
@@ -241,10 +219,8 @@ function initializeEventListeners(uiContainer) {
         };
     }
 
-    // Close custom selects when clicking outside
     document.addEventListener('click', closeAllSelectBoxes);
 
-    // Add handlers for new controls
     const showFreeModelsCheckbox = uiContainer.querySelector('#show-free-models');
     if (showFreeModelsCheckbox) {
         showFreeModelsCheckbox.addEventListener('change', function () {
@@ -269,11 +245,11 @@ function initializeEventListeners(uiContainer) {
     if (modelSortSelect) {
         modelSortSelect.addEventListener('change', function () {
             browserSet('modelSortOrder', this.value);
-            // Set default direction for latency and age
+
             if (this.value === 'latency-low-to-high') {
-                browserSet('sortDirection', 'default'); // Show lowest latency first
-            } else if (this.value === '') { // Age
-                browserSet('sortDirection', 'default'); // Show newest first
+                browserSet('sortDirection', 'default');
+            } else if (this.value === '') {
+                browserSet('sortDirection', 'default');
             }
             refreshModelsUI();
         });
@@ -290,8 +266,6 @@ function initializeEventListeners(uiContainer) {
     console.log('UI events wired.');
 }
 
-// --- Event Handlers ---
-
 /** Saves the API key from the input field. */
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
@@ -300,12 +274,12 @@ function saveApiKey() {
     if (apiKey) {
         if (!previousAPIKey) {
             resetSettings(true);
-            //jank hack to get the UI defaults to load correctly
+
         }
         browserSet('openrouter-api-key', apiKey);
         showStatus('API key saved successfully!');
-        fetchAvailableModels(); // Refresh model list
-        //refresh the website
+        fetchAvailableModels();
+
         location.reload();
     } else {
         showStatus('Please enter a valid API key');
@@ -322,13 +296,13 @@ function exportCacheToJson() {
     }
 
     try {
-        const cacheData = tweetCache.cache; // Access the raw cache object
+        const cacheData = tweetCache.cache;
         if (!cacheData || Object.keys(cacheData).length === 0) {
             showStatus('Cache is empty. Nothing to export.', 'warning');
             return;
         }
 
-        const jsonString = JSON.stringify(cacheData, null, 2); // Pretty print JSON
+        const jsonString = JSON.stringify(cacheData, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
 
         const url = URL.createObjectURL(blob);
@@ -352,11 +326,11 @@ function exportCacheToJson() {
 /** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
-        // Clear all ratings
+
         tweetCache.clear(true);
-        // Reset pending requests counter
+
         pendingRequests = 0;
-        // Clear thread relationships cache
+
         if (window.threadRelationships) {
             window.threadRelationships = {};
             browserSet('threadRelationships', '{}');
@@ -366,7 +340,6 @@ function clearTweetRatingsAndRefreshUI() {
         showStatus('All cached ratings and thread relationships cleared!');
         console.log('Cleared all tweet ratings and thread relationships');
 
-        // Reset all tweet elements to unrated state and reprocess them
         if (observedTargetNode) {
             observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
                 tweet.removeAttribute('data-sloppiness-score');
@@ -377,21 +350,20 @@ function clearTweetRatingsAndRefreshUI() {
                 if (indicator) {
                     indicator.remove();
                 }
-                // Remove from processed set and schedule reprocessing
-                const tweetId = getTweetID(tweet); // Get ID *before* potential errors
-                if (tweetId) { // Ensure we have an ID
+
+                const tweetId = getTweetID(tweet);
+                if (tweetId) {
                     processedTweets.delete(tweetId);
-                    // Explicitly destroy the old ScoreIndicator instance from the registry
+
                     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
                     if (indicatorInstance) {
                         indicatorInstance.destroy();
                     }
-                    scheduleTweetProcessing(tweet); // Now schedule processing
+                    scheduleTweetProcessing(tweet);
                 }
             });
         }
 
-        // Reset thread mapping on any conversation containers
         document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
             delete conversation.dataset.threadMapping;
             delete conversation.dataset.threadMappedAt;
@@ -425,13 +397,13 @@ function handleSettingChange(target, settingName) {
     } else {
         value = target.value;
     }
-    // Update global variable if it exists
+
     if (window[settingName] !== undefined) {
         window[settingName] = value;
     }
-    // Save to GM storage
+
     browserSet(settingName, value);
-    // Special UI updates for specific settings
+
     if (settingName === 'enableImageDescriptions') {
         const imageModelContainer = document.getElementById('image-model-container');
         if (imageModelContainer) {
@@ -442,7 +414,7 @@ function handleSettingChange(target, settingName) {
     if (settingName === 'enableWebSearch') {
         showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
     }
-    
+
     if (settingName === 'enableAutoRating') {
         showStatus('Auto-rating ' + (value ? 'enabled' : 'disabled'));
     }
@@ -463,23 +435,19 @@ function handleParameterChange(target, paramName) {
     const max = parseFloat(slider.max);
     let newValue = parseFloat(target.value);
 
-    // Clamp value if it's from the number input
     if (target.type === 'number' && !isNaN(newValue)) {
         newValue = Math.max(min, Math.min(max, newValue));
     }
 
-    // Update both slider and input
     if (slider && valueInput) {
         slider.value = newValue;
         valueInput.value = newValue;
     }
 
-    // Update global variable
     if (window[paramName] !== undefined) {
         window[paramName] = newValue;
     }
 
-    // Save to GM storage
     browserSet(paramName, newValue);
 }
 
@@ -494,7 +462,6 @@ function handleFilterSliderChange(slider) {
         valueInput.value = currentFilterThreshold.toString();
     }
 
-    // Update the gradient position based on the slider value
     const percentage = (currentFilterThreshold / 10) * 100;
     slider.style.setProperty('--slider-percent', `${percentage}%`);
 
@@ -508,14 +475,14 @@ function handleFilterSliderChange(slider) {
  */
 function handleFilterValueInput(input) {
     let value = parseInt(input.value, 10);
-    // Clamp value between 0 and 10
+
     value = Math.max(0, Math.min(10, value));
-    input.value = value.toString(); // Update input to clamped value
+    input.value = value.toString();
 
     const slider = document.getElementById('tweet-filter-slider');
     if (slider) {
         slider.value = value.toString();
-        // Update the gradient position
+
         const percentage = (value / 10) * 100;
         slider.style.setProperty('--slider-percent', `${percentage}%`);
     }
@@ -562,7 +529,6 @@ function toggleAdvancedOptions(contentId) {
         icon.classList.toggle('expanded', isExpanded);
     }
 
-    // Adjust max-height for smooth animation
     if (isExpanded) {
         content.style.maxHeight = content.scrollHeight + 'px';
     } else {
@@ -570,25 +536,23 @@ function toggleAdvancedOptions(contentId) {
     }
 }
 
-
 /**
  * Refreshes the entire settings UI to reflect current settings.
  */
 function refreshSettingsUI() {
-    // Update general settings inputs/toggles
+
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
-        const value = browserGet(settingName, window[settingName]); // Get saved or default value
+        const value = browserGet(settingName, window[settingName]);
         if (input.type === 'checkbox') {
             input.checked = value;
-            // Trigger change handler for side effects (like hiding/showing image model section)
+
             handleSettingChange(input, settingName);
         } else {
             input.value = value;
         }
     });
 
-    // Update parameter controls (sliders/number inputs)
     document.querySelectorAll('.parameter-row[data-param-name]').forEach(row => {
         const paramName = row.dataset.paramName;
         const slider = row.querySelector('.parameter-slider');
@@ -599,7 +563,6 @@ function refreshSettingsUI() {
         if (valueInput) valueInput.value = value;
     });
 
-    // Update filter slider and value input
     const filterSlider = document.getElementById('tweet-filter-slider');
     const filterValueInput = document.getElementById('tweet-filter-value');
     const currentThreshold = browserGet('filterThreshold', '5');
@@ -607,29 +570,26 @@ function refreshSettingsUI() {
     if (filterSlider && filterValueInput) {
         filterSlider.value = currentThreshold;
         filterValueInput.value = currentThreshold;
-        // Initialize the gradient position
+
         const percentage = (parseInt(currentThreshold, 10) / 10) * 100;
         filterSlider.style.setProperty('--slider-percent', `${percentage}%`);
     }
 
-    // Refresh dynamically populated lists/dropdowns
     refreshHandleList(document.getElementById('handle-list'));
-    refreshModelsUI(); // Refreshes model dropdowns
+    refreshModelsUI();
 
-    // Set initial state for advanced sections (collapsed by default unless CSS specifies otherwise)
     document.querySelectorAll('.advanced-content').forEach(content => {
         if (!content.classList.contains('expanded')) {
             content.style.maxHeight = '0';
         }
     });
     document.querySelectorAll('.advanced-toggle-icon.expanded').forEach(icon => {
-        // Ensure icon matches state if CSS defaults to expanded
+
         if (!icon.closest('.advanced-toggle')?.nextElementSibling?.classList.contains('expanded')) {
             icon.classList.remove('expanded');
         }
     });
 
-    // Refresh instructions history
     refreshInstructionsHistory();
 }
 
@@ -640,7 +600,7 @@ function refreshSettingsUI() {
 function refreshHandleList(listElement) {
     if (!listElement) return;
 
-    listElement.innerHTML = ''; // Clear existing list
+    listElement.innerHTML = '';
 
     if (blacklistedHandles.length === 0) {
         const emptyMsg = document.createElement('div');
@@ -663,7 +623,7 @@ function refreshHandleList(listElement) {
         removeBtn.className = 'remove-handle';
         removeBtn.textContent = '×';
         removeBtn.title = 'Remove from list';
-        // removeBtn listener is handled by delegation in initializeEventListeners
+
         item.appendChild(removeBtn);
 
         listElement.appendChild(item);
@@ -677,19 +637,15 @@ function refreshModelsUI() {
     const modelSelectContainer = document.getElementById('model-select-container');
     const imageModelSelectContainer = document.getElementById('image-model-select-container');
 
-    // Filter and sort models
     listedModels = [...availableModels];
 
-    // Filter free models if needed
     if (!showFreeModels) {
         listedModels = listedModels.filter(model => !model.slug.endsWith(':free'));
     }
 
-    // Sort models based on current sort order and direction
     const sortDirection = browserGet('sortDirection', 'default');
     const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
 
-    // Update toggle button text based on sort order
     const toggleBtn = document.getElementById('sort-direction');
     if (toggleBtn) {
         switch (sortOrder) {
@@ -697,7 +653,7 @@ function refreshModelsUI() {
                 toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
                 if (sortDirection === 'reverse') listedModels.reverse();
                 break;
-            case '': // Age
+            case '':
                 toggleBtn.textContent = sortDirection === 'default' ? 'New-Old' : 'Old-New';
                 if (sortDirection === 'reverse') listedModels.reverse();
                 break;
@@ -711,7 +667,6 @@ function refreshModelsUI() {
         }
     }
 
-    // Update main model selector
     if (modelSelectContainer) {
         modelSelectContainer.innerHTML = '';
         createCustomSelect(
@@ -728,7 +683,6 @@ function refreshModelsUI() {
         );
     }
 
-    // Update image model selector
     if (imageModelSelectContainer) {
         const visionModels = listedModels.filter(model =>
             model.input_modalities?.includes('image') ||
@@ -761,7 +715,6 @@ function formatModelLabel(model) {
     let label = model.endpoint?.model_variant_slug || model.id || model.name || 'Unknown Model';
     let pricingInfo = '';
 
-    // Extract pricing
     const pricing = model.endpoint?.pricing || model.pricing;
     if (pricing) {
         const promptPrice = parseFloat(pricing.prompt);
@@ -773,12 +726,11 @@ function formatModelLabel(model) {
                 pricingInfo += ` $${(completionPrice * 1e6).toFixed(4)}/mil. tok.-out`;
             }
         } else if (!isNaN(completionPrice)) {
-            // Handle case where only completion price is available (less common)
+
             pricingInfo += ` - $${(completionPrice * 1e6).toFixed(4)}/mil. tok.-out`;
         }
     }
 
-    // Add vision icon
     const isVision = model.input_modalities?.includes('image') ||
         model.architecture?.input_modalities?.includes('image') ||
         model.architecture?.modality?.includes('image');
@@ -788,8 +740,6 @@ function formatModelLabel(model) {
 
     return label + pricingInfo;
 }
-
-// --- Custom Select Dropdown Logic (largely unchanged, but included for completeness) ---
 
 /**
  * Creates a custom select dropdown with search functionality.
@@ -812,7 +762,7 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
 
     const selectItems = document.createElement('div');
     selectItems.className = 'select-items';
-    selectItems.style.display = 'none'; // Initially hidden
+    selectItems.style.display = 'none';
 
     const searchField = document.createElement('div');
     searchField.className = 'search-field';
@@ -823,9 +773,8 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
     searchField.appendChild(searchInput);
     selectItems.appendChild(searchField);
 
-    // Function to render options
     function renderOptions(filter = '') {
-        // Clear previous options (excluding search field)
+
         while (selectItems.childNodes.length > 1) {
             selectItems.removeChild(selectItems.lastChild);
         }
@@ -850,13 +799,12 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
             }
 
             optionDiv.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent closing immediately
+                e.stopPropagation();
                 currentSelectedValue = option.value;
                 selectSelected.textContent = option.label;
                 selectItems.style.display = 'none';
                 selectSelected.classList.remove('select-arrow-active');
 
-                // Update classes for all items
                 selectItems.querySelectorAll('div[data-value]').forEach(div => {
                     div.classList.toggle('same-as-selected', div.dataset.value === currentSelectedValue);
                 });
@@ -867,7 +815,6 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         });
     }
 
-    // Set initial display text
     const initialOption = options.find(opt => opt.value === currentSelectedValue);
     selectSelected.textContent = initialOption ? initialOption.label : 'Select an option';
 
@@ -875,23 +822,21 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
     customSelect.appendChild(selectItems);
     container.appendChild(customSelect);
 
-    // Initial rendering
     renderOptions();
 
-    // Event listeners
     searchInput.addEventListener('input', () => renderOptions(searchInput.value));
-    searchInput.addEventListener('click', e => e.stopPropagation()); // Prevent closing
+    searchInput.addEventListener('click', e => e.stopPropagation());
 
     selectSelected.addEventListener('click', (e) => {
         e.stopPropagation();
-        closeAllSelectBoxes(customSelect); // Close others
+        closeAllSelectBoxes(customSelect);
         const isHidden = selectItems.style.display === 'none';
         selectItems.style.display = isHidden ? 'block' : 'none';
         selectSelected.classList.toggle('select-arrow-active', isHidden);
         if (isHidden) {
             searchInput.focus();
-            searchInput.select(); // Select text for easy replacement
-            renderOptions(searchInput.value); // Re-render in case options changed AND filter by current search term
+            searchInput.select();
+            renderOptions(searchInput.value);
         }
     });
 }
@@ -907,9 +852,6 @@ function closeAllSelectBoxes(exceptThisOne = null) {
     });
 }
 
-
-
-
 /**
  * Resets all configurable settings to their default values.
  */
@@ -917,7 +859,6 @@ function resetSettings(noconfirm = false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
         tweetCache.clear();
 
-        // Define defaults (should match config.js ideally)
         const defaults = {
             selectedModel: 'openai/gpt-4.1-nano',
             selectedImageModel: 'openai/gpt-4.1-nano',
@@ -936,7 +877,6 @@ function resetSettings(noconfirm = false) {
             sortDirection: 'default'
         };
 
-        // Apply defaults
         for (const key in defaults) {
             if (window[key] !== undefined) {
                 window[key] = defaults[key];
@@ -950,14 +890,12 @@ function resetSettings(noconfirm = false) {
     }
 }
 
-// --- Blacklist/Whitelist Logic ---
-
 /**
  * Adds a handle to the blacklist, saves, and refreshes the UI.
  * @param {string} handle - The Twitter handle to add (with or without @).
  */
 function addHandleToBlacklist(handle) {
-    handle = handle.trim().replace(/^@/, ''); // Clean handle
+    handle = handle.trim().replace(/^@/, '');
     if (handle === '' || blacklistedHandles.includes(handle)) {
         showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
         return;
@@ -983,8 +921,6 @@ function removeHandleFromBlacklist(handle) {
 
 }
 
-// --- Initialization ---
-
 /**
  * Main initialization function for the UI module.
  */
@@ -996,12 +932,10 @@ function initialiseUI() {
     refreshSettingsUI();
     fetchAvailableModels();
 
-    // Initialize the floating cache stats badge
     initializeFloatingCacheStats();
 
     setInterval(updateCacheStatsUI, 3000);
 
-    // Initialize tracking object for streaming requests if it doesn't exist
     if (!window.activeStreamingRequests) window.activeStreamingRequests = {};
 }
 
@@ -1014,10 +948,8 @@ function initializeFloatingCacheStats() {
     const statsBadge = document.getElementById('tweet-filter-stats-badge');
     if (!statsBadge) return;
 
-    // Add tooltip functionality
     statsBadge.title = 'Click to open settings';
 
-    // Add click event to open settings
     statsBadge.addEventListener('click', () => {
         const settingsToggle = document.getElementById('settings-toggle');
         if (settingsToggle) {
@@ -1025,7 +957,6 @@ function initializeFloatingCacheStats() {
         }
     });
 
-    // Auto-hide after 5 seconds of inactivity
     let fadeTimeout;
     const resetFadeTimeout = () => {
         clearTimeout(fadeTimeout);
@@ -1045,5 +976,4 @@ function initializeFloatingCacheStats() {
     resetFadeTimeout();
     updateCacheStatsUI();
 }
-
 

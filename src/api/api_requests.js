@@ -1,8 +1,6 @@
-// src/api_requests.js
-
 /**
  * Gets a completion from OpenRouter API
- * 
+ *
  * @param {CompletionRequest} request - The completion request
  * @param {string} apiKey - OpenRouter API key
  * @param {number} [timeout=30000] - Request timeout in milliseconds
@@ -72,7 +70,7 @@ async function getCompletion(request, apiKey, timeout = 30000) {
 
 /**
  * Gets a streaming completion from OpenRouter API
- * 
+ *
  * @param {CompletionRequest} request - The completion request
  * @param {string} apiKey - OpenRouter API key
  * @param {Function} onChunk - Callback for each chunk of streamed response
@@ -83,15 +81,15 @@ async function getCompletion(request, apiKey, timeout = 30000) {
  * @returns {Object} The request object with an abort method
  */
 function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 90000, tweetId = null) {
-    // Add stream parameter to request
+
     const streamingRequest = {
         ...request,
         stream: true
     };
-    
+
     let fullResponse = "";
     let content = "";
-    let reasoning = ""; // Add a variable to track reasoning content
+    let reasoning = "";
     let responseObj = null;
     let streamComplete = false;
     console.log(streamingRequest);
@@ -108,11 +106,9 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
         timeout: timeout,
         responseType: "stream",
         onloadstart: function(response) {
-            // Get the ReadableStream from the response
+
             const reader = response.response.getReader();
-            
-            // Setup timeout to prevent hanging indefinitely
-            
+
             let streamTimeout = null;
             let firstChunkReceived = false;
             const resetStreamTimeout = () => {
@@ -121,7 +117,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     console.log("Stream timed out after inactivity");
                     if (!streamComplete) {
                         streamComplete = true;
-                        // Call onComplete with whatever we have so far
+
                         onComplete({
                             content: content,
                             reasoning: reasoning,
@@ -132,12 +128,12 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                 }, 30000);
             };
-            // Process the stream
+
             const processStream = async () => {
                 try {
                     let isDone = false;
                     let emptyChunksCount = 0;
-                    
+
                     while (!isDone && !streamComplete) {
                         const { done, value } = await reader.read();
 
@@ -151,58 +147,51 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                             resetStreamTimeout();
                         }
 
-                        // Convert the chunk to text
                         const chunk = new TextDecoder().decode(value);
 
                         clearTimeout(streamTimeout);
-                        // Reset timeout on activity
+
                         resetStreamTimeout();
-                        
-                        // Check for empty chunks - may indicate end of stream
+
                         if (chunk.trim() === '') {
                             emptyChunksCount++;
-                            // After receiving 3 consecutive empty chunks, consider the stream done
+
                             if (emptyChunksCount >= 3) {
                                 isDone = true;
                                 break;
                             }
                             continue;
                         }
-                        
-                        emptyChunksCount = 0; // Reset the counter if we got content
+
+                        emptyChunksCount = 0;
                         fullResponse += chunk;
-                        
-                        // Split by lines - server-sent events format
+
                         const lines = chunk.split("\n");
                         for (const line of lines) {
                             if (line.startsWith("data: ")) {
                                 const data = line.substring(6);
-                                
-                                // Check for the end of the stream
+
                                 if (data === "[DONE]") {
                                     isDone = true;
                                     break;
                                 }
-                                
+
                                 try {
                                     const parsed = JSON.parse(data);
                                     responseObj = parsed;
-                                    
-                                    // Extract the content and reasoning
+
                                     if (parsed.choices && parsed.choices[0]) {
-                                        // Check for delta content
+
                                         if (parsed.choices[0].delta && parsed.choices[0].delta.content !== undefined) {
                                             const delta = parsed.choices[0].delta.content || "";
                                             content += delta;
                                         }
-                                        
-                                        // Check for reasoning in delta
+
                                         if (parsed.choices[0].delta && parsed.choices[0].delta.reasoning !== undefined) {
                                             const reasoningDelta = parsed.choices[0].delta.reasoning || "";
                                             reasoning += reasoningDelta;
                                         }
-                                        
-                                        // Call the chunk callback
+
                                         onChunk({
                                             chunk: parsed.choices[0].delta?.content || "",
                                             reasoningChunk: parsed.choices[0].delta?.reasoning || "",
@@ -217,17 +206,15 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                             }
                         }
                     }
-                    
-                    // When done, call the complete callback if not already completed
+
                     if (!streamComplete) {
                         streamComplete = true;
                         if (streamTimeout) clearTimeout(streamTimeout);
-                        
-                        // Remove from active requests tracking
+
                         if (tweetId && window.activeStreamingRequests) {
                             delete window.activeStreamingRequests[tweetId];
                         }
-                        
+
                         onComplete({
                             content: content,
                             reasoning: reasoning,
@@ -235,19 +222,18 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                             data: responseObj
                         });
                     }
-                    
+
                 } catch (error) {
                     console.error("Stream processing error:", error);
-                    // Make sure we clean up and call onError
+
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
                         streamComplete = true;
-                        
-                        // Remove from active requests tracking
+
                         if (tweetId && window.activeStreamingRequests) {
                             delete window.activeStreamingRequests[tweetId];
                         }
-                        
+
                         onError({
                             error: true,
                             message: `Stream processing error: ${error.toString()}`,
@@ -256,18 +242,17 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                     }
                 }
             };
-            
+
             processStream().catch(error => {
                 console.error("Unhandled stream error:", error);
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
-                    
-                    // Remove from active requests tracking
+
                     if (tweetId && window.activeStreamingRequests) {
                         delete window.activeStreamingRequests[tweetId];
                     }
-                    
+
                     onError({
                         error: true,
                         message: `Unhandled stream error: ${error.toString()}`,
@@ -277,11 +262,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         },
         onerror: function(error) {
-            // Remove from active requests tracking
+
             if (tweetId && window.activeStreamingRequests) {
                 delete window.activeStreamingRequests[tweetId];
             }
-            
+
             onError({
                 error: true,
                 message: `Request error: ${error.toString()}`,
@@ -289,11 +274,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         },
         ontimeout: function() {
-            // Remove from active requests tracking
+
             if (tweetId && window.activeStreamingRequests) {
                 delete window.activeStreamingRequests[tweetId];
             }
-            
+
             onError({
                 error: true,
                 message: `Request timed out after ${timeout}ms`,
@@ -301,43 +286,39 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             });
         }
     });
-    
-    // Create an object with an abort method that can be called to cancel the request
+
     const streamingRequestObj = {
         abort: function() {
-            streamComplete = true; // Set flag to prevent further processing
+            streamComplete = true;
             pendingRequests--;
             try {
-                reqObj.abort(); // Attempt to abort the XHR request
+                reqObj.abort();
             } catch (e) {
                 console.error("Error aborting request:", e);
             }
-            
-            // Remove from active requests tracking
+
             if (tweetId && window.activeStreamingRequests) {
                 delete window.activeStreamingRequests[tweetId];
             }
 
-            // Remove incomplete entry from cache
             if (tweetId && tweetCache.has(tweetId)) {
                 const entry = tweetCache.get(tweetId);
-                // Only delete if it's a streaming entry without a score
+
                 if (entry.streaming && (entry.score === undefined || entry.score === null)) {
                     tweetCache.delete(tweetId);
                 }
             }
         }
     };
-    
-    // Track this request if we have a tweet ID
+
     if (tweetId && window.activeStreamingRequests) {
         window.activeStreamingRequests[tweetId] = streamingRequestObj;
     }
-    
+
     return streamingRequestObj;
 }
 
-let isOnlineListenerAttached = false; // Flag to ensure listener is only added once
+let isOnlineListenerAttached = false;
 
 /**
  * Fetches the list of available models from the OpenRouter API.
@@ -352,12 +333,11 @@ function fetchAvailableModels() {
     showStatus('Fetching available models...');
     const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
 
-    // Named function to handle the 'online' event
     function handleOnline() {
         showStatus('Back online. Fetching models...');
-        fetchAvailableModels(); // Retry fetching models
-        window.removeEventListener('online', handleOnline); // Remove the listener
-        isOnlineListenerAttached = false; // Reset the flag
+        fetchAvailableModels();
+        window.removeEventListener('online', handleOnline);
+        isOnlineListenerAttached = false;
     }
 
     GM_xmlhttpRequest({
@@ -372,22 +352,20 @@ function fetchAvailableModels() {
             try {
                 const data = JSON.parse(response.responseText);
                 if (data.data && data.data.models) {
-                    //filter all models that don't have key "endpoint" or endpoint is null
+
                     let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
 
-                    // Assign the slug from model.endpoint.model_variant_slug
                     filteredModels.forEach(model => {
-                        // Use model.endpoint.model_variant_slug as the primary source for the slug
-                        let currentSlug = model.endpoint?.model_variant_slug || model.id; // Fallback to model.id if slug is not present
-                        model.slug = currentSlug; // Assign the processed slug back to model.slug for consistency elsewhere
+
+                        let currentSlug = model.endpoint?.model_variant_slug || model.id;
+                        model.slug = currentSlug;
                     });
 
-                    // Reverse initial order for latency sorting to match High-Low expectations
                     if (sortOrder === 'latency-low-to-high'|| sortOrder === 'pricing-low-to-high') {
                         filteredModels.reverse();
                     }
                     availableModels = filteredModels || [];
-                    listedModels = [...availableModels]; // Initialize listedModels
+                    listedModels = [...availableModels];
                     refreshModelsUI();
                     showStatus('Models updated!');
                 }
@@ -415,7 +393,7 @@ function fetchAvailableModels() {
 
 /**
  * Gets descriptions for images using the OpenRouter API
- * 
+ *
  * @param {string[]} urls - Array of image URLs to get descriptions for
  * @param {string} apiKey - The API key for authentication
  * @param {string} tweetId - The unique tweet ID
@@ -486,8 +464,8 @@ async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
             url: `https://openrouter.ai/api/v1/generation?id=${generationId}`,
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai", // Use your script's URL
-                "X-Title": "TweetFilter-AI" // Replace with your script's name
+                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
+                "X-Title": "TweetFilter-AI"
             },
             timeout: timeout,
             onload: function(response) {
@@ -497,7 +475,7 @@ async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
                         resolve({
                             error: false,
                             message: "Metadata fetched successfully",
-                            data: data // The structure is { data: { ...metadata... } }
+                            data: data
                         });
                     } catch (error) {
                         resolve({
@@ -509,7 +487,7 @@ async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
                 } else if (response.status === 404) {
                      resolve({
                          error: true,
-                         status: 404, // Indicate not found specifically for retry logic
+                         status: 404,
                          message: `Generation metadata not found (404): ${response.responseText}`,
                          data: null
                      });
@@ -540,10 +518,3 @@ async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
     });
 }
 
-// Export the functions
-// export {
-//     getCompletion,
-//     getCompletionStreaming,
-//     fetchAvailableModels,
-//     getImageDescription
-// }; 

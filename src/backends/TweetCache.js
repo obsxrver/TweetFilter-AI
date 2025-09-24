@@ -1,5 +1,3 @@
-//src/backends/TweetCache.js
-// Helper function for debouncing
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -16,13 +14,13 @@ function debounce(func, wait) {
  * Class to manage the tweet rating cache with standardized data structure and centralized persistence.
  */
 class TweetCache {
-    // Debounce delay in milliseconds
+
     static DEBOUNCE_DELAY = 1500;
 
     constructor() {
         this.cache = {};
         this.loadFromStorage();
-        // Create a debounced version of the internal save method
+
         this.debouncedSaveToStorage = debounce(this.#saveToStorageInternal.bind(this), TweetCache.DEBOUNCE_DELAY);
     }
 
@@ -48,7 +46,7 @@ class TweetCache {
     #saveToStorageInternal() {
         try {
             browserSet('tweetRatings', JSON.stringify(this.cache));
-            updateCacheStatsUI(); // Update UI after saving
+            updateCacheStatsUI();
         } catch (error) {
             console.error("Error saving tweet cache to storage:", error);
         }
@@ -71,22 +69,21 @@ class TweetCache {
      */
     set(tweetId, rating, saveImmediately = true) {
         const existingEntry = this.cache[tweetId] || {};
-        const updatedEntry = { ...existingEntry }; // Start with a copy
+        const updatedEntry = { ...existingEntry };
 
-        // Update standard fields if provided in rating object
         if (rating.score !== undefined) updatedEntry.score = rating.score;
         if (rating.fullContext !== undefined) updatedEntry.fullContext = rating.fullContext;
         if (rating.description !== undefined) updatedEntry.description = rating.description;
         if (rating.reasoning !== undefined) updatedEntry.reasoning = rating.reasoning;
         if (rating.questions !== undefined) updatedEntry.questions = rating.questions;
         if (rating.lastAnswer !== undefined) updatedEntry.lastAnswer = rating.lastAnswer;
-        if (rating.mediaUrls !== undefined) updatedEntry.mediaUrls = rating.mediaUrls; // These are for full context
+        if (rating.mediaUrls !== undefined) updatedEntry.mediaUrls = rating.mediaUrls;
         if (rating.timestamp !== undefined) updatedEntry.timestamp = rating.timestamp;
-        else if (updatedEntry.timestamp === undefined) updatedEntry.timestamp = Date.now(); // Ensure timestamp exists
+        else if (updatedEntry.timestamp === undefined) updatedEntry.timestamp = Date.now();
         if (rating.streaming !== undefined) updatedEntry.streaming = rating.streaming;
         if (rating.blacklisted !== undefined) updatedEntry.blacklisted = rating.blacklisted;
         if (rating.fromStorage !== undefined) updatedEntry.fromStorage = rating.fromStorage;
-        
+
         if (rating.metadata) {
             updatedEntry.metadata = { ...(existingEntry.metadata || {}), ...rating.metadata };
         } else if (!existingEntry.metadata) {
@@ -95,34 +92,28 @@ class TweetCache {
 
         if (rating.qaConversationHistory !== undefined) updatedEntry.qaConversationHistory = rating.qaConversationHistory;
 
-        // Initialize new/specific fields if they don't exist on updatedEntry from existingEntry
         updatedEntry.authorHandle = updatedEntry.authorHandle || '';
         updatedEntry.individualTweetText = updatedEntry.individualTweetText || '';
         updatedEntry.individualMediaUrls = updatedEntry.individualMediaUrls || [];
         updatedEntry.qaConversationHistory = updatedEntry.qaConversationHistory || [];
 
-
-        // Specific update logic for authorHandle
         if (rating.authorHandle !== undefined) {
             updatedEntry.authorHandle = rating.authorHandle;
         }
 
-        // Specific update logic for individualTweetText
         if (rating.individualTweetText !== undefined) {
             if (!updatedEntry.individualTweetText || rating.individualTweetText.length > updatedEntry.individualTweetText.length) {
                 updatedEntry.individualTweetText = rating.individualTweetText;
             }
         }
 
-        // Specific update logic for individualMediaUrls
         if (rating.individualMediaUrls !== undefined && Array.isArray(rating.individualMediaUrls)) {
             if (!updatedEntry.individualMediaUrls || updatedEntry.individualMediaUrls.length === 0 || rating.individualMediaUrls.length > updatedEntry.individualMediaUrls.length) {
                 updatedEntry.individualMediaUrls = rating.individualMediaUrls;
             }
         }
-        
-        // Ensure defaults for any fields that might still be undefined after merge
-        updatedEntry.score = updatedEntry.score; // Remains undefined if not set
+
+        updatedEntry.score = updatedEntry.score;
         updatedEntry.authorHandle = updatedEntry.authorHandle || '';
         updatedEntry.fullContext = updatedEntry.fullContext || '';
         updatedEntry.description = updatedEntry.description || '';
@@ -133,7 +124,6 @@ class TweetCache {
         updatedEntry.streaming = updatedEntry.streaming || false;
         updatedEntry.blacklisted = updatedEntry.blacklisted || false;
         updatedEntry.fromStorage = updatedEntry.fromStorage || false;
-
 
         this.cache[tweetId] = updatedEntry;
 
@@ -153,10 +143,10 @@ class TweetCache {
      * @param {string} tweetId - The ID of the tweet to remove.
      * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      */
-    delete(tweetId, saveImmediately = true) { // saveImmediately is now ignored
+    delete(tweetId, saveImmediately = true) {
         if (this.has(tweetId)) {
             delete this.cache[tweetId];
-            // Use the debounced save
+
             this.debouncedSaveToStorage();
         }
     }
@@ -167,7 +157,7 @@ class TweetCache {
      */
     clear(saveImmediately = false) {
         this.cache = {};
-        // Use the debounced save
+
         if (saveImmediately) {
             this.#saveToStorageInternal();
         } else {
@@ -188,7 +178,7 @@ class TweetCache {
      * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
      * @returns {Object} Statistics about the cleanup operation.
      */
-    cleanup(saveImmediately = true) { // saveImmediately is now ignored
+    cleanup(saveImmediately = true) {
         const beforeCount = this.size;
         let deletedCount = 0;
         let streamingDeletedCount = 0;
@@ -206,7 +196,7 @@ class TweetCache {
                 }
                 shouldDelete = true;
             }
-            if (!entry.streaming && entry.score !== undefined && entry.score !== null && !entry.blacklisted && 
+            if (!entry.streaming && entry.score !== undefined && entry.score !== null && !entry.blacklisted &&
                 (!entry.qaConversationHistory || !Array.isArray(entry.qaConversationHistory) || entry.qaConversationHistory.length < 3)) {
                 console.warn(`[Cache Cleanup] Tweet ${tweetId} is rated but has invalid/missing qaConversationHistory. Deleting.`);
                 missingQaHistoryCount++;
@@ -220,7 +210,7 @@ class TweetCache {
         }
 
         if (deletedCount > 0) {
-            // Use the debounced save if changes were made
+
             this.debouncedSaveToStorage();
         }
 
@@ -236,5 +226,4 @@ class TweetCache {
 }
 
 const tweetCache = new TweetCache();
-// Export for use in other modules
-//export { tweetCache, TweetCache }; 
+

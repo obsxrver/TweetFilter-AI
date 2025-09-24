@@ -3,7 +3,7 @@
  * @returns {boolean} true if mobile device detected
  */
 function isMobileDevice() {
-    // Treat as mobile only based on user agent, not viewport width
+
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 /**
@@ -60,22 +60,20 @@ function resizeImage(file, maxDimPx) {
                 canvas.height = newHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                
-                // Using JPEG for potentially smaller file sizes, quality 0.9
-                // You can change to 'image/png' if transparency is critical and size is less of a concern
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
                 resolve(dataUrl);
             };
             img.onerror = (error) => {
                 console.error("Error loading image for resizing:", error);
                 reject(new Error("Could not load image for resizing."));
             };
-            img.src = event.target.result; // Use FileReader result as img src
+            img.src = event.target.result;
         };
         reader.onerror = (error) => {
             console.error("FileReader error:", error);
             reject(new Error("Could not read file."));
         };
-        reader.readAsDataURL(file); // Read the file to get a data URL for the Image object
+        reader.readAsDataURL(file);
     });
 }

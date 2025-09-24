@@ -1,8 +1,4 @@
-// src/api.js
-//import { getCompletion, getCompletionStreaming, fetchAvailableModels, getImageDescription } from './api_requests.js';
-
-
-/** 
+/**
  * Formats description text for the tooltip.
  * Copy of the function from ui.js to ensure it's available for streaming.
  */
@@ -46,40 +42,34 @@ function extractFollowUpQuestions(content) {
     const q2Start = content.indexOf(q2Marker);
     const q3Start = content.indexOf(q3Marker);
 
-    // Ensure all markers are present and in the correct order
     if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
-        // Extract Q1: text between Q_1. and Q_2.
+
         const q1Text = content.substring(q1Start + q1Marker.length, q2Start).trim();
         questions.push(q1Text);
 
-        // Extract Q2: text between Q_2. and Q_3.
         const q2Text = content.substring(q2Start + q2Marker.length, q3Start).trim();
         questions.push(q2Text);
 
-        // Extract Q3: text after Q_3. until the end of the content
-        // (Or potentially until the next major marker if the prompt changes later)
         let q3Text = content.substring(q3Start + q3Marker.length).trim();
-        // Remove any trailing markers from Q3 if necessary
+
         const endMarker = "</FOLLOW_UP_QUESTIONS>";
         if (q3Text.endsWith(endMarker)) {
             q3Text = q3Text.substring(0, q3Text.length - endMarker.length).trim();
         }
         questions.push(q3Text);
 
-        // Basic validation: Ensure questions are not empty
         if (questions.every(q => q.length > 0)) {
             return questions;
         }
     }
 
-    // If markers aren't found or questions are empty, return empty array
     console.warn("[extractFollowUpQuestions] Failed to find or parse Q_1/Q_2/Q_3 markers.");
     return [];
 }
 
 /**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
- * 
+ *
  * @param {string} tweetText - The text content of the tweet
  * @param {string} tweetId - The unique tweet ID
  * @param {string} apiKey - The API key for authentication
@@ -98,9 +88,9 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     if (!indicatorInstance) {
         console.error(`[API rateTweetWithOpenRouter] Could not get/create ScoreIndicator for ${tweetId}.`);
-        // Cannot proceed without an indicator instance to store qaConversationHistory
+
         return {
-            score: 5, // Default error score
+            score: 5,
             content: "Failed to initialize UI components for rating.",
             reasoning: "",
             questions: [],
@@ -108,18 +98,18 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             error: true,
             cached: false,
             data: null,
-            qaConversationHistory: [] // Empty history
+            qaConversationHistory: []
         };
     }
 
     if (adAuthorCache.has(authorHandle)) {
-        
+
         indicatorInstance.updateInitialReviewAndBuildHistory({
-            fullContext: tweetText, 
+            fullContext: tweetText,
             mediaUrls: [],
             apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
-            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT, 
-            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT, 
+            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
             userInstructions: currentInstructions
         });
         return {
@@ -149,8 +139,8 @@ ${currentInstructions}`}]
             {
                 role: "user",
                 content: [
-                    { 
-                        type: "text", 
+                    {
+                        type: "text",
                         text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
 
 <TWEET>[${tweetText}]</TWEET>
@@ -178,22 +168,15 @@ EXPECTED_RESPONSE_FORMAT:\n
         top_p: modelTopP,
         max_tokens: maxTokens
     };
-    
-   /* // Simplified user message text, relying on system prompt for full format instruction
-    requestBody.messages[1].content[0].text = `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
 
-<USER_INSTRUCTIONS>[${currentInstructions}]</USER_INSTRUCTIONS>
-
-<TWEET>[${tweetText}]</TWEET>`;
-*/
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
     if (mediaUrls?.length > 0) {
-        // Separate video descriptions from image URLs
+
         const imageUrls = [];
         const videoDescriptions = [];
-        
+
         mediaUrls.forEach(item => {
             if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
                 videoDescriptions.push(item);
@@ -201,13 +184,11 @@ EXPECTED_RESPONSE_FORMAT:\n
                 imageUrls.push(item);
             }
         });
-       
-        
-        // Add image URLs for vision models
+
         if (imageUrls.length > 0 && modelSupportsImages(selectedModel)) {
             imageUrls.forEach(url => {
                 if (url.startsWith('data:application/pdf')) {
-                    // Handle PDF format for models that support it
+
                     requestBody.messages[1].content.push({
                         type: "file",
                         file: {
@@ -216,13 +197,13 @@ EXPECTED_RESPONSE_FORMAT:\n
                         }
                     });
                 } else if (url.startsWith('http://') || url.startsWith('https://')) {
-                    // Only process valid HTTP/HTTPS URLs as images
+
                     requestBody.messages[1].content.push({
                         type: "image_url",
                         image_url: { "url": url }
                     });
                 } else {
-                    // Skip invalid URLs (like video descriptions that shouldn't be here)
+
                     console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
                 }
             });
@@ -233,19 +214,18 @@ EXPECTED_RESPONSE_FORMAT:\n
     }
 
     const useStreaming = browserGet('enableStreaming', false);
-    // Initial cache entry for streaming - qaConversationHistory will be added later
+
     tweetCache.set(tweetId, {
         streaming: true,
         timestamp: Date.now(),
-        tweetContent: tweetText, // Store original tweet text for context
-        mediaUrls: mediaUrls     // Store original media URLs
+        tweetContent: tweetText,
+        mediaUrls: mediaUrls
     });
 
     let attempt = 0;
     while (attempt < maxRetries) {
         attempt++;
 
-        // Rate limiting
         const now = Date.now();
         const timeElapsed = now - lastAPICallTime;
         if (timeElapsed < API_CALL_DELAY_MS) {
@@ -253,10 +233,9 @@ EXPECTED_RESPONSE_FORMAT:\n
         }
         lastAPICallTime = now;
 
-        // Update status
         pendingRequests++;
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
-        
+
         try {
             let result;
             if (useStreaming) {
@@ -265,11 +244,11 @@ EXPECTED_RESPONSE_FORMAT:\n
                 result = await rateTweet(requestBody, apiKey);
             }
             cleanupRequest();
-            
+
             if (!result.error && result.content) {
                 indicatorInstance.updateInitialReviewAndBuildHistory({
-                    fullContext: tweetText, // The full text of the tweet that was rated
-                    mediaUrls: mediaUrls,   // The media URLs associated with that tweet
+                    fullContext: tweetText,
+                    mediaUrls: mediaUrls,
                     apiResponseContent: result.content,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
                     followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
@@ -278,26 +257,26 @@ EXPECTED_RESPONSE_FORMAT:\n
 
                 const finalScore = indicatorInstance.score;
                 const finalQuestions = indicatorInstance.questions;
-                const finalDescription = indicatorInstance.description; // Analysis part
+                const finalDescription = indicatorInstance.description;
                 const finalQaHistory = indicatorInstance.qaConversationHistory;
 
                 tweetCache.set(tweetId, {
                     score: finalScore,
-                    description: finalDescription, // Analysis
-                    reasoning: result.reasoning || "", // If rateTweet/Streaming provide it separately
+                    description: finalDescription,
+                    reasoning: result.reasoning || "",
                     questions: finalQuestions,
                     lastAnswer: "",
-                    tweetContent: tweetText, 
+                    tweetContent: tweetText,
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
                     metadata: result.data?.id ? { generationId: result.data.id } : null,
-                    qaConversationHistory: finalQaHistory // Store the history
+                    qaConversationHistory: finalQaHistory
                 });
-                   
+
                 return {
                     score: finalScore,
-                    content: result.content, // Keep raw content for direct use if needed
+                    content: result.content,
                     reasoning: result.reasoning || "",
                     questions: finalQuestions,
                     error: false,
@@ -306,12 +285,12 @@ EXPECTED_RESPONSE_FORMAT:\n
                     qaConversationHistory: finalQaHistory
                 };
             }
-            // Retry logic if result was error or no content
+
             if (attempt < maxRetries && (result.error || !result.content)) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             } else if (result.error || !result.content) {
-                 // Last attempt failed or no content
+
                 throw new Error(result.content || "Failed to get valid rating content after multiple attempts");
             }
 
@@ -322,7 +301,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
             } else {
-                // All retries failed, update indicator and cache with error state
+
                 const errorContent = `Failed to get valid rating after multiple attempts: ${error.message}`;
                 indicatorInstance.updateInitialReviewAndBuildHistory({
                     fullContext: tweetText,
@@ -358,9 +337,8 @@ EXPECTED_RESPONSE_FORMAT:\n
             }
         }
     }
-    
-    // Fallback if loop finishes unexpectedly (should be caught by error handling within loop)
-    cleanupRequest(); 
+
+    cleanupRequest();
     const fallbackError = "Unexpected failure in rating process.";
     indicatorInstance.updateInitialReviewAndBuildHistory({
         fullContext: tweetText,
@@ -382,10 +360,9 @@ EXPECTED_RESPONSE_FORMAT:\n
     };
 }
 
-
 /**
  * Performs a non-streaming tweet rating request
- * 
+ *
  * @param {Object} request - The formatted request body
  * @param {string} apiKey - API key for authentication
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
@@ -395,24 +372,23 @@ async function rateTweet(request, apiKey) {
     const existingScore = tweetCache.get(tweetId)?.score;
 
     const result = await getCompletion(request, apiKey);
-    
+
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
         const reasoning = result.data.choices[0].message.reasoning || "";
-        
-        // Store the rating in cache
+
         const scoreMatches = content.match(/SCORE_(\d+)/g);
-        const score = existingScore || (scoreMatches && scoreMatches.length > 0 
-            ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10) 
+        const score = existingScore || (scoreMatches && scoreMatches.length > 0
+            ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10)
             : null);
-            
+
         tweetCache.set(tweetId, {
             score: score,
             description: content,
             tweetContent: request.tweetText,
             streaming: false
         });
-        
+
         return {
             content,
             reasoning
@@ -429,7 +405,7 @@ async function rateTweet(request, apiKey) {
 
 /**
  * Performs a streaming tweet rating request with real-time UI updates
- * 
+ *
  * @param {Object} request - The formatted request body
  * @param {string} apiKey - API key for authentication
  * @param {string} tweetId - The tweet ID
@@ -438,13 +414,13 @@ async function rateTweet(request, apiKey) {
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
  */
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
-    // Check if there's already an active streaming request for this tweet
+
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
         console.log(`Aborting existing streaming request for tweet ${tweetId}`);
         window.activeStreamingRequests[tweetId].abort();
         delete window.activeStreamingRequests[tweetId];
     }
-    // Store initial streaming entry only if not already cached with a score
+
     const existingCache = tweetCache.get(tweetId);
     if (!existingCache || existingCache.score === undefined || existingCache.score === null) {
         tweetCache.set(tweetId, {
@@ -460,12 +436,11 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
     }
 
     return new Promise((resolve, reject) => {
-        // Get or create the indicator instance *once*
-        // Use the passed-in tweetArticle
+
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
         if (!indicatorInstance) {
              console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
-             // Update cache to reflect error/non-streaming state
+
              if (tweetCache.has(tweetId)) {
                  tweetCache.get(tweetId).streaming = false;
                  tweetCache.get(tweetId).error = "Indicator initialization failed";
@@ -475,27 +450,24 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
 
         let aggregatedContent = existingCache?.description || "";
         let aggregatedReasoning = existingCache?.reasoning || "";
-        let aggregatedQuestions = existingCache?.questions || [];
         let finalData = null;
         let score = existingCache?.score || null;
-        
+
         getCompletionStreaming(
             request,
             apiKey,
-            // onChunk callback - update the ScoreIndicator instance
+
             (chunkData) => {
                 aggregatedContent = chunkData.content || aggregatedContent;
                 aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
-                
-                // Look for a score in the accumulated content so far
-                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g); // Use global flag to get all matches
-                // Always use the last score found in the stream
+
+                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
+
                 if (scoreMatches && scoreMatches.length > 0) {
                     const lastScore = scoreMatches[scoreMatches.length - 1];
                     score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
-                
-                // Update the instance
+
                  indicatorInstance.update({
                     status: 'streaming',
                     score: score,
@@ -504,25 +476,22 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     questions: [],
                     lastAnswer: ""
                 });
-                
-                // Update cache with partial data during streaming
+
                 if (tweetCache.has(tweetId)) {
                     const entry = tweetCache.get(tweetId);
                     entry.description = aggregatedContent;
                     entry.reasoning = aggregatedReasoning;
                     entry.score = score;
-                    entry.streaming = true; // Still streaming
+                    entry.streaming = true;
                 }
             },
-            // onComplete callback - finalize the rating
+
             (finalResult) => {
                 console.log(finalResult);
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
-                // console.log("Final stream data:", finalData);
 
-                // Final check for score
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
                 if (scoreMatches && scoreMatches.length > 0) {
                     const lastScore = scoreMatches[scoreMatches.length - 1];
@@ -530,15 +499,14 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 }
 
                 let finalStatus = 'rated';
-                // If no score was found anywhere, mark as error
+
                 if (score === null || score === undefined) {
                     console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
                     finalStatus = 'error';
-                    score = 5; // Assign default error score
+                    score = 5;
                     aggregatedContent += "\n[No score detected - Error]";
                 }
 
-                // Store final result in cache (non-streaming)
                 const finalCacheData = {
                     tweetContent: tweetText,
                     score: score,
@@ -551,7 +519,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 };
                 tweetCache.set(tweetId, finalCacheData);
 
-                // Finalize UI update via instance
                 indicatorInstance.update({
                     status: finalStatus,
                     score: score,
@@ -559,19 +526,17 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     questions: extractFollowUpQuestions(aggregatedContent),
                     lastAnswer: "",
-                    metadata: finalData?.id ? { generationId: finalData.id } : null 
+                    metadata: finalData?.id ? { generationId: finalData.id } : null
                 });
 
                 if (tweetArticle) {
                     filterSingleTweet(tweetArticle);
                 }
 
-                // --- Fetch Generation Metadata (New) ---
                 const generationId = finalData?.id;
                 if (generationId && apiKey) {
                     fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance);
                 }
-                // --- End Fetch Generation Metadata ---
 
                 resolve({
                     score: score,
@@ -582,10 +547,10 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     data: finalData
                 });
             },
-            // onError callback
+
             (errorData) => {
                  console.error(`[API Stream Error] Tweet ${tweetId}: ${errorData.message}`);
-                // Update UI via instance to show error
+
                 indicatorInstance.update({
                     status: 'error',
                     score: 5,
@@ -595,20 +560,18 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     lastAnswer: ''
                 });
 
-                // Update cache to reflect error
                 if (tweetCache.has(tweetId)) {
                      const entry = tweetCache.get(tweetId);
                      entry.streaming = false;
                      entry.error = errorData.message;
-                     entry.score = 5; // Store default error score in cache too
-                     entry.description = `Stream Error: ${errorData.message}`; // Store error message
+                     entry.score = 5;
+                     entry.description = `Stream Error: ${errorData.message}`;
                 }
-                
 
-                reject(new Error(errorData.message)); // Reject the promise
+                reject(new Error(errorData.message));
             },
             30000,
-            tweetId  // Pass the tweet ID to associate with this request
+            tweetId
         );
     });
 }
@@ -633,47 +596,44 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
     await new Promise(resolve => setTimeout(resolve, delay));
 
     try {
-        // console.log(`[Metadata Fetch ${tweetId}] Attempt ${attempt + 1} for generation ${generationId} after ${delay}ms`);
+
         const metadataResult = await getGenerationMetadata(generationId, apiKey);
 
         if (!metadataResult.error && metadataResult.data?.data) {
             const meta = metadataResult.data.data;
-            // console.log(`[Metadata Fetch ${tweetId}] Success for generation ${generationId}`, meta);
 
             const extractedMetadata = {
                 model: meta.model || 'N/A',
                 promptTokens: meta.tokens_prompt || 0,
-                completionTokens: meta.tokens_completion || 0, // Use this for total completion output
-                reasoningTokens: meta.native_tokens_reasoning || 0, // Specific reasoning tokens if available
-                latency: meta.latency !== undefined ? (meta.latency / 1000).toFixed(2) + 's' : 'N/A', // Convert ms to s
+                completionTokens: meta.tokens_completion || 0,
+                reasoningTokens: meta.native_tokens_reasoning || 0,
+                latency: meta.latency !== undefined ? (meta.latency / 1000).toFixed(2) + 's' : 'N/A',
                 mediaInputs: meta.num_media_prompt || 0,
-                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A', // Add total cost
-                providerName: meta.provider_name || 'N/A' // Add provider_name
+                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A',
+                providerName: meta.provider_name || 'N/A'
             };
 
-            // Update the cache
             const currentCache = tweetCache.get(tweetId);
             if (currentCache) {
                 currentCache.metadata = extractedMetadata;
-                tweetCache.set(tweetId, currentCache); // Save updated cache entry
+                tweetCache.set(tweetId, currentCache);
 
-                // Update the ScoreIndicator instance
                 indicatorInstance.update({ metadata: extractedMetadata });
                 console.log(`[Metadata Fetch ${tweetId}] Stored metadata and updated UI for generation ${generationId}`);
             } else {
                 console.warn(`[Metadata Fetch ${tweetId}] Cache entry disappeared before metadata could be stored for generation ${generationId}.`);
             }
-            return; // Success, stop retrying
+            return;
         } else if (metadataResult.status === 404) {
-            // console.log(`[Metadata Fetch ${tweetId}] Generation ${generationId} not found yet (404), retrying...`);
+
             fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
         } else {
             console.warn(`[Metadata Fetch ${tweetId}] Error fetching metadata (Attempt ${attempt + 1}) for ${generationId}: ${metadataResult.message}`);
-            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays); // Retry on other errors too
+            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
         }
     } catch (error) {
         console.error(`[Metadata Fetch ${tweetId}] Unexpected error during fetch (Attempt ${attempt + 1}) for ${generationId}:`, error);
-        // Still retry on unexpected errors
+
         fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
     }
 }
@@ -693,7 +653,6 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
     const useStreaming = browserGet('enableStreaming', false);
 
-    // Prepare messages for the API call: template the last user message in the history
     const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
             const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
@@ -707,21 +666,21 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             });
             return { ...msg, content: templatedContent };
         }
-        return msg; // Return other messages (system prompts, previous assistant messages, previous user messages) as is
+        return msg;
     });
-    
+
     const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
 
     const request = {
         model: effectiveModel,
-        messages: messagesForApi, // Use the history with the last user message templated
+        messages: messagesForApi,
         temperature: modelTemperature,
         top_p: modelTopP,
         max_tokens: maxTokens,
         stream: useStreaming
     };
     console.log(`followup request (templated): ${JSON.stringify(request)}`);
-    
+
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
     }
@@ -729,35 +688,32 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         request.provider = { sort: providerSort, allow_fallbacks: true };
     }
 
-    // UI update for "Thinking..." is handled by ScoreIndicator's _handleFollowUpQuestionClick
-
-    try { // Outer try for the finally block
-        try { // Inner try for existing error handling
-            let finalAnswerContent = "*Processing...*"; // This is the raw AI response string
-            let finalQaHistory = [...qaHistoryForApiCall]; // Start with a copy
+    try {
+        try {
+            let finalAnswerContent = "*Processing...*";
+            let finalQaHistory = [...qaHistoryForApiCall];
 
             if (useStreaming) {
                 await new Promise((resolve, reject) => {
                     let aggregatedContent = "";
-                    let aggregatedReasoning = ""; // Add reasoning tracking
+                    let aggregatedReasoning = "";
 
                     getCompletionStreaming(
                         request, apiKey,
-                        // onChunk
+
                         (chunkData) => {
                             aggregatedContent = chunkData.content || aggregatedContent;
-                            aggregatedReasoning = chunkData.reasoning || aggregatedReasoning; // Track reasoning
-                            // Render streaming answer with reasoning
+                            aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
+
                             indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
                         },
-                        // onComplete
+
                         (result) => {
                             finalAnswerContent = result.content || aggregatedContent;
-                            const finalReasoning = result.reasoning || aggregatedReasoning; // Get final reasoning
+                            const finalReasoning = result.reasoning || aggregatedReasoning;
                             const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                             finalQaHistory.push(assistantMessage);
 
-                            // Store reasoning in last conversation history turn
                             if (indicatorInstance.conversationHistory.length > 0) {
                                 const lastTurn = indicatorInstance.conversationHistory[indicatorInstance.conversationHistory.length - 1];
                                 if (lastTurn.answer === 'pending') {
@@ -769,11 +725,10 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                                 assistantResponseContent: finalAnswerContent,
                                 updatedQaHistory: finalQaHistory
                             });
-                            
-                            // Update cache with the new full QA history
+
                             const currentCache = tweetCache.get(tweetId) || {};
                             currentCache.qaConversationHistory = finalQaHistory;
-                            // also update questions and lastAnswer for compatibility if needed, though qaHistory is prime
+
                             const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
                             currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
                             currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
@@ -782,18 +737,17 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 
                             resolve();
                         },
-                        // onError
+
                         (error) => {
                             console.error("[FollowUp Stream Error]", error);
                             const errorMessage = `Error generating answer: ${error.message}`;
-                            // Update ScoreIndicator's UI part of conversationHistory
-                            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage); 
-                            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions
-                            indicatorInstance._updateTooltipUI(); // Refresh
 
-                            // Update cache with error state for this turn if needed, though qaHistory won't have AI response
+                            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage);
+                            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || [];
+                            indicatorInstance._updateTooltipUI();
+
                             const currentCache = tweetCache.get(tweetId) || {};
-                            currentCache.lastAnswer = errorMessage; // Store error message
+                            currentCache.lastAnswer = errorMessage;
                             currentCache.timestamp = Date.now();
                             tweetCache.set(tweetId, currentCache);
 
@@ -803,7 +757,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                         `followup-${tweetId}`
                     );
                 });
-            } else { // Non-streaming follow-up
+            } else {
                 const result = await getCompletion(request, apiKey, 60000);
                 if (result.error || !result.data?.choices?.[0]?.message?.content) {
                     throw new Error(result.message || "Failed to get follow-up answer.");
@@ -817,7 +771,6 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                     updatedQaHistory: finalQaHistory
                 });
 
-                // Update cache
                 const currentCache = tweetCache.get(tweetId) || {};
                 currentCache.qaConversationHistory = finalQaHistory;
                 const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
@@ -829,32 +782,21 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         } catch (error) {
             console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
             const errorMessage = `Error answering question: ${error.message}`;
-            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage); // Update UI history
-            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || []; // Restore old questions from cache
-            indicatorInstance._updateTooltipUI(); // Refresh
+            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage);
+            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || [];
+            indicatorInstance._updateTooltipUI();
 
             const currentCache = tweetCache.get(tweetId) || {};
-            currentCache.lastAnswer = errorMessage; // Store error in cache
+            currentCache.lastAnswer = errorMessage;
             currentCache.timestamp = Date.now();
             tweetCache.set(tweetId, currentCache);
-            // No re-throw needed, as the finally block will handle cleanup.
+
         }
     } finally {
-        // This block ensures that UI elements are re-enabled regardless of success or failure.
+
         if (indicatorInstance && typeof indicatorInstance._finalizeFollowUpInteraction === 'function') {
             indicatorInstance._finalizeFollowUpInteraction();
         }
     }
 }
-
-// Export all functions
-// // export {
-//     safetySettings,
-//     rateTweetWithOpenRouter,
-//     getCustomInstructionsDescription,
-//     rateTweet,
-//     rateTweetStreaming
-// };
-
-
 

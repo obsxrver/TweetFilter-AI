@@ -7,7 +7,7 @@ class InstructionsManager {
             return InstructionsManager.instance;
         }
         InstructionsManager.instance = this;
-        
+
         this.history = new InstructionsHistory();
         this.currentInstructions = browserGet('userDefinedInstructions', '');
     }
@@ -26,12 +26,10 @@ class InstructionsManager {
         this.currentInstructions = instructions;
         browserSet('userDefinedInstructions', instructions);
 
-        // Update global variable
         if (typeof USER_DEFINED_INSTRUCTIONS !== 'undefined') {
             USER_DEFINED_INSTRUCTIONS = instructions;
         }
 
-        // Create a title from the first three words and the last word
         const summary = this.#generateSummary(instructions);
         await this.history.add(instructions, summary);
 
@@ -76,7 +74,7 @@ class InstructionsManager {
 
     /**
      * Removes an instruction from history
-     * @param {number} index 
+     * @param {number} index
      * @returns {boolean}
      */
     removeFromHistory(index) {
@@ -91,5 +89,4 @@ class InstructionsManager {
     }
 }
 
-// Create and export the singleton instance
 const instructionsManager = new InstructionsManager();
