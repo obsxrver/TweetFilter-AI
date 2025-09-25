@@ -4998,22 +4998,10 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         quotedMediaLinks = await extractMediaLinks(quoteContainer);
                     }
                 }
-                if (!tweetId && cell.dataset.tweetId) {
-                    tweetId = cell.dataset.tweetId;
-                }
-                if (!username && cell.dataset.authorHandle) {
-                    username = cell.dataset.authorHandle;
-                }
-                if (!text && cell.dataset.tweetText) {
-                    text = cell.dataset.tweetText || '';
-                }
-                if ((!mediaLinks || !mediaLinks.length) && cell.dataset.mediaUrls) {
-                    try {
-                        mediaLinks = JSON.parse(cell.dataset.mediaUrls);
-                    } catch (e) {
-                        mediaLinks = [];
-                    }
-                }
+                tweetId = (tweetId || cell.dataset.tweetId) || '';
+                username = (username || cell.dataset.authorHandle) || '';
+                text = (text || cell.dataset.tweetText) || '';
+                mediaLinks = (mediaLinks || JSON.parse(cell.dataset.mediaUrls)) || [];
                 if (tweetId && username) {
                     const currentCellItem = {
                         type: 'tweet',

@@ -13,16 +13,10 @@ function filterSingleTweet(tweetArticle) {
 
     const handles = getUserHandles(tweetArticle);
     const authorHandle = handles.length > 0 ? handles[0] : '';
-    const isAuthorActuallyBlacklisted = authorHandle && isUserBlacklisted(authorHandle);
 
     const tweetText = getTweetText(tweetArticle) || '';
-    const mediaUrls = extractMediaLinksSync(tweetArticle);
+    const mediaUrls = extractMediaLinks(tweetArticle);
     const tid = getTweetID(tweetArticle);
-    cell.dataset.tweetText = tweetText;
-    cell.dataset.authorHandle = authorHandle;
-    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
-    cell.dataset.tweetId = tid;
-
     const cacheUpdateData = {
         authorHandle: authorHandle,
         individualTweetText: tweetText,
@@ -42,6 +36,11 @@ function filterSingleTweet(tweetArticle) {
         return;
     }
 
+    cell.dataset.tweetText = tweetText;
+    cell.dataset.authorHandle = authorHandle;
+    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
+    cell.dataset.tweetId = tid;
+
     const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
     const tweetId = getTweetID(tweetArticle);
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
@@ -51,10 +50,10 @@ function filterSingleTweet(tweetArticle) {
     const ratingStatus = tweetArticle.dataset.ratingStatus;
 
     if (indicatorInstance) {
-        indicatorInstance.isAuthorBlacklisted = isAuthorActuallyBlacklisted;
+        indicatorInstance.isAuthorBlacklisted = isUserBlacklisted(authorHandle);
     }
 
-    if (isAuthorActuallyBlacklisted) {
+    if (isUserBlacklisted(authorHandle)) {
         delete cell.dataset.filtered;
         cell.dataset.authorBlacklisted = 'true';
         if (indicatorInstance) {
@@ -1149,23 +1148,12 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     }
                 }
 
-                if (!tweetId && cell.dataset.tweetId) {
-                    tweetId = cell.dataset.tweetId;
-                }
-                if (!username && cell.dataset.authorHandle) {
-                    username = cell.dataset.authorHandle;
-                }
-                if (!text && cell.dataset.tweetText) {
-                    text = cell.dataset.tweetText || '';
-                }
-                if ((!mediaLinks || !mediaLinks.length) && cell.dataset.mediaUrls) {
-                    try {
-                        mediaLinks = JSON.parse(cell.dataset.mediaUrls);
-                    } catch (e) {
+                
+                tweetId = (tweetId || cell.dataset.tweetId) || '';
+                username = (username || cell.dataset.authorHandle) || '';
+                text = (text || cell.dataset.tweetText) || '';
+                mediaLinks = (mediaLinks || JSON.parse(cell.dataset.mediaUrls)) || [];
 
-                        mediaLinks = [];
-                    }
-                }
 
                 if (tweetId && username) {
                     const currentCellItem = {
