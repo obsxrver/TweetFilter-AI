@@ -727,76 +727,11 @@ function getUserHandles(tweetArticle) {
     return handles.length > 0 ? handles : [''];
 }
 /**
- * Extracts and returns an array of media URLs and video descriptions from the tweet element.
- * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
- */
-async function extractMediaLinks(scopeElement) {
-    if (!scopeElement) return [];
-    const mediaLinks = new Set();
-    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
-    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
-    const combinedSelector = `${imgSelector}, ${videoSelector}`;
-    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    const RETRY_DELAY = 5;
-    let retries = 0;
-    while (mediaElements.length === 0 && retries < MAX_RETRIES) {
-        retries++;
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-        mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    }
-    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
-        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
-    }
-    mediaElements.forEach(mediaEl => {
-        if (mediaEl.tagName === 'VIDEO') {
-            const videoDescription = mediaEl.getAttribute('aria-label');
-            if (videoDescription && videoDescription.trim()) {
-                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
-            } else {
-                const posterUrl = mediaEl.poster;
-                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
-                    try {
-                        const url = new URL(posterUrl);
-                        const name = url.searchParams.get('name');
-                        let finalUrl = posterUrl;
-                        if (name && name !== 'orig') {
-                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
-                        }
-                        mediaLinks.add(finalUrl);
-                    } catch (error) {
-                        mediaLinks.add(posterUrl);
-                    }
-                }
-            }
-        } else if (mediaEl.tagName === 'IMG') {
-            const sourceUrl = mediaEl.src;
-            if (!sourceUrl ||
-               !(sourceUrl.includes('pbs.twimg.com/')) ||
-               sourceUrl.includes('profile_images')) {
-                return;
-            }
-            try {
-                const url = new URL(sourceUrl);
-                const name = url.searchParams.get('name');
-                let finalUrl = sourceUrl;
-                if (name && name !== 'orig') {
-                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
-                }
-                mediaLinks.add(finalUrl);
-            } catch (error) {
-                mediaLinks.add(sourceUrl);
-            }
-        }
-    });
-    return Array.from(mediaLinks);
-}
-/**
  * Synchronous version of extractMediaLinks without retry logic.
  * @param {Element} scopeElement - The tweet element.
  * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
  */
-function extractMediaLinksSync(scopeElement) {
+function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
     const mediaLinks = new Set();
     const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
@@ -808,55 +743,15 @@ function extractMediaLinksSync(scopeElement) {
     }
     mediaElements.forEach(mediaEl => {
         if (mediaEl.tagName === 'VIDEO') {
-            const videoDescription = mediaEl.getAttribute('aria-label');
-            if (videoDescription && videoDescription.trim()) {
-                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
-            } else {
-                const posterUrl = mediaEl.poster;
-                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
-                    try {
-                        const url = new URL(posterUrl);
-                        const name = url.searchParams.get('name');
-                        let finalUrl = posterUrl;
-                        if (name && name !== 'orig') {
-                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
-                        }
-                        mediaLinks.add(finalUrl);
-                    } catch (error) {
-                        mediaLinks.add(posterUrl);
-                    }
-                }
-            }
+            mediaLinks.add(mediaEl.poster);
         } else if (mediaEl.tagName === 'IMG') {
             const sourceUrl = mediaEl.src;
-            if (!sourceUrl ||
-               !(sourceUrl.includes('pbs.twimg.com/')) ||
-               sourceUrl.includes('profile_images')) {
-                return;
-            }
-            try {
-                const url = new URL(sourceUrl);
-                const name = url.searchParams.get('name');
-                let finalUrl = sourceUrl;
-                if (name && name !== 'orig') {
-                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
-                }
-                mediaLinks.add(finalUrl);
-            } catch (error) {
-                mediaLinks.add(sourceUrl);
-            }
+            if(!sourceUrl) return;
+            mediaLinks.add(sourceUrl);          
         }
     });
     return Array.from(mediaLinks);
 }
-/**
- * Processes a single tweet after a delay.
- * It first sets a pending indicator, then either applies a cached rating,
- * or calls the API to rate the tweet (with retry logic).
- * Finally, it applies the filtering logic.
- * @param {Element} tweetArticle - The tweet element.
- * @param {string} tweetId - The tweet ID.
- */
 function isOriginalTweet(tweetArticle) {
     let sibling = tweetArticle.nextElementSibling;
     while (sibling) {
@@ -2786,11 +2681,9 @@ class ScoreIndicator {
     }
     /** Ensures the indicator element is attached to the correct current article element. */
     ensureIndicatorAttached() {
-        if (!this.indicatorElement) return;
+        if (!this.indicatorElement) return false;
         const currentArticle = this.findCurrentArticleElement();
-        if (!currentArticle) {
-            return;
-        }
+        if (!currentArticle) return false;
         if (this.indicatorElement.parentElement !== currentArticle) {
             const currentPosition = window.getComputedStyle(currentArticle).position;
             if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
@@ -2798,6 +2691,7 @@ class ScoreIndicator {
             }
             currentArticle.appendChild(this.indicatorElement);
         }
+        return true;
     }
     /** Finds the current DOM element for the tweet article based on tweetId. */
     findCurrentArticleElement() {
@@ -2806,16 +2700,11 @@ class ScoreIndicator {
         const linkSelector = `a[href*="/status/${this.tweetId}"]`;
         const linkElement = timeline.querySelector(linkSelector);
         const article = linkElement?.closest('article[data-testid="tweet"]');
-        if (article) {
-            if (getTweetID(article) === this.tweetId) {
-                return article;
-            }
+        if (article && getTweetID(article) === this.tweetId) {
+            return article;
         }
-        const articles = timeline.querySelectorAll('article[data-testid="tweet"]');
-        for (const art of articles) {
-            if (getTweetID(art) === this.tweetId) {
-                return art;
-            }
+        for (const art of timeline.querySelectorAll('article[data-testid="tweet"]')) {
+            if (getTweetID(art) === this.tweetId) return art;
         }
         return null;
     }
@@ -4057,14 +3946,9 @@ function filterSingleTweet(tweetArticle) {
     }
     const handles = getUserHandles(tweetArticle);
     const authorHandle = handles.length > 0 ? handles[0] : '';
-    const isAuthorActuallyBlacklisted = authorHandle && isUserBlacklisted(authorHandle);
     const tweetText = getTweetText(tweetArticle) || '';
-    const mediaUrls = extractMediaLinksSync(tweetArticle);
+    const mediaUrls = extractMediaLinks(tweetArticle);
     const tid = getTweetID(tweetArticle);
-    cell.dataset.tweetText = tweetText;
-    cell.dataset.authorHandle = authorHandle;
-    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
-    cell.dataset.tweetId = tid;
     const cacheUpdateData = {
         authorHandle: authorHandle,
         individualTweetText: tweetText,
@@ -4082,16 +3966,20 @@ function filterSingleTweet(tweetArticle) {
         cell.dataset.isAd = 'true';
         return;
     }
-    const score = parseInt(tweetArticle.dataset.sloppinessScore || '9', 10);
+    cell.dataset.tweetText = tweetText;
+    cell.dataset.authorHandle = authorHandle;
+    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
+    cell.dataset.tweetId = tid;
+    const score = parseInt(tweetArticle.dataset.slopScore || '9', 10);
     const tweetId = getTweetID(tweetArticle);
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     indicatorInstance?.ensureIndicatorAttached();
     const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     const ratingStatus = tweetArticle.dataset.ratingStatus;
     if (indicatorInstance) {
-        indicatorInstance.isAuthorBlacklisted = isAuthorActuallyBlacklisted;
+        indicatorInstance.isAuthorBlacklisted = isUserBlacklisted(authorHandle);
     }
-    if (isAuthorActuallyBlacklisted) {
+    if (isUserBlacklisted(authorHandle)) {
         delete cell.dataset.filtered;
         cell.dataset.authorBlacklisted = 'true';
         if (indicatorInstance) {
@@ -4122,10 +4010,8 @@ function filterSingleTweet(tweetArticle) {
  * @param {Element} tweetArticle - The tweet element.
  * @returns {boolean} True if a cached rating was applied.
  */
-async function applyTweetCachedRating(tweetArticle) {
+function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
-    const handles = getUserHandles(tweetArticle);
-    const userHandle = handles.length > 0 ? handles[0] : '';
     const cachedRating = tweetCache.get(tweetId);
     if (cachedRating) {
         if (cachedRating.streaming === true &&
@@ -4133,7 +4019,7 @@ async function applyTweetCachedRating(tweetArticle) {
             return false;
         }
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
-            tweetArticle.dataset.sloppinessScore = cachedRating.score.toString();
+            tweetArticle.dataset.slopScore = cachedRating.score.toString();
             tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? 'cached' : 'rated';
             tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
             tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
@@ -4147,7 +4033,7 @@ async function applyTweetCachedRating(tweetArticle) {
             filterSingleTweet(tweetArticle);
             return true;
         } else if (!cachedRating.streaming) {
-            console.warn(`Invalid cache entry for tweet ${tweetId}: missing score`);
+            //cached object with score undefined or null, and not pending rating.
             tweetCache.delete(tweetId);
             return false;
         }
@@ -4177,7 +4063,197 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
     let processingSuccessful = false;
     try {
         const apiKey = browserGet('openrouter-api-key', '');
-        if (!apiKey) {
+        if (apiKey) {
+            let score = 5;
+            let description = "";
+            let reasoning = "";
+            let questions = [];
+            let lastAnswer = "";
+            try {
+                const cachedRating = tweetCache.get(tweetId);
+                if (cachedRating && !cachedRating.score && !cachedRating.streaming) {
+                    console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
+                    tweetCache.delete(tweetId);
+                }
+                const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
+                if (!fullContextWithImageDescription) {
+                    throw new Error("Failed to get tweet context");
+                }
+                let mediaURLs = [];
+                if (document.querySelector('div[aria-label="Timeline: Conversation"]')) {
+                    const replyInfo = getTweetReplyInfo(tweetId);
+                    if (replyInfo && replyInfo.replyTo) {
+                        if (!tweetCache.has(tweetId)) {
+                            tweetCache.set(tweetId, {});
+                        }
+                        if (!tweetCache.get(tweetId).threadContext) {
+                            tweetCache.get(tweetId).threadContext = {
+                                replyTo: replyInfo.to,
+                                replyToId: replyInfo.replyTo,
+                                isRoot: false
+                            };
+                        }
+                    }
+                }
+                const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+                const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
+                const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
+                const videoMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
+                for (const match of mediaMatches1) {
+                    if (match[1]) {
+                        mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
+                    }
+                }
+                for (const match of mediaMatches2) {
+                    if (match[1]) {
+                        mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
+                    }
+                }
+                for (const match of videoMatches1) {
+                    if (match[1]) {
+                        const videoLines = match[1].trim().split('\n').filter(line => line.trim());
+                        videoLines.forEach(line => {
+                            if (line.startsWith('[VIDEO ')) {
+                                const desc = line.replace(/^\[VIDEO \d+\]: /, '');
+                                mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                            }
+                        });
+                    }
+                }
+                for (const match of videoMatches2) {
+                    if (match[1]) {
+                        const videoLines = match[1].trim().split('\n').filter(line => line.trim());
+                        videoLines.forEach(line => {
+                            if (line.startsWith('[VIDEO ')) {
+                                const desc = line.replace(/^\[VIDEO \d+\]: /, '');
+                                mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                            }
+                        });
+                    }
+                }
+                mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
+                const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]');
+                const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
+                if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
+                    console.warn(`Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext.`);
+                }
+                if (fullContextWithImageDescription) {
+                    try {
+                        const currentCache = tweetCache.get(tweetId);
+                        const isCached = currentCache &&
+                            !currentCache.streaming &&
+                            currentCache.score !== undefined &&
+                            currentCache.score !== null;
+                        if (isCached) {
+                            score = currentCache.score;
+                            description = currentCache.description || "";
+                            reasoning = currentCache.reasoning || "";
+                            questions = currentCache.questions || [];
+                            lastAnswer = currentCache.lastAnswer || "";
+                            const mediaUrls = currentCache.mediaUrls || [];
+                            processingSuccessful = true;
+                            console.log(`Using valid cache entry found for ${tweetId} before API call.`);
+                            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                                status: currentCache.fromStorage ? 'cached' : 'rated',
+                                score: score,
+                                description: description,
+                                reasoning: reasoning,
+                                questions: questions,
+                                lastAnswer: lastAnswer,
+                                metadata: currentCache.metadata || null,
+                                mediaUrls: mediaUrls
+                            });
+                            filterSingleTweet(tweetArticle);
+                            return;
+                        }
+                        const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
+                        const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
+                        score = rating.score;
+                        description = rating.content;
+                        reasoning = rating.reasoning || '';
+                        questions = rating.questions || [];
+                        lastAnswer = "";
+                        let finalStatus = rating.error ? 'error' : 'rated';
+                        if (!rating.error) {
+                            const cacheEntry = tweetCache.get(tweetId);
+                            if (cacheEntry && cacheEntry.fromStorage) {
+                                finalStatus = 'cached';
+                            } else if (rating.cached) {
+                                finalStatus = 'cached';
+                            }
+                        }
+                        tweetArticle.dataset.ratingStatus = finalStatus;
+                        tweetArticle.dataset.ratingDescription = description || "not available";
+                        tweetArticle.dataset.slopScore = score?.toString() || '';
+                        tweetArticle.dataset.ratingReasoning = reasoning;
+                        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                            status: finalStatus,
+                            score: score,
+                            description: description,
+                            reasoning: reasoning,
+                            questions: questions,
+                            lastAnswer: lastAnswer,
+                            metadata: rating.data?.id ? { generationId: rating.data.id } : null,
+                            mediaUrls: mediaURLs
+                        });
+                        processingSuccessful = !rating.error;
+                        filterSingleTweet(tweetArticle);
+                        return;
+                    } catch (apiError) {
+                        console.error(`API error processing tweet ${tweetId}:`, apiError);
+                        score = 5;
+                        description = `API Error: ${apiError.message}`;
+                        reasoning = '';
+                        questions = [];
+                        lastAnswer = '';
+                        processingSuccessful = false;
+                        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                            status: 'error',
+                            score: score,
+                            description: description,
+                            questions: [],
+                            lastAnswer: ""
+                        });
+                        const errorCacheEntry = tweetCache.get(tweetId) || {};
+                        const errorUpdate = {
+                            ...errorCacheEntry,
+                            score: score,
+                            description: description,
+                            reasoning: reasoning,
+                            questions: questions,
+                            lastAnswer: lastAnswer,
+                            streaming: false,
+                            timestamp: Date.now()
+                        };
+                        tweetCache.set(tweetId, errorUpdate, true);
+                        filterSingleTweet(tweetArticle);
+                        return;
+                    }
+                }
+                filterSingleTweet(tweetArticle);
+            } catch (error) {
+                console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
+                if (error.message === "Media content not extracted despite presence of media containers.") {
+                    if (tweetCache.has(tweetId)) {
+                        tweetCache.delete(tweetId);
+                        console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
+                    }
+                }
+                ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                    status: 'error',
+                    score: 5,
+                    description: "Error during processing: " + error.message,
+                    questions: [],
+                    lastAnswer: ""
+                });
+                filterSingleTweet(tweetArticle);
+                processingSuccessful = false;
+            } finally {
+                if (!processingSuccessful) {
+                    processedTweets.delete(tweetId);
+                }
+            }
+        } else {
             tweetArticle.dataset.ratingStatus = 'error';
             tweetArticle.dataset.ratingDescription = "No API key";
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
@@ -4187,239 +4263,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 questions: [],
                 lastAnswer: ""
             });
-            filterSingleTweet(tweetArticle);
-            return;
-        }
-        if (authorHandle && adAuthorCache.has(authorHandle)) {
-            tweetArticle.dataset.ratingStatus = 'rated';
-            tweetArticle.dataset.ratingDescription = "Advertisement";
-            tweetArticle.dataset.sloppinessScore = '0';
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'rated',
-                score: 0,
-                description: "Advertisement from known ad author",
-                questions: [],
-                lastAnswer: ""
-            });
-            filterSingleTweet(tweetArticle);
             processingSuccessful = true;
-            return;
         }
-        if (isAd(tweetArticle)) {
-            if (authorHandle) {
-                adAuthorCache.add(authorHandle);
-            }
-            tweetArticle.dataset.ratingStatus = 'rated';
-            tweetArticle.dataset.ratingDescription = "Advertisement";
-            tweetArticle.dataset.sloppinessScore = '0';
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'rated',
-                score: 0,
-                description: "Advertisement",
-                questions: [],
-                lastAnswer: ""
-            });
-            filterSingleTweet(tweetArticle);
-            processingSuccessful = true;
-            return;
-        }
-        let score = 5;
-        let description = "";
-        let reasoning = "";
-        let questions = [];
-        let lastAnswer = "";
-        try {
-            const cachedRating = tweetCache.get(tweetId);
-            if (cachedRating) {
-                if (cachedRating.streaming === true &&
-                    (cachedRating.score === undefined || cachedRating.score === null)) {
-                    console.log(`Tweet ${tweetId} has incomplete streaming cache entry, continuing with processing`);
-                }
-                else if (!cachedRating.streaming && (cachedRating.score === undefined || cachedRating.score === null)) {
-                    console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
-                    tweetCache.delete(tweetId);
-                }
-            }
-            const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
-            if (!fullContextWithImageDescription) {
-                throw new Error("Failed to get tweet context");
-            }
-            let mediaURLs = [];
-            if (document.querySelector('div[aria-label="Timeline: Conversation"]')) {
-                const replyInfo = getTweetReplyInfo(tweetId);
-                if (replyInfo && replyInfo.replyTo) {
-                    if (!tweetCache.has(tweetId)) {
-                        tweetCache.set(tweetId, {});
-                    }
-                    if (!tweetCache.get(tweetId).threadContext) {
-                        tweetCache.get(tweetId).threadContext = {
-                            replyTo: replyInfo.to,
-                            replyToId: replyInfo.replyTo,
-                            isRoot: false
-                        };
-                    }
-                }
-            }
-            const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-            const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-            const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
-            const videoMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
-            for (const match of mediaMatches1) {
-                if (match[1]) {
-                    mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
-                }
-            }
-            for (const match of mediaMatches2) {
-                if (match[1]) {
-                    mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
-                }
-            }
-            for (const match of videoMatches1) {
-                if (match[1]) {
-                    const videoLines = match[1].trim().split('\n').filter(line => line.trim());
-                    videoLines.forEach(line => {
-                        if (line.startsWith('[VIDEO ')) {
-                            const desc = line.replace(/^\[VIDEO \d+\]: /, '');
-                            mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
-                        }
-                    });
-                }
-            }
-            for (const match of videoMatches2) {
-                if (match[1]) {
-                    const videoLines = match[1].trim().split('\n').filter(line => line.trim());
-                    videoLines.forEach(line => {
-                        if (line.startsWith('[VIDEO ')) {
-                            const desc = line.replace(/^\[VIDEO \d+\]: /, '');
-                            mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
-                        }
-                    });
-                }
-            }
-            mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
-            const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]');
-            const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
-            if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
-                const warningMessage = `Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext. Forcing error for retry.`;
-                console.warn(warningMessage);
-                throw new Error("Media content not extracted despite presence of media containers.");
-            }
-            if (fullContextWithImageDescription) {
-                try {
-                    const currentCache = tweetCache.get(tweetId);
-                    const isCached = currentCache &&
-                        !currentCache.streaming &&
-                        currentCache.score !== undefined &&
-                        currentCache.score !== null;
-                    if (isCached) {
-                        score = currentCache.score;
-                        description = currentCache.description || "";
-                        reasoning = currentCache.reasoning || "";
-                        questions = currentCache.questions || [];
-                        lastAnswer = currentCache.lastAnswer || "";
-                        const mediaUrls = currentCache.mediaUrls || [];
-                        processingSuccessful = true;
-                        console.log(`Using valid cache entry found for ${tweetId} before API call.`);
-                        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                            status: currentCache.fromStorage ? 'cached' : 'rated',
-                            score: score,
-                            description: description,
-                            reasoning: reasoning,
-                            questions: questions,
-                            lastAnswer: lastAnswer,
-                            metadata: currentCache.metadata || null,
-                            mediaUrls: mediaUrls
-                        });
-                        filterSingleTweet(tweetArticle);
-                        return;
-                    }
-                    const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
-                    const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
-                    score = rating.score;
-                    description = rating.content;
-                    reasoning = rating.reasoning || '';
-                    questions = rating.questions || [];
-                    lastAnswer = "";
-                    let finalStatus = rating.error ? 'error' : 'rated';
-                    if (!rating.error) {
-                        const cacheEntry = tweetCache.get(tweetId);
-                        if (cacheEntry && cacheEntry.fromStorage) {
-                            finalStatus = 'cached';
-                        } else if (rating.cached) {
-                            finalStatus = 'cached';
-                        }
-                    }
-                    tweetArticle.dataset.ratingStatus = finalStatus;
-                    tweetArticle.dataset.ratingDescription = description || "not available";
-                    tweetArticle.dataset.sloppinessScore = score?.toString() || '';
-                    tweetArticle.dataset.ratingReasoning = reasoning;
-                    ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                        status: finalStatus,
-                        score: score,
-                        description: description,
-                        reasoning: reasoning,
-                        questions: questions,
-                        lastAnswer: lastAnswer,
-                        metadata: rating.data?.id ? { generationId: rating.data.id } : null,
-                        mediaUrls: mediaURLs
-                    });
-                    processingSuccessful = !rating.error;
-                    filterSingleTweet(tweetArticle);
-                    return;
-                } catch (apiError) {
-                    console.error(`API error processing tweet ${tweetId}:`, apiError);
-                    score = 5;
-                    description = `API Error: ${apiError.message}`;
-                    reasoning = '';
-                    questions = [];
-                    lastAnswer = '';
-                    processingSuccessful = false;
-                    ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                        status: 'error',
-                        score: score,
-                        description: description,
-                        questions: [],
-                        lastAnswer: ""
-                    });
-                    const errorCacheEntry = tweetCache.get(tweetId) || {};
-                    const errorUpdate = {
-                        ...errorCacheEntry,
-                        score: score,
-                        description: description,
-                        reasoning: reasoning,
-                        questions: questions,
-                        lastAnswer: lastAnswer,
-                        streaming: false,
-                        timestamp: Date.now()
-                    };
-                    tweetCache.set(tweetId, errorUpdate, true);
-                    filterSingleTweet(tweetArticle);
-                    return;
-                }
-            }
-            filterSingleTweet(tweetArticle);
-        } catch (error) {
-            console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
-            if (error.message === "Media content not extracted despite presence of media containers.") {
-                if (tweetCache.has(tweetId)) {
-                    tweetCache.delete(tweetId);
-                    console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
-                }
-            }
-            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'error',
-                score: 5,
-                description: "Error during processing: " + error.message,
-                questions: [],
-                lastAnswer: ""
-            });
-            filterSingleTweet(tweetArticle);
-            processingSuccessful = false;
-        } finally {
-            if (!processingSuccessful) {
-                processedTweets.delete(tweetId);
-            }
-        }
+        filterSingleTweet(tweetArticle);
+        return;
     } catch (error) {
         console.error(`Error processing tweet ${tweetId}:`, error);
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
@@ -4461,25 +4308,25 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     }
     const handles = getUserHandles(tweetArticle);
     const authorHandle = handles.length > 0 ? handles[0] : '';
-    if (authorHandle && adAuthorCache.has(authorHandle)) {
-        filterSingleTweet(tweetArticle);
-        return;
-    }
-    if (isAd(tweetArticle)) {
-        if (authorHandle) {
-            adAuthorCache.add(authorHandle);
-        }
+    if ((authorHandle && adAuthorCache.has(authorHandle)) || isAd(tweetArticle)) {
+        if (authorHandle && !adAuthorCache.has(authorHandle)) adAuthorCache.add(authorHandle);
+        tweetArticle.dataset.ratingStatus = 'rated';
+        tweetArticle.dataset.ratingDescription = "Advertisement";
+        tweetArticle.dataset.slopScore = '0';
+        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+            status: 'rated',
+            score: 0,
+            description: "Advertisement",
+            questions: [],
+            lastAnswer: ""
+        });
         filterSingleTweet(tweetArticle);
         return;
     }
     const existingInstance = ScoreIndicatorRegistry.get(tweetId);
-    if (existingInstance) {
-        existingInstance.ensureIndicatorAttached();
-        if (isValidFinalState(existingInstance.status)) {
-            filterSingleTweet(tweetArticle);
-            return;
-        }
-        if (isValidInterimState(existingInstance.status) && processedTweets.has(tweetId)) {
+    existingInstance?.ensureIndicatorAttached();
+    if (existingInstance && !rateAnyway) {
+        if (isValidFinalState(existingInstance.status) || (isValidInterimState(existingInstance.status) && processedTweets.has(tweetId))) {
             filterSingleTweet(tweetArticle);
             return;
         }
@@ -4526,14 +4373,9 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
         }
     }
     if (tweetCache.has(tweetId)) {
-        const isIncompleteStreaming =
-            tweetCache.get(tweetId).streaming === true &&
-            (tweetCache.get(tweetId).score === undefined || tweetCache.get(tweetId).score === null);
-        if (!isIncompleteStreaming) {
-            const wasApplied = await applyTweetCachedRating(tweetArticle);
-            if (wasApplied) {
-                return;
-            }
+        const isIncompleteStreaming = tweetCache.get(tweetId).streaming === true && !tweetCache.get(tweetId).score;
+        if (!isIncompleteStreaming && applyTweetCachedRating(tweetArticle)) {
+            return;
         }
     }
     if (processedTweets.has(tweetId)) {
@@ -4666,7 +4508,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
             const userHandle = handles.length > 0 ? handles[0] : '';
             const quotedHandle = handles.length > 1 ? handles[1] : '';
             const mainText = getTweetText(tweetArticle);
-            let allMediaLinks = await extractMediaLinks(tweetArticle);
+            let allMediaLinks = extractMediaLinks(tweetArticle);
             let quotedText = "";
             let quotedMediaLinks = [];
             let quotedTweetId = null;
@@ -4681,7 +4523,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
                     }
                 }
                 quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-                quotedMediaLinks = await extractMediaLinks(quoteContainer);
+                quotedMediaLinks = extractMediaLinks(quoteContainer);
             }
             const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
                 document.querySelector('div[aria-label^="Timeline: Conversation"]');
@@ -4884,7 +4726,7 @@ function applyFilteringToAll() {
     tweets.forEach(filterSingleTweet);
 }
 function ensureAllTweetsRated() {
-    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !browserGet('enableAutoRating',true)) {
+    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !browserGet('enableAutoRating', false)) {
         return;
     }
     if (!observedTargetNode) return;
@@ -4992,10 +4834,10 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     const handles = getUserHandles(article);
                     username = handles.length > 0 ? handles[0] : null;
                     text = getTweetText(article).replace(/\n+/g, ' ⏎ ');
-                    mediaLinks = await extractMediaLinks(article);
+                    mediaLinks = extractMediaLinks(article);
                     const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
                     if (quoteContainer) {
-                        quotedMediaLinks = await extractMediaLinks(quoteContainer);
+                        quotedMediaLinks = extractMediaLinks(quoteContainer);
                     }
                 }
                 tweetId = (tweetId || cell.dataset.tweetId) || '';
@@ -5198,7 +5040,7 @@ function getTweetReplyInfo(tweetId) {
 }
 setInterval(handleThreads, THREAD_CHECK_INTERVAL);
 setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
-setInterval(applyFilteringToAll, SWEEP_INTERVAL);
+//setInterval(applyFilteringToAll, SWEEP_INTERVAL);
     // ----- api/api_requests.js -----
 /**
  * Gets a completion from OpenRouter API
