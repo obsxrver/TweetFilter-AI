@@ -1028,11 +1028,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 return;
             }
 
-            cellDivs.forEach((cell, idx) => {
-                const tweetId = cell.dataset.tweetId;
-                const authorHandle = cell.dataset.authorHandle;
 
-            });
 
             cellDivs.sort((a, b) => {
                 const aY = parseInt(a.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
@@ -1040,11 +1036,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 return aY - bY;
             });
 
-            cellDivs.forEach((cell, idx) => {
-                const tweetId = cell.dataset.tweetId;
-                const authorHandle = cell.dataset.authorHandle;
 
-            });
 
             let tweetCells = [];
             let processedCount = 0;
@@ -1097,7 +1089,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     tweetCells.push(currentCellItem);
 
                     if (tweetId === urlTweetId) {
-
                         urlTweetCellIndex = tweetCells.length - 1;
                     }
                     processedCount++;

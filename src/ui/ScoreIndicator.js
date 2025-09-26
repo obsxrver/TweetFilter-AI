@@ -1855,8 +1855,6 @@ class ScoreIndicator {
 
             this.isVisible = false;
             this.tooltipElement.style.display = 'none';
-        } else if (this.isPinned) {
-
         }
     }
 
