@@ -1855,8 +1855,6 @@ class ScoreIndicator {
 
             this.isVisible = false;
             this.tooltipElement.style.display = 'none';
-        } else if (this.isPinned) {
-
         }
     }
 
@@ -1997,11 +1995,9 @@ class ScoreIndicator {
 
     /** Ensures the indicator element is attached to the correct current article element. */
     ensureIndicatorAttached() {
-        if (!this.indicatorElement) return;
+        if (!this.indicatorElement) return false;
         const currentArticle = this.findCurrentArticleElement();
-        if (!currentArticle) {
-            return;
-        }
+        if (!currentArticle) return false;
 
         if (this.indicatorElement.parentElement !== currentArticle) {
 
@@ -2011,31 +2007,22 @@ class ScoreIndicator {
             }
             currentArticle.appendChild(this.indicatorElement);
         }
+        return true;
     }
 
     /** Finds the current DOM element for the tweet article based on tweetId. */
     findCurrentArticleElement() {
         const timeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (!timeline) return null;
-
         const linkSelector = `a[href*="/status/${this.tweetId}"]`;
         const linkElement = timeline.querySelector(linkSelector);
         const article = linkElement?.closest('article[data-testid="tweet"]');
-
-        if (article) {
-
-            if (getTweetID(article) === this.tweetId) {
-                return article;
-            }
+        if (article && getTweetID(article) === this.tweetId) {
+            return article;
         }
-
-        const articles = timeline.querySelectorAll('article[data-testid="tweet"]');
-        for (const art of articles) {
-            if (getTweetID(art) === this.tweetId) {
-                return art;
-            }
+        for (const art of timeline.querySelectorAll('article[data-testid="tweet"]')) {
+            if (getTweetID(art) === this.tweetId) return art;
         }
-
         return null;
     }
 

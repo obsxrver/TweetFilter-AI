@@ -166,7 +166,10 @@ EXPECTED_RESPONSE_FORMAT:\n
         ],
         temperature: modelTemperature,
         top_p: modelTopP,
-        max_tokens: maxTokens
+        max_tokens: maxTokens,
+        reasoning: {
+            enabled: true,
+        },
     };
 
     if (selectedModel.includes('gemini')) {

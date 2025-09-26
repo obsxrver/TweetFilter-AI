@@ -172,57 +172,6 @@ class TweetCache {
     get size() {
         return Object.keys(this.cache).length;
     }
-
-    /**
-     * Cleans up invalid entries in the cache.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
-     * @returns {Object} Statistics about the cleanup operation.
-     */
-    cleanup(saveImmediately = true) {
-        const beforeCount = this.size;
-        let deletedCount = 0;
-        let streamingDeletedCount = 0;
-        let undefinedScoreCount = 0;
-        let missingQaHistoryCount = 0;
-
-        for (const tweetId in this.cache) {
-            const entry = this.cache[tweetId];
-            let shouldDelete = false;
-            if (entry.score === undefined || entry.score === null) {
-                if (entry.streaming === true) {
-                    streamingDeletedCount++;
-                } else {
-                    undefinedScoreCount++;
-                }
-                shouldDelete = true;
-            }
-            if (!entry.streaming && entry.score !== undefined && entry.score !== null && !entry.blacklisted &&
-                (!entry.qaConversationHistory || !Array.isArray(entry.qaConversationHistory) || entry.qaConversationHistory.length < 3)) {
-                console.warn(`[Cache Cleanup] Tweet ${tweetId} is rated but has invalid/missing qaConversationHistory. Deleting.`);
-                missingQaHistoryCount++;
-                shouldDelete = true;
-            }
-
-            if (shouldDelete) {
-                delete this.cache[tweetId];
-                deletedCount++;
-            }
-        }
-
-        if (deletedCount > 0) {
-
-            this.debouncedSaveToStorage();
-        }
-
-        return {
-            beforeCount,
-            afterCount: this.size,
-            deletedCount,
-            streamingDeletedCount,
-            undefinedScoreCount,
-            missingQaHistoryCount
-        };
-    }
 }
 
 const tweetCache = new TweetCache();

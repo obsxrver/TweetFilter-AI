@@ -342,7 +342,7 @@ function clearTweetRatingsAndRefreshUI() {
 
         if (observedTargetNode) {
             observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
-                tweet.removeAttribute('data-sloppiness-score');
+                tweet.removeAttribute('data-slop-score');
                 tweet.removeAttribute('data-rating-status');
                 tweet.removeAttribute('data-rating-description');
                 tweet.removeAttribute('data-cached-rating');

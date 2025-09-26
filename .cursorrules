@@ -1,0 +1,7 @@
+This is a userscript for TamperMonkey. 
+The main file is TweetFilter-AI.user.js. This file is the concatenation of all files in src/. These files are merged together by the helper script combine-src.py
+In TweetFilter-AI.user.js, each section of code is prefixed by a comment with its source's filename. eg: // ----- twitter-desloppifier.js -----
+Do not make modifications to TweetFilter-AI.user.js, as they will be overwritten by combine-src.py.
+Don't delete logs. There is an option to combine the source code with logs removed. 
+As the project is bloated at over 6000 LOC, we aim to simplify and reduce its footprint. When asked to clean up code, find shortcuts and places where a job can be done in fewer lines. 
+ 

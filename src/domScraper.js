@@ -96,97 +96,13 @@ function getUserHandles(tweetArticle) {
 
     return handles.length > 0 ? handles : [''];
 }
-/**
- * Extracts and returns an array of media URLs and video descriptions from the tweet element.
- * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
- */
-async function extractMediaLinks(scopeElement) {
-    if (!scopeElement) return [];
-
-    const mediaLinks = new Set();
-
-    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
-    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, video[poster*="pbs.twimg.com"], video`;
-    const combinedSelector = `${imgSelector}, ${videoSelector}`;
-
-    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    const RETRY_DELAY = 5;
-    let retries = 0;
-
-    while (mediaElements.length === 0 && retries < MAX_RETRIES) {
-        retries++;
-
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-        mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    }
-
-    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
-        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
-    }
-
-    mediaElements.forEach(mediaEl => {
-        if (mediaEl.tagName === 'VIDEO') {
-
-            const videoDescription = mediaEl.getAttribute('aria-label');
-            if (videoDescription && videoDescription.trim()) {
-                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
-            } else {
-
-                const posterUrl = mediaEl.poster;
-                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
-                    try {
-                        const url = new URL(posterUrl);
-                        const name = url.searchParams.get('name');
-                        let finalUrl = posterUrl;
-                        if (name && name !== 'orig') {
-                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
-                        }
-                        mediaLinks.add(finalUrl);
-                    } catch (error) {
-                        mediaLinks.add(posterUrl);
-                    }
-                }
-            }
-        } else if (mediaEl.tagName === 'IMG') {
-
-            const sourceUrl = mediaEl.src;
-
-            if (!sourceUrl ||
-               !(sourceUrl.includes('pbs.twimg.com/')) ||
-               sourceUrl.includes('profile_images')) {
-                return;
-            }
-
-            try {
-
-                const url = new URL(sourceUrl);
-                const name = url.searchParams.get('name');
-
-                let finalUrl = sourceUrl;
-
-                if (name && name !== 'orig') {
-
-                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
-                }
-
-                mediaLinks.add(finalUrl);
-            } catch (error) {
-
-                mediaLinks.add(sourceUrl);
-            }
-        }
-    });
-
-    return Array.from(mediaLinks);
-}
 
 /**
  * Synchronous version of extractMediaLinks without retry logic.
  * @param {Element} scopeElement - The tweet element.
  * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
  */
-function extractMediaLinksSync(scopeElement) {
+function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
 
     const mediaLinks = new Set();
@@ -196,75 +112,20 @@ function extractMediaLinksSync(scopeElement) {
     const combinedSelector = `${imgSelector}, ${videoSelector}`;
 
     let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-
     if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
         mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
     }
-
     mediaElements.forEach(mediaEl => {
         if (mediaEl.tagName === 'VIDEO') {
-
-            const videoDescription = mediaEl.getAttribute('aria-label');
-            if (videoDescription && videoDescription.trim()) {
-                mediaLinks.add(`[VIDEO_DESCRIPTION]: ${videoDescription.trim()}`);
-            } else {
-
-                const posterUrl = mediaEl.poster;
-                if (posterUrl && posterUrl.includes('pbs.twimg.com/') && !posterUrl.includes('profile_images')) {
-                    try {
-                        const url = new URL(posterUrl);
-                        const name = url.searchParams.get('name');
-                        let finalUrl = posterUrl;
-                        if (name && name !== 'orig') {
-                            finalUrl = posterUrl.replace(`name=${name}`, 'name=small');
-                        }
-                        mediaLinks.add(finalUrl);
-                    } catch (error) {
-                        mediaLinks.add(posterUrl);
-                    }
-                }
-            }
+            mediaLinks.add(mediaEl.poster);
         } else if (mediaEl.tagName === 'IMG') {
-
             const sourceUrl = mediaEl.src;
-
-            if (!sourceUrl ||
-               !(sourceUrl.includes('pbs.twimg.com/')) ||
-               sourceUrl.includes('profile_images')) {
-                return;
-            }
-
-            try {
-
-                const url = new URL(sourceUrl);
-                const name = url.searchParams.get('name');
-
-                let finalUrl = sourceUrl;
-
-                if (name && name !== 'orig') {
-
-                    finalUrl = sourceUrl.replace(`name=${name}`, 'name=small');
-                }
-
-                mediaLinks.add(finalUrl);
-            } catch (error) {
-
-                mediaLinks.add(sourceUrl);
-            }
+            if(!sourceUrl) return;
+            mediaLinks.add(sourceUrl);          
         }
     });
-
     return Array.from(mediaLinks);
 }
-
-/**
- * Processes a single tweet after a delay.
- * It first sets a pending indicator, then either applies a cached rating,
- * or calls the API to rate the tweet (with retry logic).
- * Finally, it applies the filtering logic.
- * @param {Element} tweetArticle - The tweet element.
- * @param {string} tweetId - The tweet ID.
- */
 
 function isOriginalTweet(tweetArticle) {
     let sibling = tweetArticle.nextElementSibling;
