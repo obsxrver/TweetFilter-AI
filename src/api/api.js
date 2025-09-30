@@ -663,7 +663,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             <FOLLOW_UP_QUESTIONS> (Anticipate 3 things the user may ask you next. These questions should not be directed at the user. Only pose a question if you are sure you can answer it, based off your knowledge.)\nQ_1. (New Question 1 here)\nQ_2. (New Question 2 here)\nQ_3. (New Question 3 here)\n</FOLLOW_UP_QUESTIONS>\n        `;
             const templatedContent = [{ type: "text", text: templatedText }];
             msg.content.forEach(contentItem => {
-                if (contentItem.type === "image_url") {
+                if (contentItem.type === "image_url" || contentItem.type === "file") {
                     templatedContent.push(contentItem);
                 }
             });
