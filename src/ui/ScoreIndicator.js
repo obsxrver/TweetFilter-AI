@@ -238,7 +238,7 @@ class ScoreIndicator {
 
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
-            this.followUpImageInput.accept = 'image/*,application/pdf';
+            this.followUpImageInput.accept = 'image/*,.pdf,application/pdf';
             this.followUpImageInput.multiple = true;
             this.followUpImageInput.style.display = 'none';
         }
@@ -1510,7 +1510,7 @@ class ScoreIndicator {
         }
     }
 
-    _handleFollowUpImageSelect(event) {
+    async _handleFollowUpImageSelect(event) {
         if (event) {
             event.preventDefault();
         }
@@ -1522,9 +1522,15 @@ class ScoreIndicator {
             this.followUpImageContainer.style.display = 'flex';
         }
 
-        Array.from(files).forEach(file => {
+        // Disable Ask button while processing files
+        if (this.customQuestionButton) {
+            this.customQuestionButton.disabled = true;
+            this.customQuestionButton.textContent = 'Processing files...';
+        }
+
+        const filePromises = Array.from(files).map(file => {
             if (file && file.type.startsWith('image/')) {
-                resizeImage(file, 1024)
+                return resizeImage(file, 1024)
                     .then(resizedDataUrl => {
                         this.uploadedImageDataUrls.push(resizedDataUrl);
                         this._addPreviewToContainer(resizedDataUrl, 'image');
@@ -1534,22 +1540,36 @@ class ScoreIndicator {
                         showStatus(`Could not process image ${file.name}: ${error.message}`, "error");
                     });
             } else if (file && file.type === 'application/pdf') {
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const dataUrl = e.target.result;
-                    this.uploadedImageDataUrls.push(dataUrl);
-                    this._addPreviewToContainer(dataUrl, 'pdf', file.name);
-                };
-                reader.onerror = (error) => {
-                    console.error("Error reading PDF:", error);
-                    showStatus(`Could not process PDF ${file.name}: ${error.message}`, "error");
-                };
-                reader.readAsDataURL(file);
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const dataUrl = e.target.result;
+                        this.uploadedImageDataUrls.push(dataUrl);
+                        this._addPreviewToContainer(dataUrl, 'pdf', file.name);
+                        resolve();
+                    };
+                    reader.onerror = (error) => {
+                        console.error("Error reading PDF:", error);
+                        showStatus(`Could not process PDF ${file.name}: ${error.message}`, "error");
+                        reject(error);
+                    };
+                    reader.readAsDataURL(file);
+                });
             } else if (file) {
                 showStatus(`Skipping unsupported file type: ${file.name}`, "warning");
+                return Promise.resolve();
             }
+            return Promise.resolve();
         });
+
+        // Wait for all files to be processed
+        await Promise.all(filePromises);
+
+        // Re-enable Ask button
+        if (this.customQuestionButton) {
+            this.customQuestionButton.disabled = false;
+            this.customQuestionButton.textContent = 'Ask';
+        }
 
         event.target.value = null;
     }
