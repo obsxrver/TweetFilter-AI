@@ -125,6 +125,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
     const currentInstructions = instructionsManager.getCurrentInstructions();
     const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
+    const enableReasoning = browserGet('enableReasoning', false);
 
     const requestBody = {
         model: effectiveModel,
@@ -167,11 +168,11 @@ EXPECTED_RESPONSE_FORMAT:\n
         temperature: modelTemperature,
         top_p: modelTopP,
         max_tokens: maxTokens,
-        reasoning: {
-            enabled: true,
-        },
     };
 
+    if (enableReasoning) {
+        requestBody.reasoning = { enabled: true };
+    }
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
@@ -682,6 +683,9 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         max_tokens: maxTokens,
         stream: useStreaming
     };
+    if (browserGet('enableReasoning', false)) {
+        request.reasoning = { enabled: true };
+    }
     console.log(`followup request (templated): ${JSON.stringify(request)}`);
 
     if (selectedModel.includes('gemini')) {

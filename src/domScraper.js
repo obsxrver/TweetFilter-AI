@@ -3,11 +3,46 @@
      * @param {Node|NodeList} elements - A DOM element or a NodeList.
      * @returns {string} The trimmed text content.
      */
+function extractVisibleTextWithEmoji(element) {
+    if (!element) return '';
+
+    const textParts = [];
+    const walk = (node) => {
+        if (!node) return;
+
+        if (node.nodeType === Node.TEXT_NODE) {
+            textParts.push(node.textContent || '');
+            return;
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        const el = node;
+
+        if (el.tagName === 'IMG') {
+            const altText = el.getAttribute('alt');
+            if (altText) textParts.push(altText);
+            return;
+        }
+
+        if (el.tagName === 'BR') {
+            textParts.push('\n');
+            return;
+        }
+
+        for (const child of el.childNodes) {
+            walk(child);
+        }
+    };
+
+    walk(element);
+    return textParts.join('').replace(/\u00A0/g, ' ').trim();
+}
+
 function getElementText(elements) {
     if (!elements) return '';
     const elementList = elements instanceof NodeList ? Array.from(elements) : [elements];
     for (const element of elementList) {
-        const text = element?.textContent?.trim();
+        const text = extractVisibleTextWithEmoji(element);
         if (text) return text;
     }
     return '';
@@ -24,7 +59,8 @@ function getTweetText(tweetArticle) {
     for (const textElement of allTextElements) {
 
         if (!quoteContainer || !quoteContainer.contains(textElement)) {
-            return textElement.textContent.trim();
+            const tweetText = extractVisibleTextWithEmoji(textElement);
+            if (tweetText) return tweetText;
         }
     }
 

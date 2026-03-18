@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.5.6
+// @version      Version 1.7
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -17,7 +17,7 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-const VERSION = '1.5.6';
+const VERSION = '1.7';
 (function () {
 
     'use strict';
