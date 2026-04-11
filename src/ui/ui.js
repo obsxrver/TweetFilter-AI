@@ -414,8 +414,8 @@ function handleSettingChange(target, settingName) {
     if (settingName === 'enableWebSearch') {
         showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
     }
-    if (settingName === 'enableReasoning') {
-        showStatus('Reasoning trace ' + (value ? 'enabled' : 'disabled'));
+    if (settingName === 'reasoningEffort') {
+        showStatus(value === 'none' ? 'Reasoning disabled' : `Reasoning effort set to ${value}`);
     }
 
     if (settingName === 'enableAutoRating') {
@@ -869,7 +869,7 @@ function resetSettings(noconfirm = false) {
             enableStreaming: true,
             enableWebSearch: false,
             enableAutoRating: true,
-            enableReasoning: false,
+            reasoningEffort: 'none',
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,

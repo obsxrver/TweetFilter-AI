@@ -94,18 +94,29 @@
                                 Show Free Models
                             </label>
                         </div>
-
+                        <div class="sort-container">
+                            <label for="reasoning-effort">Reasoning Effort</label>
+                            <select data-setting="reasoningEffort" selected="none">
+                                <option value="xhigh">xhigh</option>
+                                <option value="high">high</option>
+                                <option value="medium">medium</option>
+                                <option value="low">low</option>
+                                <option value="minimal">minimal</option>
+                                <option value="none">none</option>
+                                </select>
+                            
+                        </div>
                         <div class="parameter-row" data-param-name="modelTemperature">
                             <div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div>
                             <div class="parameter-control">
-                                <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
+                                <input type="range" class="parameter-slider" min="0" max="2" step="0.05">
                                 <input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;">
                             </div>
                         </div>
                         <div class="parameter-row" data-param-name="modelTopP">
                             <div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div>
                             <div class="parameter-control">
-                                <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
+                                <input type="range" class="parameter-slider" min="0" max="1" step="0.01">
                                 <input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;">
                             </div>
                         </div>
@@ -115,8 +126,7 @@
                                 <input type="range" class="parameter-slider" min="0" max="2000" step="100">
                                 <input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;">
                             </div>
-                        </div>
-                        
+                        </div>                        
                         <div class="toggle-row">
                             <div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div>
                             <label class="toggle-switch">
@@ -125,19 +135,13 @@
                             </label>
                         </div>
                         <div class="toggle-row">
-                            <div class="toggle-label" title="Enable web search capabilities for the model. Appends ':online' to the model slug.">Enable Web Search</div>
+                            <div class="toggle-label" title="Enable web search capabilities for the model.">Enable Web Search</div>
                             <label class="toggle-switch">
                                 <input type="checkbox" data-setting="enableWebSearch">
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
-                        <div class="toggle-row">
-                            <div class="toggle-label" title="Request reasoning traces from the model when supported.">Enable Reasoning</div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" data-setting="enableReasoning">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
+                        
                         <div class="toggle-row">
                             <div class="toggle-label" title="Automatically send tweets to API for rating. When disabled, tweets will show a 'Rate' button instead.">Auto-Rate Tweets</div>
                             <label class="toggle-switch">

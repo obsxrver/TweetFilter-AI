@@ -18,7 +18,7 @@
 (function() {
     'use strict';
     // Embedded Menu.html
-    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">×</button><label for="tweet-filter-slider">SlopScore:</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings"><span style="font-size: 14px;">⚙️</span> Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">Twitter De-Sloppifier</div><button class="close-button" data-action="toggle-settings">×</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/settings/keys" target="_blank">Get one here</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Cached Tweet Ratings</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Whitelisted Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">💾</span> Backup &amp; Restore</div><div class="section-description">Export your settings and cached ratings to a file for backup, or import previously saved settings.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div></div><div id="models-tab" class="tab-content"><div class="section-title"><span style="font-size: 14px;">🧠</span> Tweet Rating Model</div><div class="section-description">The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-sort-order">Sort models by: </label><div class="controls-group"><select id="model-sort-order" data-setting="modelSortOrder"><option value="pricing-low-to-high">Price</option><option value="latency-low-to-high">Latency</option><option value="throughput-high-to-low">Throughput</option><option value="top-weekly">Popularity</option><option value="">Age</option></select><button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button></div></div><div class="sort-container"><label for="provider-sort">API Endpoint Priority: </label><select id="provider-sort" data-setting="providerSort"><option value="">Default (load-balanced)</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show Free Models</label></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Enable web search capabilities for the model. Appends ':online' to the model slug.">Enable Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Request reasoning traces from the model when supported.">Enable Reasoning</div><label class="toggle-switch"><input type="checkbox" data-setting="enableReasoning"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Automatically send tweets to API for rating. When disabled, tweets will show a 'Rate' button instead.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div><div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div><div class="toggle-row"><div class="toggle-label">Enable Image Descriptions</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Custom Instructions</div><div class="section-description">Add custom instructions for how the model should score tweets:</div><textarea id="user-instructions" placeholder="Examples:- Give high scores to tweets about technology- Penalize clickbait-style tweets- Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Custom Instructions History</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"><!-- Instructions entries will be added here dynamically --></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button></div></div><div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div><div class="section-description">Add Twitter handles to automatically rate as 10/10:</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Twitter handle (without @)"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
+    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">×</button><label for="tweet-filter-slider">SlopScore:</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings"><span style="font-size: 14px;">⚙️</span> Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">Twitter De-Sloppifier</div><button class="close-button" data-action="toggle-settings">×</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/settings/keys" target="_blank">Get one here</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Cached Tweet Ratings</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Whitelisted Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">💾</span> Backup &amp; Restore</div><div class="section-description">Export your settings and cached ratings to a file for backup, or import previously saved settings.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div></div><div id="models-tab" class="tab-content"><div class="section-title"><span style="font-size: 14px;">🧠</span> Tweet Rating Model</div><div class="section-description">The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-sort-order">Sort models by: </label><div class="controls-group"><select id="model-sort-order" data-setting="modelSortOrder"><option value="pricing-low-to-high">Price</option><option value="latency-low-to-high">Latency</option><option value="throughput-high-to-low">Throughput</option><option value="top-weekly">Popularity</option><option value="">Age</option></select><button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button></div></div><div class="sort-container"><label for="provider-sort">API Endpoint Priority: </label><select id="provider-sort" data-setting="providerSort"><option value="">Default (load-balanced)</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show Free Models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select data-setting="reasoningEffort" selected="none"><option value="xhigh">xhigh</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option><option value="minimal">minimal</option><option value="none">none</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Enable web search capabilities for the model.">Enable Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Automatically send tweets to API for rating. When disabled, tweets will show a 'Rate' button instead.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div><div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div><div class="toggle-row"><div class="toggle-label">Enable Image Descriptions</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Custom Instructions</div><div class="section-description">Add custom instructions for how the model should score tweets:</div><textarea id="user-instructions" placeholder="Examples:- Give high scores to tweets about technology- Penalize clickbait-style tweets- Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Custom Instructions History</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"><!-- Instructions entries will be added here dynamically --></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button></div></div><div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div><div class="section-description">Add Twitter handles to automatically rate as 10/10:</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Twitter handle (without @)"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
     // Embedded style.css
     const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 16px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);display: flex;flex-direction: column;width: 90vw;max-width: 380px;max-height: 85vh;overflow: hidden;border: 1px solid rgba(255, 255, 255, 0.1);line-height: 1.3;transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 12px 15px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 20;border-radius: 16px 16px 0 0;}.settings-title {font-weight: bold;font-size: 16px;}.settings-content {overflow-y: auto;max-height: calc(85vh - 110px);padding: 0;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(255, 255, 255, 0.1);position: sticky;top: 0;background-color: rgba(22, 24, 28, 0.98);z-index: 10;padding: 10px 15px;gap: 8px;}.tab-button {padding: 6px 10px;background: none;border: none;color: #e7e9ea;font-weight: bold;cursor: pointer;border-radius: 8px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(255, 255, 255, 0.1);}.tab-button.active {color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);border-bottom: 2px solid #1d9bf0;}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 15px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 15px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(39, 44, 48, 0.95);padding: 8px;border-bottom: 1px solid rgba(255, 255, 255, 0.1);z-index: 1;}.select-container .search-input {width: 100%;padding: 8px 10px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 12px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;padding: 10px 12px;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(39, 44, 48, 0.98);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 8px;margin-top: 5px;box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(255, 255, 255, 0.05);}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: bold;margin-top: 20px;margin-bottom: 8px;color: #e7e9ea;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12px;margin-bottom: 8px;opacity: 0.8;line-height: 1.4;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 5px;margin-bottom: 15px;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 12px;background-color: rgba(255, 255, 255, 0.03);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: bold;font-size: 13px;color: #e7e9ea;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;display: flex;align-items: center;gap: 10px;justify-content: space-between;}.sort-container label {font-size: 14px;color: var(--text-color);white-space: nowrap;}.sort-container .controls-group {display: flex;gap: 8px;align-items: center;}.sort-container select {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;min-width: 120px;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {padding: 5px 10px;border-radius: 4px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-size: 14px;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}@media (min-width: 601px) {#settings-container {width: 480px;max-width: 480px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}`;
     // Apply CSS
@@ -26,15 +26,6 @@
     // Set menu HTML
     GM_setValue('menuHTML', MENU);
     // ----- helpers/browserStorage.js -----
-/**
- * Browser storage wrapper functions for userscript compatibility
- */
-/**
- * Gets a value from browser storage using Tampermonkey's GM_getValue
- * @param {string} key - The key to get from storage
- * @param {any} defaultValue - The default value if key doesn't exist
- * @returns {any} - The value from storage or default value
- */
 function browserGet(key, defaultValue = null) {
     try {
         return GM_getValue(key, defaultValue);
@@ -42,11 +33,6 @@ function browserGet(key, defaultValue = null) {
         return defaultValue;
     }
 }
-/**
- * Sets a value in browser storage using Tampermonkey's GM_setValue
- * @param {string} key - The key to set in storage
- * @param {any} value - The value to store
- */
 function browserSet(key, value) {
     try {
         GM_setValue(key, value);
@@ -54,7 +40,6 @@ function browserSet(key, value) {
     }
 }
     // ----- helpers/cache.js -----
-/** Updates the cache statistics display in the General tab. */
 function updateCacheStatsUI() {
     const cachedCountEl = document.getElementById('cached-ratings-count');
     const whitelistedCountEl = document.getElementById('whitelisted-handles-count');
@@ -82,9 +67,6 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 };
-/**
- * Class to manage the tweet rating cache with standardized data structure and centralized persistence.
- */
 class TweetCache {
     static DEBOUNCE_DELAY = 1500;
     constructor() {
@@ -92,9 +74,6 @@ class TweetCache {
         this.loadFromStorage();
         this.debouncedSaveToStorage = debounce(this.#saveToStorageInternal.bind(this), TweetCache.DEBOUNCE_DELAY);
     }
-    /**
-     * Loads the cache from browser storage.
-     */
     loadFromStorage() {
         try {
             const storedCache = browserGet('tweetRatings', '{}');
@@ -106,9 +85,6 @@ class TweetCache {
             this.cache = {};
         }
     }
-    /**
-     * Saves the current cache to browser storage. (Internal, synchronous implementation)
-     */
     #saveToStorageInternal() {
         try {
             browserSet('tweetRatings', JSON.stringify(this.cache));
@@ -116,20 +92,9 @@ class TweetCache {
         } catch (error) {
         }
     }
-    /**
-     * Gets a tweet rating from the cache.
-     * @param {string} tweetId - The ID of the tweet.
-     * @returns {Object|null} The tweet rating object or null if not found.
-     */
     get(tweetId) {
         return this.cache[tweetId] || null;
     }
-    /**
-     * Sets a tweet rating in the cache.
-     * @param {string} tweetId - The ID of the tweet.
-     * @param {Object} rating - The rating object. Can be a partial update.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or use debounced save.
-     */
     set(tweetId, rating, saveImmediately = true) {
         const existingEntry = this.cache[tweetId] || {};
         const updatedEntry = { ...existingEntry };
@@ -189,21 +154,12 @@ class TweetCache {
     has(tweetId) {
         return this.cache[tweetId] !== undefined;
     }
-    /**
-     * Removes a tweet rating from the cache.
-     * @param {string} tweetId - The ID of the tweet to remove.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
-     */
     delete(tweetId, saveImmediately = true) {
         if (this.has(tweetId)) {
             delete this.cache[tweetId];
             this.debouncedSaveToStorage();
         }
     }
-    /**
-     * Clears all ratings from the cache.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or debounce.
-     */
     clear(saveImmediately = false) {
         this.cache = {};
         if (saveImmediately) {
@@ -212,19 +168,12 @@ class TweetCache {
             this.debouncedSaveToStorage();
         }
     }
-    /**
-     * Gets the number of cached ratings.
-     * @returns {number} The number of cached ratings.
-     */
     get size() {
         return Object.keys(this.cache).length;
     }
 }
 const tweetCache = new TweetCache();
     // ----- backends/InstructionsHistory.js -----
-/**
- * Manages the history of custom instructions
- */
 class InstructionsHistory {
     constructor() {
         if (InstructionsHistory.instance) {
@@ -235,12 +184,6 @@ class InstructionsHistory {
         this.maxEntries = 10;
         this.loadFromStorage();
     }
-    /**
-     * Generates a simple hash of a string
-     * @private
-     * @param {string} str - String to hash
-     * @returns {string} - Hash of the string
-     */
     #hashString(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -250,10 +193,6 @@ class InstructionsHistory {
         }
         return hash.toString(36);
     }
-    /**
-     * Loads the history from browser storage
-     * @private
-     */
     loadFromStorage() {
         try {
             const stored = browserGet('instructionsHistory', '[]');
@@ -269,10 +208,6 @@ class InstructionsHistory {
             this.history = [];
         }
     }
-    /**
-     * Saves the current history to browser storage
-     * @private
-     */
     #saveToStorage() {
         try {
             browserSet('instructionsHistory', JSON.stringify(this.history));
@@ -280,12 +215,6 @@ class InstructionsHistory {
             throw new Error('Failed to save instructions history');
         }
     }
-    /**
-     * Adds new instructions to the history
-     * @param {string} instructions - The instructions text
-     * @param {string} summary - The summary of the instructions
-     * @returns {Promise<boolean>} - Whether the operation was successful
-     */
     async add(instructions, summary) {
         try {
             if (!instructions?.trim() || !summary?.trim()) {
@@ -315,11 +244,6 @@ class InstructionsHistory {
             return false;
         }
     }
-    /**
-     * Removes an entry from history
-     * @param {number} index - The index of the entry to remove
-     * @returns {boolean} - Whether the operation was successful
-     */
     remove(index) {
         try {
             if (index < 0 || index >= this.history.length) {
@@ -332,18 +256,9 @@ class InstructionsHistory {
             return false;
         }
     }
-    /**
-     * Gets all history entries, sorted by timestamp (newest first)
-     * @returns {Array} The history entries
-     */
     getAll() {
         return [...this.history];
     }
-    /**
-     * Gets a specific entry from history
-     * @param {number} index - The index of the entry to get
-     * @returns {Object|null} The history entry or null if not found
-     */
     get(index) {
         try {
             if (index < 0 || index >= this.history.length) {
@@ -354,9 +269,6 @@ class InstructionsHistory {
             return null;
         }
     }
-    /**
-     * Clears all history
-     */
     clear() {
         try {
             this.history = [];
@@ -365,18 +277,11 @@ class InstructionsHistory {
             throw new Error('Failed to clear instructions history');
         }
     }
-    /**
-     * Gets the number of entries in history
-     * @returns {number} The number of entries
-     */
     get size() {
         return this.history.length;
     }
 }
     // ----- backends/InstructionsManager.js -----
-/**
- * Manages the business logic for instructions handling
- */
 class InstructionsManager {
     constructor() {
         if (InstructionsManager.instance) {
@@ -386,11 +291,6 @@ class InstructionsManager {
         this.history = new InstructionsHistory();
         this.currentInstructions = browserGet('userDefinedInstructions', '');
     }
-    /**
-     * Saves new instructions and adds them to history
-     * @param {string} instructions - The instructions to save
-     * @returns {Promise<{success: boolean, message: string}>}
-     */
     async saveInstructions(instructions) {
         if (!instructions?.trim()) {
             return { success: false, message: 'Instructions cannot be empty' };
@@ -409,12 +309,6 @@ class InstructionsManager {
             shouldClearCache: true
         };
     }
-    /**
-     * Creates a summary title using the first three words and the last word
-     * @private
-     * @param {string} instructions - Full instruction text
-     * @returns {string} Generated title
-     */
     #generateSummary(instructions) {
         const words = instructions.trim().split(/\s+/);
         if (words.length <= 3) {
@@ -424,31 +318,15 @@ class InstructionsManager {
         const lastWord = words[words.length - 1];
         return `${firstThree} … ${lastWord}`;
     }
-    /**
-     * Gets the current instructions
-     * @returns {string}
-     */
     getCurrentInstructions() {
         return this.currentInstructions;
     }
-    /**
-     * Gets all instruction history entries
-     * @returns {Array}
-     */
     getHistory() {
         return this.history.getAll();
     }
-    /**
-     * Removes an instruction from history
-     * @param {number} index
-     * @returns {boolean}
-     */
     removeFromHistory(index) {
         return this.history.remove(index);
     }
-    /**
-     * Clears all instruction history
-     */
     clearHistory() {
         this.history.clear();
     }
@@ -478,7 +356,7 @@ let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true);
 let enableWebSearch = browserGet('enableWebSearch', false);
 let enableAutoRating = browserGet('enableAutoRating', true);
-let enableReasoning = browserGet('enableReasoning', false);
+let reasoningEffort = browserGet('reasoningEffort', 'none');
 const REVIEW_SYSTEM_PROMPT = `
     You are TweetFilter-AI.
     Today's date is ${new Date().toLocaleDateString()}, at ${new Date().toLocaleTimeString()}. UTC. Your knowledge cutoff is prior to this date.
@@ -566,11 +444,6 @@ const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
-/**
- * Helper function to check if a model supports images based on its architecture
- * @param {string} modelId - The model ID to check
- * @returns {boolean} - Whether the model supports image input
- */
 function modelSupportsImages(modelId) {
   if (!availableModels || availableModels.length === 0) {
     return false;
@@ -583,11 +456,6 @@ function modelSupportsImages(modelId) {
     model.input_modalities.includes('image');
 }
     // ----- domScraper.js -----
-/**
-     * Extracts and returns trimmed text content from the given element(s).
-     * @param {Node|NodeList} elements - A DOM element or a NodeList.
-     * @returns {string} The trimmed text content.
-     */
 function extractVisibleTextWithEmoji(element) {
     if (!element) return '';
     const textParts = [];
@@ -624,11 +492,6 @@ function getElementText(elements) {
     }
     return '';
 }
-/**
- * Extracts the text of a tweet, excluding any text from quoted tweets.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {string} The text of the main tweet.
- */
 function getTweetText(tweetArticle) {
     const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
     const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
@@ -640,11 +503,6 @@ function getTweetText(tweetArticle) {
     }
     return '';
 }
-/**
- * Extracts the tweet ID from a tweet article element.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {string} The tweet ID.
- */
 function getTweetID(tweetArticle) {
     const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
     let tweetId = timeEl?.parentElement?.href;
@@ -657,11 +515,6 @@ function getTweetID(tweetArticle) {
     }
     return `tweet-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
 }
-/**
- * Extracts the Twitter handle from a tweet article element.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {array} The user and quoted user handles.
- */
 function getUserHandles(tweetArticle) {
     let handles = [];
     const handleElement = tweetArticle.querySelector(USER_HANDLE_SELECTOR);
@@ -697,11 +550,6 @@ function getUserHandles(tweetArticle) {
     }
     return handles.length > 0 ? handles : [''];
 }
-/**
- * Synchronous version of extractMediaLinks without retry logic.
- * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
- */
 function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
     const mediaLinks = new Set();
@@ -733,10 +581,6 @@ function isOriginalTweet(tweetArticle) {
     }
     return false;
 }
-/**
- * Handles DOM mutations to detect new tweets added to the timeline.
- * @param {MutationRecord[]} mutationsList - List of observed mutations.
- */
 function handleMutations(mutationsList) {
     let tweetsAdded = false;
     let needsCleanup = false;
@@ -839,11 +683,6 @@ function handleMutations(mutationsList) {
         ScoreIndicatorRegistry.cleanupOrphaned();
     }
 }
-/**
- * Checks if a tweet article is an advertisement.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {boolean} True if the tweet is an ad.
- */
 function isAd(tweetArticle) {
     if (!tweetArticle) return false;
     const spans = tweetArticle.querySelectorAll('div[dir="ltr"] span');
@@ -855,18 +694,9 @@ function isAd(tweetArticle) {
     return false;
 }
     // ----- ui/utils.js -----
-/**
- * Detects if the user is on a mobile device
- * @returns {boolean} true if mobile device detected
- */
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
-/**
- * Displays a temporary status message on the screen.
- * @param {string} message - The message to display.
- * @param {string} [type=\'info\'] - The type of message (info, error, warning, success).
- */
 function showStatus(message, type = 'info') {
     const indicator = document.getElementById('status-indicator');
     if (!indicator) {
@@ -876,12 +706,6 @@ function showStatus(message, type = 'info') {
     indicator.className = 'active ' + type;
     setTimeout(() => { indicator.classList.remove('active', type); }, 3000);
 }
-/**
- * Resizes an image file to a maximum dimension.
- * @param {File} file - The image file to resize.
- * @param {number} maxDimPx - The maximum dimension (width or height) in pixels.
- * @returns {Promise<string>} A promise that resolves with the data URL of the resized image (JPEG format).
- */
 function resizeImage(file, maxDimPx) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -927,9 +751,6 @@ function resizeImage(file, maxDimPx) {
     });
 }
     // ----- ui/InstructionsUI.js -----
-/**
- * UI component for managing instructions
- */
 async function saveInstructions() {
     const instructionsTextarea = document.getElementById('user-instructions');
     const result = await instructionsManager.saveInstructions(instructionsTextarea.value);
@@ -943,9 +764,6 @@ async function saveInstructions() {
         refreshInstructionsHistory();
     }
 }
-/**
- * Refreshes the instructions history list in the UI.
- */
 function refreshInstructionsHistory() {
     const listElement = document.getElementById('instructions-list');
     if (!listElement) return;
@@ -963,12 +781,6 @@ function refreshInstructionsHistory() {
         listElement.appendChild(item);
     });
 }
-/**
- * Creates a history item element
- * @param {Object} entry - The history entry
- * @param {number} index - The index in the history
- * @returns {HTMLElement}
- */
 function createHistoryItem(entry, index) {
     const item = document.createElement('div');
     item.className = 'instruction-item';
@@ -995,10 +807,6 @@ function createHistoryItem(entry, index) {
     item.appendChild(buttons);
     return item;
 }
-/**
- * Uses the selected instructions from history.
- * @param {string} instructions - The instructions to use.
- */
 function useInstructions(instructions) {
     const textarea = document.getElementById('user-instructions');
     if (textarea) {
@@ -1006,10 +814,6 @@ function useInstructions(instructions) {
         saveInstructions();
     }
 }
-/**
- * Removes instructions from history at the specified index.
- * @param {number} index - The index of the instructions to remove.
- */
 function removeInstructions(index) {
     if (instructionsManager.removeFromHistory(index)) {
         refreshInstructionsHistory();
@@ -1018,9 +822,6 @@ function removeInstructions(index) {
         showStatus('Error removing instructions');
     }
 }
-/**
- * Clears all instructions history after confirmation
- */
 function clearInstructionsHistory() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all instruction history?')) {
         instructionsManager.clearHistory();
@@ -1029,13 +830,7 @@ function clearInstructionsHistory() {
     }
 }
     // ----- ui/ScoreIndicator.js -----
-/**
- * Manages the state and UI for a single score indicator and its associated tooltip.
- */
 class ScoreIndicator {
-    /**
-     * @param {Element} tweetArticle - The tweet article element this indicator belongs to.
-     */
     constructor(tweetArticle) {
         if (!tweetArticle || !tweetArticle.nodeType || tweetArticle.nodeType !== Node.ELEMENT_NODE) {
             throw new Error("ScoreIndicator requires a valid tweet article DOM element.");
@@ -1107,10 +902,6 @@ class ScoreIndicator {
             throw error;
         }
     }
-    /**
-     * Creates the indicator and tooltip DOM elements.
-     * @param {Element} initialTweetArticle - The article element to attach to initially.
-     */
     _createElements(initialTweetArticle) {
         this.indicatorElement = document.createElement('div');
         this.indicatorElement.className = 'score-indicator';
@@ -1223,7 +1014,7 @@ class ScoreIndicator {
             this.attachImageButton.title = 'Attach image(s) or PDF(s)';
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
-            this.followUpImageInput.accept = 'image/*,.pdf,application/pdf';
+            this.followUpImageInput.accept = `image${"/"}*,.pdf,application/pdf`;
             this.followUpImageInput.multiple = true;
             this.followUpImageInput.style.display = 'none';
         }
@@ -1309,10 +1100,6 @@ class ScoreIndicator {
             this._initializeMobileInteractionFix();
         }
     }
-    /**
-     * Initializes the mobile scroll interaction workaround.
-     * @private
-     */
     _initializeMobileInteractionFix() {
         this._hasFirstInteraction = false;
         const handleFirstTap = (e) => {
@@ -1396,11 +1183,6 @@ class ScoreIndicator {
             }, { passive: true });
         }
     }
-    /**
-     * Simulates initial tap events on mobile interactive elements to bypass
-     * the first-tap scrolling issue that occurs on some mobile browsers.
-     * @private
-     */
     _simulateInitialMobileTaps() {
         setTimeout(() => {
             const elementsToTap = [
@@ -1458,7 +1240,6 @@ class ScoreIndicator {
             });
         }, 100);
     }
-    /** Adds necessary event listeners to the indicator and tooltip. */
     _addEventListeners() {
         if (!this.indicatorElement || !this.tooltipElement) return;
         this.indicatorElement.addEventListener('mouseenter', this._handleMouseEnter.bind(this));
@@ -1532,7 +1313,6 @@ class ScoreIndicator {
             this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
         }
     }
-    /** Updates the visual appearance of the indicator (icon/text, class). */
     _updateIndicatorUI() {
         if (!this.indicatorElement) return;
         const classList = this.indicatorElement.classList;
@@ -1584,7 +1364,6 @@ class ScoreIndicator {
         }
         this.indicatorElement.textContent = indicatorText;
     }
-    /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
         if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement || !this.metadataDropdown) {
             return;
@@ -1769,7 +1548,6 @@ class ScoreIndicator {
             this._updateScrollButtonVisibility();
         }
     }
-    /** Renders the conversation history into HTML string */
     _renderConversationHistory() {
         if (!this.conversationHistory || this.conversationHistory.length === 0) {
             return '';
@@ -1874,10 +1652,6 @@ class ScoreIndicator {
         }
         return historyHtml;
     }
-    /**
-     * Attaches event listeners to reasoning toggles within the conversation history.
-     * Uses event delegation.
-     */
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
         if (this._boundHandlers.handleConversationReasoningToggle) {
@@ -1923,7 +1697,6 @@ class ScoreIndicator {
             });
         });
     }
-    /** Calculates and sets the tooltip's position. */
     _setPosition() {
         if (!this.isVisible || !this.indicatorElement || !this.tooltipElement) return;
         const indicatorRect = this.indicatorElement.getBoundingClientRect();
@@ -2254,7 +2027,6 @@ class ScoreIndicator {
         if (this.followUpImageContainer && files.length > 0) {
             this.followUpImageContainer.style.display = 'flex';
         }
-        // Disable Ask button while processing files
         if (this.customQuestionButton) {
             this.customQuestionButton.disabled = true;
             this.customQuestionButton.textContent = 'Processing files...';
@@ -2290,9 +2062,7 @@ class ScoreIndicator {
             }
             return Promise.resolve();
         });
-        // Wait for all files to be processed
         await Promise.all(filePromises);
-        // Re-enable Ask button
         if (this.customQuestionButton) {
             this.customQuestionButton.disabled = false;
             this.customQuestionButton.textContent = 'Ask';
@@ -2374,13 +2144,6 @@ class ScoreIndicator {
         }
         this.currentFollowUpSource = null;
     }
-    /**
-     * Finds a pending entry in the conversation history by question text and updates its answer.
-     * Also updates the UI.
-     * @param {string} question - The text of the question that was asked.
-     * @param {string} answer - The new answer (or error message).
-     * @param {string} [reasoning=''] - Optional reasoning text associated with the answer.
-     */
     _updateConversationHistory(question, answer, reasoning = '') {
         const entryIndex = this.conversationHistory.findIndex(turn => turn.question === question && turn.answer === 'pending');
         if (entryIndex !== -1) {
@@ -2390,12 +2153,6 @@ class ScoreIndicator {
         } else {
         }
     }
-    /**
-     * Updates the visual display of the last answer element during streaming
-     * without changing the underlying conversationHistory state.
-     * @param {string} streamingText - The current aggregated text from the stream.
-     * @param {string} [reasoningText=''] - Optional reasoning text from the stream.
-     */
     _renderStreamingAnswer(streamingText, reasoningText = '') {
         if (!this.conversationContainerElement) return;
         const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
@@ -2478,16 +2235,6 @@ class ScoreIndicator {
         }
         this._performConversationAutoScroll();
     }
-    /**
-     * Updates the indicator's state and refreshes the UI.
-     * @param {object} options
-     * @param {string} [options.status] - New status ('pending', 'streaming', 'rated', 'error', 'cached', 'blacklisted').
-     * @param {number|null} [options.score] - New score.
-     * @param {string} [options.description] - New description text.
-     * @param {string} [options.reasoning] - New reasoning text.
-     * @param {object|null} [options.metadata] - New metadata object.
-     * @param {string[]} [options.questions] - New follow-up questions.
-     */
     update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined }) {
         const statusChanged = status !== undefined && this.status !== status;
         const scoreChanged = score !== null && this.score !== score;
@@ -2526,7 +2273,6 @@ class ScoreIndicator {
             this._updateScrollButtonVisibility();
         }
     }
-    /** Shows the tooltip and positions it correctly. */
     show() {
         if (!this.tooltipElement) return;
         this.isVisible = true;
@@ -2537,14 +2283,12 @@ class ScoreIndicator {
         }
         this._updateScrollButtonVisibility();
     }
-    /** Hides the tooltip unless it's pinned. */
     hide() {
         if (!this.isPinned && this.tooltipElement) {
             this.isVisible = false;
             this.tooltipElement.style.display = 'none';
         }
     }
-    /** Toggles the tooltip's visibility. */
     toggle() {
         if (this.isVisible && !this.isPinned) {
             this.hide();
@@ -2552,7 +2296,6 @@ class ScoreIndicator {
             this.show();
         }
     }
-    /** Pins the tooltip open. */
     pin() {
         if (!this.tooltipElement || !this.pinButton) return;
         this.isPinned = true;
@@ -2560,7 +2303,6 @@ class ScoreIndicator {
         this.pinButton.innerHTML = '📍';
         this.pinButton.title = 'Unpin tooltip';
     }
-    /** Unpins the tooltip, allowing it to be hidden automatically. */
     unpin() {
         if (!this.tooltipElement || !this.pinButton) return;
         this.isPinned = false;
@@ -2580,7 +2322,6 @@ class ScoreIndicator {
         }
         this.hide();
     }
-    /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
     destroy() {
         if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
             window.activeStreamingRequests[this.tweetId].abort();
@@ -2653,7 +2394,6 @@ class ScoreIndicator {
         this.metadataContent = null;
         this.tooltipScrollableContentElement = null;
     }
-    /** Ensures the indicator element is attached to the correct current article element. */
     ensureIndicatorAttached() {
         if (!this.indicatorElement) return false;
         const currentArticle = this.findCurrentArticleElement();
@@ -2667,7 +2407,6 @@ class ScoreIndicator {
         }
         return true;
     }
-    /** Finds the current DOM element for the tweet article based on tweetId. */
     findCurrentArticleElement() {
         const timeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (!timeline) return null;
@@ -2682,16 +2421,6 @@ class ScoreIndicator {
         }
         return null;
     }
-    /**
-     * Updates the indicator's state after an initial review and builds the conversation history.
-     * @param {object} params
-     * @param {string} params.fullContext - The full text context of the tweet.
-     * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
-     * @param {string} params.apiResponseContent - The raw content from the API response.
-     * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
-     * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
-     * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
-     */
     updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
         const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
         const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
@@ -2719,12 +2448,6 @@ class ScoreIndicator {
         this._updateIndicatorUI();
         this._updateTooltipUI();
     }
-    /**
-     * Updates the indicator's state after a follow-up question has been answered.
-     * @param {object} params
-     * @param {string} params.assistantResponseContent - The raw content of the AI's response.
-     * @param {object[]} params.updatedQaHistory - The fully updated qaConversationHistory array.
-     */
     updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
         this.qaConversationHistory = updatedQaHistory;
         const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
@@ -2740,10 +2463,6 @@ class ScoreIndicator {
         this._convertStreamingToDropdown();
         this._updateTooltipUI();
     }
-    /**
-     * Converts the streaming reasoning container to a proper reasoning dropdown after streaming completes.
-     * @private
-     */
     _convertStreamingToDropdown() {
         if (!this.conversationContainerElement) return;
         const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
@@ -2800,10 +2519,6 @@ class ScoreIndicator {
         }
         reasoningDropdown.style.display = 'block';
     }
-    /**
-     * Rehydrates the ScoreIndicator instance from cached data.
-     * @param {object} cachedData - The cached data object.
-     */
     rehydrateFromCache(cachedData) {
         this.score = cachedData.score;
         this.description = cachedData.description;
@@ -2921,9 +2636,6 @@ class ScoreIndicator {
             scheduleTweetProcessing(currentArticle, true);
         }
     }
-    /**
-     * Handle scroll events in the conversation history area for granular auto-scroll.
-     */
     _handleConversationScroll() {
         if (!this.conversationContainerElement) return;
         const isNearBottom = this.conversationContainerElement.scrollHeight - this.conversationContainerElement.scrollTop - this.conversationContainerElement.clientHeight < 40;
@@ -2937,9 +2649,6 @@ class ScoreIndicator {
             }
         }
     }
-    /**
-     * Auto-scroll the conversation history area to the bottom if allowed.
-     */
     _performConversationAutoScroll() {
         if (!this.conversationContainerElement || !this.autoScrollConversation) return;
         requestAnimationFrame(() => {
@@ -2952,13 +2661,6 @@ class ScoreIndicator {
 }
 const ScoreIndicatorRegistry = {
     managers: new Map(),
-    /**
-     * Gets an existing manager or creates a new one.
-     * Ensures only one manager exists per tweetId.
-     * @param {string} tweetId
-     * @param {Element} [tweetArticle=null] - Required if creating a new instance.
-     * @returns {ScoreIndicator | null}
-     */
     get(tweetId, tweetArticle = null) {
         if (!tweetId) {
             return null;
@@ -2981,28 +2683,16 @@ const ScoreIndicatorRegistry = {
         }
         return null;
     },
-    /**
-     * Adds an instance to the registry (called by constructor).
-     * @param {string} tweetId
-     * @param {ScoreIndicator} instance
-     */
     add(tweetId, instance) {
         if (this.managers.has(tweetId)) {
         }
         this.managers.set(tweetId, instance);
     },
-    /**
-     * Removes an instance from the registry (called by destroy method).
-     * @param {string} tweetId
-     */
     remove(tweetId) {
         if (this.managers.has(tweetId)) {
             this.managers.delete(tweetId);
         }
     },
-    /**
-     * Cleans up managers whose corresponding tweet articles are no longer in the main timeline DOM.
-     */
     cleanupOrphaned() {
         let removedCount = 0;
         const observedTimeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
@@ -3021,9 +2711,6 @@ const ScoreIndicatorRegistry = {
             }
         }
     },
-    /**
-     * Destroys all managed indicators. Useful for full cleanup on script unload/major UI reset.
-     */
     destroyAll() {
         [...this.managers.values()].forEach(manager => manager.destroy());
         this.managers.clear();
@@ -3083,13 +2770,6 @@ function formatTooltipDescription(description = "", reasoning = "") {
     return { description: formattedDescription, reasoning: formattedReasoning };
 }
     // ----- ui/ui.js -----
-/**
- * Toggles the visibility of an element and updates the corresponding toggle button text.
- * @param {HTMLElement} element - The element to toggle.
- * @param {HTMLElement} toggleButton - The button that controls the toggle.
- * @param {string} openText - Text for the button when the element is open.
- * @param {string} closedText - Text for the button when the element is closed.
- */
 function toggleElementVisibility(element, toggleButton, openText, closedText) {
     if (!element || !toggleButton) return;
     const isCurrentlyHidden = element.classList.contains('hidden');
@@ -3130,9 +2810,6 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
         }
     }
 }
-/**
- * Injects the UI elements from the HTML resource into the page.
- */
 function injectUI() {
     let menuHTML;
     if (MENU) {
@@ -3159,10 +2836,6 @@ function injectUI() {
     }
     return uiContainer;
 }
-/**
- * Initializes all UI event listeners using event delegation.
- * @param {HTMLElement} uiContainer - The root container element for the UI.
- */
 function initializeEventListeners(uiContainer) {
     if (!uiContainer) {
         return;
@@ -3303,7 +2976,6 @@ function initializeEventListeners(uiContainer) {
         });
     }
 }
-/** Saves the API key from the input field. */
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
@@ -3320,9 +2992,6 @@ function saveApiKey() {
         showStatus('Please enter a valid API key');
     }
 }
-/**
- * Exports the current tweet cache to a JSON file.
- */
 function exportCacheToJson() {
     if (!tweetCache) {
         showStatus('Error: Tweet cache not found.', 'error');
@@ -3351,7 +3020,6 @@ function exportCacheToJson() {
         showStatus('Error exporting cache. Check console for details.', 'error');
     }
 }
-/** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         tweetCache.clear(true);
@@ -3391,7 +3059,6 @@ function clearTweetRatingsAndRefreshUI() {
         });
     }
 }
-/** Adds a handle from the input field to the blacklist. */
 function addHandleFromInput() {
     const handleInput = document.getElementById('handle-input');
     const handle = handleInput.value.trim();
@@ -3400,11 +3067,6 @@ function addHandleFromInput() {
         handleInput.value = '';
     }
 }
-/**
- * Handles changes to general setting inputs/toggles.
- * @param {HTMLElement} target - The input/toggle element that changed.
- * @param {string} settingName - The name of the setting (from data-setting).
- */
 function handleSettingChange(target, settingName) {
     let value;
     if (target.type === 'checkbox') {
@@ -3426,18 +3088,13 @@ function handleSettingChange(target, settingName) {
     if (settingName === 'enableWebSearch') {
         showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
     }
-    if (settingName === 'enableReasoning') {
-        showStatus('Reasoning trace ' + (value ? 'enabled' : 'disabled'));
+    if (settingName === 'reasoningEffort') {
+        showStatus(value === 'none' ? 'Reasoning disabled' : `Reasoning effort set to ${value}`);
     }
     if (settingName === 'enableAutoRating') {
         showStatus('Auto-rating ' + (value ? 'enabled' : 'disabled'));
     }
 }
-/**
- * Handles changes to parameter control sliders/number inputs.
- * @param {HTMLElement} target - The slider or number input element.
- * @param {string} paramName - The name of the parameter (from data-param-name).
- */
 function handleParameterChange(target, paramName) {
     const row = target.closest('.parameter-row');
     if (!row) return;
@@ -3458,10 +3115,6 @@ function handleParameterChange(target, paramName) {
     }
     browserSet(paramName, newValue);
 }
-/**
- * Handles changes to the main filter slider.
- * @param {HTMLElement} slider - The filter slider element.
- */
 function handleFilterSliderChange(slider) {
     const valueInput = document.getElementById('tweet-filter-value');
     currentFilterThreshold = parseInt(slider.value, 10);
@@ -3473,10 +3126,6 @@ function handleFilterSliderChange(slider) {
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
-/**
- * Handles changes to the numeric input for filter threshold.
- * @param {HTMLElement} input - The numeric input element.
- */
 function handleFilterValueInput(input) {
     let value = parseInt(input.value, 10);
     value = Math.max(0, Math.min(10, value));
@@ -3491,10 +3140,6 @@ function handleFilterValueInput(input) {
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
-/**
- * Switches the active tab in the settings panel.
- * @param {string} tabName - The name of the tab to activate (from data-tab).
- */
 function switchTab(tabName) {
     const settingsContent = document.querySelector('#settings-container .settings-content');
     if (!settingsContent) return;
@@ -3507,10 +3152,6 @@ function switchTab(tabName) {
     if (tabToShow) tabToShow.classList.add('active');
     if (buttonToActivate) buttonToActivate.classList.add('active');
 }
-/**
- * Toggles the visibility of advanced options sections.
- * @param {string} contentId - The ID of the content element to toggle.
- */
 function toggleAdvancedOptions(contentId) {
     const content = document.getElementById(contentId);
     const toggle = document.querySelector(`[data-toggle="${contentId}"]`);
@@ -3526,9 +3167,6 @@ function toggleAdvancedOptions(contentId) {
         content.style.maxHeight = '0';
     }
 }
-/**
- * Refreshes the entire settings UI to reflect current settings.
- */
 function refreshSettingsUI() {
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
@@ -3571,10 +3209,6 @@ function refreshSettingsUI() {
     });
     refreshInstructionsHistory();
 }
-/**
- * Refreshes the handle list UI.
- * @param {HTMLElement} listElement - The list element to refresh.
- */
 function refreshHandleList(listElement) {
     if (!listElement) return;
     listElement.innerHTML = '';
@@ -3600,9 +3234,6 @@ function refreshHandleList(listElement) {
         listElement.appendChild(item);
     });
 }
-/**
- * Updates the model selection dropdowns based on availableModels.
- */
 function refreshModelsUI() {
     const modelSelectContainer = document.getElementById('model-select-container');
     const imageModelSelectContainer = document.getElementById('image-model-select-container');
@@ -3668,11 +3299,6 @@ function refreshModelsUI() {
         );
     }
 }
-/**
- * Formats a model object into a string for display in dropdowns.
- * @param {Object} model - The model object from the API.
- * @returns {string} A formatted label string.
- */
 function formatModelLabel(model) {
     let label = model.endpoint?.model_variant_slug || model.id || model.name || 'Unknown Model';
     let pricingInfo = '';
@@ -3697,15 +3323,6 @@ function formatModelLabel(model) {
     }
     return label + pricingInfo;
 }
-/**
- * Creates a custom select dropdown with search functionality.
- * @param {HTMLElement} container - Container to append the custom select to.
- * @param {string} id - ID for the root custom-select div.
- * @param {Array<{value: string, label: string}>} options - Options for the dropdown.
- * @param {string} initialSelectedValue - Initially selected value.
- * @param {Function} onChange - Callback function when selection changes.
- * @param {string} searchPlaceholder - Placeholder text for the search input.
- */
 function createCustomSelect(container, id, options, initialSelectedValue, onChange, searchPlaceholder) {
     let currentSelectedValue = initialSelectedValue;
     const customSelect = document.createElement('div');
@@ -3779,7 +3396,6 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         }
     });
 }
-/** Closes all custom select dropdowns except the one passed in. */
 function closeAllSelectBoxes(exceptThisOne = null) {
     document.querySelectorAll('.custom-select').forEach(select => {
         if (select === exceptThisOne) return;
@@ -3789,9 +3405,6 @@ function closeAllSelectBoxes(exceptThisOne = null) {
         if (selected) selected.classList.remove('select-arrow-active');
     });
 }
-/**
- * Resets all configurable settings to their default values.
- */
 function resetSettings(noconfirm = false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
         tweetCache.clear();
@@ -3802,7 +3415,7 @@ function resetSettings(noconfirm = false) {
             enableStreaming: true,
             enableWebSearch: false,
             enableAutoRating: true,
-            enableReasoning: false,
+            reasoningEffort: 'none',
             modelTemperature: 0.5,
             modelTopP: 0.9,
             imageModelTemperature: 0.5,
@@ -3824,10 +3437,6 @@ function resetSettings(noconfirm = false) {
         showStatus('Settings reset to defaults');
     }
 }
-/**
- * Adds a handle to the blacklist, saves, and refreshes the UI.
- * @param {string} handle - The Twitter handle to add (with or without @).
- */
 function addHandleToBlacklist(handle) {
     handle = handle.trim().replace(/^@/, '');
     if (handle === '' || blacklistedHandles.includes(handle)) {
@@ -3839,10 +3448,6 @@ function addHandleToBlacklist(handle) {
     refreshHandleList(document.getElementById('handle-list'));
     showStatus(`Added @${handle} to auto-rate list.`);
 }
-/**
- * Removes a handle from the blacklist, saves, and refreshes the UI.
- * @param {string} handle - The Twitter handle to remove (without @).
- */
 function removeHandleFromBlacklist(handle) {
     const index = blacklistedHandles.indexOf(handle);
     if (index > -1) {
@@ -3852,9 +3457,6 @@ function removeHandleFromBlacklist(handle) {
         showStatus(`Removed @${handle} from auto-rate list.`);
     } else console.warn(`Attempted to remove non-existent handle: ${handle}`);
 }
-/**
- * Main initialization function for the UI module.
- */
 function initialiseUI() {
     const uiContainer = injectUI();
     if (!uiContainer) return;
@@ -3865,11 +3467,6 @@ function initialiseUI() {
     setInterval(updateCacheStatsUI, 3000);
     if (!window.activeStreamingRequests) window.activeStreamingRequests = {};
 }
-/**
- * Initializes event listeners and functionality for the floating cache stats badge.
- * This provides real-time feedback when tweets are rated and cached,
- * even when the settings panel is not open.
- */
 function initializeFloatingCacheStats() {
     const statsBadge = document.getElementById('tweet-filter-stats-badge');
     if (!statsBadge) return;
@@ -3897,11 +3494,6 @@ function initializeFloatingCacheStats() {
     updateCacheStatsUI();
 }
     // ----- ratingEngine.js -----
-/**
- * Applies filtering to a single tweet by replacing its contents with a minimal placeholder.
- * Also updates the rating indicator.
- * @param {Element} tweetArticle - The tweet element.
- */
 function filterSingleTweet(tweetArticle) {
     const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
     if (!cell) {
@@ -3967,12 +3559,6 @@ function filterSingleTweet(tweetArticle) {
         }
     }
 }
-/**
- * Applies a cached rating (if available) to a tweet article.
- * Also sets the rating status to 'rated' and updates the indicator.
- * @param {Element} tweetArticle - The tweet element.
- * @returns {boolean} True if a cached rating was applied.
- */
 function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const cachedRating = tweetCache.get(tweetId);
@@ -3995,18 +3581,12 @@ function applyTweetCachedRating(tweetArticle) {
             filterSingleTweet(tweetArticle);
             return true;
         } else if (!cachedRating.streaming) {
-            //cached object with score undefined or null, and not pending rating.
             tweetCache.delete(tweetId);
             return false;
         }
     }
     return false;
 }
-/**
- * Checks if a given user handle is in the blacklist.
- * @param {string} handle - The Twitter handle.
- * @returns {boolean} True if blacklisted, false otherwise.
- */
 function isUserBlacklisted(handle) {
     if (!handle) return false;
     handle = handle.toLowerCase().trim();
@@ -4423,25 +4003,6 @@ async function buildReplyChain(tweetId, maxDepth = Infinity) {
     }
     return chain;
 }
-/**
- * Extracts the full context of a tweet article and returns a formatted string.
- *
- * Schema:
- * [TWEET]:
- * @[the author of the tweet]
- * [the text of the tweet]
- * [MEDIA_DESCRIPTION]:
- * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
- * [QUOTED_TWEET]:
- * [the text of the quoted tweet]
- * [QUOTED_TWEET_MEDIA_DESCRIPTION]:
- * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
- *
- * @param {Element} tweetArticle - The tweet article element.
- * @param {string} tweetId - The tweet's ID.
- * @param {string} apiKey - API key used for getting image descriptions.
- * @returns {Promise<string>} - The full context string.
- */
 async function getFullContext(tweetArticle, tweetId, apiKey) {
     if (getFullContextPromises.has(tweetId)) {
         return getFullContextPromises.get(tweetId);
@@ -4659,9 +4220,6 @@ ${quotedImageUrls.join(", ")}`;
     getFullContextPromises.set(tweetId, contextPromise);
     return contextPromise;
 }
-/**
- * Applies filtering to all tweets currently in the observed container.
- */
 function applyFilteringToAll() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
@@ -4968,16 +4526,7 @@ function getTweetReplyInfo(tweetId) {
 }
 setInterval(handleThreads, THREAD_CHECK_INTERVAL);
 setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
-//setInterval(applyFilteringToAll, SWEEP_INTERVAL);
     // ----- api/api_requests.js -----
-/**
- * Gets a completion from OpenRouter API
- *
- * @param {CompletionRequest} request - The completion request
- * @param {string} apiKey - OpenRouter API key
- * @param {number} [timeout=30000] - Request timeout in milliseconds
- * @returns {Promise<CompletionResult>} The completion result
- */
 async function getCompletion(request, apiKey, timeout = 30000) {
     return new Promise((resolve) => {
         GM_xmlhttpRequest({
@@ -5039,18 +4588,6 @@ async function getCompletion(request, apiKey, timeout = 30000) {
         });
     });
 }
-/**
- * Gets a streaming completion from OpenRouter API
- *
- * @param {CompletionRequest} request - The completion request
- * @param {string} apiKey - OpenRouter API key
- * @param {Function} onChunk - Callback for each chunk of streamed response
- * @param {Function} onComplete - Callback when streaming is complete
- * @param {Function} onError - Callback when an error occurs
- * @param {number} [timeout=30000] - Request timeout in milliseconds
- * @param {string} [tweetId=null] - Optional tweet ID to associate with this request
- * @returns {Object} The request object with an abort method
- */
 function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 90000, tweetId = null) {
     const streamingRequest = {
         ...request,
@@ -5241,10 +4778,6 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     return streamingRequestObj;
 }
 let isOnlineListenerAttached = false;
-/**
- * Fetches the list of available models from the OpenRouter API.
- * Uses the stored API key, and updates the model selector upon success.
- */
 function fetchAvailableModels() {
     const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
@@ -5303,15 +4836,6 @@ function fetchAvailableModels() {
         }
     });
 }
-/**
- * Gets descriptions for images using the OpenRouter API
- *
- * @param {string[]} urls - Array of image URLs to get descriptions for
- * @param {string} apiKey - The API key for authentication
- * @param {string} tweetId - The unique tweet ID
- * @param {string} userHandle - The Twitter user handle
- * @returns {Promise<string>} Combined image descriptions
- */
 async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
     if (!urls?.length || !imageDescriptionsEnabled) {
@@ -5358,14 +4882,6 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     }
     return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
 }
-/**
- * Fetches generation metadata from OpenRouter API by ID.
- *
- * @param {string} generationId - The ID of the generation to fetch metadata for.
- * @param {string} apiKey - OpenRouter API key.
- * @param {number} [timeout=10000] - Request timeout in milliseconds.
- * @returns {Promise<CompletionResult>} The result containing metadata or an error.
- */
 async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
     return new Promise((resolve) => {
         GM_xmlhttpRequest({
@@ -5427,10 +4943,6 @@ async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
     });
 }
     // ----- api/api.js -----
-/**
- * Formats description text for the tooltip.
- * Copy of the function from ui.js to ensure it's available for streaming.
- */
 const safetySettings = [
     {
         category: "HARM_CATEGORY_HARASSMENT",
@@ -5453,11 +4965,6 @@ const safetySettings = [
         threshold: "BLOCK_NONE",
     },
 ];
-/**
- * Extracts follow-up questions from the AI response content.
- * @param {string} content - The full AI response content.
- * @returns {string[]} An array of 3 questions, or an empty array if not found.
- */
 function extractFollowUpQuestions(content) {
     if (!content) return [];
     const questions = [];
@@ -5484,17 +4991,6 @@ function extractFollowUpQuestions(content) {
     }
     return [];
 }
-/**
- * Rates a tweet using the OpenRouter API with automatic retry functionality.
- *
- * @param {string} tweetText - The text content of the tweet
- * @param {string} tweetId - The unique tweet ID
- * @param {string} apiKey - The API key for authentication
- * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
- * @param {number} [maxRetries=3] - Maximum number of retry attempts
- * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
- * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
- */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
     const cleanupRequest = () => {
         pendingRequests = Math.max(0, pendingRequests - 1);
@@ -5535,7 +5031,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     }
     const currentInstructions = instructionsManager.getCurrentInstructions();
     const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
-    const enableReasoning = browserGet('enableReasoning', false);
+    const reasoningEffort = browserGet('reasoningEffort', 'none');
     const requestBody = {
         model: effectiveModel,
         messages: [
@@ -5574,8 +5070,8 @@ EXPECTED_RESPONSE_FORMAT:\n
         top_p: modelTopP,
         max_tokens: maxTokens,
     };
-    if (enableReasoning) {
-        requestBody.reasoning = { enabled: true };
+    if (reasoningEffort !== 'none') {
+        requestBody.reasoning = { effort: reasoningEffort };
     }
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
@@ -5744,13 +5240,6 @@ EXPECTED_RESPONSE_FORMAT:\n
         qaConversationHistory: indicatorInstance.qaConversationHistory
     };
 }
-/**
- * Performs a non-streaming tweet rating request
- *
- * @param {Object} request - The formatted request body
- * @param {string} apiKey - API key for authentication
- * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
- */
 async function rateTweet(request, apiKey) {
     const tweetId = request.tweetId;
     const existingScore = tweetCache.get(tweetId)?.score;
@@ -5780,16 +5269,6 @@ async function rateTweet(request, apiKey) {
         data: null
     };
 }
-/**
- * Performs a streaming tweet rating request with real-time UI updates
- *
- * @param {Object} request - The formatted request body
- * @param {string} apiKey - API key for authentication
- * @param {string} tweetId - The tweet ID
- * @param {string} tweetText - The text content of the tweet
- * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
- * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
- */
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
         window.activeStreamingRequests[tweetId].abort();
@@ -5922,15 +5401,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         );
     });
 }
-/**
- * Fetches generation metadata with retry logic and updates cache/UI.
- * @param {string} tweetId
- * @param {string} generationId
- * @param {string} apiKey
- * @param {ScoreIndicator} indicatorInstance - The indicator instance to update.
- * @param {number} [attempt=0]
- * @param {number[]} [delays=[1000, 500, 2000, 4000, 8000]]
- */
 async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt = 0, delays = [1000, 500, 2000, 4000, 8000]) {
     if (attempt >= delays.length) {
         return;
@@ -5968,16 +5438,6 @@ async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, in
         fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
     }
 }
-/**
- * Answers a follow-up question about a tweet and generates new questions.
- *
- * @param {string} tweetId - The ID of the tweet being discussed.
- * @param {object[]} qaHistoryForApiCall - The conversation history array, including the latest user message.
- * @param {string} apiKey - The OpenRouter API key.
- * @param {Element} [tweetArticle=null] - The DOM element for the tweet article.
- * @param {ScoreIndicator} indicatorInstance - The ScoreIndicator instance to update.
- * @returns {Promise<void>} Resolves when the answer is generated and UI updated.
- */
 async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, tweetArticle, indicatorInstance) {
     const questionTextForLogging = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
     const useStreaming = browserGet('enableStreaming', false);
@@ -5996,17 +5456,20 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         }
         return msg;
     });
-    const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
     const request = {
-        model: effectiveModel,
+        model: selectedModel,
         messages: messagesForApi,
         temperature: modelTemperature,
         top_p: modelTopP,
         max_tokens: maxTokens,
         stream: useStreaming
     };
-    if (browserGet('enableReasoning', false)) {
-        request.reasoning = { enabled: true };
+    const reasoningEffort = browserGet('reasoningEffort', 'none');
+    if (reasoningEffort !== 'none') {
+        request.reasoning = { effort: reasoningEffort };
+    }
+    if(browserGet('enableWebSearch',false)){
+        request.tools = [{type: "openrouter:web_search"}];
     }
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
@@ -6111,10 +5574,6 @@ const VERSION = '1.7';
     let menuhtml = GM_getResourceText("MENU_HTML");
     browserSet('menuHTML', menuhtml);
     let firstRun = browserGet('firstRun', true);
-    /**
-     * Initializes the observer on the main content area, adds the UI elements,
-     * starts processing visible tweets, and sets up periodic checks.
-     */
     function initializeObserver() {
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (target) {

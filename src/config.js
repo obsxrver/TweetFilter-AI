@@ -23,7 +23,7 @@ let enableImageDescriptions = browserGet('enableImageDescriptions', false);
 let enableStreaming = browserGet('enableStreaming', true);
 let enableWebSearch = browserGet('enableWebSearch', false);
 let enableAutoRating = browserGet('enableAutoRating', true);
-let enableReasoning = browserGet('enableReasoning', false);
+let reasoningEffort = browserGet('reasoningEffort', 'none');
 
 const REVIEW_SYSTEM_PROMPT = `
 

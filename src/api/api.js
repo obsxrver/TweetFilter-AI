@@ -125,7 +125,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
 
     const currentInstructions = instructionsManager.getCurrentInstructions();
     const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
-    const enableReasoning = browserGet('enableReasoning', false);
+    const reasoningEffort = browserGet('reasoningEffort', 'none');
 
     const requestBody = {
         model: effectiveModel,
@@ -170,8 +170,8 @@ EXPECTED_RESPONSE_FORMAT:\n
         max_tokens: maxTokens,
     };
 
-    if (enableReasoning) {
-        requestBody.reasoning = { enabled: true };
+    if (reasoningEffort !== 'none') {
+        requestBody.reasoning = { effort: reasoningEffort };
     }
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
@@ -673,18 +673,20 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         return msg;
     });
 
-    const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
-
     const request = {
-        model: effectiveModel,
+        model: selectedModel,
         messages: messagesForApi,
         temperature: modelTemperature,
         top_p: modelTopP,
         max_tokens: maxTokens,
         stream: useStreaming
     };
-    if (browserGet('enableReasoning', false)) {
-        request.reasoning = { enabled: true };
+    const reasoningEffort = browserGet('reasoningEffort', 'none');
+    if (reasoningEffort !== 'none') {
+        request.reasoning = { effort: reasoningEffort };
+    }
+    if(browserGet('enableWebSearch',false)){
+        request.tools = [{type: "openrouter:web_search"}];
     }
     console.log(`followup request (templated): ${JSON.stringify(request)}`);
 
