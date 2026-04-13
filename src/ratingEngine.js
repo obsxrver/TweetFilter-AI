@@ -612,12 +612,18 @@ async function buildReplyChain(tweetId, maxDepth = Infinity) {
     if (!tweetId || maxDepth <= 0) return [];
 
     const chain = [];
-
+    const visited = new Set();
     let currentId = tweetId;
     let depth = 0;
 
     while (currentId && depth < maxDepth) {
-        const replyInfo = threadRelationships[currentId];
+        if (visited.has(currentId)) {
+            console.warn(`[buildReplyChain] Detected reply chain cycle at ${currentId}`);
+            break;
+        }
+        visited.add(currentId);
+
+        const replyInfo = getStoredReplyInfo(currentId);
         if (!replyInfo || !replyInfo.replyTo) break;
 
         chain.push({
@@ -632,6 +638,47 @@ async function buildReplyChain(tweetId, maxDepth = Infinity) {
     }
 
     return chain;
+}
+
+function getStoredReplyInfo(tweetId) {
+    if (!tweetId) return null;
+
+    const relationship = threadRelationships[tweetId];
+    const cachedEntry = tweetCache.get(tweetId);
+    const threadContext = cachedEntry?.threadContext;
+
+    if (relationship) {
+        const replyTo = relationship.replyTo || threadContext?.replyToId || null;
+        return {
+            ...relationship,
+            replyTo,
+            from: relationship.from || cachedEntry?.authorHandle || '',
+            to: relationship.to || threadContext?.replyTo || null,
+            isRoot: replyTo ? false : (relationship.isRoot === true || threadContext?.isRoot === true)
+        };
+    }
+
+    if (threadContext?.replyToId) {
+        return {
+            replyTo: threadContext.replyToId,
+            from: cachedEntry?.authorHandle || '',
+            to: threadContext.replyTo || null,
+            isRoot: false,
+            timestamp: cachedEntry?.timestamp || 0
+        };
+    }
+
+    if (threadContext?.isRoot) {
+        return {
+            replyTo: null,
+            from: cachedEntry?.authorHandle || '',
+            to: null,
+            isRoot: true,
+            timestamp: cachedEntry?.timestamp || 0
+        };
+    }
+
+    return null;
 }
 
 /**
@@ -987,8 +1034,19 @@ async function handleThreads() {
         if (!pageTweetId) return;
 
         let rootTweetId = pageTweetId;
-        while (threadRelationships[rootTweetId] && threadRelationships[rootTweetId].replyTo) {
-            rootTweetId = threadRelationships[rootTweetId].replyTo;
+        const visited = new Set();
+        while (rootTweetId) {
+            if (visited.has(rootTweetId)) {
+                console.warn(`[handleThreads] Detected reply chain cycle at ${rootTweetId}`);
+                break;
+            }
+            visited.add(rootTweetId);
+
+            const replyInfo = getStoredReplyInfo(rootTweetId);
+            if (!replyInfo || !replyInfo.replyTo) {
+                break;
+            }
+            rootTweetId = replyInfo.replyTo;
         }
 
         await mapThreadStructure(conversation, rootTweetId);
@@ -1138,6 +1196,29 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 return;
             }
 
+            const applyStoredParentInfo = (currentItem) => {
+                const storedReplyInfo = getStoredReplyInfo(currentItem.tweetId);
+                if (!storedReplyInfo) {
+                    return false;
+                }
+
+                if (storedReplyInfo.replyTo && currentItem.tweetId !== localRootTweetId) {
+                    currentItem.replyTo = storedReplyInfo.to || tweetCache.get(storedReplyInfo.replyTo)?.authorHandle || null;
+                    currentItem.replyToId = storedReplyInfo.replyTo;
+                    currentItem.isRoot = false;
+                    return true;
+                }
+
+                if (storedReplyInfo.isRoot || currentItem.tweetId === localRootTweetId) {
+                    currentItem.replyTo = null;
+                    currentItem.replyToId = null;
+                    currentItem.isRoot = true;
+                    return true;
+                }
+
+                return false;
+            };
+
             for (let i = 0; i < tweetCells.length; ++i) {
                 let currentItem = tweetCells[i];
 
@@ -1147,9 +1228,11 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 }
 
                 if (i === 0) {
-                    currentItem.replyTo = null;
-                    currentItem.replyToId = null;
-                    currentItem.isRoot = true;
+                    if (!applyStoredParentInfo(currentItem)) {
+                        currentItem.replyTo = null;
+                        currentItem.replyToId = null;
+                        currentItem.isRoot = true;
+                    }
 
                 } else {
                     const previousItem = tweetCells[i - 1];
@@ -1160,17 +1243,17 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             currentItem.isRoot = false;
 
                         } else if (effectiveUrlTweetInfo && currentItem.tweetId === effectiveUrlTweetInfo.tweetId) {
-
-                            currentItem.replyTo = null;
-                            currentItem.replyToId = null;
-                            currentItem.isRoot = true;
-
+                            if (!applyStoredParentInfo(currentItem)) {
+                                currentItem.replyTo = null;
+                                currentItem.replyToId = null;
+                                currentItem.isRoot = true;
+                            }
                         } else {
-
-                            currentItem.replyTo = null;
-                            currentItem.replyToId = null;
-                            currentItem.isRoot = true;
-
+                            if (!applyStoredParentInfo(currentItem)) {
+                                currentItem.replyTo = null;
+                                currentItem.replyToId = null;
+                                currentItem.isRoot = true;
+                            }
                         }
                     } else if (previousItem.type === 'tweet') {
                         currentItem.replyTo = previousItem.username;
@@ -1178,10 +1261,11 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         currentItem.isRoot = false;
 
                     } else {
-
-                        currentItem.replyTo = null;
-                        currentItem.replyToId = null;
-                        currentItem.isRoot = true;
+                        if (!applyStoredParentInfo(currentItem)) {
+                            currentItem.replyTo = null;
+                            currentItem.replyToId = null;
+                            currentItem.isRoot = true;
+                        }
                     }
                 }
             }
@@ -1306,10 +1390,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
 }
 
 function getTweetReplyInfo(tweetId) {
-    if (threadRelationships[tweetId]) {
-        return threadRelationships[tweetId];
-    }
-    return null;
+    return getStoredReplyInfo(tweetId);
 }
 
 setInterval(handleThreads, THREAD_CHECK_INTERVAL);
