@@ -41,7 +41,6 @@ class ScoreIndicator {
 
         this.followUpImageContainer = null;
         this.followUpImageInput = null;
-        this.uploadedImageDataUrls = [];
 
         this.metadataDropdown = null;
         this.metadataToggle = null;
@@ -67,14 +66,14 @@ class ScoreIndicator {
         this._lastScrollPosition = 0;
 
         this._boundHandlers = {
-            handleMobileFocus: null,
-            handleMobileTouchStart: null,
             handleAttachImageClick: null,
             handleKeyDown: null,
             handleFollowUpTouchStart: null,
             handleFollowUpTouchEnd: null,
             handleConversationReasoningToggle: null
         };
+        this._boundMethodHandlers = Object.create(null);
+        this._listenerTeardowns = [];
 
         try {
             this._createElements(tweetArticle);
@@ -238,6 +237,7 @@ class ScoreIndicator {
 
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
+            // I escaped the slash here because it was messing up the comment stripping code.
             this.followUpImageInput.accept = `image${"/"}*,.pdf,application/pdf`;
             this.followUpImageInput.multiple = true;
             this.followUpImageInput.style.display = 'none';
@@ -342,7 +342,11 @@ class ScoreIndicator {
 
         this.autoScrollConversation = true;
         if (this.conversationContainerElement) {
-            this.conversationContainerElement.addEventListener('scroll', this._handleConversationScroll.bind(this));
+            this._registerDomListener(
+                this.conversationContainerElement,
+                'scroll',
+                this._getBoundMethodHandler('_handleConversationScroll')
+            );
         }
 
         if (isMobileDevice()) {
@@ -397,17 +401,18 @@ class ScoreIndicator {
         ].filter(el => el);
 
         interactiveElements.forEach(element => {
-            element.addEventListener('touchstart', handleFirstTap, { passive: true, capture: true });
+            this._registerDomListener(element, 'touchstart', handleFirstTap, { passive: true, capture: true });
         });
 
         if (this.customQuestionInput) {
             let scrollBeforeFocus = 0;
 
-            this.customQuestionInput.addEventListener('touchstart', (e) => {
+            const handleInputTouchStart = () => {
                 scrollBeforeFocus = this.tooltipScrollableContentElement?.scrollTop || 0;
-            }, { passive: true });
+            };
+            this._registerDomListener(this.customQuestionInput, 'touchstart', handleInputTouchStart, { passive: true });
 
-            this.customQuestionInput.addEventListener('focus', (e) => {
+            const handleInputFocus = () => {
 
                 if (scrollBeforeFocus > 0) {
                     requestAnimationFrame(() => {
@@ -416,25 +421,25 @@ class ScoreIndicator {
                         }
                     });
                 }
-            });
+            };
+            this._registerDomListener(this.customQuestionInput, 'focus', handleInputFocus);
         }
 
         if (this.conversationContainerElement) {
 
-            this.conversationContainerElement.addEventListener('touchstart', (e) => {
+            const handleConversationTouchStart = (e) => {
                 const toggle = e.target.closest('.reasoning-toggle');
                 if (toggle) {
                     handleFirstTap(e);
                 }
-            }, { passive: true, capture: true });
+            };
+            this._registerDomListener(this.conversationContainerElement, 'touchstart', handleConversationTouchStart, { passive: true, capture: true });
         }
 
         if (this.tooltipScrollableContentElement) {
-            let lastTouchY = 0;
             let scrollLocked = false;
 
-            this.tooltipScrollableContentElement.addEventListener('touchstart', (e) => {
-                lastTouchY = e.touches[0].clientY;
+            const handleTooltipTouchStart = (e) => {
                 scrollLocked = false;
 
                 if (!this._hasFirstInteraction) {
@@ -454,7 +459,8 @@ class ScoreIndicator {
                         }, 100);
                     }
                 }
-            }, { passive: true });
+            };
+            this._registerDomListener(this.tooltipScrollableContentElement, 'touchstart', handleTooltipTouchStart, { passive: true });
         }
     }
 
@@ -529,28 +535,77 @@ class ScoreIndicator {
         }, 100);
     }
 
+    /**
+     * Returns a memoized instance-bound handler for a class method.
+     * @param {string} methodName
+     * @returns {Function}
+     */
+    _getBoundMethodHandler(methodName) {
+        if (!this._boundMethodHandlers[methodName]) {
+            const method = this[methodName];
+            if (typeof method !== 'function') {
+                throw new Error(`[ScoreIndicator ${this.tweetId}] Missing handler method: ${methodName}`);
+            }
+            this._boundMethodHandlers[methodName] = method.bind(this);
+        }
+        return this._boundMethodHandlers[methodName];
+    }
+
+    /**
+     * Registers a DOM event listener and tracks teardown for `destroy()`.
+     * @param {EventTarget | null | undefined} target
+     * @param {string} eventName
+     * @param {Function} handler
+     * @param {AddEventListenerOptions|boolean} [options]
+     */
+    _registerDomListener(target, eventName, handler, options) {
+        if (!target || typeof target.addEventListener !== 'function' || typeof handler !== 'function') {
+            return;
+        }
+        target.addEventListener(eventName, handler, options);
+        this._listenerTeardowns.push(() => {
+            if (target && typeof target.removeEventListener === 'function') {
+                target.removeEventListener(eventName, handler, options);
+            }
+        });
+    }
+
+    /**
+     * Runs and clears all registered listener teardowns.
+     */
+    _removeRegisteredListeners() {
+        for (let i = this._listenerTeardowns.length - 1; i >= 0; i -= 1) {
+            try {
+                this._listenerTeardowns[i]();
+            } catch (error) {
+                console.warn(`[ScoreIndicator ${this.tweetId}] Failed to remove a listener:`, error);
+            }
+        }
+        this._listenerTeardowns = [];
+    }
+
     /** Adds necessary event listeners to the indicator and tooltip. */
     _addEventListeners() {
         if (!this.indicatorElement || !this.tooltipElement) return;
 
-        this.indicatorElement.addEventListener('mouseenter', this._handleMouseEnter.bind(this));
-        this.indicatorElement.addEventListener('mouseleave', this._handleMouseLeave.bind(this));
-        this.indicatorElement.addEventListener('click', this._handleIndicatorClick.bind(this));
+        this._registerDomListener(this.indicatorElement, 'mouseenter', this._getBoundMethodHandler('_handleMouseEnter'));
+        this._registerDomListener(this.indicatorElement, 'mouseleave', this._getBoundMethodHandler('_handleMouseLeave'));
+        this._registerDomListener(this.indicatorElement, 'click', this._getBoundMethodHandler('_handleIndicatorClick'));
 
-        this.tooltipElement.addEventListener('mouseenter', this._handleTooltipMouseEnter.bind(this));
-        this.tooltipElement.addEventListener('mouseleave', this._handleTooltipMouseLeave.bind(this));
+        this._registerDomListener(this.tooltipElement, 'mouseenter', this._getBoundMethodHandler('_handleTooltipMouseEnter'));
+        this._registerDomListener(this.tooltipElement, 'mouseleave', this._getBoundMethodHandler('_handleTooltipMouseLeave'));
 
-        this.tooltipScrollableContentElement?.addEventListener('scroll', this._handleTooltipScroll.bind(this));
+        this._registerDomListener(this.tooltipScrollableContentElement, 'scroll', this._getBoundMethodHandler('_handleTooltipScroll'));
 
-        this.pinButton?.addEventListener('click', this._handlePinClick.bind(this));
-        this.copyButton?.addEventListener('click', this._handleCopyClick.bind(this));
-        this.tooltipCloseButton?.addEventListener('click', this._handleCloseClick.bind(this));
-        this.reasoningToggle?.addEventListener('click', this._handleReasoningToggleClick.bind(this));
-        this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
-        this.refreshButton?.addEventListener('click', this._handleRefreshClick.bind(this));
-        this.rateButton?.addEventListener('click', this._handleRateClick.bind(this));
+        this._registerDomListener(this.pinButton, 'click', this._getBoundMethodHandler('_handlePinClick'));
+        this._registerDomListener(this.copyButton, 'click', this._getBoundMethodHandler('_handleCopyClick'));
+        this._registerDomListener(this.tooltipCloseButton, 'click', this._getBoundMethodHandler('_handleCloseClick'));
+        this._registerDomListener(this.reasoningToggle, 'click', this._getBoundMethodHandler('_handleReasoningToggleClick'));
+        this._registerDomListener(this.scrollButton, 'click', this._getBoundMethodHandler('_handleScrollButtonClick'));
+        this._registerDomListener(this.refreshButton, 'click', this._getBoundMethodHandler('_handleRefreshClick'));
+        this._registerDomListener(this.rateButton, 'click', this._getBoundMethodHandler('_handleRateClick'));
 
-        this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
+        this._registerDomListener(this.followUpQuestionsElement, 'click', this._getBoundMethodHandler('_handleFollowUpQuestionClick'));
 
         if (isMobileDevice() && this.followUpQuestionsElement) {
             this._boundHandlers.handleFollowUpTouchStart = (e) => {
@@ -587,11 +642,11 @@ class ScoreIndicator {
                 }
             };
 
-            this.followUpQuestionsElement.addEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
-            this.followUpQuestionsElement.addEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+            this._registerDomListener(this.followUpQuestionsElement, 'touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+            this._registerDomListener(this.followUpQuestionsElement, 'touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
         }
 
-        this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
+        this._registerDomListener(this.customQuestionButton, 'click', this._getBoundMethodHandler('_handleCustomQuestionClick'));
 
         this._boundHandlers.handleKeyDown = (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -599,22 +654,9 @@ class ScoreIndicator {
                 this._handleCustomQuestionClick(event);
             }
         };
-        this.customQuestionInput?.addEventListener('keydown', this._boundHandlers.handleKeyDown);
+        this._registerDomListener(this.customQuestionInput, 'keydown', this._boundHandlers.handleKeyDown);
 
-        if (isMobileDevice() && this.customQuestionInput) {
-
-            this._boundHandlers.handleMobileFocus = (event) => {
-
-            };
-
-            this._boundHandlers.handleMobileTouchStart = (event) => {
-
-                this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
-            };
-
-        }
-
-        this.metadataToggle?.addEventListener('click', this._handleMetadataToggleClick.bind(this));
+        this._registerDomListener(this.metadataToggle, 'click', this._getBoundMethodHandler('_handleMetadataToggleClick'));
 
         if (this.attachImageButton && this.followUpImageInput) {
             this._boundHandlers.handleAttachImageClick = (event) => {
@@ -622,8 +664,8 @@ class ScoreIndicator {
                 event.stopPropagation();
                 this.followUpImageInput.click();
             };
-            this.attachImageButton.addEventListener('click', this._boundHandlers.handleAttachImageClick);
-            this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
+            this._registerDomListener(this.attachImageButton, 'click', this._boundHandlers.handleAttachImageClick);
+            this._registerDomListener(this.followUpImageInput, 'change', this._getBoundMethodHandler('_handleFollowUpImageSelect'));
         }
 
     }
@@ -685,6 +727,83 @@ class ScoreIndicator {
         this.indicatorElement.textContent = indicatorText;
     }
 
+    /**
+     * Splits tagged API text into tooltip display sections.
+     * @param {string} fullDescription
+     * @returns {{analysisContent: string, scoreContent: string, questionsContent: string}}
+     */
+    _extractDescriptionSections(fullDescription) {
+        const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
+        const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
+        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
+
+        let analysisContent = "";
+        let scoreContent = "";
+        let questionsContent = "";
+
+        if (analysisMatch && analysisMatch[1] !== undefined) {
+            analysisContent = analysisMatch[1].trim();
+        } else if (!scoreMatch && !questionsMatch) {
+            analysisContent = fullDescription;
+        } else {
+            analysisContent = "*Waiting for analysis...*";
+        }
+
+        if (scoreMatch && scoreMatch[1] !== undefined) {
+            scoreContent = scoreMatch[1].trim();
+        }
+
+        if (questionsMatch && questionsMatch[1] !== undefined) {
+            const taggedQuestions = [1, 2, 3]
+                .map((index) => {
+                    const taggedQuestionMatch = questionsMatch[1].match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
+                    return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
+                        ? taggedQuestionMatch[1].trim()
+                        : "";
+                })
+                .filter(Boolean);
+
+            questionsContent = taggedQuestions.length > 0
+                ? taggedQuestions.join('\n')
+                : questionsMatch[1].trim();
+        }
+
+        return { analysisContent, scoreContent, questionsContent };
+    }
+
+    /**
+     * Computes metadata panel content and visibility from current metadata.
+     * @returns {{metadataHTML: string, showMetadataDropdown: boolean}}
+     */
+    _buildMetadataDisplayState() {
+        let metadataHTML = '';
+        let showMetadataDropdown = false;
+        const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
+        const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
+
+        if (hasFullMetadata) {
+            if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
+                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
+            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+            if (this.metadata.reasoningTokens > 0) {
+                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+            if (this.metadata.mediaInputs > 0) {
+                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+            showMetadataDropdown = true;
+        } else if (hasOnlyGenId) {
+            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
+            showMetadataDropdown = true;
+        }
+
+        return { metadataHTML, showMetadataDropdown };
+    }
+
     /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
 
@@ -694,32 +813,11 @@ class ScoreIndicator {
 
         const previousScrollTop = this.tooltipScrollableContentElement.scrollTop;
 
-        const fullDescription = this.description || "";
-        const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
-        const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
-        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([^<]+)<\/FOLLOW_UP_QUESTIONS>/);
-
-        let analysisContent = "";
-        let scoreContent = "";
-        let questionsContent = "";
-
-        if (analysisMatch && analysisMatch[1] !== undefined) {
-            analysisContent = analysisMatch[1].trim();
-        } else if (!scoreMatch && !questionsMatch) {
-
-            analysisContent = fullDescription;
-        } else {
-
-            analysisContent = "*Waiting for analysis...*";
-        }
-
-        if (scoreMatch && scoreMatch[1] !== undefined) {
-            scoreContent = scoreMatch[1].trim();
-        }
-
-        if (questionsMatch && questionsMatch[1] !== undefined) {
-            questionsContent = questionsMatch[1].trim();
-        }
+        const {
+            analysisContent,
+            scoreContent,
+            questionsContent
+        } = this._extractDescriptionSections(this.description || "");
 
         let contentChanged = false;
 
@@ -777,6 +875,7 @@ class ScoreIndicator {
         if (this.conversationContainerElement.innerHTML !== renderedHistory) {
             this.conversationContainerElement.innerHTML = renderedHistory;
             this.conversationContainerElement.style.display = this.conversationHistory.length > 0 ? 'block' : 'none';
+            this._attachConversationReasoningListeners();
             contentChanged = true;
         }
 
@@ -835,31 +934,7 @@ class ScoreIndicator {
             contentChanged = true;
         }
 
-        let metadataHTML = '';
-        let showMetadataDropdown = false;
-        const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
-        const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
-
-        if (hasFullMetadata) {
-
-            if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
-                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
-            }
-            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
-            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
-            if (this.metadata.reasoningTokens > 0) {
-                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
-            }
-            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
-            if (this.metadata.mediaInputs > 0) {
-                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
-            }
-            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
-            showMetadataDropdown = true;
-        } else if (hasOnlyGenId) {
-            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
-            showMetadataDropdown = true;
-        }
+        const { metadataHTML, showMetadataDropdown } = this._buildMetadataDisplayState();
 
         if (this.metadataElement.innerHTML !== metadataHTML) {
             this.metadataElement.innerHTML = metadataHTML;
@@ -1025,12 +1100,6 @@ class ScoreIndicator {
             `;
         });
 
-        if (this.conversationContainerElement) {
-            this.conversationContainerElement.innerHTML = historyHtml;
-
-            this._attachConversationReasoningListeners();
-        }
-
         return historyHtml;
     }
 
@@ -1042,7 +1111,7 @@ class ScoreIndicator {
         if (!this.conversationContainerElement) return;
 
         if (this._boundHandlers.handleConversationReasoningToggle) {
-            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+            return;
         }
 
         this._boundHandlers.handleConversationReasoningToggle = (e) => {
@@ -1077,7 +1146,7 @@ class ScoreIndicator {
             }
         };
 
-        this.conversationContainerElement.addEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+        this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationReasoningToggle);
     }
 
     _performAutoScroll() {
@@ -1665,6 +1734,56 @@ class ScoreIndicator {
         this.currentFollowUpSource = null;
     }
 
+    /** Public wrapper for indicator refresh. */
+    refreshIndicatorUI() {
+        this._updateIndicatorUI();
+    }
+
+    /** Public wrapper for tooltip refresh. */
+    refreshTooltipUI() {
+        this._updateTooltipUI();
+    }
+
+    /**
+     * Updates blacklist UI state without exposing internal rendering methods.
+     * @param {boolean} isBlacklisted
+     */
+    setAuthorBlacklistState(isBlacklisted) {
+        this.isAuthorBlacklisted = Boolean(isBlacklisted);
+    }
+
+    /**
+     * Sets follow-up question list while preserving internal state ownership.
+     * @param {string[]} questions
+     */
+    setFollowUpQuestions(questions) {
+        this.questions = Array.isArray(questions) ? questions : [];
+    }
+
+    /**
+     * Public wrapper used by streaming follow-up handlers.
+     * @param {string} question
+     * @param {string} answer
+     * @param {string} [reasoning='']
+     */
+    updateConversationHistoryEntry(question, answer, reasoning = '') {
+        this._updateConversationHistory(question, answer, reasoning);
+    }
+
+    /**
+     * Public wrapper used by streaming follow-up handlers.
+     * @param {string} streamingText
+     * @param {string} [reasoningText='']
+     */
+    renderStreamingAnswer(streamingText, reasoningText = '') {
+        this._renderStreamingAnswer(streamingText, reasoningText);
+    }
+
+    /** Public wrapper to finalize follow-up UI state. */
+    finalizeFollowUpInteraction() {
+        this._finalizeFollowUpInteraction();
+    }
+
     /**
      * Finds a pending entry in the conversation history by question text and updates its answer.
      * Also updates the UI.
@@ -1932,47 +2051,7 @@ class ScoreIndicator {
             delete window.activeStreamingRequests[this.tweetId];
         }
 
-        this.indicatorElement?.removeEventListener('mouseenter', this._handleMouseEnter);
-        this.indicatorElement?.removeEventListener('mouseleave', this._handleMouseLeave);
-        this.indicatorElement?.removeEventListener('click', this._handleIndicatorClick);
-        this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
-        this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
-        this.tooltipScrollableContentElement?.removeEventListener('scroll', this._handleTooltipScroll.bind(this));
-        this.pinButton?.removeEventListener('click', this._handlePinClick.bind(this));
-        this.copyButton?.removeEventListener('click', this._handleCopyClick.bind(this));
-        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick.bind(this));
-        this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick.bind(this));
-        this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick.bind(this));
-        this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick.bind(this));
-        this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick.bind(this));
-        this.customQuestionInput?.removeEventListener('keydown', this._boundHandlers.handleKeyDown);
-
-        if (isMobileDevice()) {
-            if (this.customQuestionInput && this._boundHandlers.handleMobileFocus) {
-                this.customQuestionInput.removeEventListener('focus', this._boundHandlers.handleMobileFocus);
-                this.customQuestionInput.removeEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
-            }
-
-            if (this.followUpQuestionsElement && this._boundHandlers.handleFollowUpTouchStart) {
-                this.followUpQuestionsElement.removeEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
-                this.followUpQuestionsElement.removeEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
-            }
-        }
-
-        this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
-        this.refreshButton?.removeEventListener('click', this._handleRefreshClick.bind(this));
-        this.rateButton?.removeEventListener('click', this._handleRateClick.bind(this));
-
-        if (this.attachImageButton) {
-            this.attachImageButton.removeEventListener('click', this._boundHandlers.handleAttachImageClick);
-        }
-        if (this.followUpImageInput) {
-            this.followUpImageInput.removeEventListener('change', this._handleFollowUpImageSelect.bind(this));
-        }
-
-        if (this.conversationContainerElement && this._boundHandlers.handleConversationReasoningToggle) {
-            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
-        }
+        this._removeRegisteredListeners();
 
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
@@ -2011,6 +2090,8 @@ class ScoreIndicator {
         this.metadataContent = null;
 
         this.tooltipScrollableContentElement = null;
+        this._boundMethodHandlers = Object.create(null);
+        this._listenerTeardowns = [];
     }
 
     /** Ensures the indicator element is attached to the correct current article element. */

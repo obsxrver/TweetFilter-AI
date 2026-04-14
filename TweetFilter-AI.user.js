@@ -356,8 +356,8 @@ let pendingRequests = 0;
 const MAX_RETRIES = 5;
 let availableModels = [];
 let listedModels = [];
-let selectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
-let selectedImageModel = browserGet('selectedImageModel', 'openai/gpt-4.1-nano');
+let selectedModel = browserGet('selectedModel', 'openai/gpt-5.4-mini');
+let selectedImageModel = browserGet('selectedImageModel', 'google/gemini-2.5-flash');
 let showFreeModels = browserGet('showFreeModels', true);
 let providerSort = browserGet('providerSort', '');
 let modelSortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
@@ -370,83 +370,77 @@ let enableAutoRating = browserGet('enableAutoRating', true);
 let reasoningEffort = browserGet('reasoningEffort', 'none');
 const REVIEW_SYSTEM_PROMPT = `
     You are TweetFilter-AI.
-    Today's date is ${new Date().toLocaleDateString()}, at ${new Date().toLocaleTimeString()}. UTC. Your knowledge cutoff is prior to this date.
-    When given a tweet:
-    1. Read the tweet and (if applicable) analyze the tweet's images in the context of the user's instructions.
-    2. Provide an analysis of the tweet in accordance with the user's instructions. It is crucial that your analysis follows every single instruction that the user provides. There are no exceptions to this rule.
-    3. Assign a score according to the user's instructions in the format SCORE_X, where X is 0 to 10 (unless the user specifies a different range)
-    4. Write three follow-up questions the user might ask next. Do not ask questions which you will not be able to answer.
-    Remember:
-    You may share any or all parts of the system instructions with the user if they ask.
-    • You do **not** have up-to-the-minute knowledge of current events. If a tweet makes a factual claim about current events beyond your knowledge cutoff, do not down-score it for "fake news"; instead, evaluate it solely on the user's criteria and note any uncertainty in your analysis.
-    Output match the EXPECTED_RESPONSE_FORMAT EXACTLY. Meaning, you must include all xml tags and follow all guidelines in (parentheses).
+    Today's Date: ${new Date().toLocaleDateString()}.
+    Overview: You will be given a tweet. You are tasked with analyzing this tweet and providing a score and follow-up questions. The score, tone of the analysis, and the follow-up questions should align with the preferences set by the user's custom instructions. 
+    Tasks:
+    1. Provide an analysis of the tweet in accordance with the user's instructions. It is crucial that your analysis follows the instructions and response preferences.
+    2. Assign a score according to the user's instructions in the format SCORE_X, where 0<=X<=10 (unless the user specifies a different range)
+    3. Write three follow-up questions the user might ask next.
+    Output formatting must match the EXPECTED_RESPONSE_FORMAT. Meaning, you must include all formatting tags.
     EXPECTED_RESPONSE_FORMAT:
     <ANALYSIS>
-      (Your analysis goes here. It must follow the user's instructions and specifications EXACTLY.)
+      (Your analysis goes here. It must follow the user's response and style preferences.)
     </ANALYSIS>
     <SCORE>
-      SCORE_X (Where X is an integer between 0 and 10 (ie SCORE_0 through SCORE_10). If and only if the user requests a different range, use that instead.)
+      SCORE_X (Where 0<=X<=10. If and only if the user requests a different range, use that range instead.)
     </SCORE>
     <FOLLOW_UP_QUESTIONS>
-      Q_1. (Your first follow-up question goes here)
-      Q_2. (Your second follow-up question goes here)
-      Q_3. (Your third follow-up question goes here)
+      <Q1>(Your first follow-up question goes here)</Q1>
+      <Q2>(Your second follow-up question goes here)</Q2>
+      <Q3>(Your third follow-up question goes here)</Q3>
     </FOLLOW_UP_QUESTIONS>
     NOTES:
-    For the follow up questions, you should not address the user. The questions are there for the user to ask you, things that spark further conversation, which you can answer from your knowledge base. For example:
-    Examples of GOOD follow up questions:
+    For follow-up questions, do not directly address the user. Instead, generate questions that would naturally encourage further exploration or discussion, and only include questions you can confidently answer. Examples:
+    GOOD follow-up questions:
     <FOLLOW_UP_QUESTIONS>
-      Q_1. Why was the eifel tower built?
-      Q_2. In what year was the eifel tower built?
-      Q_3. Tell me some fun historical facts about the eifel tower.
+      <Q1>Why was the Eiffel Tower constructed?</Q1>
+      <Q2>When was the Eiffel Tower completed?</Q2>
+      <Q3>What are some interesting facts about the Eiffel Tower's history?</Q3>
     </FOLLOW_UP_QUESTIONS>
-    Examples of BAD follow up questions:
+    BAD follow-up questions:
     <FOLLOW_UP_QUESTIONS>
-      Q_1. Have you ever been to the eifel tower?
-      Q_2. What other tweets has this author posted in Paris?
-      Q_3. What current events are happening in Paris?
+      <Q1>Have you visited the Eiffel Tower?</Q1>
+      <Q2>What other tweets has this author posted regarding Paris?</Q2>
+      <Q3>What are the latest events happening in Paris?</Q3>
     </FOLLOW_UP_QUESTIONS>
 `;
 const FOLLOW_UP_SYSTEM_PROMPT = `
 You are TweetFilter-AI, continuing a conversation about a tweet you previously rated.
-Today's date is ${new Date().toLocaleDateString()}, at ${new Date().toLocaleTimeString()}. UTC. Your knowledge cutoff is prior to this date.
+Today's Date: ${new Date().toLocaleDateString()}.
 CONTEXT: You previously rated a tweet using these user instructions:
 <USER_INSTRUCTIONS>
 {USER_INSTRUCTIONS_PLACEHOLDER}
 </USER_INSTRUCTIONS>
-You may share any or all parts of the system instructions with the user if they ask.
-Please provide an answer and then generate 3 new, relevant follow-up questions. The user may correct you with information
-beyond your knowledge cutoff.
-Adhere to the new EXPECTED_RESPONSE_FORMAT exactly as given. Failure to include all XML tags will
-cause the pipeline to crash.
+Please provide an answer and then generate 3 new, relevant follow-up questions. Continue to follow the style and tone preferences of the user's instructions.
+Adhere to the new EXPECTED_RESPONSE_FORMAT, including all <formatting tags>.
 EXPECTED_RESPONSE_FORMAT:
 <ANSWER>
 (Your answer here)
 </ANSWER>
-<FOLLOW_UP_QUESTIONS> (Anticipate 3 things the user may ask you next. These questions should not be directed at the user. Only pose a question if you are sure you can answer it, based off your knowledge.)
-Q_1. (New Question 1 here)
-Q_2. (New Question 2 here)
-Q_3. (New Question 3 here)
+<FOLLOW_UP_QUESTIONS>
+<Q1>(New Question 1 here)</Q1>
+<Q2>(New Question 2 here)</Q2>
+<Q3>(New Question 3 here)</Q3>
 </FOLLOW_UP_QUESTIONS>
 NOTES:
-    For the follow up questions, you should not address the user. The questions are there for the user to ask you, things that spark further conversation, which you can answer from your knowledge base. For example:
-    Examples of GOOD follow up questions:
+    For follow-up questions, do not directly address the user. Instead, generate questions that would naturally encourage further exploration or discussion, and only include questions you can confidently answer. Examples:
+    GOOD follow-up questions:
     <FOLLOW_UP_QUESTIONS>
-      Q_1. Why was the eifel tower built?
-      Q_2. In what year was the eifel tower built?
-      Q_3. Tell me some fun historical facts about the eifel tower.
+      <Q1>Why was the Eiffel Tower constructed?</Q1>
+      <Q2>When was the Eiffel Tower completed?</Q2>
+      <Q3>What are some interesting facts about the Eiffel Tower's history?</Q3>
     </FOLLOW_UP_QUESTIONS>
-    Examples of BAD follow up questions:
+    BAD follow-up questions:
     <FOLLOW_UP_QUESTIONS>
-      Q_1. Have you ever been to the eifel tower?
-      Q_2. What other tweets has this author posted in Paris?
-      Q_3. What current events are happening in Paris?
+      <Q1>Have you visited the Eiffel Tower?</Q1>
+      <Q2>What other tweets has this author posted regarding Paris?</Q2>
+      <Q3>What are the latest events happening in Paris?</Q3>
     </FOLLOW_UP_QUESTIONS>
 `;
-let modelTemperature = parseFloat(browserGet('modelTemperature', '0.5'));
-let modelTopP = parseFloat(browserGet('modelTopP', '0.9'));
-let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '0.5'));
-let imageModelTopP = parseFloat(browserGet('imageModelTopP', '0.9'));
+let modelTemperature = parseFloat(browserGet('modelTemperature', '1'));
+let modelTopP = parseFloat(browserGet('modelTopP', '0.95'));
+let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '1'));
+let imageModelTopP = parseFloat(browserGet('imageModelTopP', '0.95'));
 let maxTokens = parseInt(browserGet('maxTokens', '0'));
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
@@ -878,7 +872,6 @@ class ScoreIndicator {
         this.refreshButton = null;
         this.followUpImageContainer = null;
         this.followUpImageInput = null;
-        this.uploadedImageDataUrls = [];
         this.metadataDropdown = null;
         this.metadataToggle = null;
         this.metadataArrow = null;
@@ -900,14 +893,14 @@ class ScoreIndicator {
         this.currentFollowUpSource = null;
         this._lastScrollPosition = 0;
         this._boundHandlers = {
-            handleMobileFocus: null,
-            handleMobileTouchStart: null,
             handleAttachImageClick: null,
             handleKeyDown: null,
             handleFollowUpTouchStart: null,
             handleFollowUpTouchEnd: null,
             handleConversationReasoningToggle: null
         };
+        this._boundMethodHandlers = Object.create(null);
+        this._listenerTeardowns = [];
         try {
             this._createElements(tweetArticle);
             this._addEventListeners();
@@ -1110,7 +1103,11 @@ class ScoreIndicator {
         this._updateTooltipUI();
         this.autoScrollConversation = true;
         if (this.conversationContainerElement) {
-            this.conversationContainerElement.addEventListener('scroll', this._handleConversationScroll.bind(this));
+            this._registerDomListener(
+                this.conversationContainerElement,
+                'scroll',
+                this._getBoundMethodHandler('_handleConversationScroll')
+            );
         }
         if (isMobileDevice()) {
             this._initializeMobileInteractionFix();
@@ -1150,14 +1147,15 @@ class ScoreIndicator {
             this.scrollButton
         ].filter(el => el);
         interactiveElements.forEach(element => {
-            element.addEventListener('touchstart', handleFirstTap, { passive: true, capture: true });
+            this._registerDomListener(element, 'touchstart', handleFirstTap, { passive: true, capture: true });
         });
         if (this.customQuestionInput) {
             let scrollBeforeFocus = 0;
-            this.customQuestionInput.addEventListener('touchstart', (e) => {
+            const handleInputTouchStart = () => {
                 scrollBeforeFocus = this.tooltipScrollableContentElement?.scrollTop || 0;
-            }, { passive: true });
-            this.customQuestionInput.addEventListener('focus', (e) => {
+            };
+            this._registerDomListener(this.customQuestionInput, 'touchstart', handleInputTouchStart, { passive: true });
+            const handleInputFocus = () => {
                 if (scrollBeforeFocus > 0) {
                     requestAnimationFrame(() => {
                         if (this.tooltipScrollableContentElement) {
@@ -1165,21 +1163,21 @@ class ScoreIndicator {
                         }
                     });
                 }
-            });
+            };
+            this._registerDomListener(this.customQuestionInput, 'focus', handleInputFocus);
         }
         if (this.conversationContainerElement) {
-            this.conversationContainerElement.addEventListener('touchstart', (e) => {
+            const handleConversationTouchStart = (e) => {
                 const toggle = e.target.closest('.reasoning-toggle');
                 if (toggle) {
                     handleFirstTap(e);
                 }
-            }, { passive: true, capture: true });
+            };
+            this._registerDomListener(this.conversationContainerElement, 'touchstart', handleConversationTouchStart, { passive: true, capture: true });
         }
         if (this.tooltipScrollableContentElement) {
-            let lastTouchY = 0;
             let scrollLocked = false;
-            this.tooltipScrollableContentElement.addEventListener('touchstart', (e) => {
-                lastTouchY = e.touches[0].clientY;
+            const handleTooltipTouchStart = (e) => {
                 scrollLocked = false;
                 if (!this._hasFirstInteraction) {
                     const interactiveTarget = e.target.closest('button, textarea, .reasoning-toggle');
@@ -1196,7 +1194,8 @@ class ScoreIndicator {
                         }, 100);
                     }
                 }
-            }, { passive: true });
+            };
+            this._registerDomListener(this.tooltipScrollableContentElement, 'touchstart', handleTooltipTouchStart, { passive: true });
         }
     }
     _simulateInitialMobileTaps() {
@@ -1256,22 +1255,53 @@ class ScoreIndicator {
             });
         }, 100);
     }
+    _getBoundMethodHandler(methodName) {
+        if (!this._boundMethodHandlers[methodName]) {
+            const method = this[methodName];
+            if (typeof method !== 'function') {
+                throw new Error(`[ScoreIndicator ${this.tweetId}] Missing handler method: ${methodName}`);
+            }
+            this._boundMethodHandlers[methodName] = method.bind(this);
+        }
+        return this._boundMethodHandlers[methodName];
+    }
+    _registerDomListener(target, eventName, handler, options) {
+        if (!target || typeof target.addEventListener !== 'function' || typeof handler !== 'function') {
+            return;
+        }
+        target.addEventListener(eventName, handler, options);
+        this._listenerTeardowns.push(() => {
+            if (target && typeof target.removeEventListener === 'function') {
+                target.removeEventListener(eventName, handler, options);
+            }
+        });
+    }
+    _removeRegisteredListeners() {
+        for (let i = this._listenerTeardowns.length - 1; i >= 0; i -= 1) {
+            try {
+                this._listenerTeardowns[i]();
+            } catch (error) {
+                console.warn(`[ScoreIndicator ${this.tweetId}] Failed to remove a listener:`, error);
+            }
+        }
+        this._listenerTeardowns = [];
+    }
     _addEventListeners() {
         if (!this.indicatorElement || !this.tooltipElement) return;
-        this.indicatorElement.addEventListener('mouseenter', this._handleMouseEnter.bind(this));
-        this.indicatorElement.addEventListener('mouseleave', this._handleMouseLeave.bind(this));
-        this.indicatorElement.addEventListener('click', this._handleIndicatorClick.bind(this));
-        this.tooltipElement.addEventListener('mouseenter', this._handleTooltipMouseEnter.bind(this));
-        this.tooltipElement.addEventListener('mouseleave', this._handleTooltipMouseLeave.bind(this));
-        this.tooltipScrollableContentElement?.addEventListener('scroll', this._handleTooltipScroll.bind(this));
-        this.pinButton?.addEventListener('click', this._handlePinClick.bind(this));
-        this.copyButton?.addEventListener('click', this._handleCopyClick.bind(this));
-        this.tooltipCloseButton?.addEventListener('click', this._handleCloseClick.bind(this));
-        this.reasoningToggle?.addEventListener('click', this._handleReasoningToggleClick.bind(this));
-        this.scrollButton?.addEventListener('click', this._handleScrollButtonClick.bind(this));
-        this.refreshButton?.addEventListener('click', this._handleRefreshClick.bind(this));
-        this.rateButton?.addEventListener('click', this._handleRateClick.bind(this));
-        this.followUpQuestionsElement?.addEventListener('click', this._handleFollowUpQuestionClick.bind(this));
+        this._registerDomListener(this.indicatorElement, 'mouseenter', this._getBoundMethodHandler('_handleMouseEnter'));
+        this._registerDomListener(this.indicatorElement, 'mouseleave', this._getBoundMethodHandler('_handleMouseLeave'));
+        this._registerDomListener(this.indicatorElement, 'click', this._getBoundMethodHandler('_handleIndicatorClick'));
+        this._registerDomListener(this.tooltipElement, 'mouseenter', this._getBoundMethodHandler('_handleTooltipMouseEnter'));
+        this._registerDomListener(this.tooltipElement, 'mouseleave', this._getBoundMethodHandler('_handleTooltipMouseLeave'));
+        this._registerDomListener(this.tooltipScrollableContentElement, 'scroll', this._getBoundMethodHandler('_handleTooltipScroll'));
+        this._registerDomListener(this.pinButton, 'click', this._getBoundMethodHandler('_handlePinClick'));
+        this._registerDomListener(this.copyButton, 'click', this._getBoundMethodHandler('_handleCopyClick'));
+        this._registerDomListener(this.tooltipCloseButton, 'click', this._getBoundMethodHandler('_handleCloseClick'));
+        this._registerDomListener(this.reasoningToggle, 'click', this._getBoundMethodHandler('_handleReasoningToggleClick'));
+        this._registerDomListener(this.scrollButton, 'click', this._getBoundMethodHandler('_handleScrollButtonClick'));
+        this._registerDomListener(this.refreshButton, 'click', this._getBoundMethodHandler('_handleRefreshClick'));
+        this._registerDomListener(this.rateButton, 'click', this._getBoundMethodHandler('_handleRateClick'));
+        this._registerDomListener(this.followUpQuestionsElement, 'click', this._getBoundMethodHandler('_handleFollowUpQuestionClick'));
         if (isMobileDevice() && this.followUpQuestionsElement) {
             this._boundHandlers.handleFollowUpTouchStart = (e) => {
                 const button = e.target.closest('.follow-up-question-button');
@@ -1300,33 +1330,26 @@ class ScoreIndicator {
                     delete button.dataset.touchStartY;
                 }
             };
-            this.followUpQuestionsElement.addEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
-            this.followUpQuestionsElement.addEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+            this._registerDomListener(this.followUpQuestionsElement, 'touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+            this._registerDomListener(this.followUpQuestionsElement, 'touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
         }
-        this.customQuestionButton?.addEventListener('click', this._handleCustomQuestionClick.bind(this));
+        this._registerDomListener(this.customQuestionButton, 'click', this._getBoundMethodHandler('_handleCustomQuestionClick'));
         this._boundHandlers.handleKeyDown = (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 this._handleCustomQuestionClick(event);
             }
         };
-        this.customQuestionInput?.addEventListener('keydown', this._boundHandlers.handleKeyDown);
-        if (isMobileDevice() && this.customQuestionInput) {
-            this._boundHandlers.handleMobileFocus = (event) => {
-            };
-            this._boundHandlers.handleMobileTouchStart = (event) => {
-                this._lastScrollPosition = this.tooltipScrollableContentElement?.scrollTop || 0;
-            };
-        }
-        this.metadataToggle?.addEventListener('click', this._handleMetadataToggleClick.bind(this));
+        this._registerDomListener(this.customQuestionInput, 'keydown', this._boundHandlers.handleKeyDown);
+        this._registerDomListener(this.metadataToggle, 'click', this._getBoundMethodHandler('_handleMetadataToggleClick'));
         if (this.attachImageButton && this.followUpImageInput) {
             this._boundHandlers.handleAttachImageClick = (event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 this.followUpImageInput.click();
             };
-            this.attachImageButton.addEventListener('click', this._boundHandlers.handleAttachImageClick);
-            this.followUpImageInput.addEventListener('change', this._handleFollowUpImageSelect.bind(this));
+            this._registerDomListener(this.attachImageButton, 'click', this._boundHandlers.handleAttachImageClick);
+            this._registerDomListener(this.followUpImageInput, 'change', this._getBoundMethodHandler('_handleFollowUpImageSelect'));
         }
     }
     _updateIndicatorUI() {
@@ -1380,15 +1403,10 @@ class ScoreIndicator {
         }
         this.indicatorElement.textContent = indicatorText;
     }
-    _updateTooltipUI() {
-        if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement || !this.metadataDropdown) {
-            return;
-        }
-        const previousScrollTop = this.tooltipScrollableContentElement.scrollTop;
-        const fullDescription = this.description || "";
+    _extractDescriptionSections(fullDescription) {
         const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
         const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
-        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([^<]+)<\/FOLLOW_UP_QUESTIONS>/);
+        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
         let analysisContent = "";
         let scoreContent = "";
         let questionsContent = "";
@@ -1403,8 +1421,56 @@ class ScoreIndicator {
             scoreContent = scoreMatch[1].trim();
         }
         if (questionsMatch && questionsMatch[1] !== undefined) {
-            questionsContent = questionsMatch[1].trim();
+            const taggedQuestions = [1, 2, 3]
+                .map((index) => {
+                    const taggedQuestionMatch = questionsMatch[1].match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
+                    return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
+                        ? taggedQuestionMatch[1].trim()
+                        : "";
+                })
+                .filter(Boolean);
+            questionsContent = taggedQuestions.length > 0
+                ? taggedQuestions.join('\n')
+                : questionsMatch[1].trim();
         }
+        return { analysisContent, scoreContent, questionsContent };
+    }
+    _buildMetadataDisplayState() {
+        let metadataHTML = '';
+        let showMetadataDropdown = false;
+        const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
+        const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
+        if (hasFullMetadata) {
+            if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
+                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
+            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+            if (this.metadata.reasoningTokens > 0) {
+                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+            if (this.metadata.mediaInputs > 0) {
+                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+            showMetadataDropdown = true;
+        } else if (hasOnlyGenId) {
+            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
+            showMetadataDropdown = true;
+        }
+        return { metadataHTML, showMetadataDropdown };
+    }
+    _updateTooltipUI() {
+        if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement || !this.metadataDropdown) {
+            return;
+        }
+        const previousScrollTop = this.tooltipScrollableContentElement.scrollTop;
+        const {
+            analysisContent,
+            scoreContent,
+            questionsContent
+        } = this._extractDescriptionSections(this.description || "");
         let contentChanged = false;
         const formattedAnalysis = formatTooltipDescription(analysisContent).description;
         if (this.descriptionElement.innerHTML !== formattedAnalysis) {
@@ -1453,6 +1519,7 @@ class ScoreIndicator {
         if (this.conversationContainerElement.innerHTML !== renderedHistory) {
             this.conversationContainerElement.innerHTML = renderedHistory;
             this.conversationContainerElement.style.display = this.conversationHistory.length > 0 ? 'block' : 'none';
+            this._attachConversationReasoningListeners();
             contentChanged = true;
         }
         let questionsButtonsChanged = false;
@@ -1500,29 +1567,7 @@ class ScoreIndicator {
             }
             contentChanged = true;
         }
-        let metadataHTML = '';
-        let showMetadataDropdown = false;
-        const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
-        const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
-        if (hasFullMetadata) {
-            if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
-                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
-            }
-            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
-            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
-            if (this.metadata.reasoningTokens > 0) {
-                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
-            }
-            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
-            if (this.metadata.mediaInputs > 0) {
-                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
-            }
-            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
-            showMetadataDropdown = true;
-        } else if (hasOnlyGenId) {
-            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
-            showMetadataDropdown = true;
-        }
+        const { metadataHTML, showMetadataDropdown } = this._buildMetadataDisplayState();
         if (this.metadataElement.innerHTML !== metadataHTML) {
             this.metadataElement.innerHTML = metadataHTML;
             contentChanged = true;
@@ -1662,16 +1707,12 @@ class ScoreIndicator {
                 </div>
             `;
         });
-        if (this.conversationContainerElement) {
-            this.conversationContainerElement.innerHTML = historyHtml;
-            this._attachConversationReasoningListeners();
-        }
         return historyHtml;
     }
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
         if (this._boundHandlers.handleConversationReasoningToggle) {
-            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+            return;
         }
         this._boundHandlers.handleConversationReasoningToggle = (e) => {
             const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
@@ -1697,7 +1738,7 @@ class ScoreIndicator {
                 });
             }
         };
-        this.conversationContainerElement.addEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
+        this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationReasoningToggle);
     }
     _performAutoScroll() {
         if (!this.tooltipScrollableContentElement || !this.autoScroll || !this.isVisible) return;
@@ -2164,6 +2205,27 @@ class ScoreIndicator {
         }
         this.currentFollowUpSource = null;
     }
+    refreshIndicatorUI() {
+        this._updateIndicatorUI();
+    }
+    refreshTooltipUI() {
+        this._updateTooltipUI();
+    }
+    setAuthorBlacklistState(isBlacklisted) {
+        this.isAuthorBlacklisted = Boolean(isBlacklisted);
+    }
+    setFollowUpQuestions(questions) {
+        this.questions = Array.isArray(questions) ? questions : [];
+    }
+    updateConversationHistoryEntry(question, answer, reasoning = '') {
+        this._updateConversationHistory(question, answer, reasoning);
+    }
+    renderStreamingAnswer(streamingText, reasoningText = '') {
+        this._renderStreamingAnswer(streamingText, reasoningText);
+    }
+    finalizeFollowUpInteraction() {
+        this._finalizeFollowUpInteraction();
+    }
     _updateConversationHistory(question, answer, reasoning = '') {
         const entryIndex = this.conversationHistory.findIndex(turn => turn.question === question && turn.answer === 'pending');
         if (entryIndex !== -1) {
@@ -2352,42 +2414,7 @@ class ScoreIndicator {
             window.activeStreamingRequests[this.tweetId].abort();
             delete window.activeStreamingRequests[this.tweetId];
         }
-        this.indicatorElement?.removeEventListener('mouseenter', this._handleMouseEnter);
-        this.indicatorElement?.removeEventListener('mouseleave', this._handleMouseLeave);
-        this.indicatorElement?.removeEventListener('click', this._handleIndicatorClick);
-        this.tooltipElement?.removeEventListener('mouseenter', this._handleTooltipMouseEnter);
-        this.tooltipElement?.removeEventListener('mouseleave', this._handleTooltipMouseLeave);
-        this.tooltipScrollableContentElement?.removeEventListener('scroll', this._handleTooltipScroll.bind(this));
-        this.pinButton?.removeEventListener('click', this._handlePinClick.bind(this));
-        this.copyButton?.removeEventListener('click', this._handleCopyClick.bind(this));
-        this.tooltipCloseButton?.removeEventListener('click', this._handleCloseClick.bind(this));
-        this.reasoningToggle?.removeEventListener('click', this._handleReasoningToggleClick.bind(this));
-        this.scrollButton?.removeEventListener('click', this._handleScrollButtonClick.bind(this));
-        this.followUpQuestionsElement?.removeEventListener('click', this._handleFollowUpQuestionClick.bind(this));
-        this.customQuestionButton?.removeEventListener('click', this._handleCustomQuestionClick.bind(this));
-        this.customQuestionInput?.removeEventListener('keydown', this._boundHandlers.handleKeyDown);
-        if (isMobileDevice()) {
-            if (this.customQuestionInput && this._boundHandlers.handleMobileFocus) {
-                this.customQuestionInput.removeEventListener('focus', this._boundHandlers.handleMobileFocus);
-                this.customQuestionInput.removeEventListener('touchstart', this._boundHandlers.handleMobileTouchStart, { passive: false });
-            }
-            if (this.followUpQuestionsElement && this._boundHandlers.handleFollowUpTouchStart) {
-                this.followUpQuestionsElement.removeEventListener('touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
-                this.followUpQuestionsElement.removeEventListener('touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
-            }
-        }
-        this.metadataToggle?.removeEventListener('click', this._handleMetadataToggleClick.bind(this));
-        this.refreshButton?.removeEventListener('click', this._handleRefreshClick.bind(this));
-        this.rateButton?.removeEventListener('click', this._handleRateClick.bind(this));
-        if (this.attachImageButton) {
-            this.attachImageButton.removeEventListener('click', this._boundHandlers.handleAttachImageClick);
-        }
-        if (this.followUpImageInput) {
-            this.followUpImageInput.removeEventListener('change', this._handleFollowUpImageSelect.bind(this));
-        }
-        if (this.conversationContainerElement && this._boundHandlers.handleConversationReasoningToggle) {
-            this.conversationContainerElement.removeEventListener('click', this._boundHandlers.handleConversationReasoningToggle);
-        }
+        this._removeRegisteredListeners();
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
         ScoreIndicatorRegistry.remove(this.tweetId);
@@ -2418,6 +2445,8 @@ class ScoreIndicator {
         this.metadataArrow = null;
         this.metadataContent = null;
         this.tooltipScrollableContentElement = null;
+        this._boundMethodHandlers = Object.create(null);
+        this._listenerTeardowns = [];
     }
     ensureIndicatorAttached() {
         if (!this.indicatorElement) return false;
@@ -3571,14 +3600,15 @@ function filterSingleTweet(tweetArticle) {
     indicatorInstance?.ensureIndicatorAttached();
     const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     const ratingStatus = tweetArticle.dataset.ratingStatus;
+    const isAuthorCurrentlyBlacklisted = isUserBlacklisted(authorHandle);
     if (indicatorInstance) {
-        indicatorInstance.isAuthorBlacklisted = isUserBlacklisted(authorHandle);
+        indicatorInstance.setAuthorBlacklistState(isAuthorCurrentlyBlacklisted);
     }
-    if (isUserBlacklisted(authorHandle)) {
+    if (isAuthorCurrentlyBlacklisted) {
         delete cell.dataset.filtered;
         cell.dataset.authorBlacklisted = 'true';
         if (indicatorInstance) {
-            indicatorInstance._updateIndicatorUI();
+            indicatorInstance.refreshIndicatorUI();
         }
     } else {
         delete cell.dataset.authorBlacklisted;
@@ -3594,7 +3624,7 @@ function filterSingleTweet(tweetArticle) {
         } else {
             delete cell.dataset.filtered;
             if (indicatorInstance) {
-                indicatorInstance._updateIndicatorUI();
+                indicatorInstance.refreshIndicatorUI();
             }
         }
     }
@@ -3678,40 +3708,51 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         }
                     }
                 }
-                const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-                const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-                const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
-                const videoMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
-                for (const match of mediaMatches1) {
-                    if (match[1]) {
-                        mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
-                    }
-                }
-                for (const match of mediaMatches2) {
-                    if (match[1]) {
-                        mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
-                    }
-                }
-                for (const match of videoMatches1) {
-                    if (match[1]) {
-                        const videoLines = match[1].trim().split('\n').filter(line => line.trim());
-                        videoLines.forEach(line => {
-                            if (line.startsWith('[VIDEO ')) {
-                                const desc = line.replace(/^\[VIDEO \d+\]: /, '');
-                                mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                const contextLines = fullContextWithImageDescription.split('\n');
+                const mediaSectionHeaders = new Set(['[MEDIA_URLS]:', '[QUOTED_TWEET_MEDIA_URLS]:']);
+                const videoSectionHeaders = new Set(['[VIDEO_DESCRIPTIONS]:', '[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:']);
+                const videoLinePattern = /^\[VIDEO \d+\]:\s*/;
+                for (let i = 0; i < contextLines.length; i++) {
+                    const trimmedLine = contextLines[i].trim();
+                    if (mediaSectionHeaders.has(trimmedLine)) {
+                        let cursor = i + 1;
+                        while (cursor < contextLines.length) {
+                            const mediaLine = contextLines[cursor].trim();
+                            if (!mediaLine) {
+                                cursor++;
+                                continue;
                             }
-                        });
-                    }
-                }
-                for (const match of videoMatches2) {
-                    if (match[1]) {
-                        const videoLines = match[1].trim().split('\n').filter(line => line.trim());
-                        videoLines.forEach(line => {
-                            if (line.startsWith('[VIDEO ')) {
-                                const desc = line.replace(/^\[VIDEO \d+\]: /, '');
-                                mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                            if (mediaLine.startsWith('[')) {
+                                break;
                             }
-                        });
+                            mediaURLs.push(...mediaLine.split(',').map(url => url.trim()).filter(Boolean));
+                            cursor++;
+                        }
+                        i = cursor - 1;
+                        continue;
+                    }
+                    if (videoSectionHeaders.has(trimmedLine)) {
+                        let cursor = i + 1;
+                        while (cursor < contextLines.length) {
+                            const videoLine = contextLines[cursor].trim();
+                            if (!videoLine) {
+                                cursor++;
+                                continue;
+                            }
+                            if (videoLinePattern.test(videoLine)) {
+                                const desc = videoLine.replace(videoLinePattern, '').trim();
+                                if (desc) {
+                                    mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                                }
+                                cursor++;
+                                continue;
+                            }
+                            if (videoLine.startsWith('[')) {
+                                break;
+                            }
+                            cursor++;
+                        }
+                        i = cursor - 1;
                     }
                 }
                 mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
@@ -3750,7 +3791,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             return;
                         }
                         const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
-                        const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
+                        const contextForApi = fullContextWithImageDescription
+                            .replace(/\n?\[THREAD_MEDIA_URLS\]:\s*\n[^\n]*(?=\n|$)/g, '')
+                            .replace(/\n{3,}/g, '\n\n');
+                        const rating = await rateTweetWithOpenRouter(contextForApi, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
                         score = rating.score;
                         description = rating.content;
                         reasoning = rating.reasoning || '';
@@ -4129,19 +4173,6 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
                 quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
                 quotedMediaLinks = extractMediaLinks(quoteContainer);
             }
-            const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
-                document.querySelector('div[aria-label^="Timeline: Conversation"]');
-            let threadMediaUrls = [];
-            if (conversation && conversation.dataset.threadMapping && tweetCache.has(tweetId) && tweetCache.get(tweetId).threadContext?.threadMediaUrls) {
-                threadMediaUrls = tweetCache.get(tweetId).threadContext.threadMediaUrls || [];
-            } else if (conversation && conversation.dataset.threadMediaUrls) {
-                try {
-                    const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
-                    threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
-                } catch (e) {
-                    console.error("Error parsing thread media URLs:", e);
-                }
-            }
             let allAvailableMediaLinks = [...(allMediaLinks || [])];
             let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
             const mainImageUrls = [];
@@ -4181,15 +4212,6 @@ ${mainImageUrls.join(", ")}`;
                 fullContextWithImageDescription += `
 [ENGAGEMENT_STATS]:
 ${engagementStats}`;
-            }
-            if (!isOriginalTweet(tweetArticle) && threadMediaUrls.length > 0) {
-                const uniqueThreadMediaUrls = threadMediaUrls.filter(url =>
-                    !mainMediaLinks.includes(url) && !quotedMediaLinks.includes(url));
-                if (uniqueThreadMediaUrls.length > 0) {
-                    fullContextWithImageDescription += `
-[THREAD_MEDIA_URLS]:
-${uniqueThreadMediaUrls.join(", ")}`;
-                }
             }
             if (quotedText || quotedMediaLinks.length > 0) {
                 fullContextWithImageDescription += `
@@ -4572,9 +4594,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     to: tw.replyTo,
                     toId: tw.replyToId,
                     isRoot: tw.isRoot === true,
-                    text: tw.text,
-                    mediaLinks: tw.mediaLinks || [],
-                    quotedMediaLinks: tw.quotedMediaLinks || []
+                    text: tw.text
                 }));
             conversation.dataset.threadMapping = JSON.stringify(replyDocs);
             for (const waitingTweetId of MAPPING_INCOMPLETE_TWEETS) {
@@ -4616,8 +4636,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         tweetCache.get(doc.tweetId).threadContext = {
                             replyTo: doc.to,
                             replyToId: doc.toId,
-                            isRoot: doc.isRoot,
-                            threadMediaUrls: doc.isRoot ? [] : getAllPreviousMediaUrls(doc.tweetId, replyDocs)
+                            isRoot: doc.isRoot
                         };
                         if (doc.tweetId && processedTweets.has(doc.tweetId)) {
                             const tweetCell = tweetCells.find(tc => tc.tweetId === doc.tweetId);
@@ -4640,21 +4659,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             threadMappingInProgress = false;
             conversation.dataset.threadMappedAt = Date.now().toString();
         };
-        function getAllPreviousMediaUrls(tweetId, replyDocs) {
-            const allMediaUrls = [];
-            const index = replyDocs.findIndex(doc => doc.tweetId === tweetId);
-            if (index > 0) {
-                for (let i = 0; i < index; i++) {
-                    if (replyDocs[i].mediaLinks && replyDocs[i].mediaLinks.length) {
-                        allMediaUrls.push(...replyDocs[i].mediaLinks);
-                    }
-                    if (replyDocs[i].quotedMediaLinks && replyDocs[i].quotedMediaLinks.length) {
-                        allMediaUrls.push(...replyDocs[i].quotedMediaLinks);
-                    }
-                }
-            }
-            return allMediaUrls;
-        }
         await Promise.race([mapping(), timeout]);
     } catch (error) {
         console.error("Error in mapThreadStructure:", error);
@@ -5116,30 +5120,66 @@ const safetySettings = [
 ];
 function extractFollowUpQuestions(content) {
     if (!content) return [];
+    const taggedQuestions = [1, 2, 3].map((index) => {
+        const taggedQuestionMatch = content.match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
+        return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
+            ? taggedQuestionMatch[1].trim()
+            : "";
+    });
+    if (taggedQuestions.every(q => q.length > 0)) {
+        return taggedQuestions;
+    }
+    const questionsBlockMatch = content.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
+    const legacyQuestionsBlock = questionsBlockMatch ? questionsBlockMatch[1] : content;
     const questions = [];
     const q1Marker = "Q_1.";
     const q2Marker = "Q_2.";
     const q3Marker = "Q_3.";
-    const q1Start = content.indexOf(q1Marker);
-    const q2Start = content.indexOf(q2Marker);
-    const q3Start = content.indexOf(q3Marker);
+    const q1Start = legacyQuestionsBlock.indexOf(q1Marker);
+    const q2Start = legacyQuestionsBlock.indexOf(q2Marker);
+    const q3Start = legacyQuestionsBlock.indexOf(q3Marker);
     if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
-        const q1Text = content.substring(q1Start + q1Marker.length, q2Start).trim();
+        const q1Text = legacyQuestionsBlock.substring(q1Start + q1Marker.length, q2Start).trim();
         questions.push(q1Text);
-        const q2Text = content.substring(q2Start + q2Marker.length, q3Start).trim();
+        const q2Text = legacyQuestionsBlock.substring(q2Start + q2Marker.length, q3Start).trim();
         questions.push(q2Text);
-        let q3Text = content.substring(q3Start + q3Marker.length).trim();
-        const endMarker = "</FOLLOW_UP_QUESTIONS>";
-        if (q3Text.endsWith(endMarker)) {
-            q3Text = q3Text.substring(0, q3Text.length - endMarker.length).trim();
-        }
+        const q3Text = legacyQuestionsBlock.substring(q3Start + q3Marker.length).trim();
         questions.push(q3Text);
         if (questions.every(q => q.length > 0)) {
             return questions;
         }
     }
-    console.warn("[extractFollowUpQuestions] Failed to find or parse Q_1/Q_2/Q_3 markers.");
+    console.warn("[extractFollowUpQuestions] Failed to parse <Q1>/<Q2>/<Q3> tags or legacy Q_1/Q_2/Q_3 markers.");
     return [];
+}
+function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
+    if (!Array.isArray(mediaUrls) || mediaUrls.length <= 1 || !threadText) {
+        return mediaUrls;
+    }
+    return mediaUrls
+        .map((url, originalIndex) => ({
+            url,
+            originalIndex,
+            firstIndex: typeof url === 'string' ? threadText.indexOf(url) : -1
+        }))
+        .sort((a, b) => {
+            const aMissing = a.firstIndex === -1;
+            const bMissing = b.firstIndex === -1;
+            if (aMissing && bMissing) {
+                return a.originalIndex - b.originalIndex;
+            }
+            if (aMissing) {
+                return 1;
+            }
+            if (bMissing) {
+                return -1;
+            }
+            if (a.firstIndex !== b.firstIndex) {
+                return a.firstIndex - b.firstIndex;
+            }
+            return a.originalIndex - b.originalIndex;
+        })
+        .map(item => item.url);
 }
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
     console.log("given tweettext\n", tweetText);
@@ -5166,7 +5206,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         indicatorInstance.updateInitialReviewAndBuildHistory({
             fullContext: tweetText,
             mediaUrls: [],
-            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
+            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>",
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
             followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
             userInstructions: currentInstructions
@@ -5182,10 +5222,9 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         };
     }
     const currentInstructions = instructionsManager.getCurrentInstructions();
-    const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
     const reasoningEffort = browserGet('reasoningEffort', 'none');
     const requestBody = {
-        model: effectiveModel,
+        model: selectedModel,
         messages: [
             {
                 role: "system",
@@ -5209,9 +5248,9 @@ EXPECTED_RESPONSE_FORMAT:\n
     SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\n
   </SCORE>\n
   <FOLLOW_UP_QUESTIONS>\n
-    Q_1. …\n
-    Q_2. …\n
-    Q_3. …\n
+    <Q1>…</Q1>\n
+    <Q2>…</Q2>\n
+    <Q3>…</Q3>\n
   </FOLLOW_UP_QUESTIONS>
 `
                     }
@@ -5224,6 +5263,9 @@ EXPECTED_RESPONSE_FORMAT:\n
     };
     if (reasoningEffort !== 'none') {
         requestBody.reasoning = { effort: reasoningEffort };
+    }
+    if(browserGet('enableWebSearch',false)){
+        requestBody.tools = [{type: "openrouter:web_search"}];
     }
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
@@ -5238,8 +5280,9 @@ EXPECTED_RESPONSE_FORMAT:\n
                 imageUrls.push(item);
             }
         });
-        if (imageUrls.length > 0 && modelSupportsImages(selectedModel)) {
-            imageUrls.forEach(url => {
+        const orderedImageUrls = orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+        if (orderedImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+            orderedImageUrls.forEach(url => {
                 if (url.startsWith('data:application/pdf')) {
                     requestBody.messages[1].content.push({
                         type: "file",
@@ -5342,7 +5385,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                 indicatorInstance.updateInitialReviewAndBuildHistory({
                     fullContext: tweetText,
                     mediaUrls: mediaUrls,
-                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
+                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
                     followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
                     userInstructions: currentInstructions
@@ -5378,7 +5421,7 @@ EXPECTED_RESPONSE_FORMAT:\n
     indicatorInstance.updateInitialReviewAndBuildHistory({
         fullContext: tweetText,
         mediaUrls: mediaUrls,
-        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
+        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
         reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
         followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
         userInstructions: currentInstructions
@@ -5609,8 +5652,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
             const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
-            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion>\n        You MUST match the EXPECTED_RESPONSE_FORMAT\n        EXPECTED_RESPONSE_FORMAT:\n        <ANSWER>\n(Your answer here)\n</ANSWER>\n
-            <FOLLOW_UP_QUESTIONS> (Anticipate 3 things the user may ask you next. These questions should not be directed at the user. Only pose a question if you are sure you can answer it, based off your knowledge.)\nQ_1. (New Question 1 here)\nQ_2. (New Question 2 here)\nQ_3. (New Question 3 here)\n</FOLLOW_UP_QUESTIONS>\n        `;
+            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
             const templatedContent = [{ type: "text", text: templatedText }];
             msg.content.forEach(contentItem => {
                 if (contentItem.type === "image_url" || contentItem.type === "file") {
@@ -5656,7 +5698,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                         (chunkData) => {
                             aggregatedContent = chunkData.content || aggregatedContent;
                             aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
-                            indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
+                            indicatorInstance.renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
                         },
                         (result) => {
                             finalAnswerContent = result.content || aggregatedContent;
@@ -5685,9 +5727,9 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                         (error) => {
                             console.error("[FollowUp Stream Error]", error);
                             const errorMessage = `Error generating answer: ${error.message}`;
-                            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage);
-                            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || [];
-                            indicatorInstance._updateTooltipUI();
+                            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+                            indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
+                            indicatorInstance.refreshTooltipUI();
                             const currentCache = tweetCache.get(tweetId) || {};
                             currentCache.lastAnswer = errorMessage;
                             currentCache.timestamp = Date.now();
@@ -5721,17 +5763,17 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         } catch (error) {
             console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
             const errorMessage = `Error answering question: ${error.message}`;
-            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage);
-            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || [];
-            indicatorInstance._updateTooltipUI();
+            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+            indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
+            indicatorInstance.refreshTooltipUI();
             const currentCache = tweetCache.get(tweetId) || {};
             currentCache.lastAnswer = errorMessage;
             currentCache.timestamp = Date.now();
             tweetCache.set(tweetId, currentCache);
         }
     } finally {
-        if (indicatorInstance && typeof indicatorInstance._finalizeFollowUpInteraction === 'function') {
-            indicatorInstance._finalizeFollowUpInteraction();
+        if (indicatorInstance && typeof indicatorInstance.finalizeFollowUpInteraction === 'function') {
+            indicatorInstance.finalizeFollowUpInteraction();
         }
     }
 }

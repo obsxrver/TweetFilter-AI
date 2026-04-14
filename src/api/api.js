@@ -33,29 +33,35 @@ const safetySettings = [
 function extractFollowUpQuestions(content) {
     if (!content) return [];
 
+    const taggedQuestions = [1, 2, 3].map((index) => {
+        const taggedQuestionMatch = content.match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
+        return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
+            ? taggedQuestionMatch[1].trim()
+            : "";
+    });
+    if (taggedQuestions.every(q => q.length > 0)) {
+        return taggedQuestions;
+    }
+
+    const questionsBlockMatch = content.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
+    const legacyQuestionsBlock = questionsBlockMatch ? questionsBlockMatch[1] : content;
     const questions = [];
     const q1Marker = "Q_1.";
     const q2Marker = "Q_2.";
     const q3Marker = "Q_3.";
 
-    const q1Start = content.indexOf(q1Marker);
-    const q2Start = content.indexOf(q2Marker);
-    const q3Start = content.indexOf(q3Marker);
+    const q1Start = legacyQuestionsBlock.indexOf(q1Marker);
+    const q2Start = legacyQuestionsBlock.indexOf(q2Marker);
+    const q3Start = legacyQuestionsBlock.indexOf(q3Marker);
 
     if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
-
-        const q1Text = content.substring(q1Start + q1Marker.length, q2Start).trim();
+        const q1Text = legacyQuestionsBlock.substring(q1Start + q1Marker.length, q2Start).trim();
         questions.push(q1Text);
 
-        const q2Text = content.substring(q2Start + q2Marker.length, q3Start).trim();
+        const q2Text = legacyQuestionsBlock.substring(q2Start + q2Marker.length, q3Start).trim();
         questions.push(q2Text);
 
-        let q3Text = content.substring(q3Start + q3Marker.length).trim();
-
-        const endMarker = "</FOLLOW_UP_QUESTIONS>";
-        if (q3Text.endsWith(endMarker)) {
-            q3Text = q3Text.substring(0, q3Text.length - endMarker.length).trim();
-        }
+        const q3Text = legacyQuestionsBlock.substring(q3Start + q3Marker.length).trim();
         questions.push(q3Text);
 
         if (questions.every(q => q.length > 0)) {
@@ -63,8 +69,47 @@ function extractFollowUpQuestions(content) {
         }
     }
 
-    console.warn("[extractFollowUpQuestions] Failed to find or parse Q_1/Q_2/Q_3 markers.");
+    console.warn("[extractFollowUpQuestions] Failed to parse <Q1>/<Q2>/<Q3> tags or legacy Q_1/Q_2/Q_3 markers.");
     return [];
+}
+
+/**
+ * Orders media URLs by their first appearance in the provided thread text.
+ * URLs not found in the text keep their original relative order and are placed last.
+ * @param {string[]} mediaUrls
+ * @param {string} threadText
+ * @returns {string[]}
+ */
+function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
+    if (!Array.isArray(mediaUrls) || mediaUrls.length <= 1 || !threadText) {
+        return mediaUrls;
+    }
+
+    return mediaUrls
+        .map((url, originalIndex) => ({
+            url,
+            originalIndex,
+            firstIndex: typeof url === 'string' ? threadText.indexOf(url) : -1
+        }))
+        .sort((a, b) => {
+            const aMissing = a.firstIndex === -1;
+            const bMissing = b.firstIndex === -1;
+
+            if (aMissing && bMissing) {
+                return a.originalIndex - b.originalIndex;
+            }
+            if (aMissing) {
+                return 1;
+            }
+            if (bMissing) {
+                return -1;
+            }
+            if (a.firstIndex !== b.firstIndex) {
+                return a.firstIndex - b.firstIndex;
+            }
+            return a.originalIndex - b.originalIndex;
+        })
+        .map(item => item.url);
 }
 
 /**
@@ -107,7 +152,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         indicatorInstance.updateInitialReviewAndBuildHistory({
             fullContext: tweetText,
             mediaUrls: [],
-            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>",
+            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>",
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
             followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
             userInstructions: currentInstructions
@@ -124,11 +169,11 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
     }
 
     const currentInstructions = instructionsManager.getCurrentInstructions();
-    const effectiveModel = browserGet('enableWebSearch', false) ? `${selectedModel}:online` : selectedModel;
+    
     const reasoningEffort = browserGet('reasoningEffort', 'none');
 
     const requestBody = {
-        model: effectiveModel,
+        model: selectedModel,
         messages: [
             {
                 role: "system",
@@ -156,9 +201,9 @@ EXPECTED_RESPONSE_FORMAT:\n
   </SCORE>\n
 
   <FOLLOW_UP_QUESTIONS>\n
-    Q_1. …\n
-    Q_2. …\n
-    Q_3. …\n
+    <Q1>…</Q1>\n
+    <Q2>…</Q2>\n
+    <Q3>…</Q3>\n
   </FOLLOW_UP_QUESTIONS>
 `
                     }
@@ -172,6 +217,9 @@ EXPECTED_RESPONSE_FORMAT:\n
 
     if (reasoningEffort !== 'none') {
         requestBody.reasoning = { effort: reasoningEffort };
+    }
+    if(browserGet('enableWebSearch',false)){
+        requestBody.tools = [{type: "openrouter:web_search"}];
     }
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
@@ -189,8 +237,10 @@ EXPECTED_RESPONSE_FORMAT:\n
             }
         });
 
-        if (imageUrls.length > 0 && modelSupportsImages(selectedModel)) {
-            imageUrls.forEach(url => {
+        const orderedImageUrls = orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+
+        if (orderedImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+            orderedImageUrls.forEach(url => {
                 if (url.startsWith('data:application/pdf')) {
 
                     requestBody.messages[1].content.push({
@@ -310,7 +360,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                 indicatorInstance.updateInitialReviewAndBuildHistory({
                     fullContext: tweetText,
                     mediaUrls: mediaUrls,
-                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
+                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
                     followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
                     userInstructions: currentInstructions
@@ -347,7 +397,7 @@ EXPECTED_RESPONSE_FORMAT:\n
     indicatorInstance.updateInitialReviewAndBuildHistory({
         fullContext: tweetText,
         mediaUrls: mediaUrls,
-        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS>Q_1. N/A\\nQ_2. N/A\\nQ_3. N/A</FOLLOW_UP_QUESTIONS>`,
+        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
         reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
         followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
         userInstructions: currentInstructions
@@ -660,8 +710,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
             const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
-            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion>\n        You MUST match the EXPECTED_RESPONSE_FORMAT\n        EXPECTED_RESPONSE_FORMAT:\n        <ANSWER>\n(Your answer here)\n</ANSWER>\n
-            <FOLLOW_UP_QUESTIONS> (Anticipate 3 things the user may ask you next. These questions should not be directed at the user. Only pose a question if you are sure you can answer it, based off your knowledge.)\nQ_1. (New Question 1 here)\nQ_2. (New Question 2 here)\nQ_3. (New Question 3 here)\n</FOLLOW_UP_QUESTIONS>\n        `;
+            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
             const templatedContent = [{ type: "text", text: templatedText }];
             msg.content.forEach(contentItem => {
                 if (contentItem.type === "image_url" || contentItem.type === "file") {
@@ -714,7 +763,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                             aggregatedContent = chunkData.content || aggregatedContent;
                             aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
 
-                            indicatorInstance._renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
+                            indicatorInstance.renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
                         },
 
                         (result) => {
@@ -751,9 +800,9 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                             console.error("[FollowUp Stream Error]", error);
                             const errorMessage = `Error generating answer: ${error.message}`;
 
-                            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage);
-                            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || [];
-                            indicatorInstance._updateTooltipUI();
+                            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+                            indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
+                            indicatorInstance.refreshTooltipUI();
 
                             const currentCache = tweetCache.get(tweetId) || {};
                             currentCache.lastAnswer = errorMessage;
@@ -791,9 +840,9 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         } catch (error) {
             console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
             const errorMessage = `Error answering question: ${error.message}`;
-            indicatorInstance._updateConversationHistory(questionTextForLogging, errorMessage);
-            indicatorInstance.questions = tweetCache.get(tweetId)?.questions || [];
-            indicatorInstance._updateTooltipUI();
+            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+            indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
+            indicatorInstance.refreshTooltipUI();
 
             const currentCache = tweetCache.get(tweetId) || {};
             currentCache.lastAnswer = errorMessage;
@@ -803,8 +852,8 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         }
     } finally {
 
-        if (indicatorInstance && typeof indicatorInstance._finalizeFollowUpInteraction === 'function') {
-            indicatorInstance._finalizeFollowUpInteraction();
+        if (indicatorInstance && typeof indicatorInstance.finalizeFollowUpInteraction === 'function') {
+            indicatorInstance.finalizeFollowUpInteraction();
         }
     }
 }

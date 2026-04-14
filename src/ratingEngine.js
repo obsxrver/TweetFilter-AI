@@ -48,16 +48,17 @@ function filterSingleTweet(tweetArticle) {
     indicatorInstance?.ensureIndicatorAttached();
     const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
     const ratingStatus = tweetArticle.dataset.ratingStatus;
+    const isAuthorCurrentlyBlacklisted = isUserBlacklisted(authorHandle);
 
     if (indicatorInstance) {
-        indicatorInstance.isAuthorBlacklisted = isUserBlacklisted(authorHandle);
+        indicatorInstance.setAuthorBlacklistState(isAuthorCurrentlyBlacklisted);
     }
 
-    if (isUserBlacklisted(authorHandle)) {
+    if (isAuthorCurrentlyBlacklisted) {
         delete cell.dataset.filtered;
         cell.dataset.authorBlacklisted = 'true';
         if (indicatorInstance) {
-            indicatorInstance._updateIndicatorUI();
+            indicatorInstance.refreshIndicatorUI();
         }
     } else {
         delete cell.dataset.authorBlacklisted;
@@ -73,7 +74,7 @@ function filterSingleTweet(tweetArticle) {
         } else {
             delete cell.dataset.filtered;
             if (indicatorInstance) {
-                indicatorInstance._updateIndicatorUI();
+                indicatorInstance.refreshIndicatorUI();
             }
         }
     }
@@ -192,42 +193,54 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     }
                 }
 
-                const mediaMatches1 = fullContextWithImageDescription.matchAll(/(?:\[MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-                const mediaMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_MEDIA_URLS\]:\s*\n)(.*?)(?:\n|$)/g);
-                const videoMatches1 = fullContextWithImageDescription.matchAll(/(?:\[VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
-                const videoMatches2 = fullContextWithImageDescription.matchAll(/(?:\[QUOTED_TWEET_VIDEO_DESCRIPTIONS\]:\s*\n)([\s\S]*?)(?:\n\[|$)/g);
+                const contextLines = fullContextWithImageDescription.split('\n');
+                const mediaSectionHeaders = new Set(['[MEDIA_URLS]:', '[QUOTED_TWEET_MEDIA_URLS]:']);
+                const videoSectionHeaders = new Set(['[VIDEO_DESCRIPTIONS]:', '[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:']);
+                const videoLinePattern = /^\[VIDEO \d+\]:\s*/;
 
-                for (const match of mediaMatches1) {
-                    if (match[1]) {
-                        mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
-                    }
-                }
-                for (const match of mediaMatches2) {
-                    if (match[1]) {
-                        mediaURLs.push(...match[1].split(', ').filter(url => url.trim()));
-                    }
-                }
+                for (let i = 0; i < contextLines.length; i++) {
+                    const trimmedLine = contextLines[i].trim();
 
-                for (const match of videoMatches1) {
-                    if (match[1]) {
-                        const videoLines = match[1].trim().split('\n').filter(line => line.trim());
-                        videoLines.forEach(line => {
-                            if (line.startsWith('[VIDEO ')) {
-                                const desc = line.replace(/^\[VIDEO \d+\]: /, '');
-                                mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                    if (mediaSectionHeaders.has(trimmedLine)) {
+                        let cursor = i + 1;
+                        while (cursor < contextLines.length) {
+                            const mediaLine = contextLines[cursor].trim();
+                            if (!mediaLine) {
+                                cursor++;
+                                continue;
                             }
-                        });
+                            if (mediaLine.startsWith('[')) {
+                                break;
+                            }
+                            mediaURLs.push(...mediaLine.split(',').map(url => url.trim()).filter(Boolean));
+                            cursor++;
+                        }
+                        i = cursor - 1;
+                        continue;
                     }
-                }
-                for (const match of videoMatches2) {
-                    if (match[1]) {
-                        const videoLines = match[1].trim().split('\n').filter(line => line.trim());
-                        videoLines.forEach(line => {
-                            if (line.startsWith('[VIDEO ')) {
-                                const desc = line.replace(/^\[VIDEO \d+\]: /, '');
-                                mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+
+                    if (videoSectionHeaders.has(trimmedLine)) {
+                        let cursor = i + 1;
+                        while (cursor < contextLines.length) {
+                            const videoLine = contextLines[cursor].trim();
+                            if (!videoLine) {
+                                cursor++;
+                                continue;
                             }
-                        });
+                            if (videoLinePattern.test(videoLine)) {
+                                const desc = videoLine.replace(videoLinePattern, '').trim();
+                                if (desc) {
+                                    mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                                }
+                                cursor++;
+                                continue;
+                            }
+                            if (videoLine.startsWith('[')) {
+                                break;
+                            }
+                            cursor++;
+                        }
+                        i = cursor - 1;
                     }
                 }
 
@@ -273,8 +286,11 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         }
 
                         const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
+                        const contextForApi = fullContextWithImageDescription
+                            .replace(/\n?\[THREAD_MEDIA_URLS\]:\s*\n[^\n]*(?=\n|$)/g, '')
+                            .replace(/\n{3,}/g, '\n\n');
 
-                        const rating = await rateTweetWithOpenRouter(fullContextWithImageDescription, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
+                        const rating = await rateTweetWithOpenRouter(contextForApi, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
                         score = rating.score;
                         description = rating.content;
                         reasoning = rating.reasoning || '';
@@ -737,21 +753,6 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
                 quotedMediaLinks = extractMediaLinks(quoteContainer);
             }
 
-            const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
-                document.querySelector('div[aria-label^="Timeline: Conversation"]');
-
-            let threadMediaUrls = [];
-            if (conversation && conversation.dataset.threadMapping && tweetCache.has(tweetId) && tweetCache.get(tweetId).threadContext?.threadMediaUrls) {
-                threadMediaUrls = tweetCache.get(tweetId).threadContext.threadMediaUrls || [];
-            } else if (conversation && conversation.dataset.threadMediaUrls) {
-                try {
-                    const allMediaUrls = JSON.parse(conversation.dataset.threadMediaUrls);
-                    threadMediaUrls = Array.isArray(allMediaUrls) ? allMediaUrls : [];
-                } catch (e) {
-                    console.error("Error parsing thread media URLs:", e);
-                }
-            }
-
             let allAvailableMediaLinks = [...(allMediaLinks || [])];
             let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
 
@@ -798,18 +799,6 @@ ${mainImageUrls.join(", ")}`;
                 fullContextWithImageDescription += `
 [ENGAGEMENT_STATS]:
 ${engagementStats}`;
-            }
-
-            if (!isOriginalTweet(tweetArticle) && threadMediaUrls.length > 0) {
-                const uniqueThreadMediaUrls = threadMediaUrls.filter(url =>
-                    !mainMediaLinks.includes(url) && !quotedMediaLinks.includes(url));
-
-                if (uniqueThreadMediaUrls.length > 0) {
-                    fullContextWithImageDescription += `
-[THREAD_MEDIA_URLS]:
-${uniqueThreadMediaUrls.join(", ")}`;
-
-                }
             }
 
             if (quotedText || quotedMediaLinks.length > 0) {
@@ -1278,9 +1267,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     to: tw.replyTo,
                     toId: tw.replyToId,
                     isRoot: tw.isRoot === true,
-                    text: tw.text,
-                    mediaLinks: tw.mediaLinks || [],
-                    quotedMediaLinks: tw.quotedMediaLinks || []
+                    text: tw.text
                 }));
 
             conversation.dataset.threadMapping = JSON.stringify(replyDocs);
@@ -1328,8 +1315,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         tweetCache.get(doc.tweetId).threadContext = {
                             replyTo: doc.to,
                             replyToId: doc.toId,
-                            isRoot: doc.isRoot,
-                            threadMediaUrls: doc.isRoot ? [] : getAllPreviousMediaUrls(doc.tweetId, replyDocs)
+                            isRoot: doc.isRoot
                         };
 
                         if (doc.tweetId && processedTweets.has(doc.tweetId)) {
@@ -1359,24 +1345,6 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             conversation.dataset.threadMappedAt = Date.now().toString();
 
         };
-
-        function getAllPreviousMediaUrls(tweetId, replyDocs) {
-            const allMediaUrls = [];
-            const index = replyDocs.findIndex(doc => doc.tweetId === tweetId);
-
-            if (index > 0) {
-                for (let i = 0; i < index; i++) {
-                    if (replyDocs[i].mediaLinks && replyDocs[i].mediaLinks.length) {
-                        allMediaUrls.push(...replyDocs[i].mediaLinks);
-                    }
-                    if (replyDocs[i].quotedMediaLinks && replyDocs[i].quotedMediaLinks.length) {
-                        allMediaUrls.push(...replyDocs[i].quotedMediaLinks);
-                    }
-                }
-            }
-
-            return allMediaUrls;
-        }
 
         await Promise.race([mapping(), timeout]);
 
