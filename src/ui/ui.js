@@ -197,11 +197,6 @@ function initializeEventListeners(uiContainer) {
         const target = event.target;
         const setting = target.dataset.setting;
 
-        if (setting === 'modelSortOrder') {
-            handleSettingChange(target, setting);
-            fetchAvailableModels();
-        }
-
         if (setting === 'enableImageDescriptions') {
             handleSettingChange(target, setting);
         }
@@ -230,27 +225,11 @@ function initializeEventListeners(uiContainer) {
         });
     }
 
-    const sortDirectionBtn = uiContainer.querySelector('#sort-direction');
-    if (sortDirectionBtn) {
-        sortDirectionBtn.addEventListener('click', function () {
-            const currentDirection = browserGet('sortDirection', 'default');
-            const newDirection = currentDirection === 'default' ? 'reverse' : 'default';
-            browserSet('sortDirection', newDirection);
-            this.dataset.value = newDirection;
-            refreshModelsUI();
-        });
-    }
-
-    const modelSortSelect = uiContainer.querySelector('#model-sort-order');
-    if (modelSortSelect) {
-        modelSortSelect.addEventListener('change', function () {
-            browserSet('modelSortOrder', this.value);
-
-            if (this.value === 'latency-low-to-high') {
-                browserSet('sortDirection', 'default');
-            } else if (this.value === '') {
-                browserSet('sortDirection', 'default');
-            }
+    const modelFamilyFilterSelect = uiContainer.querySelector('#model-family-filter');
+    if (modelFamilyFilterSelect) {
+        modelFamilyFilterSelect.addEventListener('change', function () {
+            modelFamilyFilter = normalizeModelFamilyFilter(this.value);
+            browserSet('modelFamilyFilter', modelFamilyFilter);
             refreshModelsUI();
         });
     }
@@ -636,46 +615,94 @@ function refreshHandleList(listElement) {
 /**
  * Updates the model selection dropdowns based on availableModels.
  */
+function getModelSlug(model) {
+    return model?.slug || model?.canonical_slug || model?.endpoint?.model_variant_slug || model?.id || model?.name || '';
+}
+
+const MODEL_PROVIDER_FALLBACKS = ['openai', 'anthropic', 'google', 'qwen'];
+
+function getModelProvider(model) {
+    const modelSlug = getModelSlug(model);
+    if (!modelSlug) return '';
+
+    return (modelSlug.split('/')[0] || '').replace(/^~/, '').toLowerCase().trim();
+}
+
+function getAvailableModelProviders() {
+    return [...new Set(availableModels.map(getModelProvider).filter(Boolean))].sort();
+}
+
+function formatProviderName(provider) {
+    return provider
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function normalizeModelFamilyFilter(filterValue) {
+    const normalizedValue = (filterValue || '').toString().toLowerCase().trim();
+    if (!normalizedValue) return '';
+    return normalizedValue.replace(/^~/, '');
+}
+
+function syncModelFamilyFilterOptions(selectElement) {
+    if (!selectElement) return;
+
+    const providers = getAvailableModelProviders();
+    const providerOptions = providers.length > 0 ? providers : MODEL_PROVIDER_FALLBACKS;
+    const storedFilter = normalizeModelFamilyFilter(browserGet('modelFamilyFilter', modelFamilyFilter || ''));
+    modelFamilyFilter = providers.length > 0 && storedFilter && !providers.includes(storedFilter) ? '' : storedFilter;
+
+    selectElement.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = 'All Providers';
+    selectElement.appendChild(allOption);
+
+    providerOptions.forEach(provider => {
+        const option = document.createElement('option');
+        option.value = provider;
+        option.textContent = formatProviderName(provider);
+        selectElement.appendChild(option);
+    });
+
+    selectElement.value = storedFilter;
+
+    if (selectElement.value !== modelFamilyFilter) {
+        selectElement.value = modelFamilyFilter;
+    }
+
+    if (browserGet('modelFamilyFilter', '') !== modelFamilyFilter) {
+        browserSet('modelFamilyFilter', modelFamilyFilter);
+    }
+}
+
 function refreshModelsUI() {
     const modelSelectContainer = document.getElementById('model-select-container');
     const imageModelSelectContainer = document.getElementById('image-model-select-container');
+    const modelFamilyFilterSelect = document.getElementById('model-family-filter');
 
     listedModels = [...availableModels];
 
     if (!showFreeModels) {
-        listedModels = listedModels.filter(model => !model.slug.endsWith(':free'));
+        listedModels = listedModels.filter(model => !getModelSlug(model).endsWith(':free'));
     }
 
-    const sortDirection = browserGet('sortDirection', 'default');
-    const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
+    listedModels.sort((a, b) => (Number(b.created) || 0) - (Number(a.created) || 0));
 
-    const toggleBtn = document.getElementById('sort-direction');
-    if (toggleBtn) {
-        switch (sortOrder) {
-            case 'latency-low-to-high':
-                toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
-                if (sortDirection === 'reverse') listedModels.reverse();
-                break;
-            case '':
-                toggleBtn.textContent = sortDirection === 'default' ? 'New-Old' : 'Old-New';
-                if (sortDirection === 'reverse') listedModels.reverse();
-                break;
-            case 'top-weekly':
-                toggleBtn.textContent = sortDirection === 'default' ? 'Most Popular' : 'Least Popular';
-                if (sortDirection === 'reverse') listedModels.reverse();
-                break;
-            default:
-                toggleBtn.textContent = sortDirection === 'default' ? 'High-Low' : 'Low-High';
-                if (sortDirection === 'reverse') listedModels.reverse();
-        }
-    }
+    syncModelFamilyFilterOptions(modelFamilyFilterSelect);
+
+    const familyFilteredModels = modelFamilyFilter
+        ? listedModels.filter(model => getModelProvider(model) === modelFamilyFilter)
+        : listedModels;
 
     if (modelSelectContainer) {
         modelSelectContainer.innerHTML = '';
         createCustomSelect(
             modelSelectContainer,
             'model-selector',
-            listedModels.map(model => ({ value: model.endpoint?.model_variant_slug || model.id, label: formatModelLabel(model) })),
+            familyFilteredModels.map(model => ({ value: getModelSlug(model), label: formatModelLabel(model) })),
             selectedModel,
             (newValue) => {
                 selectedModel = newValue;
@@ -697,7 +724,7 @@ function refreshModelsUI() {
         createCustomSelect(
             imageModelSelectContainer,
             'image-model-selector',
-            visionModels.map(model => ({ value: model.endpoint?.model_variant_slug || model.id, label: formatModelLabel(model) })),
+            visionModels.map(model => ({ value: getModelSlug(model), label: formatModelLabel(model) })),
             selectedImageModel,
             (newValue) => {
                 selectedImageModel = newValue;
@@ -715,7 +742,7 @@ function refreshModelsUI() {
  * @returns {string} A formatted label string.
  */
 function formatModelLabel(model) {
-    let label = model.endpoint?.model_variant_slug || model.id || model.name || 'Unknown Model';
+    let label = getModelSlug(model) || 'Unknown Model';
     let pricingInfo = '';
 
     const pricing = model.endpoint?.pricing || model.pricing;
@@ -877,8 +904,7 @@ function resetSettings(noconfirm = false) {
             maxTokens: 0,
             filterThreshold: 5,
             userDefinedInstructions: 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.',
-            modelSortOrder: 'throughput-high-to-low',
-            sortDirection: 'default'
+            modelFamilyFilter: ''
         };
 
         for (const key in defaults) {
@@ -980,4 +1006,3 @@ function initializeFloatingCacheStats() {
     resetFadeTimeout();
     updateCacheStatsUI();
 }
-

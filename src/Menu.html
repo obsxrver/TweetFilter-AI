@@ -67,17 +67,14 @@
                     </div>
                     <div class="advanced-content" id="model-options-content">
                         <div class="sort-container">
-                            <label for="model-sort-order">Sort models by: </label>
-                            <div class="controls-group">
-                                <select id="model-sort-order" data-setting="modelSortOrder">
-                                    <option value="pricing-low-to-high">Price</option>
-                                    <option value="latency-low-to-high">Latency</option>
-                                    <option value="throughput-high-to-low">Throughput</option>
-                                    <option value="top-weekly">Popularity</option>
-                                    <option value="">Age</option>
-                                </select>
-                                <button id="sort-direction" class="sort-toggle" data-setting="sortDirection" data-value="default">High-Low</button>
-                            </div>
+                            <label for="model-family-filter">Model Provider:</label>
+                            <select id="model-family-filter" data-setting="modelFamilyFilter">
+                                <option value="">All Providers</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="google">Google</option>
+                                <option value="qwen">Qwen</option>
+                            </select>
                         </div>
                         <div class="sort-container">
                             <label for="provider-sort">API Endpoint Priority: </label>

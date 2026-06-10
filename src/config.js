@@ -14,9 +14,8 @@ let listedModels = [];
 let selectedModel = browserGet('selectedModel', 'openai/gpt-5.4-mini');
 let selectedImageModel = browserGet('selectedImageModel', 'google/gemini-2.5-flash');
 let showFreeModels = browserGet('showFreeModels', true);
+let modelFamilyFilter = browserGet('modelFamilyFilter', '');
 let providerSort = browserGet('providerSort', '');
-let modelSortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
-let sortDirection = browserGet('sortDirection', 'default');
 let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
 
 let enableImageDescriptions = browserGet('enableImageDescriptions', false);

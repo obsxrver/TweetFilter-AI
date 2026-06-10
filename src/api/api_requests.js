@@ -331,7 +331,6 @@ function fetchAvailableModels() {
         return;
     }
     showStatus('Fetching available models...');
-    const sortOrder = browserGet('modelSortOrder', 'throughput-high-to-low');
 
     function handleOnline() {
         showStatus('Back online. Fetching models...');
@@ -342,7 +341,7 @@ function fetchAvailableModels() {
 
     GM_xmlhttpRequest({
         method: "GET",
-        url: `https://openrouter.ai/api/frontend/models/find?order=${sortOrder}`,
+        url: 'https://openrouter.ai/api/v1/models',
         headers: {
             "Authorization": `Bearer ${apiKey}`,
             "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
@@ -351,19 +350,14 @@ function fetchAvailableModels() {
         onload: function (response) {
             try {
                 const data = JSON.parse(response.responseText);
-                if (data.data && data.data.models) {
-
-                    let filteredModels = data.data.models.filter(model => model.endpoint && model.endpoint !== null);
+                if (Array.isArray(data.data)) {
+                    let filteredModels = data.data.filter(model => model && (model.id || model.canonical_slug));
 
                     filteredModels.forEach(model => {
-
-                        let currentSlug = model.endpoint?.model_variant_slug || model.id;
-                        model.slug = currentSlug;
+                        model.slug = model.canonical_slug || model.id;
                     });
 
-                    if (sortOrder === 'latency-low-to-high'|| sortOrder === 'pricing-low-to-high') {
-                        filteredModels.reverse();
-                    }
+                    filteredModels.sort((a, b) => (Number(b.created) || 0) - (Number(a.created) || 0));
                     availableModels = filteredModels || [];
                     listedModels = [...availableModels];
                     refreshModelsUI();
