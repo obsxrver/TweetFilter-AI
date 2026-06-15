@@ -2150,10 +2150,8 @@ class ScoreIndicator {
         this.status = this.score !== null ? 'rated' : 'error';
 
         const userMessageContent = [{ type: "text", text: fullContext }];
-        if(modelSupportsImages(selectedModel)) {
-        mediaUrls.forEach(url => {
-                userMessageContent.push({ type: "image_url", image_url: { "url": url } });
-            });
+        if (typeof collectRatingImageUrls === 'function' && typeof appendRatingMediaContent === 'function' && modelSupportsImages(selectedModel)) {
+            appendRatingMediaContent(userMessageContent, collectRatingImageUrls(mediaUrls, fullContext));
         }
 
         const followUpSystemPromptWithInstructions = followUpSystemPrompt.replace(

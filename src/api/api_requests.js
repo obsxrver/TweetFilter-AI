@@ -359,6 +359,11 @@ function fetchAvailableModels() {
 
                     filteredModels.sort((a, b) => (Number(b.created) || 0) - (Number(a.created) || 0));
                     availableModels = filteredModels || [];
+                    const imageCapableModelIds = [...new Set(availableModels
+                        .filter(modelHasImageInput)
+                        .flatMap(getModelIdentifierCandidates)
+                        .filter(Boolean))];
+                    browserSet('imageCapableModelIds', imageCapableModelIds);
                     listedModels = [...availableModels];
                     refreshModelsUI();
                     showStatus('Models updated!');

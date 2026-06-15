@@ -119,20 +119,65 @@ const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twi
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 
+function getModelIdentifierCandidates(model) {
+  return [
+    model?.slug,
+    model?.id,
+    model?.canonical_slug,
+    model?.endpoint?.model_variant_slug,
+    model?.name
+  ];
+}
+
+function modelHasImageInput(model) {
+  if (!model) {
+    return false;
+  }
+
+  const modalities = [
+    ...(Array.isArray(model.input_modalities) ? model.input_modalities : []),
+    ...(Array.isArray(model.architecture?.input_modalities) ? model.architecture.input_modalities : []),
+    ...(typeof model.architecture?.modality === 'string' ? model.architecture.modality.split(/[+,/ ]/) : [])
+  ].map(modality => modality.toLowerCase());
+
+  return modalities.includes('image');
+}
+
+function getCachedImageCapableModelIds() {
+  const cachedIds = browserGet('imageCapableModelIds', []);
+  if (Array.isArray(cachedIds)) {
+    return cachedIds;
+  }
+  try {
+    const parsedIds = JSON.parse(cachedIds);
+    return Array.isArray(parsedIds) ? parsedIds : [];
+  } catch (error) {
+    return [];
+  }
+}
+
 /**
  * Helper function to check if a model supports images based on its architecture
  * @param {string} modelId - The model ID to check
  * @returns {boolean} - Whether the model supports image input
  */
 function modelSupportsImages(modelId) {
-  if (!availableModels || availableModels.length === 0) {
-    return false;
-  }
-  const model = availableModels.find(m => m.slug === modelId);
-  if (!model) {
+  if (!modelId) {
     return false;
   }
 
-  return model.input_modalities &&
-    model.input_modalities.includes('image');
+  const normalizedModelId = modelId.toLowerCase();
+  const model = availableModels?.find(model =>
+    getModelIdentifierCandidates(model)
+      .filter(Boolean)
+      .some(value => value.toLowerCase() === normalizedModelId)
+  );
+
+  if (model) {
+    return modelHasImageInput(model);
+  }
+
+  return getCachedImageCapableModelIds()
+    .filter(Boolean)
+    .some(value => value.toLowerCase() === normalizedModelId);
 }

@@ -112,6 +112,57 @@ function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
         .map(item => item.url);
 }
 
+function collectRatingImageUrls(mediaUrls, tweetText) {
+    const imageUrls = [];
+    const seenUrls = new Set();
+
+    const addUrl = (url) => {
+        const trimmedUrl = typeof url === 'string' ? url.trim() : '';
+        if (!trimmedUrl || trimmedUrl.startsWith('[VIDEO_DESCRIPTION]:') || seenUrls.has(trimmedUrl)) {
+            return;
+        }
+        seenUrls.add(trimmedUrl);
+        imageUrls.push(trimmedUrl);
+    };
+
+    if (Array.isArray(mediaUrls)) {
+        mediaUrls.forEach(addUrl);
+    }
+
+    if (tweetText) {
+        const urlPattern = /https?:\/\/[^\s,\])>]+/g;
+        const contextUrls = tweetText.match(urlPattern) || [];
+        contextUrls.forEach(url => {
+            if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+                addUrl(url);
+            }
+        });
+    }
+
+    return orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+}
+
+function appendRatingMediaContent(content, mediaUrls) {
+    mediaUrls.forEach(url => {
+        if (url.startsWith('data:application/pdf')) {
+            content.push({
+                type: "file",
+                file: {
+                    filename: "attachment.pdf",
+                    file_data: url
+                }
+            });
+        } else if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+            content.push({
+                type: "image_url",
+                image_url: { "url": url }
+            });
+        } else {
+            console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
+        }
+    });
+}
+
 /**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
  *
@@ -224,44 +275,9 @@ EXPECTED_RESPONSE_FORMAT:\n
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
-    if (mediaUrls?.length > 0) {
-
-        const imageUrls = [];
-        const videoDescriptions = [];
-
-        mediaUrls.forEach(item => {
-            if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
-                videoDescriptions.push(item);
-            } else {
-                imageUrls.push(item);
-            }
-        });
-
-        const orderedImageUrls = orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
-
-        if (orderedImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
-            orderedImageUrls.forEach(url => {
-                if (url.startsWith('data:application/pdf')) {
-
-                    requestBody.messages[1].content.push({
-                        type: "file",
-                        file: {
-                            filename: "attachment.pdf",
-                            file_data: url
-                        }
-                    });
-                } else if (url.startsWith('http://') || url.startsWith('https://')) {
-
-                    requestBody.messages[1].content.push({
-                        type: "image_url",
-                        image_url: { "url": url }
-                    });
-                } else {
-
-                    console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
-                }
-            });
-        }
+    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+        appendRatingMediaContent(requestBody.messages[1].content, ratingImageUrls);
     }
     if (providerSort) {
         requestBody.provider = { sort: providerSort, allow_fallbacks: true };

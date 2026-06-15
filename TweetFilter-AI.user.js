@@ -438,15 +438,26 @@ const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twi
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 function modelSupportsImages(modelId) {
-  if (!availableModels || availableModels.length === 0) {
+  if (!modelId || !availableModels || availableModels.length === 0) {
     return false;
   }
-  const model = availableModels.find(m => m.slug === modelId);
+  const normalizedModelId = modelId.toLowerCase();
+  const model = availableModels.find(m => [
+    m.slug,
+    m.id,
+    m.canonical_slug,
+    m.endpoint?.model_variant_slug,
+    m.name
+  ].filter(Boolean).some(value => value.toLowerCase() === normalizedModelId));
   if (!model) {
     return false;
   }
-  return model.input_modalities &&
-    model.input_modalities.includes('image');
+  const modalities = [
+    ...(Array.isArray(model.input_modalities) ? model.input_modalities : []),
+    ...(Array.isArray(model.architecture?.input_modalities) ? model.architecture.input_modalities : []),
+    ...(typeof model.architecture?.modality === 'string' ? model.architecture.modality.split(/[+,/ ]/) : [])
+  ].map(modality => modality.toLowerCase());
+  return modalities.includes('image');
 }
     // ----- domScraper.js -----
 function extractVisibleTextWithEmoji(element) {
@@ -2457,10 +2468,8 @@ class ScoreIndicator {
         this.questions = initialQuestions;
         this.status = this.score !== null ? 'rated' : 'error';
         const userMessageContent = [{ type: "text", text: fullContext }];
-        if(modelSupportsImages(selectedModel)) {
-        mediaUrls.forEach(url => {
-                userMessageContent.push({ type: "image_url", image_url: { "url": url } });
-            });
+        if (typeof collectRatingImageUrls === 'function' && typeof appendRatingMediaContent === 'function' && modelSupportsImages(selectedModel)) {
+            appendRatingMediaContent(userMessageContent, collectRatingImageUrls(mediaUrls, fullContext));
         }
         const followUpSystemPromptWithInstructions = followUpSystemPrompt.replace(
             '{USER_INSTRUCTIONS_PLACEHOLDER}',
@@ -5113,6 +5122,50 @@ function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
         })
         .map(item => item.url);
 }
+function collectRatingImageUrls(mediaUrls, tweetText) {
+    const imageUrls = [];
+    const seenUrls = new Set();
+    const addUrl = (url) => {
+        const trimmedUrl = typeof url === 'string' ? url.trim() : '';
+        if (!trimmedUrl || trimmedUrl.startsWith('[VIDEO_DESCRIPTION]:') || seenUrls.has(trimmedUrl)) {
+            return;
+        }
+        seenUrls.add(trimmedUrl);
+        imageUrls.push(trimmedUrl);
+    };
+    if (Array.isArray(mediaUrls)) {
+        mediaUrls.forEach(addUrl);
+    }
+    if (tweetText) {
+        const urlPattern = /https?:\/\/[^\s,\])>]+/g;
+        const contextUrls = tweetText.match(urlPattern) || [];
+        contextUrls.forEach(url => {
+            if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+                addUrl(url);
+            }
+        });
+    }
+    return orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+}
+function appendRatingMediaContent(content, mediaUrls) {
+    mediaUrls.forEach(url => {
+        if (url.startsWith('data:application/pdf')) {
+            content.push({
+                type: "file",
+                file: {
+                    filename: "attachment.pdf",
+                    file_data: url
+                }
+            });
+        } else if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+            content.push({
+                type: "image_url",
+                image_url: { "url": url }
+            });
+        } else {
+        }
+    });
+}
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
     const cleanupRequest = () => {
         pendingRequests = Math.max(0, pendingRequests - 1);
@@ -5200,36 +5253,9 @@ EXPECTED_RESPONSE_FORMAT:\n
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
-    if (mediaUrls?.length > 0) {
-        const imageUrls = [];
-        const videoDescriptions = [];
-        mediaUrls.forEach(item => {
-            if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
-                videoDescriptions.push(item);
-            } else {
-                imageUrls.push(item);
-            }
-        });
-        const orderedImageUrls = orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
-        if (orderedImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
-            orderedImageUrls.forEach(url => {
-                if (url.startsWith('data:application/pdf')) {
-                    requestBody.messages[1].content.push({
-                        type: "file",
-                        file: {
-                            filename: "attachment.pdf",
-                            file_data: url
-                        }
-                    });
-                } else if (url.startsWith('http://') || url.startsWith('https://')) {
-                    requestBody.messages[1].content.push({
-                        type: "image_url",
-                        image_url: { "url": url }
-                    });
-                } else {
-                }
-            });
-        }
+    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+        appendRatingMediaContent(requestBody.messages[1].content, ratingImageUrls);
     }
     if (providerSort) {
         requestBody.provider = { sort: providerSort, allow_fallbacks: true };
