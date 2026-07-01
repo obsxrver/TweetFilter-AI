@@ -15,12 +15,651 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-!function(){"use strict";let t=`<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">\xd7</button><label for="tweet-filter-slider">SlopScore:</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings"><span style="font-size: 14px;">⚙️</span> Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">Twitter De-Sloppifier</div><button class="close-button" data-action="toggle-settings">\xd7</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/settings/keys" target="_blank">Get one here</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Cached Tweet Ratings</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Whitelisted Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">💾</span> Backup &amp; Restore</div><div class="section-description">Export your settings and cached ratings to a file for backup, or import previously saved settings.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div></div><div id="models-tab" class="tab-content"><div class="section-title"><span style="font-size: 14px;">🧠</span> Tweet Rating Model</div><div class="section-description">The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Model Provider:</label><select id="model-family-filter" data-setting="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">API Endpoint Priority: </label><select id="provider-sort" data-setting="providerSort"><option value="">Default (load-balanced)</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show Free Models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select data-setting="reasoningEffort" selected="none"><option value="xhigh">xhigh</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option><option value="minimal">minimal</option><option value="none">none</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Enable web search capabilities for the model.">Enable Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Automatically send tweets to API for rating. When disabled, tweets will show a 'Rate' button instead.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div><div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div><div class="toggle-row"><div class="toggle-label">Enable Image Descriptions</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Custom Instructions</div><div class="section-description">Add custom instructions for how the model should score tweets:</div><textarea id="user-instructions" placeholder="Examples:- Give high scores to tweets about technology- Penalize clickbait-style tweets- Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Custom Instructions History</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"><!-- Instructions entries will be added here dynamically --></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button></div></div><div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div><div class="section-description">Add Twitter handles to automatically rate as 10/10:</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Twitter handle (without @)"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;function e(t,e=null){try{return GM_getValue(t,e)}catch(o){return e}}function o(t,e){try{GM_setValue(t,e)}catch(o){}}function i(){let t=document.getElementById("cached-ratings-count"),e=document.getElementById("whitelisted-handles-count"),o=a.size,i=U.length;t&&(t.textContent=o),e&&(e.textContent=i);let n=document.getElementById("tweet-filter-stats-badge");n&&(n.innerHTML=`
-            <span style="margin-right: 5px;">🧠</span>
-            <span data-cached-count>${o} rated</span>
-            <span data-pending-count> | ${E} pending</span>
-            ${i>0?`<span style="margin-left: 5px;"> | ${i} whitelisted</span>`:""}
-        `)}GM_addStyle('.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: \'Live\';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: \'|\';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: \'\';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background: linear-gradient(180deg, rgba(22, 26, 31, 0.97), rgba(16, 18, 22, 0.97));color: #e7e9ea;padding: 0;border-radius: 18px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);display: flex;flex-direction: column;width: min(92vw, 420px);max-width: 420px;max-height: 88vh;overflow: hidden;border: 1px solid rgba(130, 178, 219, 0.24);line-height: 1.3;backdrop-filter: blur(12px);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 14px 16px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background: linear-gradient(180deg, rgba(28, 34, 40, 0.98), rgba(23, 27, 33, 0.96));z-index: 20;border-radius: 18px 18px 0 0;}.settings-title {font-weight: 700;font-size: 16px;letter-spacing: 0.2px;color: #f1f5f9;}.settings-content {overflow-y: auto;max-height: calc(88vh - 118px);padding: 0 0 14px;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(120, 167, 210, 0.18);position: sticky;top: 0;background: rgba(20, 24, 29, 0.95);z-index: 10;padding: 12px 14px 10px;gap: 10px;}.tab-button {padding: 8px 12px;background: rgba(255, 255, 255, 0.04);border: 1px solid transparent;color: #d7e2ec;font-weight: 600;cursor: pointer;border-radius: 10px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(85, 157, 218, 0.14);border-color: rgba(85, 157, 218, 0.3);}.tab-button.active {color: #79c1ff;background-color: rgba(45, 152, 237, 0.2);border-color: rgba(82, 178, 255, 0.5);box-shadow: inset 0 0 0 1px rgba(37, 131, 204, 0.25);}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 16px 16px 8px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 12px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(24, 29, 35, 0.98);padding: 8px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);z-index: 1;}.select-container .search-input {width: 100%;padding: 9px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(33, 39, 46, 0.92);color: #e7e9ea;font-size: 12.5px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background: linear-gradient(180deg, rgba(40, 47, 56, 0.95), rgba(32, 38, 45, 0.95));color: #e7e9ea;padding: 10px 12px;min-height: 40px;border: 1px solid rgba(137, 178, 214, 0.35);border-radius: 10px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(28, 34, 41, 0.99);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(120, 167, 210, 0.28);border-radius: 10px;margin-top: 6px;box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(120, 167, 210, 0.09);font-size: 12.5px;}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: 700;margin-top: 18px;margin-bottom: 8px;color: #f3f6fa;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12.5px;margin-bottom: 10px;color: rgba(225, 233, 241, 0.82);line-height: 1.45;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 8px;margin-bottom: 15px;border: 1px solid rgba(120, 167, 210, 0.2);border-radius: 12px;padding: 12px 12px 10px;background: rgba(255, 255, 255, 0.04);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: 700;font-size: 13px;color: #dce7f2;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;padding: 10px;display: flex;flex-direction: column;align-items: stretch;gap: 8px;border: 1px solid rgba(120, 167, 210, 0.16);border-radius: 10px;background: rgba(255, 255, 255, 0.03);}.sort-container label {font-size: 12px;color: #cfd9e3;font-weight: 600;white-space: normal;display: flex;align-items: center;gap: 8px;}.sort-container .controls-group {display: grid;grid-template-columns: minmax(0, 1fr) auto;gap: 8px;align-items: center;}.sort-container select {width: 100%;min-height: 34px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12.5px;cursor: pointer;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {min-height: 34px;min-width: 94px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.32);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12px;font-weight: 600;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}.sort-container label input[type="checkbox"] {width: 14px;height: 14px;margin: 0;accent-color: #1d9bf0;}@media (min-width: 601px) {#settings-container {width: min(430px, 90vw);max-width: 430px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, \'Courier New\', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, \'Courier New\', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}'),GM_setValue("menuHTML",t);class n{static DEBOUNCE_DELAY=1500;constructor(){var t,e;this.cache={},this.loadFromStorage();let o;this.debouncedSaveToStorage=(t=this.#a.bind(this),e=n.DEBOUNCE_DELAY,function i(...n){let r=()=>{clearTimeout(o),t.apply(this,n)};clearTimeout(o),o=setTimeout(r,e)})}loadFromStorage(){try{let t=e("tweetRatings","{}");for(let o in this.cache=JSON.parse(t),this.cache)this.cache[o].fromStorage=!0}catch(i){this.cache={}}}#a(){try{o("tweetRatings",JSON.stringify(this.cache)),i()}catch(r){}}get(t){return this.cache[t]||null}set(t,e,o=!0){let i=this.cache[t]||{},n={...i};void 0!==e.score&&(n.score=e.score),void 0!==e.fullContext&&(n.fullContext=e.fullContext),void 0!==e.description&&(n.description=e.description),void 0!==e.reasoning&&(n.reasoning=e.reasoning),void 0!==e.questions&&(n.questions=e.questions),void 0!==e.lastAnswer&&(n.lastAnswer=e.lastAnswer),void 0!==e.mediaUrls&&(n.mediaUrls=e.mediaUrls),void 0!==e.timestamp?n.timestamp=e.timestamp:void 0===n.timestamp&&(n.timestamp=Date.now()),void 0!==e.streaming&&(n.streaming=e.streaming),void 0!==e.blacklisted&&(n.blacklisted=e.blacklisted),void 0!==e.fromStorage&&(n.fromStorage=e.fromStorage),e.metadata?n.metadata={...i.metadata||{},...e.metadata}:i.metadata||(n.metadata={model:null,promptTokens:null,completionTokens:null,latency:null,mediaInputs:null,price:null}),void 0!==e.qaConversationHistory&&(n.qaConversationHistory=e.qaConversationHistory),n.authorHandle=n.authorHandle||"",n.individualTweetText=n.individualTweetText||"",n.individualMediaUrls=n.individualMediaUrls||[],n.qaConversationHistory=n.qaConversationHistory||[],void 0!==e.authorHandle&&(n.authorHandle=e.authorHandle),void 0!==e.individualTweetText&&(!n.individualTweetText||e.individualTweetText.length>n.individualTweetText.length)&&(n.individualTweetText=e.individualTweetText),void 0!==e.individualMediaUrls&&Array.isArray(e.individualMediaUrls)&&(!n.individualMediaUrls||0===n.individualMediaUrls.length||e.individualMediaUrls.length>n.individualMediaUrls.length)&&(n.individualMediaUrls=e.individualMediaUrls),n.score=n.score,n.authorHandle=n.authorHandle||"",n.fullContext=n.fullContext||"",n.description=n.description||"",n.reasoning=n.reasoning||"",n.questions=n.questions||[],n.lastAnswer=n.lastAnswer||"",n.mediaUrls=n.mediaUrls||[],n.streaming=n.streaming||!1,n.blacklisted=n.blacklisted||!1,n.fromStorage=n.fromStorage||!1,this.cache[t]=n,o?this.#a():this.debouncedSaveToStorage()}has(t){return void 0!==this.cache[t]}delete(t,e=!0){this.has(t)&&(delete this.cache[t],this.debouncedSaveToStorage())}clear(t=!1){this.cache={},t?this.#a():this.debouncedSaveToStorage()}get size(){return Object.keys(this.cache).length}}let a=new n;class s{constructor(){if(s.instance)return s.instance;s.instance=this,this.history=[],this.maxEntries=10,this.loadFromStorage()}#b(l){let d=0;for(let c=0;c<l.length;c++){let p=l.charCodeAt(c);d=(d<<5)-d+p,d&=d}return d.toString(36)}loadFromStorage(){try{let t=e("instructionsHistory","[]");if(this.history=JSON.parse(t),!Array.isArray(this.history))throw Error("Stored history is not an array");this.history=this.history.map(t=>({...t,hash:t.hash||this.#b(t.instructions)}))}catch(o){this.history=[]}}#c(){try{o("instructionsHistory",JSON.stringify(this.history))}catch(u){throw Error("Failed to save instructions history")}}async add(t,e){try{if(!t?.trim()||!e?.trim())throw Error("Invalid instructions or summary");let o=this.#b(t.trim()),i=this.history.findIndex(t=>t.hash===o);if(-1!==i){this.history[i].timestamp=Date.now(),this.history[i].summary=e;let n=this.history.splice(i,1)[0];this.history.unshift(n)}else this.history.unshift({instructions:t.trim(),summary:e.trim(),timestamp:Date.now(),hash:o}),this.history.length>this.maxEntries&&(this.history=this.history.slice(0,this.maxEntries));return this.#c(),!0}catch(r){return!1}}remove(t){try{if(t<0||t>=this.history.length)throw Error("Invalid history index");return this.history.splice(t,1),this.#c(),!0}catch(e){return!1}}getAll(){return[...this.history]}get(t){try{if(t<0||t>=this.history.length)return null;return{...this.history[t]}}catch(e){return null}}clear(){try{this.history=[],this.#c()}catch(t){throw Error("Failed to clear instructions history")}}get size(){return this.history.length}}class h{constructor(){if(h.instance)return h.instance;h.instance=this,this.history=new s,this.currentInstructions=e("userDefinedInstructions","")}async saveInstructions(t){if(!t?.trim())return{success:!1,message:"Instructions cannot be empty"};t=t.trim(),this.currentInstructions=t,o("userDefinedInstructions",t),"undefined"!=typeof USER_DEFINED_INSTRUCTIONS&&(USER_DEFINED_INSTRUCTIONS=t);let e=this.#d(t);return await this.history.add(t,e),{success:!0,message:"Scoring instructions saved! New tweets will use these instructions.",shouldClearCache:!0}}#d(g){let m=g.trim().split(/\s+/);if(m.length<=3)return m.join(" ");let f=m.slice(0,3).join(" "),$=m[m.length-1];return`${f} … ${$}`}getCurrentInstructions(){return this.currentInstructions}getHistory(){return this.history.getAll()}removeFromHistory(t){return this.history.remove(t)}clearHistory(){this.history.clear()}}let b=new h,y=new Set,v=new Set;b.getCurrentInstructions();let x=parseInt(e("filterThreshold","5")),w=null,_=0,E=0,S=[],C=[],I=e("selectedModel","openai/gpt-5.4-mini"),T=e("selectedImageModel","google/gemini-2.5-flash"),k=e("showFreeModels",!0),A=e("modelFamilyFilter",""),q=e("providerSort",""),U=e("blacklistedHandles","").split("\n").filter(t=>""!==t.trim());e("enableImageDescriptions",!1),e("enableStreaming",!0),e("enableWebSearch",!1),e("enableAutoRating",!0),e("reasoningEffort","none");let L=`
+(function() {
+    'use strict';
+    console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
+    // Embedded Menu.html
+    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">x</button><label for="tweet-filter-slider">Minimum score</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings">Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">TweetFilter AI</div><button class="close-button" data-action="toggle-settings">x</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title">OpenRouter API Key<a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Get one</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;">Cache</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Rated Tweets</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Always-Keep Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;">Backup</div><div class="section-description">Export cached ratings as JSON.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset Settings</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">TweetFilter AI</div></div><div id="models-tab" class="tab-content"><div class="section-title">Tweet Rating Model</div><div class="section-description">Choose the model that scores tweets. Image-capable models can inspect tweet images directly.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Provider</label><select id="model-family-filter" data-setting="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">Endpoint Priority</label><select id="provider-sort" data-setting="providerSort"><option value="">Default</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show free models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select id="reasoning-effort" data-setting="reasoningEffort"><option value="none">None</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra High</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random model responses should be.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling value.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum response tokens. Use 0 for provider default.">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Show API responses as they stream in.">Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Allow OpenRouter web search for rating requests.">Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="When disabled, tweets show a manual Rate button.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;">Image Description Model</div><div class="section-description">Use this only when your rating model cannot read images directly.</div><div class="toggle-row"><div class="toggle-label">Describe Images First</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image descriptions.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Scoring Instructions</div><div class="section-description">Describe what a high-quality tweet means to you.</div><textarea id="user-instructions" placeholder="Examples:- Reward original reporting and useful technical detail.- Penalize engagement bait and vague outrage.- Prefer concise, evidence-backed posts." data-setting="userDefinedInstructions"></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Instruction History</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear History</button></div></div><div class="section-title" style="margin-top: 20px;">Always Keep Handles</div><div class="section-description">Tweets from these handles stay visible regardless of score.</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Handle without @"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
+    // Embedded style.css
+    const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background: linear-gradient(180deg, rgba(22, 26, 31, 0.97), rgba(16, 18, 22, 0.97));color: #e7e9ea;padding: 0;border-radius: 18px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);display: flex;flex-direction: column;width: min(92vw, 420px);max-width: 420px;max-height: 88vh;overflow: hidden;border: 1px solid rgba(130, 178, 219, 0.24);line-height: 1.3;backdrop-filter: blur(12px);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 14px 16px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background: linear-gradient(180deg, rgba(28, 34, 40, 0.98), rgba(23, 27, 33, 0.96));z-index: 20;border-radius: 18px 18px 0 0;}.settings-title {font-weight: 700;font-size: 16px;letter-spacing: 0.2px;color: #f1f5f9;}.settings-content {overflow-y: auto;max-height: calc(88vh - 118px);padding: 0 0 14px;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(120, 167, 210, 0.18);position: sticky;top: 0;background: rgba(20, 24, 29, 0.95);z-index: 10;padding: 12px 14px 10px;gap: 10px;}.tab-button {padding: 8px 12px;background: rgba(255, 255, 255, 0.04);border: 1px solid transparent;color: #d7e2ec;font-weight: 600;cursor: pointer;border-radius: 10px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(85, 157, 218, 0.14);border-color: rgba(85, 157, 218, 0.3);}.tab-button.active {color: #79c1ff;background-color: rgba(45, 152, 237, 0.2);border-color: rgba(82, 178, 255, 0.5);box-shadow: inset 0 0 0 1px rgba(37, 131, 204, 0.25);}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 16px 16px 8px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 12px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(24, 29, 35, 0.98);padding: 8px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);z-index: 1;}.select-container .search-input {width: 100%;padding: 9px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(33, 39, 46, 0.92);color: #e7e9ea;font-size: 12.5px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background: linear-gradient(180deg, rgba(40, 47, 56, 0.95), rgba(32, 38, 45, 0.95));color: #e7e9ea;padding: 10px 12px;min-height: 40px;border: 1px solid rgba(137, 178, 214, 0.35);border-radius: 10px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(28, 34, 41, 0.99);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(120, 167, 210, 0.28);border-radius: 10px;margin-top: 6px;box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(120, 167, 210, 0.09);font-size: 12.5px;}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: 700;margin-top: 18px;margin-bottom: 8px;color: #f3f6fa;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12.5px;margin-bottom: 10px;color: rgba(225, 233, 241, 0.82);line-height: 1.45;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 8px;margin-bottom: 15px;border: 1px solid rgba(120, 167, 210, 0.2);border-radius: 12px;padding: 12px 12px 10px;background: rgba(255, 255, 255, 0.04);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: 700;font-size: 13px;color: #dce7f2;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;padding: 10px;display: flex;flex-direction: column;align-items: stretch;gap: 8px;border: 1px solid rgba(120, 167, 210, 0.16);border-radius: 10px;background: rgba(255, 255, 255, 0.03);}.sort-container label {font-size: 12px;color: #cfd9e3;font-weight: 600;white-space: normal;display: flex;align-items: center;gap: 8px;}.sort-container .controls-group {display: grid;grid-template-columns: minmax(0, 1fr) auto;gap: 8px;align-items: center;}.sort-container select {width: 100%;min-height: 34px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12.5px;cursor: pointer;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {min-height: 34px;min-width: 94px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.32);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12px;font-weight: 600;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}.sort-container label input[type="checkbox"] {width: 14px;height: 14px;margin: 0;accent-color: #1d9bf0;}@media (min-width: 601px) {#settings-container {width: min(430px, 90vw);max-width: 430px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}`;
+    // Apply CSS
+    GM_addStyle(STYLE);
+    // Set menu HTML
+    GM_setValue('menuHTML', MENU);
+    // ----- helpers/browserStorage.js -----
+/**
+ * Browser storage wrapper functions for userscript compatibility
+ */
+/**
+ * Gets a value from browser storage using Tampermonkey's GM_getValue
+ * @param {string} key - The key to get from storage
+ * @param {any} defaultValue - The default value if key doesn't exist
+ * @returns {any} - The value from storage or default value
+ */
+function browserGet(key, defaultValue = null) {
+    try {
+        return GM_getValue(key, defaultValue);
+    } catch (error) {
+        console.error('Error reading from browser storage:', error);
+        return defaultValue;
+    }
+}
+/**
+ * Sets a value in browser storage using Tampermonkey's GM_setValue
+ * @param {string} key - The key to set in storage
+ * @param {any} value - The value to store
+ */
+function browserSet(key, value) {
+    try {
+        GM_setValue(key, value);
+    } catch (error) {
+        console.error('Error writing to browser storage:', error);
+    }
+}
+    // ----- appState.js -----
+const DEFAULT_INSTRUCTIONS = 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
+const DEFAULT_SETTINGS = Object.freeze({
+    selectedModel: 'openai/gpt-4.1-nano',
+    selectedImageModel: 'google/gemini-2.5-flash',
+    showFreeModels: true,
+    modelFamilyFilter: '',
+    providerSort: '',
+    enableImageDescriptions: false,
+    enableStreaming: true,
+    enableWebSearch: false,
+    enableAutoRating: true,
+    reasoningEffort: 'none',
+    modelTemperature: 0.5,
+    modelTopP: 0.9,
+    imageModelTemperature: 0.5,
+    imageModelTopP: 0.9,
+    maxTokens: 0,
+    filterThreshold: 5,
+    userDefinedInstructions: DEFAULT_INSTRUCTIONS,
+    blacklistedHandles: ''
+});
+const TweetRatingStatus = Object.freeze({
+    PENDING: 'pending',
+    STREAMING: 'streaming',
+    RATED: 'rated',
+    CACHED: 'cached',
+    MANUAL: 'manual',
+    ERROR: 'error',
+    BLACKLISTED: 'blacklisted',
+    AD: 'ad'
+});
+const FINAL_TWEET_STATUSES = new Set([
+    TweetRatingStatus.RATED,
+    TweetRatingStatus.CACHED,
+    TweetRatingStatus.MANUAL,
+    TweetRatingStatus.BLACKLISTED,
+    TweetRatingStatus.AD
+]);
+const ACTIVE_TWEET_STATUSES = new Set([
+    TweetRatingStatus.PENDING,
+    TweetRatingStatus.STREAMING
+]);
+function coerceBoolean(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return fallback;
+}
+function coerceNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+function coerceInteger(value, fallback = 0) {
+    const number = parseInt(value, 10);
+    return Number.isFinite(number) ? number : fallback;
+}
+function parseHandleList(value) {
+    return String(value || '')
+        .split('\n')
+        .map(handle => handle.trim().replace(/^@/, ''))
+        .filter(Boolean);
+}
+class AppSettingsStore {
+    get(key) {
+        return browserGet(key, DEFAULT_SETTINGS[key]);
+    }
+    set(key, value) {
+        browserSet(key, value);
+        window[key] = value;
+    }
+    getBoolean(key) {
+        return coerceBoolean(this.get(key), DEFAULT_SETTINGS[key]);
+    }
+    getNumber(key) {
+        return coerceNumber(this.get(key), DEFAULT_SETTINGS[key]);
+    }
+    getInteger(key) {
+        return coerceInteger(this.get(key), DEFAULT_SETTINGS[key]);
+    }
+    getHandles() {
+        return parseHandleList(this.get('blacklistedHandles'));
+    }
+    saveHandles(handles) {
+        const cleanHandles = [...new Set((handles || []).map(handle => handle.trim().replace(/^@/, '')).filter(Boolean))];
+        this.set('blacklistedHandles', cleanHandles.join('\n'));
+        return cleanHandles;
+    }
+    reset() {
+        Object.entries(DEFAULT_SETTINGS).forEach(([key, value]) => this.set(key, value));
+        return { ...DEFAULT_SETTINGS };
+    }
+}
+class TweetProcessingState {
+    constructor() {
+        this.processedTweetIds = new Set();
+        this.retryCounts = new Map();
+        this.pendingRequestCount = 0;
+        this.maxRetriesPerTweet = 2;
+    }
+    markScheduled(tweetId) {
+        this.processedTweetIds.add(tweetId);
+    }
+    isScheduled(tweetId) {
+        return this.processedTweetIds.has(tweetId);
+    }
+    clear(tweetId) {
+        this.processedTweetIds.delete(tweetId);
+    }
+    clearAll() {
+        this.processedTweetIds.clear();
+        this.retryCounts.clear();
+        this.pendingRequestCount = 0;
+        pendingRequests = 0;
+    }
+    resetRetries(tweetId) {
+        this.retryCounts.delete(tweetId);
+    }
+    shouldRetry(tweetId) {
+        const retryCount = this.retryCounts.get(tweetId) || 0;
+        if (retryCount >= this.maxRetriesPerTweet) {
+            return false;
+        }
+        this.retryCounts.set(tweetId, retryCount + 1);
+        return true;
+    }
+    incrementPending() {
+        this.pendingRequestCount += 1;
+        pendingRequests = this.pendingRequestCount;
+        return this.pendingRequestCount;
+    }
+    decrementPending() {
+        this.pendingRequestCount = Math.max(0, this.pendingRequestCount - 1);
+        pendingRequests = this.pendingRequestCount;
+        return this.pendingRequestCount;
+    }
+    resetPending() {
+        this.pendingRequestCount = 0;
+        pendingRequests = 0;
+    }
+}
+function isFinalTweetStatus(status) {
+    return FINAL_TWEET_STATUSES.has(status);
+}
+function isActiveTweetStatus(status) {
+    return ACTIVE_TWEET_STATUSES.has(status);
+}
+function isCompleteCachedRating(entry) {
+    return !!entry && entry.streaming !== true && entry.score !== undefined && entry.score !== null;
+}
+const appSettings = new AppSettingsStore();
+const tweetProcessingState = new TweetProcessingState();
+    // ----- helpers/cache.js -----
+/** Updates the cache statistics display in the General tab. */
+function updateCacheStatsUI() {
+    const cachedCountEl = document.getElementById('cached-ratings-count');
+    const whitelistedCountEl = document.getElementById('whitelisted-handles-count');
+    const cachedCount = tweetCache.size;
+    const keepCount = blacklistedHandles.length;
+    if (cachedCountEl) cachedCountEl.textContent = cachedCount;
+    if (whitelistedCountEl) whitelistedCountEl.textContent = keepCount;
+    const statsBadge = document.getElementById("tweet-filter-stats-badge");
+    if (statsBadge) statsBadge.innerHTML = `
+            <span data-cached-count>${cachedCount} rated</span>
+            <span data-pending-count> | ${pendingRequests} pending</span>
+            ${keepCount > 0 ? `<span style="margin-left: 5px;"> | ${keepCount} kept</span>` : ''}
+        `;
+}
+    // ----- backends/TweetCache.js -----
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func.apply(this, args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
+const EMPTY_TWEET_METADATA = Object.freeze({
+    model: null,
+    promptTokens: null,
+    completionTokens: null,
+    latency: null,
+    mediaInputs: null,
+    price: null
+});
+function normalizeScore(score) {
+    if (score === undefined || score === null || score === '') {
+        return null;
+    }
+    const parsedScore = Number(score);
+    if (!Number.isFinite(parsedScore)) {
+        return null;
+    }
+    return Math.max(0, Math.min(10, parsedScore));
+}
+function normalizeTweetCacheEntry(entry = {}) {
+    const normalizedScore = normalizeScore(entry.score);
+    return {
+        score: normalizedScore,
+        status: entry.status || null,
+        fullContext: entry.fullContext || '',
+        description: entry.description || '',
+        reasoning: entry.reasoning || '',
+        questions: Array.isArray(entry.questions) ? entry.questions : [],
+        lastAnswer: entry.lastAnswer || '',
+        mediaUrls: Array.isArray(entry.mediaUrls) ? entry.mediaUrls : [],
+        tweetContent: entry.tweetContent || '',
+        authorHandle: entry.authorHandle || '',
+        individualTweetText: entry.individualTweetText || '',
+        individualMediaUrls: Array.isArray(entry.individualMediaUrls) ? entry.individualMediaUrls : [],
+        qaConversationHistory: Array.isArray(entry.qaConversationHistory) ? entry.qaConversationHistory : [],
+        metadata: entry.metadata ? { ...entry.metadata } : { ...EMPTY_TWEET_METADATA },
+        threadContext: entry.threadContext || null,
+        streaming: entry.streaming === true,
+        blacklisted: entry.blacklisted === true,
+        error: entry.error || null,
+        fromStorage: entry.fromStorage === true,
+        timestamp: Number.isFinite(Number(entry.timestamp)) ? Number(entry.timestamp) : Date.now()
+    };
+}
+/**
+ * Class to manage the tweet rating cache with standardized data structure and centralized persistence.
+ */
+class TweetCache {
+    static DEBOUNCE_DELAY = 1500;
+    constructor() {
+        this.cache = {};
+        this.loadFromStorage();
+        this.debouncedSaveToStorage = debounce(this.#saveToStorageInternal.bind(this), TweetCache.DEBOUNCE_DELAY);
+    }
+    /**
+     * Loads the cache from browser storage.
+     */
+    loadFromStorage() {
+        try {
+            const storedCache = browserGet('tweetRatings', '{}');
+            this.cache = JSON.parse(storedCache);
+            for (const tweetId in this.cache) {
+                this.cache[tweetId] = normalizeTweetCacheEntry({
+                    ...this.cache[tweetId],
+                    fromStorage: true
+                });
+            }
+        } catch (error) {
+            console.error('Error loading tweet cache:', error);
+            this.cache = {};
+        }
+    }
+    /**
+     * Saves the current cache to browser storage. (Internal, synchronous implementation)
+     */
+    #saveToStorageInternal() {
+        try {
+            browserSet('tweetRatings', JSON.stringify(this.cache));
+            updateCacheStatsUI();
+        } catch (error) {
+            console.error("Error saving tweet cache to storage:", error);
+        }
+    }
+    /**
+     * Gets a tweet rating from the cache.
+     * @param {string} tweetId - The ID of the tweet.
+     * @returns {Object|null} The tweet rating object or null if not found.
+     */
+    get(tweetId) {
+        return this.cache[tweetId] || null;
+    }
+    /**
+     * Sets a tweet rating in the cache.
+     * @param {string} tweetId - The ID of the tweet.
+     * @param {Object} rating - The rating object. Can be a partial update.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or use debounced save.
+     */
+    set(tweetId, rating, saveImmediately = true) {
+        if (!tweetId) {
+            return;
+        }
+        const existingEntry = normalizeTweetCacheEntry(this.cache[tweetId] || {});
+        const updatedEntry = normalizeTweetCacheEntry({
+            ...existingEntry,
+            ...rating,
+            metadata: rating.metadata ? { ...(existingEntry.metadata || {}), ...rating.metadata } : existingEntry.metadata,
+            timestamp: rating.timestamp !== undefined ? rating.timestamp : Date.now()
+        });
+        if (rating.individualTweetText !== undefined &&
+            existingEntry.individualTweetText &&
+            existingEntry.individualTweetText.length > String(rating.individualTweetText).length) {
+            updatedEntry.individualTweetText = existingEntry.individualTweetText;
+        }
+        if (rating.individualMediaUrls !== undefined &&
+            Array.isArray(existingEntry.individualMediaUrls) &&
+            Array.isArray(rating.individualMediaUrls) &&
+            existingEntry.individualMediaUrls.length > rating.individualMediaUrls.length) {
+            updatedEntry.individualMediaUrls = existingEntry.individualMediaUrls;
+        }
+        this.cache[tweetId] = updatedEntry;
+        if (!saveImmediately) {
+            this.debouncedSaveToStorage();
+        } else {
+            this.#saveToStorageInternal();
+        }
+    }
+    has(tweetId) {
+        return this.cache[tweetId] !== undefined;
+    }
+    hasCompleteRating(tweetId) {
+        return isCompleteCachedRating(this.cache[tweetId]);
+    }
+    /**
+     * Removes a tweet rating from the cache.
+     * @param {string} tweetId - The ID of the tweet to remove.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
+     */
+    delete(tweetId, saveImmediately = true) {
+        if (this.has(tweetId)) {
+            delete this.cache[tweetId];
+            this.debouncedSaveToStorage();
+        }
+    }
+    /**
+     * Clears all ratings from the cache.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or debounce.
+     */
+    clear(saveImmediately = false) {
+        this.cache = {};
+        if (saveImmediately) {
+            this.#saveToStorageInternal();
+        } else {
+            this.debouncedSaveToStorage();
+        }
+    }
+    /**
+     * Gets the number of cached ratings.
+     * @returns {number} The number of cached ratings.
+     */
+    get size() {
+        return Object.keys(this.cache).length;
+    }
+}
+const tweetCache = new TweetCache();
+    // ----- backends/InstructionsHistory.js -----
+/**
+ * Manages the history of custom instructions
+ */
+class InstructionsHistory {
+    constructor() {
+        if (InstructionsHistory.instance) {
+            return InstructionsHistory.instance;
+        }
+        InstructionsHistory.instance = this;
+        this.history = [];
+        this.maxEntries = 10;
+        this.loadFromStorage();
+    }
+    /**
+     * Generates a simple hash of a string
+     * @private
+     * @param {string} str - String to hash
+     * @returns {string} - Hash of the string
+     */
+    #hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return hash.toString(36);
+    }
+    /**
+     * Loads the history from browser storage
+     * @private
+     */
+    loadFromStorage() {
+        try {
+            const stored = browserGet('instructionsHistory', '[]');
+            this.history = JSON.parse(stored);
+            if (!Array.isArray(this.history)) {
+                throw new Error('Stored history is not an array');
+            }
+            this.history = this.history.map(entry => ({
+                ...entry,
+                hash: entry.hash || this.#hashString(entry.instructions)
+            }));
+        } catch (e) {
+            console.error('Error loading instructions history:', e);
+            this.history = [];
+        }
+    }
+    /**
+     * Saves the current history to browser storage
+     * @private
+     */
+    #saveToStorage() {
+        try {
+            browserSet('instructionsHistory', JSON.stringify(this.history));
+        } catch (e) {
+            console.error('Error saving instructions history:', e);
+            throw new Error('Failed to save instructions history');
+        }
+    }
+    /**
+     * Adds new instructions to the history
+     * @param {string} instructions - The instructions text
+     * @param {string} summary - The summary of the instructions
+     * @returns {Promise<boolean>} - Whether the operation was successful
+     */
+    async add(instructions, summary) {
+        try {
+            if (!instructions?.trim() || !summary?.trim()) {
+                throw new Error('Invalid instructions or summary');
+            }
+            const hash = this.#hashString(instructions.trim());
+            const existingIndex = this.history.findIndex(entry => entry.hash === hash);
+            if (existingIndex !== -1) {
+                this.history[existingIndex].timestamp = Date.now();
+                this.history[existingIndex].summary = summary;
+                const entry = this.history.splice(existingIndex, 1)[0];
+                this.history.unshift(entry);
+            } else {
+                this.history.unshift({
+                    instructions: instructions.trim(),
+                    summary: summary.trim(),
+                    timestamp: Date.now(),
+                    hash
+                });
+                if (this.history.length > this.maxEntries) {
+                    this.history = this.history.slice(0, this.maxEntries);
+                }
+            }
+            this.#saveToStorage();
+            return true;
+        } catch (e) {
+            console.error('Error adding instructions to history:', e);
+            return false;
+        }
+    }
+    /**
+     * Removes an entry from history
+     * @param {number} index - The index of the entry to remove
+     * @returns {boolean} - Whether the operation was successful
+     */
+    remove(index) {
+        try {
+            if (index < 0 || index >= this.history.length) {
+                throw new Error('Invalid history index');
+            }
+            this.history.splice(index, 1);
+            this.#saveToStorage();
+            return true;
+        } catch (e) {
+            console.error('Error removing instructions from history:', e);
+            return false;
+        }
+    }
+    /**
+     * Gets all history entries, sorted by timestamp (newest first)
+     * @returns {Array} The history entries
+     */
+    getAll() {
+        return [...this.history];
+    }
+    /**
+     * Gets a specific entry from history
+     * @param {number} index - The index of the entry to get
+     * @returns {Object|null} The history entry or null if not found
+     */
+    get(index) {
+        try {
+            if (index < 0 || index >= this.history.length) {
+                return null;
+            }
+            return { ...this.history[index] };
+        } catch (e) {
+            console.error('Error getting history entry:', e);
+            return null;
+        }
+    }
+    /**
+     * Clears all history
+     */
+    clear() {
+        try {
+            this.history = [];
+            this.#saveToStorage();
+        } catch (e) {
+            console.error('Error clearing instructions history:', e);
+            throw new Error('Failed to clear instructions history');
+        }
+    }
+    /**
+     * Gets the number of entries in history
+     * @returns {number} The number of entries
+     */
+    get size() {
+        return this.history.length;
+    }
+}
+    // ----- backends/InstructionsManager.js -----
+/**
+ * Manages the business logic for instructions handling
+ */
+class InstructionsManager {
+    constructor() {
+        if (InstructionsManager.instance) {
+            return InstructionsManager.instance;
+        }
+        InstructionsManager.instance = this;
+        this.history = new InstructionsHistory();
+        this.currentInstructions = browserGet('userDefinedInstructions', DEFAULT_INSTRUCTIONS);
+    }
+    /**
+     * Saves new instructions and adds them to history
+     * @param {string} instructions - The instructions to save
+     * @returns {Promise<{success: boolean, message: string}>}
+     */
+    async saveInstructions(instructions) {
+        if (!instructions?.trim()) {
+            return { success: false, message: 'Instructions cannot be empty' };
+        }
+        instructions = instructions.trim();
+        this.currentInstructions = instructions;
+        browserSet('userDefinedInstructions', instructions);
+        const summary = this.#generateSummary(instructions);
+        await this.history.add(instructions, summary);
+        return {
+            success: true,
+            message: 'Scoring instructions saved! New tweets will use these instructions.',
+            shouldClearCache: true
+        };
+    }
+    /**
+     * Creates a summary title using the first three words and the last word
+     * @private
+     * @param {string} instructions - Full instruction text
+     * @returns {string} Generated title
+     */
+    #generateSummary(instructions) {
+        const words = instructions.trim().split(/\s+/);
+        if (words.length <= 3) {
+            return words.join(' ');
+        }
+        const firstThree = words.slice(0, 3).join(' ');
+        const lastWord = words[words.length - 1];
+        return `${firstThree} … ${lastWord}`;
+    }
+    /**
+     * Gets the current instructions
+     * @returns {string}
+     */
+    getCurrentInstructions() {
+        return this.currentInstructions;
+    }
+    /**
+     * Gets all instruction history entries
+     * @returns {Array}
+     */
+    getHistory() {
+        return this.history.getAll();
+    }
+    /**
+     * Removes an instruction from history
+     * @param {number} index
+     * @returns {boolean}
+     */
+    removeFromHistory(index) {
+        return this.history.remove(index);
+    }
+    /**
+     * Clears all instruction history
+     */
+    clearHistory() {
+        this.history.clear();
+    }
+}
+const instructionsManager = new InstructionsManager();
+    // ----- config.js -----
+const processedTweets = tweetProcessingState.processedTweetIds;
+const adAuthorCache = new Set();
+const PROCESSING_DELAY_MS = 1;
+const API_CALL_DELAY_MS = 1;
+let userDefinedInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
+let currentFilterThreshold = appSettings.getInteger('filterThreshold');
+let observedTargetNode = null;
+let lastAPICallTime = 0;
+let pendingRequests = 0;
+const MAX_RETRIES = 5;
+let availableModels = [];
+let listedModels = [];
+let selectedModel = appSettings.get('selectedModel');
+let selectedImageModel = appSettings.get('selectedImageModel');
+let showFreeModels = appSettings.getBoolean('showFreeModels');
+let modelFamilyFilter = appSettings.get('modelFamilyFilter');
+let providerSort = appSettings.get('providerSort');
+let blacklistedHandles = appSettings.getHandles();
+let enableImageDescriptions = appSettings.getBoolean('enableImageDescriptions');
+let enableStreaming = appSettings.getBoolean('enableStreaming');
+let enableWebSearch = appSettings.getBoolean('enableWebSearch');
+let enableAutoRating = appSettings.getBoolean('enableAutoRating');
+let reasoningEffort = appSettings.get('reasoningEffort');
+const REVIEW_SYSTEM_PROMPT = `
     You are TweetFilter-AI.
     Today's Date: ${new Date().toLocaleDateString()}.
     Overview: You will be given a tweet. You are tasked with analyzing this tweet and providing a score and follow-up questions. The score, tone of the analysis, and the follow-up questions should align with the preferences set by the user's custom instructions. 
@@ -55,7 +694,8 @@
       <Q2>What other tweets has this author posted regarding Paris?</Q2>
       <Q3>What are the latest events happening in Paris?</Q3>
     </FOLLOW_UP_QUESTIONS>
-`,R=`
+`;
+const FOLLOW_UP_SYSTEM_PROMPT = `
 You are TweetFilter-AI, continuing a conversation about a tweet you previously rated.
 Today's Date: ${new Date().toLocaleDateString()}.
 CONTEXT: You previously rated a tweet using these user instructions:
@@ -87,89 +727,5923 @@ NOTES:
       <Q2>What other tweets has this author posted regarding Paris?</Q2>
       <Q3>What are the latest events happening in Paris?</Q3>
     </FOLLOW_UP_QUESTIONS>
-`,H=parseFloat(e("modelTemperature","1")),N=parseFloat(e("modelTopP","0.95")),O=parseFloat(e("imageModelTemperature","1")),Q=parseFloat(e("imageModelTopP","0.95")),B=parseInt(e("maxTokens","0")),D='article[data-testid="tweet"]',M='div[role="link"][tabindex="0"]',P='div[data-testid="tweetText"]';function F(t){if(!t||!S||0===S.length)return!1;let e=t.toLowerCase(),o=S.find(t=>[t.slug,t.id,t.canonical_slug,t.endpoint?.model_variant_slug,t.name].filter(Boolean).some(t=>t.toLowerCase()===e));if(!o)return!1;let i=[...Array.isArray(o.input_modalities)?o.input_modalities:[],...Array.isArray(o.architecture?.input_modalities)?o.architecture.input_modalities:[],..."string"==typeof o.architecture?.modality?o.architecture.modality.split(/[+,/ ]/):[]].map(t=>t.toLowerCase());return i.includes("image")}function z(t){if(!t)return"";let e=[],o=t=>{if(!t)return;if(t.nodeType===Node.TEXT_NODE){e.push(t.textContent||"");return}if(t.nodeType!==Node.ELEMENT_NODE)return;let i=t;if("IMG"===i.tagName){let n=i.getAttribute("alt");n&&e.push(n);return}if("BR"===i.tagName){e.push("\n");return}for(let r of i.childNodes)o(r)};return o(t),e.join("").replace(/\u00A0/g," ").trim()}function W(t){let e=t.querySelectorAll(P),o=t.querySelector(M);for(let i of e)if(!o||!o.contains(i)){let n=z(i);if(n)return n}return""}function Y(t){let e=t.querySelector('a[href*="/status/"] time'),o=e?.parentElement?.href;if(o&&o.includes("/status/")){let i=o.match(/\/status\/(\d+)/);return i&&i[1]?i[1]:o.substring(o.indexOf("/status/")+1)}return`tweet-${Math.random().toString(36).substring(2,15)}-${Date.now()}`}function X(t){let e=[],o=t.querySelector('div[data-testid="User-Name"] a[role="link"]');if(o){let i=o.getAttribute("href");i&&i.startsWith("/")&&e.push(i.slice(1))}if(e.length>0){let n=t.querySelector('div[role="link"][tabindex="0"]');if(n){let r=n.querySelector('div[data-testid^="UserAvatar-Container-"]');if(r){let a=r.getAttribute("data-testid"),s=a.lastIndexOf("-");if(s>=0&&s<a.length-1){let l=a.substring(s+1);l&&l!==e[0]&&e.push(l)}let d=n.querySelector('a[href*="/status/"]');if(d){let c=d.getAttribute("href"),p=c.match(/^\/([^/]+)\/status\/\d+/);p&&p[1]&&p[1]!==e[0]&&e.push(p[1])}}}}return e.length>0?e:[""]}function j(t){if(!t)return[];let e=new Set,o='div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"], [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]',i='video[poster*="pbs.twimg.com"], video, [poster*="pbs.twimg.com"], video',n=`${o}, ${i}`,r=t.querySelectorAll(n);return 0===r.length&&t.matches(M)&&(r=t.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]')),r.forEach(t=>{if("VIDEO"===t.tagName)e.add(t.poster);else if("IMG"===t.tagName){let o=t.src;if(!o)return;e.add(o)}}),Array.from(e)}function V(t){let e=!1,o=!1,i=t=>{if(window.location.pathname.includes("/compose/")||!t||t.dataset?.filtered==="true"||t.dataset?.isAd==="true")return!0;let e=t.closest('div[data-testid="cellInnerDiv"]');if(e?.dataset?.filtered==="true"||e?.dataset?.isAd==="true")return!0;if(G(t))return e&&(e.dataset.isAd="true",e.classList.add("tweet-filtered")),t.dataset.isAd="true",!0;let o=Y(t);if(y.has(o)){let i=to.get(o);if(i&&"error"!==i.status)return!0}return!1};for(let n of t)"childList"===n.type&&(n.addedNodes.length>0&&n.addedNodes.forEach(t=>{if(t.nodeType===Node.ELEMENT_NODE){let o=null;if(t.matches&&t.matches('div[aria-label^="Timeline: Conversation"]')?o=t:t.querySelector&&(o=t.querySelector('div[aria-label^="Timeline: Conversation"]')),o&&setTimeout(tA,5),t.matches&&t.matches(D))i(t)||(t0(t),e=!0);else if(t.querySelector){let n=t.querySelectorAll(D);n.forEach(t=>{i(t)||(t0(t),e=!0)})}}}),n.removedNodes.length>0&&n.removedNodes.forEach(t=>{if(t.nodeType===Node.ELEMENT_NODE&&t.dataset?.filtered!=="true"&&t.dataset?.isAd!=="true"){if(t.matches&&t.matches(D)){let e=Y(t);e&&(to.get(e)?.destroy(),o=!0)}else if(t.querySelectorAll){let i=t.querySelectorAll(D);i.forEach(t=>{if(t.dataset?.filtered==="true"||t.dataset?.isAd==="true")return;let e=Y(t);e&&(to.get(e)?.destroy(),o=!0)})}}}));e&&setTimeout(()=>{t8()},100),o&&to.cleanupOrphaned()}function G(t){if(!t)return!1;let e=t.querySelectorAll('div[dir="ltr"] span');for(let o of e)if("Ad"===o.textContent.trim()&&!o.children.length)return!0;return!1}function K(){return/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)}function Z(t,e="info"){let o=document.getElementById("status-indicator");o&&(o.textContent=t,o.className="active "+e,setTimeout(()=>{o.classList.remove("active",e)},3e3))}async function J(){let t=document.getElementById("user-instructions"),e=await b.saveInstructions(t.value);Z(e.message),e.success&&e.shouldClearCache&&(K()||confirm("Do you want to clear the rating cache to apply these instructions to all tweets?"))&&tr(),e.success&&tt()}function tt(){let t=document.getElementById("instructions-list");if(!t)return;let e=b.getHistory();if(t.innerHTML="",0===e.length){let o=document.createElement("div");o.style.cssText="padding: 8px; opacity: 0.7; font-style: italic;",o.textContent="No saved instructions yet",t.appendChild(o);return}e.forEach((e,o)=>{let i=function t(e,o){let i=document.createElement("div");i.className="instruction-item",i.dataset.index=o;let n=document.createElement("div");n.className="instruction-text",n.textContent=e.summary,n.title=e.instructions,i.appendChild(n);let r=document.createElement("div");r.className="instruction-buttons";let a=document.createElement("button");a.className="use-instruction",a.textContent="Use",a.title="Use these instructions",a.onclick=()=>(function t(e){let o=document.getElementById("user-instructions");o&&(o.value=e,J())})(e.instructions),r.appendChild(a);let s=document.createElement("button");return s.className="remove-instruction",s.textContent="\xd7",s.title="Remove from history",s.onclick=()=>{var t;return t=o,void(b.removeFromHistory(t)?(tt(),Z("Instructions removed from history")):Z("Error removing instructions"))},r.appendChild(s),i.appendChild(r),i}(e,o);t.appendChild(i)})}class te{constructor(t){if(!t||!t.nodeType||t.nodeType!==Node.ELEMENT_NODE)throw Error("ScoreIndicator requires a valid tweet article DOM element.");this.tweetArticle=t,this.tweetId=Y(this.tweetArticle),this.isAuthorBlacklisted=!1,this.indicatorElement=null,this.tooltipElement=null,this.tooltipControls=null,this.pinButton=null,this.copyButton=null,this.tooltipCloseButton=null,this.reasoningDropdown=null,this.reasoningToggle=null,this.reasoningArrow=null,this.reasoningContent=null,this.reasoningTextElement=null,this.descriptionElement=null,this.scoreTextElement=null,this.followUpQuestionsTextElement=null,this.scrollButton=null,this.metadataElement=null,this.conversationContainerElement=null,this.followUpQuestionsElement=null,this.customQuestionContainer=null,this.customQuestionInput=null,this.customQuestionButton=null,this.attachImageButton=null,this.refreshButton=null,this.followUpImageContainer=null,this.followUpImageInput=null,this.metadataDropdown=null,this.metadataToggle=null,this.metadataArrow=null,this.metadataContent=null,this.tooltipScrollableContentElement=null,this.status="pending",this.score=null,this.description="",this.reasoning="",this.metadata=null,this.conversationHistory=[],this.questions=[],this.isPinned=!1,this.isVisible=!1,this.autoScroll=!0,this.userInitiatedScroll=!1,this.uploadedImageDataUrls=[],this.qaConversationHistory=[],this.currentFollowUpSource=null,this._lastScrollPosition=0,this._boundHandlers={handleAttachImageClick:null,handleKeyDown:null,handleFollowUpTouchStart:null,handleFollowUpTouchEnd:null,handleConversationReasoningToggle:null},this._boundMethodHandlers=Object.create(null),this._listenerTeardowns=[];try{this._createElements(t),this._addEventListeners(),to.add(this.tweetId,this)}catch(e){throw this.destroy(),e}}_createElements(t){this.indicatorElement=document.createElement("div"),this.indicatorElement.className="score-indicator",this.indicatorElement.dataset.tweetId=this.tweetId;let o=window.getComputedStyle(t).position;"relative"!==o&&"absolute"!==o&&"fixed"!==o&&"sticky"!==o&&(t.style.position="relative"),t.appendChild(this.indicatorElement),this.tooltipElement=document.createElement("div"),this.tooltipElement.className="score-description",this.tooltipElement.style.display="none",this.tooltipElement.dataset.tweetId=this.tweetId,this.tooltipElement.dataset.autoScroll=this.autoScroll?"true":"false",K()&&(this.tooltipElement.style.touchAction="pan-x pan-y pinch-zoom"),this.tooltipControls=document.createElement("div"),this.tooltipControls.className="tooltip-controls",this.tooltipCloseButton=document.createElement("button"),this.tooltipCloseButton.className="close-button tooltip-close-button",this.tooltipCloseButton.innerHTML="\xd7",this.tooltipCloseButton.title="Close tooltip",this.pinButton=document.createElement("button"),this.pinButton.className="tooltip-pin-button",this.pinButton.innerHTML="\uD83D\uDCCC",this.pinButton.title="Pin tooltip (prevents auto-closing)",this.copyButton=document.createElement("button"),this.copyButton.className="tooltip-copy-button",this.copyButton.innerHTML="\uD83D\uDCCB",this.copyButton.title="Copy content to clipboard",this.refreshButton=document.createElement("button"),this.refreshButton.className="tooltip-refresh-button",this.refreshButton.innerHTML="\uD83D\uDD04",this.refreshButton.title="Re-rate this tweet",this.rateButton=document.createElement("button"),this.rateButton.className="tooltip-rate-button",this.rateButton.innerHTML="⭐",this.rateButton.title="Rate this tweet",this.rateButton.style.display="none",this.tooltipControls.appendChild(this.pinButton),this.tooltipControls.appendChild(this.copyButton),this.tooltipControls.appendChild(this.tooltipCloseButton),this.tooltipControls.appendChild(this.refreshButton),this.tooltipControls.appendChild(this.rateButton),this.tooltipElement.appendChild(this.tooltipControls),this.tooltipScrollableContentElement=document.createElement("div"),this.tooltipScrollableContentElement.className="tooltip-scrollable-content",K()&&(this.tooltipScrollableContentElement.style.webkitOverflowScrolling="touch",this.tooltipScrollableContentElement.style.overscrollBehavior="contain"),this.reasoningDropdown=document.createElement("div"),this.reasoningDropdown.className="reasoning-dropdown",this.reasoningDropdown.style.display="none",this.reasoningToggle=document.createElement("div"),this.reasoningToggle.className="reasoning-toggle",this.reasoningArrow=document.createElement("span"),this.reasoningArrow.className="reasoning-arrow",this.reasoningArrow.textContent="▶",this.reasoningToggle.appendChild(this.reasoningArrow),this.reasoningToggle.appendChild(document.createTextNode(" Show Reasoning Trace")),this.reasoningContent=document.createElement("div"),this.reasoningContent.className="reasoning-content",this.reasoningTextElement=document.createElement("p"),this.reasoningTextElement.className="reasoning-text",this.reasoningContent.appendChild(this.reasoningTextElement),this.reasoningDropdown.appendChild(this.reasoningToggle),this.reasoningDropdown.appendChild(this.reasoningContent),this.tooltipScrollableContentElement.appendChild(this.reasoningDropdown),this.descriptionElement=document.createElement("div"),this.descriptionElement.className="description-text",this.tooltipScrollableContentElement.appendChild(this.descriptionElement),this.scoreTextElement=document.createElement("div"),this.scoreTextElement.className="score-text-from-description",this.scoreTextElement.style.display="none",this.tooltipScrollableContentElement.appendChild(this.scoreTextElement),this.followUpQuestionsTextElement=document.createElement("div"),this.followUpQuestionsTextElement.className="follow-up-questions-text-from-description",this.followUpQuestionsTextElement.style.display="none",this.tooltipScrollableContentElement.appendChild(this.followUpQuestionsTextElement),this.conversationContainerElement=document.createElement("div"),this.conversationContainerElement.className="tooltip-conversation-history",this.tooltipScrollableContentElement.appendChild(this.conversationContainerElement),this.followUpQuestionsElement=document.createElement("div"),this.followUpQuestionsElement.className="tooltip-follow-up-questions",this.followUpQuestionsElement.style.display="none",this.tooltipScrollableContentElement.appendChild(this.followUpQuestionsElement),this.customQuestionContainer=document.createElement("div"),this.customQuestionContainer.className="tooltip-custom-question-container",this.customQuestionInput=document.createElement("textarea"),this.customQuestionInput.placeholder="Ask your own question...",this.customQuestionInput.className="tooltip-custom-question-input",this.customQuestionInput.rows=1,this.customQuestionInput.addEventListener("input",function(){""===this.value.trim()?(this.style.height="auto",this.rows=1):(this.style.height="auto",this.style.height=this.scrollHeight+"px")});let i=e("selectedModel","openai/gpt-4.1-nano"),n=F(i);if(n&&(this.attachImageButton=document.createElement("button"),this.attachImageButton.textContent="\uD83D\uDCCE",this.attachImageButton.className="tooltip-attach-image-button",this.attachImageButton.title="Attach image(s) or PDF(s)",this.followUpImageInput=document.createElement("input"),this.followUpImageInput.type="file",this.followUpImageInput.accept="image/*,.pdf,application/pdf",this.followUpImageInput.multiple=!0,this.followUpImageInput.style.display="none"),this.customQuestionButton=document.createElement("button"),this.customQuestionButton.textContent="Ask",this.customQuestionButton.className="tooltip-custom-question-button",this.customQuestionContainer.appendChild(this.customQuestionInput),this.attachImageButton&&(this.customQuestionContainer.appendChild(this.attachImageButton),this.followUpImageInput&&this.customQuestionContainer.appendChild(this.followUpImageInput)),this.customQuestionContainer.appendChild(this.customQuestionButton),K()&&this.customQuestionInput){let r=this.tooltipScrollableContentElement?.scrollTop||0;setTimeout(()=>{if(!this.customQuestionInput||!this.tooltipScrollableContentElement)return;let t=t=>{this.tooltipScrollableContentElement.scrollTop=r,t.preventDefault()};this.tooltipScrollableContentElement.addEventListener("scroll",t,{passive:!1}),this.customQuestionInput.focus({preventScroll:!0}),this.customQuestionInput.blur(),setTimeout(()=>{this.tooltipScrollableContentElement?.removeEventListener("scroll",t),this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=r)},100)},50)}n&&(this.followUpImageContainer=document.createElement("div"),this.followUpImageContainer.className="tooltip-follow-up-image-preview-container"),this.metadataDropdown=document.createElement("div"),this.metadataDropdown.className="reasoning-dropdown",this.metadataDropdown.style.display="none",this.metadataToggle=document.createElement("div"),this.metadataToggle.className="reasoning-toggle",this.metadataArrow=document.createElement("span"),this.metadataArrow.className="reasoning-arrow",this.metadataArrow.textContent="▶",this.metadataToggle.appendChild(this.metadataArrow),this.metadataToggle.appendChild(document.createTextNode(" Show Metadata")),this.metadataContent=document.createElement("div"),this.metadataContent.className="reasoning-content",this.metadataElement=document.createElement("div"),this.metadataElement.className="tooltip-metadata",this.metadataContent.appendChild(this.metadataElement),this.metadataDropdown.appendChild(this.metadataToggle),this.metadataDropdown.appendChild(this.metadataContent),this.tooltipElement.appendChild(this.tooltipScrollableContentElement),this.followUpImageContainer&&this.tooltipElement.appendChild(this.followUpImageContainer),this.tooltipElement.appendChild(this.customQuestionContainer),this.tooltipElement.appendChild(this.metadataDropdown),this.scrollButton=document.createElement("div"),this.scrollButton.className="scroll-to-bottom-button",this.scrollButton.innerHTML="⬇ Scroll to bottom",this.scrollButton.style.display="none",this.tooltipElement.appendChild(this.scrollButton);let a=document.createElement("div");a.className="tooltip-bottom-spacer",this.tooltipScrollableContentElement.appendChild(a),document.body.appendChild(this.tooltipElement),K()&&(this.indicatorElement?.classList.add("mobile-indicator"),this.tooltipElement?.classList.add("mobile-tooltip")),this._updateIndicatorUI(),this._updateTooltipUI(),this.autoScrollConversation=!0,this.conversationContainerElement&&this._registerDomListener(this.conversationContainerElement,"scroll",this._getBoundMethodHandler("_handleConversationScroll")),K()&&this._initializeMobileInteractionFix()}_initializeMobileInteractionFix(){this._hasFirstInteraction=!1;let t=t=>{if(!this._hasFirstInteraction){this._hasFirstInteraction=!0;let e=this.tooltipScrollableContentElement?.scrollTop||0;setTimeout(()=>{this.tooltipScrollableContentElement&&this.tooltipScrollableContentElement.scrollTop!==e&&(this.tooltipScrollableContentElement.scrollTop=e)},0),t.target===this.customQuestionInput&&"touchstart"===t.type&&requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=e)})}},e=[this.customQuestionInput,this.customQuestionButton,this.reasoningToggle,this.metadataToggle,this.pinButton,this.copyButton,this.tooltipCloseButton,this.refreshButton,this.rateButton,this.scrollButton].filter(t=>t);if(e.forEach(e=>{this._registerDomListener(e,"touchstart",t,{passive:!0,capture:!0})}),this.customQuestionInput){let o=0,i=()=>{o=this.tooltipScrollableContentElement?.scrollTop||0};this._registerDomListener(this.customQuestionInput,"touchstart",i,{passive:!0});let n=()=>{o>0&&requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=o)})};this._registerDomListener(this.customQuestionInput,"focus",n)}if(this.conversationContainerElement){let r=e=>{let o=e.target.closest(".reasoning-toggle");o&&t(e)};this._registerDomListener(this.conversationContainerElement,"touchstart",r,{passive:!0,capture:!0})}if(this.tooltipScrollableContentElement){let a=!1,s=t=>{if(a=!1,!this._hasFirstInteraction){let e=t.target.closest("button, textarea, .reasoning-toggle");if(e){a=!0;let o=this.tooltipScrollableContentElement.scrollTop;requestAnimationFrame(()=>{a&&this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=o)}),setTimeout(()=>{a=!1},100)}}};this._registerDomListener(this.tooltipScrollableContentElement,"touchstart",s,{passive:!0})}}_simulateInitialMobileTaps(){setTimeout(()=>{let t=[this.customQuestionInput,this.customQuestionButton,this.reasoningToggle,this.metadataToggle].filter(t=>t);t.forEach(t=>{try{let e=new TouchEvent("touchstart",{bubbles:!0,cancelable:!0,view:window,touches:[new Touch({identifier:Date.now(),target:t,clientX:0,clientY:0,screenX:0,screenY:0,pageX:0,pageY:0})]});t.dispatchEvent(e);let o=new TouchEvent("touchend",{bubbles:!0,cancelable:!0,view:window,changedTouches:[new Touch({identifier:Date.now(),target:t,clientX:0,clientY:0,screenX:0,screenY:0,pageX:0,pageY:0})]});t.dispatchEvent(o)}catch(i){try{let n=document.createEvent("TouchEvent");n.initTouchEvent("touchstart",!0,!0),t.dispatchEvent(n)}catch(r){t.click(),t.blur&&t.blur()}}})},100)}_getBoundMethodHandler(t){if(!this._boundMethodHandlers[t]){let e=this[t];if("function"!=typeof e)throw Error(`[ScoreIndicator ${this.tweetId}] Missing handler method: ${t}`);this._boundMethodHandlers[t]=e.bind(this)}return this._boundMethodHandlers[t]}_registerDomListener(t,e,o,i){t&&"function"==typeof t.addEventListener&&"function"==typeof o&&(t.addEventListener(e,o,i),this._listenerTeardowns.push(()=>{t&&"function"==typeof t.removeEventListener&&t.removeEventListener(e,o,i)}))}_removeRegisteredListeners(){for(let t=this._listenerTeardowns.length-1;t>=0;t-=1)try{this._listenerTeardowns[t]()}catch(e){}this._listenerTeardowns=[]}_addEventListeners(){this.indicatorElement&&this.tooltipElement&&(this._registerDomListener(this.indicatorElement,"mouseenter",this._getBoundMethodHandler("_handleMouseEnter")),this._registerDomListener(this.indicatorElement,"mouseleave",this._getBoundMethodHandler("_handleMouseLeave")),this._registerDomListener(this.indicatorElement,"click",this._getBoundMethodHandler("_handleIndicatorClick")),this._registerDomListener(this.tooltipElement,"mouseenter",this._getBoundMethodHandler("_handleTooltipMouseEnter")),this._registerDomListener(this.tooltipElement,"mouseleave",this._getBoundMethodHandler("_handleTooltipMouseLeave")),this._registerDomListener(this.tooltipScrollableContentElement,"scroll",this._getBoundMethodHandler("_handleTooltipScroll")),this._registerDomListener(this.pinButton,"click",this._getBoundMethodHandler("_handlePinClick")),this._registerDomListener(this.copyButton,"click",this._getBoundMethodHandler("_handleCopyClick")),this._registerDomListener(this.tooltipCloseButton,"click",this._getBoundMethodHandler("_handleCloseClick")),this._registerDomListener(this.reasoningToggle,"click",this._getBoundMethodHandler("_handleReasoningToggleClick")),this._registerDomListener(this.scrollButton,"click",this._getBoundMethodHandler("_handleScrollButtonClick")),this._registerDomListener(this.refreshButton,"click",this._getBoundMethodHandler("_handleRefreshClick")),this._registerDomListener(this.rateButton,"click",this._getBoundMethodHandler("_handleRateClick")),this._registerDomListener(this.followUpQuestionsElement,"click",this._getBoundMethodHandler("_handleFollowUpQuestionClick")),K()&&this.followUpQuestionsElement&&(this._boundHandlers.handleFollowUpTouchStart=t=>{let e=t.target.closest(".follow-up-question-button");e&&(t.preventDefault(),e.dataset.touchStartX=t.touches[0].clientX,e.dataset.touchStartY=t.touches[0].clientY)},this._boundHandlers.handleFollowUpTouchEnd=t=>{let e=t.target.closest(".follow-up-question-button");if(e&&e.dataset.touchStartX){t.preventDefault();let o=t.changedTouches[0].clientX,i=t.changedTouches[0].clientY,n=Math.abs(o-parseFloat(e.dataset.touchStartX)),r=Math.abs(i-parseFloat(e.dataset.touchStartY));n<10&&r<10&&this._handleFollowUpQuestionClick({target:e,preventDefault(){},stopPropagation(){}}),delete e.dataset.touchStartX,delete e.dataset.touchStartY}},this._registerDomListener(this.followUpQuestionsElement,"touchstart",this._boundHandlers.handleFollowUpTouchStart,{passive:!1}),this._registerDomListener(this.followUpQuestionsElement,"touchend",this._boundHandlers.handleFollowUpTouchEnd,{passive:!1})),this._registerDomListener(this.customQuestionButton,"click",this._getBoundMethodHandler("_handleCustomQuestionClick")),this._boundHandlers.handleKeyDown=t=>{"Enter"!==t.key||t.shiftKey||(t.preventDefault(),this._handleCustomQuestionClick(t))},this._registerDomListener(this.customQuestionInput,"keydown",this._boundHandlers.handleKeyDown),this._registerDomListener(this.metadataToggle,"click",this._getBoundMethodHandler("_handleMetadataToggleClick")),this.attachImageButton&&this.followUpImageInput&&(this._boundHandlers.handleAttachImageClick=t=>{t.preventDefault(),t.stopPropagation(),this.followUpImageInput.click()},this._registerDomListener(this.attachImageButton,"click",this._boundHandlers.handleAttachImageClick),this._registerDomListener(this.followUpImageInput,"change",this._getBoundMethodHandler("_handleFollowUpImageSelect"))))}_updateIndicatorUI(){if(!this.indicatorElement)return;let t=this.indicatorElement.classList;t.remove("pending-rating","rated-rating","error-rating","cached-rating","blacklisted-rating","streaming-rating","manual-rating","blacklisted-author-indicator");let e="",o="";if(this.isAuthorBlacklisted)o="blacklisted-author-indicator",e=null!==this.score&&void 0!==this.score?String(this.score):"?";else switch(this.status){case"pending":o="pending-rating",e="⏳";break;case"streaming":o="streaming-rating",e=null!==this.score&&void 0!==this.score?String(this.score):"\uD83D\uDD04";break;case"error":o="error-rating",e="⚠️";break;case"cached":o="cached-rating",e=String(this.score);break;case"blacklisted":o="blacklisted-rating",e=String(this.score);break;case"manual":o="manual-rating",e="\uD83D\uDCAD";break;default:o="rated-rating",e=String(this.score)}o&&t.add(o),this.indicatorElement.textContent=e}_extractDescriptionSections(t){let e=t.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/),o=t.match(/<SCORE>([^<]+)<\/SCORE>/),i=t.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/),n="",r="",a="";if(n=e&&void 0!==e[1]?e[1].trim():o||i?"*Waiting for analysis...*":t,o&&void 0!==o[1]&&(r=o[1].trim()),i&&void 0!==i[1]){let s=[1,2,3].map(t=>{let e=i[1].match(RegExp(`<Q${t}>([\\s\\S]*?)<\\/Q${t}>`));return e&&void 0!==e[1]?e[1].trim():""}).filter(Boolean);a=s.length>0?s.join("\n"):i[1].trim()}return{analysisContent:n,scoreContent:r,questionsContent:a}}_buildMetadataDisplayState(){let t="",e=!1,o=this.metadata&&Object.keys(this.metadata).length>1&&this.metadata.model,i=this.metadata&&this.metadata.generationId&&1===Object.keys(this.metadata).length;return o?(this.metadata.providerName&&"N/A"!==this.metadata.providerName&&(t+=`<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`),t+=`<div class="metadata-line">Model: ${this.metadata.model}</div>`,t+=`<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`,this.metadata.reasoningTokens>0&&(t+=`<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`),t+=`<div class="metadata-line">Latency: ${this.metadata.latency}</div>`,this.metadata.mediaInputs>0&&(t+=`<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`),t+=`<div class="metadata-line">Price: ${this.metadata.price}</div>`,e=!0):i&&(t+=`<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`,e=!0),{metadataHTML:t,showMetadataDropdown:e}}_updateTooltipUI(){if(!this.tooltipElement||!this.tooltipScrollableContentElement||!this.descriptionElement||!this.scoreTextElement||!this.followUpQuestionsTextElement||!this.reasoningTextElement||!this.reasoningDropdown||!this.conversationContainerElement||!this.followUpQuestionsElement||!this.metadataElement||!this.metadataDropdown)return;let t=this.tooltipScrollableContentElement.scrollTop,{analysisContent:e,scoreContent:o,questionsContent:i}=this._extractDescriptionSections(this.description||""),n=!1,r=ti(e).description;if(this.descriptionElement.innerHTML!==r&&(this.descriptionElement.innerHTML=r,n=!0),o){let a=o.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/SCORE_(\d+)/g,'<span class="score-highlight">SCORE: $1</span>').replace(/\n/g,"<br>");this.scoreTextElement.innerHTML!==a&&(this.scoreTextElement.innerHTML=a,n=!0),this.scoreTextElement.style.display="block"}else"none"!==this.scoreTextElement.style.display&&(this.scoreTextElement.style.display="none",this.scoreTextElement.innerHTML="",n=!0);if(i){let s=i.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");this.followUpQuestionsTextElement.innerHTML!==s&&(this.followUpQuestionsTextElement.innerHTML=s)}else""!==this.followUpQuestionsTextElement.innerHTML&&(this.followUpQuestionsTextElement.innerHTML="");this.followUpQuestionsTextElement.style.display="none";let l=ti("",this.reasoning).reasoning;this.reasoningTextElement.innerHTML!==l&&(this.reasoningTextElement.innerHTML=l,n=!0);let d=!!l;"none"===this.reasoningDropdown.style.display===d&&(this.reasoningDropdown.style.display=d?"block":"none",n=!0);let c=this._renderConversationHistory();this.conversationContainerElement.innerHTML!==c&&(this.conversationContainerElement.innerHTML=c,this.conversationContainerElement.style.display=this.conversationHistory.length>0?"block":"none",this._attachConversationReasoningListeners(),n=!0);let p=!1;this.followUpQuestionsElement.children.length!==(this.questions?.length||0)?p=!0:this.questions?.forEach((t,e)=>{let o=this.followUpQuestionsElement.children[e];o&&o.dataset.questionText===t||(p=!0)}),p&&(this.followUpQuestionsElement.innerHTML="",this.questions&&this.questions.length>0?(this.questions.forEach((t,e)=>{let o=document.createElement("button");if(o.className="follow-up-question-button",o.textContent=`🤔 ${t}`,o.dataset.questionIndex=e,o.dataset.questionText=t,K()){let i=!1;o.addEventListener("touchstart",t=>{if(!i){i=!0;let e=this.tooltipScrollableContentElement?.scrollTop||0;requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=e)})}},{passive:!0}),o.addEventListener("focus",t=>{t.target.blur()},{passive:!0})}this.followUpQuestionsElement.appendChild(o)}),this.followUpQuestionsElement.style.display="block"):this.followUpQuestionsElement.style.display="none",n=!0);let{metadataHTML:u,showMetadataDropdown:h}=this._buildMetadataDisplayState();if(this.metadataElement.innerHTML!==u&&(this.metadataElement.innerHTML=u,n=!0),this.metadataDropdown){let g=this.metadataDropdown.style.display,m=h?"block":"none";g!==m&&(this.metadataDropdown.style.display=m,n=!0)}let f="streaming"===this.status;if(this.tooltipElement.classList.contains("streaming-tooltip")!==f&&(this.tooltipElement.classList.toggle("streaming-tooltip",f),n=!0),this.rateButton){let $="manual"===this.status,b=this.rateButton.style.display,y=$?"inline-block":"none";b!==y&&(this.rateButton.style.display=y,n=!0)}n?requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&this.isVisible&&(this.autoScroll?this._performAutoScroll():this.tooltipScrollableContentElement.scrollTop=t),this._updateScrollButtonVisibility()}):this._updateScrollButtonVisibility()}_renderConversationHistory(){if(!this.conversationHistory||0===this.conversationHistory.length)return"";let t=new Map;this.conversationContainerElement&&this.conversationContainerElement.querySelectorAll(".conversation-reasoning").forEach((e,o)=>{t.set(o,e.classList.contains("expanded"))});let e="";return this.conversationHistory.forEach((o,i)=>{let n=o.question.replace(/</g,"&lt;").replace(/>/g,"&gt;"),r="";o.uploadedImages&&o.uploadedImages.length>0&&(r=`
+`;
+let modelTemperature = appSettings.getNumber('modelTemperature');
+let modelTopP = appSettings.getNumber('modelTopP');
+let imageModelTemperature = appSettings.getNumber('imageModelTemperature');
+let imageModelTopP = appSettings.getNumber('imageModelTopP');
+let maxTokens = appSettings.getInteger('maxTokens');
+const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
+const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
+const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
+const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
+const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
+const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
+const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
+function getModelIdentifierCandidates(model) {
+  return [
+    model?.slug,
+    model?.id,
+    model?.canonical_slug,
+    model?.endpoint?.model_variant_slug,
+    model?.name
+  ];
+}
+function modelHasImageInput(model) {
+  if (!model) {
+    return false;
+  }
+  const modalities = [
+    ...(Array.isArray(model.input_modalities) ? model.input_modalities : []),
+    ...(Array.isArray(model.architecture?.input_modalities) ? model.architecture.input_modalities : []),
+    ...(typeof model.architecture?.modality === 'string' ? model.architecture.modality.split(/[+,/ ]/) : [])
+  ].map(modality => modality.toLowerCase());
+  return modalities.includes('image');
+}
+function getCachedImageCapableModelIds() {
+  const cachedIds = browserGet('imageCapableModelIds', []);
+  if (Array.isArray(cachedIds)) {
+    return cachedIds;
+  }
+  try {
+    const parsedIds = JSON.parse(cachedIds);
+    return Array.isArray(parsedIds) ? parsedIds : [];
+  } catch (error) {
+    return [];
+  }
+}
+/**
+ * Helper function to check if a model supports images based on its architecture
+ * @param {string} modelId - The model ID to check
+ * @returns {boolean} - Whether the model supports image input
+ */
+function modelSupportsImages(modelId) {
+  if (!modelId) {
+    return false;
+  }
+  const normalizedModelId = modelId.toLowerCase();
+  const model = availableModels?.find(model =>
+    getModelIdentifierCandidates(model)
+      .filter(Boolean)
+      .some(value => value.toLowerCase() === normalizedModelId)
+  );
+  if (model) {
+    return modelHasImageInput(model);
+  }
+  return getCachedImageCapableModelIds()
+    .filter(Boolean)
+    .some(value => value.toLowerCase() === normalizedModelId);
+}
+    // ----- domScraper.js -----
+/**
+     * Extracts and returns trimmed text content from the given element(s).
+     * @param {Node|NodeList} elements - A DOM element or a NodeList.
+     * @returns {string} The trimmed text content.
+     */
+function extractVisibleTextWithEmoji(element) {
+    if (!element) return '';
+    const textParts = [];
+    const walk = (node) => {
+        if (!node) return;
+        if (node.nodeType === Node.TEXT_NODE) {
+            textParts.push(node.textContent || '');
+            return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        const el = node;
+        if (el.tagName === 'IMG') {
+            const altText = el.getAttribute('alt');
+            if (altText) textParts.push(altText);
+            return;
+        }
+        if (el.tagName === 'BR') {
+            textParts.push('\n');
+            return;
+        }
+        for (const child of el.childNodes) {
+            walk(child);
+        }
+    };
+    walk(element);
+    return textParts.join('').replace(/\u00A0/g, ' ').trim();
+}
+function getElementText(elements) {
+    if (!elements) return '';
+    const elementList = elements instanceof NodeList ? Array.from(elements) : [elements];
+    for (const element of elementList) {
+        const text = extractVisibleTextWithEmoji(element);
+        if (text) return text;
+    }
+    return '';
+}
+/**
+ * Extracts the text of a tweet, excluding any text from quoted tweets.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {string} The text of the main tweet.
+ */
+function getTweetText(tweetArticle) {
+    const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
+    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+    for (const textElement of allTextElements) {
+        if (!quoteContainer || !quoteContainer.contains(textElement)) {
+            const tweetText = extractVisibleTextWithEmoji(textElement);
+            if (tweetText) return tweetText;
+        }
+    }
+    return '';
+}
+/**
+ * Extracts the tweet ID from a tweet article element.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {string} The tweet ID.
+ */
+function getTweetID(tweetArticle) {
+    if (!tweetArticle) return '';
+    const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
+    let tweetId = timeEl?.parentElement?.href;
+    if (tweetId && tweetId.includes('/status/')) {
+        const match = tweetId.match(/\/status\/(\d+)/);
+        if (match && match[1]) {
+            return match[1];
+        }
+        return tweetId.substring(tweetId.indexOf('/status/') + 1);
+    }
+    if (!tweetArticle.dataset.tweetFilterGeneratedId) {
+        tweetArticle.dataset.tweetFilterGeneratedId = `generated-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+    }
+    return tweetArticle.dataset.tweetFilterGeneratedId;
+}
+/**
+ * Extracts the Twitter handle from a tweet article element.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {array} The user and quoted user handles.
+ */
+function getUserHandles(tweetArticle) {
+    let handles = [];
+    const handleElement = tweetArticle.querySelector(USER_HANDLE_SELECTOR);
+    if (handleElement) {
+        const href = handleElement.getAttribute('href');
+        if (href && href.startsWith('/')) {
+            handles.push(href.slice(1));
+        }
+    }
+    if (handles.length > 0) {
+        const quoteContainer = tweetArticle.querySelector('div[role="link"][tabindex="0"]');
+        if (quoteContainer) {
+            const userAvatarDiv = quoteContainer.querySelector('div[data-testid^="UserAvatar-Container-"]');
+            if (userAvatarDiv) {
+                const testId = userAvatarDiv.getAttribute('data-testid');
+                const lastDashIndex = testId.lastIndexOf('-');
+                if (lastDashIndex >= 0 && lastDashIndex < testId.length - 1) {
+                    const quotedHandle = testId.substring(lastDashIndex + 1);
+                    if (quotedHandle && quotedHandle !== handles[0]) {
+                        handles.push(quotedHandle);
+                    }
+                }
+                const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
+                if (quotedLink) {
+                    const href = quotedLink.getAttribute('href');
+                    const match = href.match(/^\/([^/]+)\/status\/\d+/);
+                    if (match && match[1] && match[1] !== handles[0]) {
+                        handles.push(match[1]);
+                    }
+                }
+            }
+        }
+    }
+    return handles.length > 0 ? handles : [''];
+}
+/**
+ * Synchronous version of extractMediaLinks without retry logic.
+ * @param {Element} scopeElement - The tweet element.
+ * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
+ */
+function extractMediaLinks(scopeElement) {
+    if (!scopeElement) return [];
+    const mediaLinks = new Set();
+    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
+    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, [poster*="pbs.twimg.com"], video`;
+    const combinedSelector = `${imgSelector}, ${videoSelector}`;
+    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
+    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
+        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
+    }
+    mediaElements.forEach(mediaEl => {
+        if (mediaEl.tagName === 'VIDEO') {
+            mediaLinks.add(mediaEl.poster);
+        } else if (mediaEl.tagName === 'IMG') {
+            const sourceUrl = mediaEl.src;
+            if(!sourceUrl) return;
+            mediaLinks.add(sourceUrl);          
+        }
+    });
+    return Array.from(mediaLinks);
+}
+function isOriginalTweet(tweetArticle) {
+    let sibling = tweetArticle.nextElementSibling;
+    while (sibling) {
+        if (sibling.matches && sibling.matches('div[data-testid="inline_reply_offscreen"]')) {
+            return true;
+        }
+        sibling = sibling.nextElementSibling;
+    }
+    return false;
+}
+/**
+ * Handles DOM mutations to detect new tweets added to the timeline.
+ * @param {MutationRecord[]} mutationsList - List of observed mutations.
+ */
+function handleMutations(mutationsList) {
+    let tweetsAdded = false;
+    let needsCleanup = false;
+    const shouldSkipProcessing = (element) => {
+        if (window.location.pathname.includes('/compose/')) return true;
+        if (!element) return true;
+        if (element.dataset?.filtered === 'true' || element.dataset?.isAd === 'true') {
+            return true;
+        }
+        const cell = element.closest('div[data-testid="cellInnerDiv"]');
+        if (cell?.dataset?.filtered === 'true' || cell?.dataset?.isAd === 'true') {
+            return true;
+        }
+        if (isAd(element)) {
+            if (cell) {
+                cell.dataset.isAd = 'true';
+                cell.classList.add('tweet-filtered');
+            }
+            element.dataset.isAd = 'true';
+            return true;
+        }
+        const tweetId = getTweetID(element);
+        if (tweetProcessingState.isScheduled(tweetId)) {
+            const indicator = ScoreIndicatorRegistry.get(tweetId);
+            if (indicator && indicator.status !== TweetRatingStatus.ERROR) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const mutation of mutationsList) {
+        if (mutation.type === 'childList') {
+            if (mutation.addedNodes.length > 0) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        let conversationTimeline = null;
+                        if (node.matches && node.matches('div[aria-label^="Timeline: Conversation"]')) {
+                            conversationTimeline = node;
+                        } else if (node.querySelector) {
+                            conversationTimeline = node.querySelector('div[aria-label^="Timeline: Conversation"]');
+                        }
+                        if (conversationTimeline) {
+                            console.log("[handleMutations] Conversation timeline detected. Triggering handleThreads.");
+                            setTimeout(handleThreads, 5);
+                        }
+                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                            if (!shouldSkipProcessing(node)) {
+                                scheduleTweetProcessing(node);
+                                tweetsAdded = true;
+                            }
+                        }
+                        else if (node.querySelector) {
+                            const tweetsInside = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                            tweetsInside.forEach(tweet => {
+                                if (!shouldSkipProcessing(tweet)) {
+                                    scheduleTweetProcessing(tweet);
+                                    tweetsAdded = true;
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+            if (mutation.removedNodes.length > 0) {
+                mutation.removedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        if (node.dataset?.filtered === 'true' || node.dataset?.isAd === 'true') {
+                            return;
+                        }
+                        if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
+                            const tweetId = getTweetID(node);
+                            if (tweetId) {
+                                ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                needsCleanup = true;
+                            }
+                        }
+                        else if (node.querySelectorAll) {
+                            const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+                            removedTweets.forEach(tweet => {
+                                if (tweet.dataset?.filtered === 'true' || tweet.dataset?.isAd === 'true') {
+                                    return;
+                                }
+                                const tweetId = getTweetID(tweet);
+                                if (tweetId) {
+                                    ScoreIndicatorRegistry.get(tweetId)?.destroy();
+                                    needsCleanup = true;
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        }
+    }
+    if (tweetsAdded) {
+        setTimeout(() => {
+            applyFilteringToAll();
+        }, 100);
+    }
+    if (needsCleanup) {
+        ScoreIndicatorRegistry.cleanupOrphaned();
+    }
+}
+/**
+ * Checks if a tweet article is an advertisement.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {boolean} True if the tweet is an ad.
+ */
+function isAd(tweetArticle) {
+    if (!tweetArticle) return false;
+    const spans = tweetArticle.querySelectorAll('div[dir="ltr"] span');
+    for (const span of spans) {
+        if (span.textContent.trim() === 'Ad' && !span.children.length) {
+            return true;
+        }
+    }
+    return false;
+}
+    // ----- ui/utils.js -----
+/**
+ * Detects if the user is on a mobile device
+ * @returns {boolean} true if mobile device detected
+ */
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+/**
+ * Displays a temporary status message on the screen.
+ * @param {string} message - The message to display.
+ * @param {string} [type=\'info\'] - The type of message (info, error, warning, success).
+ */
+function showStatus(message, type = 'info') {
+    const indicator = document.getElementById('status-indicator');
+    if (!indicator) {
+        console.error('#status-indicator element not found.');
+        return;
+    }
+    indicator.textContent = message;
+    indicator.className = 'active ' + type;
+    setTimeout(() => { indicator.classList.remove('active', type); }, 3000);
+}
+/**
+ * Resizes an image file to a maximum dimension.
+ * @param {File} file - The image file to resize.
+ * @param {number} maxDimPx - The maximum dimension (width or height) in pixels.
+ * @returns {Promise<string>} A promise that resolves with the data URL of the resized image (JPEG format).
+ */
+function resizeImage(file, maxDimPx) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                let { width, height } = img;
+                let newWidth, newHeight;
+                if (width > height) {
+                    if (width > maxDimPx) {
+                        newWidth = maxDimPx;
+                        newHeight = height * (maxDimPx / width);
+                    } else {
+                        newWidth = width;
+                        newHeight = height;
+                    }
+                } else {
+                    if (height > maxDimPx) {
+                        newHeight = maxDimPx;
+                        newWidth = width * (maxDimPx / height);
+                    } else {
+                        newWidth = width;
+                        newHeight = height;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                resolve(dataUrl);
+            };
+            img.onerror = (error) => {
+                console.error("Error loading image for resizing:", error);
+                reject(new Error("Could not load image for resizing."));
+            };
+            img.src = event.target.result;
+        };
+        reader.onerror = (error) => {
+            console.error("FileReader error:", error);
+            reject(new Error("Could not read file."));
+        };
+        reader.readAsDataURL(file);
+    });
+}
+    // ----- ui/InstructionsUI.js -----
+/**
+ * UI component for managing instructions
+ */
+async function saveInstructions() {
+    const instructionsTextarea = document.getElementById('user-instructions');
+    const result = await instructionsManager.saveInstructions(instructionsTextarea.value);
+    showStatus(result.message);
+    if (result.success && result.shouldClearCache) {
+        if (isMobileDevice() || confirm('Do you want to clear the rating cache to apply these instructions to all tweets?')) {
+            clearTweetRatingsAndRefreshUI();
+        }
+    }
+    if (result.success) {
+        refreshInstructionsHistory();
+    }
+}
+/**
+ * Refreshes the instructions history list in the UI.
+ */
+function refreshInstructionsHistory() {
+    const listElement = document.getElementById('instructions-list');
+    if (!listElement) return;
+    const history = instructionsManager.getHistory();
+    listElement.innerHTML = '';
+    if (history.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = 'padding: 8px; opacity: 0.7; font-style: italic;';
+        emptyMsg.textContent = 'No saved instructions yet';
+        listElement.appendChild(emptyMsg);
+        return;
+    }
+    history.forEach((entry, index) => {
+        const item = createHistoryItem(entry, index);
+        listElement.appendChild(item);
+    });
+}
+/**
+ * Creates a history item element
+ * @param {Object} entry - The history entry
+ * @param {number} index - The index in the history
+ * @returns {HTMLElement}
+ */
+function createHistoryItem(entry, index) {
+    const item = document.createElement('div');
+    item.className = 'instruction-item';
+    item.dataset.index = index;
+    const text = document.createElement('div');
+    text.className = 'instruction-text';
+    text.textContent = entry.summary;
+    text.title = entry.instructions;
+    item.appendChild(text);
+    const buttons = document.createElement('div');
+    buttons.className = 'instruction-buttons';
+    const useBtn = document.createElement('button');
+    useBtn.className = 'use-instruction';
+    useBtn.textContent = 'Use';
+    useBtn.title = 'Use these instructions';
+    useBtn.onclick = () => useInstructions(entry.instructions);
+    buttons.appendChild(useBtn);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-instruction';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove from history';
+    removeBtn.onclick = () => removeInstructions(index);
+    buttons.appendChild(removeBtn);
+    item.appendChild(buttons);
+    return item;
+}
+/**
+ * Uses the selected instructions from history.
+ * @param {string} instructions - The instructions to use.
+ */
+function useInstructions(instructions) {
+    const textarea = document.getElementById('user-instructions');
+    if (textarea) {
+        textarea.value = instructions;
+        saveInstructions();
+    }
+}
+/**
+ * Removes instructions from history at the specified index.
+ * @param {number} index - The index of the instructions to remove.
+ */
+function removeInstructions(index) {
+    if (instructionsManager.removeFromHistory(index)) {
+        refreshInstructionsHistory();
+        showStatus('Instructions removed from history');
+    } else {
+        showStatus('Error removing instructions');
+    }
+}
+/**
+ * Clears all instructions history after confirmation
+ */
+function clearInstructionsHistory() {
+    if (isMobileDevice() || confirm('Are you sure you want to clear all instruction history?')) {
+        instructionsManager.clearHistory();
+        refreshInstructionsHistory();
+        showStatus('Instructions history cleared');
+    }
+}
+    // ----- ui/ScoreIndicator.js -----
+/**
+ * Manages the state and UI for a single score indicator and its associated tooltip.
+ */
+class ScoreIndicator {
+    /**
+     * @param {Element} tweetArticle - The tweet article element this indicator belongs to.
+     */
+    constructor(tweetArticle) {
+        if (!tweetArticle || !tweetArticle.nodeType || tweetArticle.nodeType !== Node.ELEMENT_NODE) {
+            throw new Error("ScoreIndicator requires a valid tweet article DOM element.");
+        }
+        this.tweetArticle = tweetArticle;
+        this.tweetId = getTweetID(this.tweetArticle);
+        this.isAuthorBlacklisted = false;
+        this.indicatorElement = null;
+        this.tooltipElement = null;
+        this.tooltipControls = null;
+        this.pinButton = null;
+        this.copyButton = null;
+        this.tooltipCloseButton = null;
+        this.reasoningDropdown = null;
+        this.reasoningToggle = null;
+        this.reasoningArrow = null;
+        this.reasoningContent = null;
+        this.reasoningTextElement = null;
+        this.descriptionElement = null;
+        this.scoreTextElement = null;
+        this.followUpQuestionsTextElement = null;
+        this.scrollButton = null;
+        this.metadataElement = null;
+        this.conversationContainerElement = null;
+        this.followUpQuestionsElement = null;
+        this.customQuestionContainer = null;
+        this.customQuestionInput = null;
+        this.customQuestionButton = null;
+        this.attachImageButton = null;
+        this.refreshButton = null;
+        this.followUpImageContainer = null;
+        this.followUpImageInput = null;
+        this.metadataDropdown = null;
+        this.metadataToggle = null;
+        this.metadataArrow = null;
+        this.metadataContent = null;
+        this.tooltipScrollableContentElement = null;
+        this.status = 'pending';
+        this.score = null;
+        this.description = '';
+        this.reasoning = '';
+        this.metadata = null;
+        this.conversationHistory = [];
+        this.questions = [];
+        this.isPinned = false;
+        this.isVisible = false;
+        this.autoScroll = true;
+        this.userInitiatedScroll = false;
+        this.uploadedImageDataUrls = [];
+        this.qaConversationHistory = [];
+        this.currentFollowUpSource = null;
+        this._lastScrollPosition = 0;
+        this._boundHandlers = {
+            handleAttachImageClick: null,
+            handleKeyDown: null,
+            handleFollowUpTouchStart: null,
+            handleFollowUpTouchEnd: null,
+            handleConversationReasoningToggle: null
+        };
+        this._boundMethodHandlers = Object.create(null);
+        this._listenerTeardowns = [];
+        try {
+            this._createElements(tweetArticle);
+            this._addEventListeners();
+            ScoreIndicatorRegistry.add(this.tweetId, this);
+        } catch (error) {
+            console.error(`[ScoreIndicator ${this.tweetId}] Failed initialization:`, error);
+            this.destroy();
+            throw error;
+        }
+    }
+    /**
+     * Creates the indicator and tooltip DOM elements.
+     * @param {Element} initialTweetArticle - The article element to attach to initially.
+     */
+    _createElements(initialTweetArticle) {
+        this.indicatorElement = document.createElement('div');
+        this.indicatorElement.className = 'score-indicator';
+        this.indicatorElement.dataset.tweetId = this.tweetId;
+        const currentPosition = window.getComputedStyle(initialTweetArticle).position;
+        if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
+            initialTweetArticle.style.position = 'relative';
+        }
+        initialTweetArticle.appendChild(this.indicatorElement);
+        this.tooltipElement = document.createElement('div');
+        this.tooltipElement.className = 'score-description';
+        this.tooltipElement.style.display = 'none';
+        this.tooltipElement.dataset.tweetId = this.tweetId;
+        this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+        if (isMobileDevice()) {
+            this.tooltipElement.style.touchAction = 'pan-x pan-y pinch-zoom';
+        }
+        this.tooltipControls = document.createElement('div');
+        this.tooltipControls.className = 'tooltip-controls';
+        this.tooltipCloseButton = document.createElement('button');
+        this.tooltipCloseButton.className = 'close-button tooltip-close-button';
+        this.tooltipCloseButton.innerHTML = '×';
+        this.tooltipCloseButton.title = 'Close tooltip';
+        this.pinButton = document.createElement('button');
+        this.pinButton.className = 'tooltip-pin-button';
+        this.pinButton.innerHTML = '📌';
+        this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        this.copyButton = document.createElement('button');
+        this.copyButton.className = 'tooltip-copy-button';
+        this.copyButton.innerHTML = '📋';
+        this.copyButton.title = 'Copy content to clipboard';
+        this.refreshButton = document.createElement('button');
+        this.refreshButton.className = 'tooltip-refresh-button';
+        this.refreshButton.innerHTML = '🔄';
+        this.refreshButton.title = 'Re-rate this tweet';
+        this.rateButton = document.createElement('button');
+        this.rateButton.className = 'tooltip-rate-button';
+        this.rateButton.innerHTML = '⭐';
+        this.rateButton.title = 'Rate this tweet';
+        this.rateButton.style.display = 'none';
+        this.tooltipControls.appendChild(this.pinButton);
+        this.tooltipControls.appendChild(this.copyButton);
+        this.tooltipControls.appendChild(this.tooltipCloseButton);
+        this.tooltipControls.appendChild(this.refreshButton);
+        this.tooltipControls.appendChild(this.rateButton);
+        this.tooltipElement.appendChild(this.tooltipControls);
+        this.tooltipScrollableContentElement = document.createElement('div');
+        this.tooltipScrollableContentElement.className = 'tooltip-scrollable-content';
+        if (isMobileDevice()) {
+            this.tooltipScrollableContentElement.style.webkitOverflowScrolling = 'touch';
+            this.tooltipScrollableContentElement.style.overscrollBehavior = 'contain';
+        }
+        this.reasoningDropdown = document.createElement('div');
+        this.reasoningDropdown.className = 'reasoning-dropdown';
+        this.reasoningDropdown.style.display = 'none';
+        this.reasoningToggle = document.createElement('div');
+        this.reasoningToggle.className = 'reasoning-toggle';
+        this.reasoningArrow = document.createElement('span');
+        this.reasoningArrow.className = 'reasoning-arrow';
+        this.reasoningArrow.textContent = '▶';
+        this.reasoningToggle.appendChild(this.reasoningArrow);
+        this.reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
+        this.reasoningContent = document.createElement('div');
+        this.reasoningContent.className = 'reasoning-content';
+        this.reasoningTextElement = document.createElement('p');
+        this.reasoningTextElement.className = 'reasoning-text';
+        this.reasoningContent.appendChild(this.reasoningTextElement);
+        this.reasoningDropdown.appendChild(this.reasoningToggle);
+        this.reasoningDropdown.appendChild(this.reasoningContent);
+        this.tooltipScrollableContentElement.appendChild(this.reasoningDropdown);
+        this.descriptionElement = document.createElement('div');
+        this.descriptionElement.className = 'description-text';
+        this.tooltipScrollableContentElement.appendChild(this.descriptionElement);
+        this.scoreTextElement = document.createElement('div');
+        this.scoreTextElement.className = 'score-text-from-description';
+        this.scoreTextElement.style.display = 'none';
+        this.tooltipScrollableContentElement.appendChild(this.scoreTextElement);
+        this.followUpQuestionsTextElement = document.createElement('div');
+        this.followUpQuestionsTextElement.className = 'follow-up-questions-text-from-description';
+        this.followUpQuestionsTextElement.style.display = 'none';
+        this.tooltipScrollableContentElement.appendChild(this.followUpQuestionsTextElement);
+        this.conversationContainerElement = document.createElement('div');
+        this.conversationContainerElement.className = 'tooltip-conversation-history';
+        this.tooltipScrollableContentElement.appendChild(this.conversationContainerElement);
+        this.followUpQuestionsElement = document.createElement('div');
+        this.followUpQuestionsElement.className = 'tooltip-follow-up-questions';
+        this.followUpQuestionsElement.style.display = 'none';
+        this.tooltipScrollableContentElement.appendChild(this.followUpQuestionsElement);
+        this.customQuestionContainer = document.createElement('div');
+        this.customQuestionContainer.className = 'tooltip-custom-question-container';
+        this.customQuestionInput = document.createElement('textarea');
+        this.customQuestionInput.placeholder = 'Ask your own question...';
+        this.customQuestionInput.className = 'tooltip-custom-question-input';
+        this.customQuestionInput.rows = 1;
+        this.customQuestionInput.addEventListener('input', function() {
+            if (this.value.trim() === '') {
+                this.style.height = 'auto';
+                this.rows = 1;
+            } else {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            }
+        });
+        const currentSelectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
+        const supportsImages = typeof modelSupportsImages === 'function' && modelSupportsImages(currentSelectedModel);
+        if (supportsImages) {
+            this.attachImageButton = document.createElement('button');
+            this.attachImageButton.textContent = '📎';
+            this.attachImageButton.className = 'tooltip-attach-image-button';
+            this.attachImageButton.title = 'Attach image(s) or PDF(s)';
+            this.followUpImageInput = document.createElement('input');
+            this.followUpImageInput.type = 'file';
+            // I escaped the slash here because it was messing up the comment stripping code.
+            this.followUpImageInput.accept = `image${"/"}*,.pdf,application/pdf`;
+            this.followUpImageInput.multiple = true;
+            this.followUpImageInput.style.display = 'none';
+        }
+        this.customQuestionButton = document.createElement('button');
+        this.customQuestionButton.textContent = 'Ask';
+        this.customQuestionButton.className = 'tooltip-custom-question-button';
+        this.customQuestionContainer.appendChild(this.customQuestionInput);
+        if (this.attachImageButton) {
+            this.customQuestionContainer.appendChild(this.attachImageButton);
+            if (this.followUpImageInput) {
+                this.customQuestionContainer.appendChild(this.followUpImageInput);
+            }
+        }
+        this.customQuestionContainer.appendChild(this.customQuestionButton);
+        if (isMobileDevice() && this.customQuestionInput) {
+            const initialScroll = this.tooltipScrollableContentElement?.scrollTop || 0;
+            setTimeout(() => {
+                if (!this.customQuestionInput || !this.tooltipScrollableContentElement) {
+                    return;
+                }
+                const preventScroll = (e) => {
+                    this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                    e.preventDefault();
+                };
+                this.tooltipScrollableContentElement.addEventListener('scroll', preventScroll, { passive: false });
+                this.customQuestionInput.focus({ preventScroll: true });
+                this.customQuestionInput.blur();
+                setTimeout(() => {
+                    this.tooltipScrollableContentElement?.removeEventListener('scroll', preventScroll);
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = initialScroll;
+                    }
+                }, 100);
+            }, 50);
+        }
+        if (supportsImages) {
+            this.followUpImageContainer = document.createElement('div');
+            this.followUpImageContainer.className = 'tooltip-follow-up-image-preview-container';
+        }
+        this.metadataDropdown = document.createElement('div');
+        this.metadataDropdown.className = 'reasoning-dropdown';
+        this.metadataDropdown.style.display = 'none';
+        this.metadataToggle = document.createElement('div');
+        this.metadataToggle.className = 'reasoning-toggle';
+        this.metadataArrow = document.createElement('span');
+        this.metadataArrow.className = 'reasoning-arrow';
+        this.metadataArrow.textContent = '▶';
+        this.metadataToggle.appendChild(this.metadataArrow);
+        this.metadataToggle.appendChild(document.createTextNode(' Show Metadata'));
+        this.metadataContent = document.createElement('div');
+        this.metadataContent.className = 'reasoning-content';
+        this.metadataElement = document.createElement('div');
+        this.metadataElement.className = 'tooltip-metadata';
+        this.metadataContent.appendChild(this.metadataElement);
+        this.metadataDropdown.appendChild(this.metadataToggle);
+        this.metadataDropdown.appendChild(this.metadataContent);
+        this.tooltipElement.appendChild(this.tooltipScrollableContentElement);
+        if (this.followUpImageContainer) {
+            this.tooltipElement.appendChild(this.followUpImageContainer);
+        }
+        this.tooltipElement.appendChild(this.customQuestionContainer);
+        this.tooltipElement.appendChild(this.metadataDropdown);
+        this.scrollButton = document.createElement('div');
+        this.scrollButton.className = 'scroll-to-bottom-button';
+        this.scrollButton.innerHTML = '⬇ Scroll to bottom';
+        this.scrollButton.style.display = 'none';
+        this.tooltipElement.appendChild(this.scrollButton);
+        const bottomSpacer = document.createElement('div');
+        bottomSpacer.className = 'tooltip-bottom-spacer';
+        this.tooltipScrollableContentElement.appendChild(bottomSpacer);
+        document.body.appendChild(this.tooltipElement);
+        if (isMobileDevice()) {
+            this.indicatorElement?.classList.add('mobile-indicator');
+            this.tooltipElement?.classList.add('mobile-tooltip');
+        }
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+        this.autoScrollConversation = true;
+        if (this.conversationContainerElement) {
+            this._registerDomListener(
+                this.conversationContainerElement,
+                'scroll',
+                this._getBoundMethodHandler('_handleConversationScroll')
+            );
+        }
+        if (isMobileDevice()) {
+            this._initializeMobileInteractionFix();
+        }
+    }
+    /**
+     * Initializes the mobile scroll interaction workaround.
+     * @private
+     */
+    _initializeMobileInteractionFix() {
+        this._hasFirstInteraction = false;
+        const handleFirstTap = (e) => {
+            if (!this._hasFirstInteraction) {
+                this._hasFirstInteraction = true;
+                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                setTimeout(() => {
+                    if (this.tooltipScrollableContentElement &&
+                        this.tooltipScrollableContentElement.scrollTop !== scrollTop) {
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                }, 0);
+                if (e.target === this.customQuestionInput && e.type === 'touchstart') {
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                        }
+                    });
+                }
+            }
+        };
+        const interactiveElements = [
+            this.customQuestionInput,
+            this.customQuestionButton,
+            this.reasoningToggle,
+            this.metadataToggle,
+            this.pinButton,
+            this.copyButton,
+            this.tooltipCloseButton,
+            this.refreshButton,
+            this.rateButton,
+            this.scrollButton
+        ].filter(el => el);
+        interactiveElements.forEach(element => {
+            this._registerDomListener(element, 'touchstart', handleFirstTap, { passive: true, capture: true });
+        });
+        if (this.customQuestionInput) {
+            let scrollBeforeFocus = 0;
+            const handleInputTouchStart = () => {
+                scrollBeforeFocus = this.tooltipScrollableContentElement?.scrollTop || 0;
+            };
+            this._registerDomListener(this.customQuestionInput, 'touchstart', handleInputTouchStart, { passive: true });
+            const handleInputFocus = () => {
+                if (scrollBeforeFocus > 0) {
+                    requestAnimationFrame(() => {
+                        if (this.tooltipScrollableContentElement) {
+                            this.tooltipScrollableContentElement.scrollTop = scrollBeforeFocus;
+                        }
+                    });
+                }
+            };
+            this._registerDomListener(this.customQuestionInput, 'focus', handleInputFocus);
+        }
+        if (this.conversationContainerElement) {
+            const handleConversationTouchStart = (e) => {
+                const toggle = e.target.closest('.reasoning-toggle');
+                if (toggle) {
+                    handleFirstTap(e);
+                }
+            };
+            this._registerDomListener(this.conversationContainerElement, 'touchstart', handleConversationTouchStart, { passive: true, capture: true });
+        }
+        if (this.tooltipScrollableContentElement) {
+            let scrollLocked = false;
+            const handleTooltipTouchStart = (e) => {
+                scrollLocked = false;
+                if (!this._hasFirstInteraction) {
+                    const interactiveTarget = e.target.closest('button, textarea, .reasoning-toggle');
+                    if (interactiveTarget) {
+                        scrollLocked = true;
+                        const scrollTop = this.tooltipScrollableContentElement.scrollTop;
+                        requestAnimationFrame(() => {
+                            if (scrollLocked && this.tooltipScrollableContentElement) {
+                                this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                            }
+                        });
+                        setTimeout(() => {
+                            scrollLocked = false;
+                        }, 100);
+                    }
+                }
+            };
+            this._registerDomListener(this.tooltipScrollableContentElement, 'touchstart', handleTooltipTouchStart, { passive: true });
+        }
+    }
+    /**
+     * Simulates initial tap events on mobile interactive elements to bypass
+     * the first-tap scrolling issue that occurs on some mobile browsers.
+     * @private
+     */
+    _simulateInitialMobileTaps() {
+        setTimeout(() => {
+            const elementsToTap = [
+                this.customQuestionInput,
+                this.customQuestionButton,
+                this.reasoningToggle,
+                this.metadataToggle
+            ].filter(el => el);
+            elementsToTap.forEach(element => {
+                try {
+                    const touchEvent = new TouchEvent('touchstart', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        touches: [new Touch({
+                            identifier: Date.now(),
+                            target: element,
+                            clientX: 0,
+                            clientY: 0,
+                            screenX: 0,
+                            screenY: 0,
+                            pageX: 0,
+                            pageY: 0,
+                        })]
+                    });
+                    element.dispatchEvent(touchEvent);
+                    const touchEndEvent = new TouchEvent('touchend', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window,
+                        changedTouches: [new Touch({
+                            identifier: Date.now(),
+                            target: element,
+                            clientX: 0,
+                            clientY: 0,
+                            screenX: 0,
+                            screenY: 0,
+                            pageX: 0,
+                            pageY: 0,
+                        })]
+                    });
+                    element.dispatchEvent(touchEndEvent);
+                } catch (e) {
+                    try {
+                        const event = document.createEvent('TouchEvent');
+                        event.initTouchEvent('touchstart', true, true);
+                        element.dispatchEvent(event);
+                    } catch (fallbackError) {
+                        element.click();
+                        if (element.blur) {
+                            element.blur();
+                        }
+                    }
+                }
+            });
+        }, 100);
+    }
+    /**
+     * Returns a memoized instance-bound handler for a class method.
+     * @param {string} methodName
+     * @returns {Function}
+     */
+    _getBoundMethodHandler(methodName) {
+        if (!this._boundMethodHandlers[methodName]) {
+            const method = this[methodName];
+            if (typeof method !== 'function') {
+                throw new Error(`[ScoreIndicator ${this.tweetId}] Missing handler method: ${methodName}`);
+            }
+            this._boundMethodHandlers[methodName] = method.bind(this);
+        }
+        return this._boundMethodHandlers[methodName];
+    }
+    /**
+     * Registers a DOM event listener and tracks teardown for `destroy()`.
+     * @param {EventTarget | null | undefined} target
+     * @param {string} eventName
+     * @param {Function} handler
+     * @param {AddEventListenerOptions|boolean} [options]
+     */
+    _registerDomListener(target, eventName, handler, options) {
+        if (!target || typeof target.addEventListener !== 'function' || typeof handler !== 'function') {
+            return;
+        }
+        target.addEventListener(eventName, handler, options);
+        this._listenerTeardowns.push(() => {
+            if (target && typeof target.removeEventListener === 'function') {
+                target.removeEventListener(eventName, handler, options);
+            }
+        });
+    }
+    /**
+     * Runs and clears all registered listener teardowns.
+     */
+    _removeRegisteredListeners() {
+        for (let i = this._listenerTeardowns.length - 1; i >= 0; i -= 1) {
+            try {
+                this._listenerTeardowns[i]();
+            } catch (error) {
+                console.warn(`[ScoreIndicator ${this.tweetId}] Failed to remove a listener:`, error);
+            }
+        }
+        this._listenerTeardowns = [];
+    }
+    /** Adds necessary event listeners to the indicator and tooltip. */
+    _addEventListeners() {
+        if (!this.indicatorElement || !this.tooltipElement) return;
+        this._registerDomListener(this.indicatorElement, 'mouseenter', this._getBoundMethodHandler('_handleMouseEnter'));
+        this._registerDomListener(this.indicatorElement, 'mouseleave', this._getBoundMethodHandler('_handleMouseLeave'));
+        this._registerDomListener(this.indicatorElement, 'click', this._getBoundMethodHandler('_handleIndicatorClick'));
+        this._registerDomListener(this.tooltipElement, 'mouseenter', this._getBoundMethodHandler('_handleTooltipMouseEnter'));
+        this._registerDomListener(this.tooltipElement, 'mouseleave', this._getBoundMethodHandler('_handleTooltipMouseLeave'));
+        this._registerDomListener(this.tooltipScrollableContentElement, 'scroll', this._getBoundMethodHandler('_handleTooltipScroll'));
+        this._registerDomListener(this.pinButton, 'click', this._getBoundMethodHandler('_handlePinClick'));
+        this._registerDomListener(this.copyButton, 'click', this._getBoundMethodHandler('_handleCopyClick'));
+        this._registerDomListener(this.tooltipCloseButton, 'click', this._getBoundMethodHandler('_handleCloseClick'));
+        this._registerDomListener(this.reasoningToggle, 'click', this._getBoundMethodHandler('_handleReasoningToggleClick'));
+        this._registerDomListener(this.scrollButton, 'click', this._getBoundMethodHandler('_handleScrollButtonClick'));
+        this._registerDomListener(this.refreshButton, 'click', this._getBoundMethodHandler('_handleRefreshClick'));
+        this._registerDomListener(this.rateButton, 'click', this._getBoundMethodHandler('_handleRateClick'));
+        this._registerDomListener(this.followUpQuestionsElement, 'click', this._getBoundMethodHandler('_handleFollowUpQuestionClick'));
+        if (isMobileDevice() && this.followUpQuestionsElement) {
+            this._boundHandlers.handleFollowUpTouchStart = (e) => {
+                const button = e.target.closest('.follow-up-question-button');
+                if (button) {
+                    e.preventDefault();
+                    button.dataset.touchStartX = e.touches[0].clientX;
+                    button.dataset.touchStartY = e.touches[0].clientY;
+                }
+            };
+            this._boundHandlers.handleFollowUpTouchEnd = (e) => {
+                const button = e.target.closest('.follow-up-question-button');
+                if (button && button.dataset.touchStartX) {
+                    e.preventDefault();
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    const deltaX = Math.abs(touchEndX - parseFloat(button.dataset.touchStartX));
+                    const deltaY = Math.abs(touchEndY - parseFloat(button.dataset.touchStartY));
+                    if (deltaX < 10 && deltaY < 10) {
+                        this._handleFollowUpQuestionClick({
+                            target: button,
+                            preventDefault: () => {},
+                            stopPropagation: () => {}
+                        });
+                    }
+                    delete button.dataset.touchStartX;
+                    delete button.dataset.touchStartY;
+                }
+            };
+            this._registerDomListener(this.followUpQuestionsElement, 'touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
+            this._registerDomListener(this.followUpQuestionsElement, 'touchend', this._boundHandlers.handleFollowUpTouchEnd, { passive: false });
+        }
+        this._registerDomListener(this.customQuestionButton, 'click', this._getBoundMethodHandler('_handleCustomQuestionClick'));
+        this._boundHandlers.handleKeyDown = (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                this._handleCustomQuestionClick(event);
+            }
+        };
+        this._registerDomListener(this.customQuestionInput, 'keydown', this._boundHandlers.handleKeyDown);
+        this._registerDomListener(this.metadataToggle, 'click', this._getBoundMethodHandler('_handleMetadataToggleClick'));
+        if (this.attachImageButton && this.followUpImageInput) {
+            this._boundHandlers.handleAttachImageClick = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.followUpImageInput.click();
+            };
+            this._registerDomListener(this.attachImageButton, 'click', this._boundHandlers.handleAttachImageClick);
+            this._registerDomListener(this.followUpImageInput, 'change', this._getBoundMethodHandler('_handleFollowUpImageSelect'));
+        }
+    }
+    /** Updates the visual appearance of the indicator (icon/text, class). */
+    _updateIndicatorUI() {
+        if (!this.indicatorElement) return;
+        const classList = this.indicatorElement.classList;
+        classList.remove(
+            'pending-rating', 'rated-rating', 'error-rating',
+            'cached-rating', 'blacklisted-rating', 'streaming-rating',
+            'manual-rating', 'blacklisted-author-indicator'
+        );
+        let indicatorText = '';
+        let indicatorClass = '';
+        if (this.isAuthorBlacklisted) {
+            indicatorClass = 'blacklisted-author-indicator';
+            indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '?';
+        } else {
+            switch (this.status) {
+                case TweetRatingStatus.PENDING:
+                    indicatorClass = 'pending-rating';
+                    indicatorText = '...';
+                    break;
+                case TweetRatingStatus.STREAMING:
+                    indicatorClass = 'streaming-rating';
+                    indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '~';
+                    break;
+                case TweetRatingStatus.ERROR:
+                    indicatorClass = 'error-rating';
+                    indicatorText = '!';
+                    break;
+                case TweetRatingStatus.CACHED:
+                    indicatorClass = 'cached-rating';
+                    indicatorText = String(this.score);
+                    break;
+                case TweetRatingStatus.BLACKLISTED:
+                    indicatorClass = 'blacklisted-rating';
+                    indicatorText = String(this.score);
+                    break;
+                case TweetRatingStatus.MANUAL:
+                    indicatorClass = 'manual-rating';
+                    indicatorText = 'Rate';
+                    break;
+                case TweetRatingStatus.AD:
+                    indicatorClass = 'rated-rating';
+                    indicatorText = 'Ad';
+                    break;
+                case TweetRatingStatus.RATED:
+                default:
+                    indicatorClass = 'rated-rating';
+                    indicatorText = String(this.score);
+                    break;
+            }
+        }
+        if (indicatorClass) {
+            classList.add(indicatorClass);
+        }
+        this.indicatorElement.textContent = indicatorText;
+    }
+    /**
+     * Splits tagged API text into tooltip display sections.
+     * @param {string} fullDescription
+     * @returns {{analysisContent: string, scoreContent: string, questionsContent: string}}
+     */
+    _extractDescriptionSections(fullDescription) {
+        const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
+        const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
+        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
+        let analysisContent = "";
+        let scoreContent = "";
+        let questionsContent = "";
+        if (analysisMatch && analysisMatch[1] !== undefined) {
+            analysisContent = analysisMatch[1].trim();
+        } else if (!scoreMatch && !questionsMatch) {
+            analysisContent = fullDescription;
+        } else {
+            analysisContent = "*Waiting for analysis...*";
+        }
+        if (scoreMatch && scoreMatch[1] !== undefined) {
+            scoreContent = scoreMatch[1].trim();
+        }
+        if (questionsMatch && questionsMatch[1] !== undefined) {
+            const taggedQuestions = [1, 2, 3]
+                .map((index) => {
+                    const taggedQuestionMatch = questionsMatch[1].match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
+                    return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
+                        ? taggedQuestionMatch[1].trim()
+                        : "";
+                })
+                .filter(Boolean);
+            questionsContent = taggedQuestions.length > 0
+                ? taggedQuestions.join('\n')
+                : questionsMatch[1].trim();
+        }
+        return { analysisContent, scoreContent, questionsContent };
+    }
+    /**
+     * Computes metadata panel content and visibility from current metadata.
+     * @returns {{metadataHTML: string, showMetadataDropdown: boolean}}
+     */
+    _buildMetadataDisplayState() {
+        let metadataHTML = '';
+        let showMetadataDropdown = false;
+        const hasFullMetadata = this.metadata && Object.keys(this.metadata).length > 1 && this.metadata.model;
+        const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
+        if (hasFullMetadata) {
+            if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
+                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
+            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+            if (this.metadata.reasoningTokens > 0) {
+                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+            if (this.metadata.mediaInputs > 0) {
+                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+            }
+            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+            showMetadataDropdown = true;
+        } else if (hasOnlyGenId) {
+            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId}</div>`;
+            showMetadataDropdown = true;
+        }
+        return { metadataHTML, showMetadataDropdown };
+    }
+    /** Updates the content and potentially scroll position of the tooltip. */
+    _updateTooltipUI() {
+        if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement || !this.metadataDropdown) {
+            return;
+        }
+        const previousScrollTop = this.tooltipScrollableContentElement.scrollTop;
+        const {
+            analysisContent,
+            scoreContent,
+            questionsContent
+        } = this._extractDescriptionSections(this.description || "");
+        let contentChanged = false;
+        const formattedAnalysis = formatTooltipDescription(analysisContent).description;
+        if (this.descriptionElement.innerHTML !== formattedAnalysis) {
+            this.descriptionElement.innerHTML = formattedAnalysis;
+            contentChanged = true;
+        }
+        if (scoreContent) {
+            const formattedScoreText = scoreContent
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>')
+                .replace(/\n/g, '<br>');
+            if (this.scoreTextElement.innerHTML !== formattedScoreText) {
+                this.scoreTextElement.innerHTML = formattedScoreText;
+                contentChanged = true;
+            }
+            this.scoreTextElement.style.display = 'block';
+        } else {
+            if (this.scoreTextElement.style.display !== 'none') {
+                this.scoreTextElement.style.display = 'none';
+                this.scoreTextElement.innerHTML = '';
+                contentChanged = true;
+            }
+        }
+        if (questionsContent) {
+            const formattedQuestionsText = questionsContent.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            if (this.followUpQuestionsTextElement.innerHTML !== formattedQuestionsText) {
+                this.followUpQuestionsTextElement.innerHTML = formattedQuestionsText;
+            }
+        } else {
+            if (this.followUpQuestionsTextElement.innerHTML !== '') {
+                this.followUpQuestionsTextElement.innerHTML = '';
+            }
+        }
+        this.followUpQuestionsTextElement.style.display = 'none';
+        const formattedReasoning = formatTooltipDescription("", this.reasoning).reasoning;
+        if (this.reasoningTextElement.innerHTML !== formattedReasoning) {
+            this.reasoningTextElement.innerHTML = formattedReasoning;
+            contentChanged = true;
+        }
+        const showReasoning = !!formattedReasoning;
+        if ((this.reasoningDropdown.style.display === 'none') === showReasoning) {
+            this.reasoningDropdown.style.display = showReasoning ? 'block' : 'none';
+            contentChanged = true;
+        }
+        const renderedHistory = this._renderConversationHistory();
+        if (this.conversationContainerElement.innerHTML !== renderedHistory) {
+            this.conversationContainerElement.innerHTML = renderedHistory;
+            this.conversationContainerElement.style.display = this.conversationHistory.length > 0 ? 'block' : 'none';
+            this._attachConversationReasoningListeners();
+            contentChanged = true;
+        }
+        let questionsButtonsChanged = false;
+        if (this.followUpQuestionsElement.children.length !== (this.questions?.length || 0)) {
+            questionsButtonsChanged = true;
+        } else {
+            this.questions?.forEach((q, i) => {
+                const button = this.followUpQuestionsElement.children[i];
+                if (!button || button.dataset.questionText !== q) {
+                    questionsButtonsChanged = true;
+                }
+            });
+        }
+        if (questionsButtonsChanged) {
+            this.followUpQuestionsElement.innerHTML = '';
+            if (this.questions && this.questions.length > 0) {
+                this.questions.forEach((question, index) => {
+                    const questionButton = document.createElement('button');
+                    questionButton.className = 'follow-up-question-button';
+                    questionButton.textContent = `🤔 ${question}`;
+                    questionButton.dataset.questionIndex = index;
+                    questionButton.dataset.questionText = question;
+                    if (isMobileDevice()) {
+                        let hasBeenTapped = false;
+                        questionButton.addEventListener('touchstart', (e) => {
+                            if (!hasBeenTapped) {
+                                hasBeenTapped = true;
+                                const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+                                requestAnimationFrame(() => {
+                                    if (this.tooltipScrollableContentElement) {
+                                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                                    }
+                                });
+                            }
+                        }, { passive: true });
+                        questionButton.addEventListener('focus', (e) => {
+                            e.target.blur();
+                        }, { passive: true });
+                    }
+                    this.followUpQuestionsElement.appendChild(questionButton);
+                });
+                this.followUpQuestionsElement.style.display = 'block';
+            } else {
+                this.followUpQuestionsElement.style.display = 'none';
+            }
+            contentChanged = true;
+        }
+        const { metadataHTML, showMetadataDropdown } = this._buildMetadataDisplayState();
+        if (this.metadataElement.innerHTML !== metadataHTML) {
+            this.metadataElement.innerHTML = metadataHTML;
+            contentChanged = true;
+        }
+        if (this.metadataDropdown) {
+            const currentDisplay = this.metadataDropdown.style.display;
+            const newDisplay = showMetadataDropdown ? 'block' : 'none';
+            if (currentDisplay !== newDisplay) {
+                this.metadataDropdown.style.display = newDisplay;
+                contentChanged = true;
+            }
+        }
+        const isStreaming = this.status === TweetRatingStatus.STREAMING;
+        if (this.tooltipElement.classList.contains('streaming-tooltip') !== isStreaming) {
+             this.tooltipElement.classList.toggle('streaming-tooltip', isStreaming);
+             contentChanged = true;
+        }
+        if (this.rateButton) {
+            const showRateButton = this.status === TweetRatingStatus.MANUAL;
+            const currentDisplay = this.rateButton.style.display;
+            const newDisplay = showRateButton ? 'inline-block' : 'none';
+            if (currentDisplay !== newDisplay) {
+                this.rateButton.style.display = newDisplay;
+                contentChanged = true;
+            }
+        }
+        if (contentChanged) {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement && this.isVisible) {
+                    if (this.autoScroll) {
+                        this._performAutoScroll();
+                    } else {
+                        this.tooltipScrollableContentElement.scrollTop = previousScrollTop;
+                    }
+                }
+                this._updateScrollButtonVisibility();
+            });
+        } else {
+            this._updateScrollButtonVisibility();
+        }
+    }
+    /** Renders the conversation history into HTML string */
+    _renderConversationHistory() {
+        if (!this.conversationHistory || this.conversationHistory.length === 0) {
+            return '';
+        }
+        const expandedStates = new Map();
+        if (this.conversationContainerElement) {
+            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach((dropdown, index) => {
+                expandedStates.set(index, dropdown.classList.contains('expanded'));
+            });
+        }
+        let historyHtml = '';
+        this.conversationHistory.forEach((turn, index) => {
+            const formattedQuestion = turn.question
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            let uploadedImageHtml = '';
+            if (turn.uploadedImages && turn.uploadedImages.length > 0) {
+                uploadedImageHtml = `
                     <div class="conversation-image-container">
-                        ${o.uploadedImages.map(t=>t.startsWith("data:application/pdf")?`
+                        ${turn.uploadedImages.map(url => {
+                            if (url.startsWith('data:application/pdf')) {
+                                return `
                                     <div class="conversation-uploaded-pdf" style="display: inline-block; text-align: center; margin: 4px;">
                                         <span style="font-size: 48px;">📄</span>
                                         <div style="font-size: 12px;">PDF Document</div>
                                     </div>
-                                `:`<img src="${t}" alt="User uploaded image" class="conversation-uploaded-image">`).join("")}
+                                `;
+                            } else {
+                                return `<img src="${url}" alt="User uploaded image" class="conversation-uploaded-image">`;
+                            }
+                        }).join('')}
                     </div>
-                `);let a;a="pending"===o.answer?'<em class="pending-answer">Answering...</em>':o.answer.replace(/```([\s\S]*?)```/g,(t,e)=>`<pre><code>${e.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</code></pre>`).replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>').replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\*(.*?)\*/g,"<em>$1</em>").replace(/`([^`]+)`/g,"<code>$1</code>").replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm,t=>{let e=t.trim().split("\n"),o=e[0],i=e.slice(2),n='<table class="markdown-table">';return n+="<thead><tr>",o.slice(1,-1).split("|").forEach(t=>{n+=`<th>${t.trim()}</th>`}),n+="</tr></thead>",n+="<tbody>",i.forEach(t=>{t.trim()&&(n+="<tr>",t.slice(1,-1).split("|").forEach(t=>{n+=`<td>${t.trim()}</td>`}),n+="</tr>")}),n+="</tbody></table>"}).replace(/\n/g,"<br>"),i>0&&(e+='<hr class="conversation-separator">');let s="";if(o.reasoning&&""!==o.reasoning.trim()&&"pending"!==o.answer){let l=ti("",o.reasoning).reasoning,d=t.get(i);s=`
-                    <div class="reasoning-dropdown conversation-reasoning${d?" expanded":""}" data-index="${i}">
-                        <div class="reasoning-toggle" role="button" tabindex="0" aria-expanded="${d?"true":"false"}">
-                            <span class="reasoning-arrow">${d?"▼":"▶"}</span> Show Reasoning Trace
+                `;
+            }
+            let formattedAnswer;
+            if (turn.answer === 'pending') {
+                formattedAnswer = '<em class="pending-answer">Answering...</em>';
+            } else {
+                formattedAnswer = turn.answer
+                    .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
+                    .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                        const rows = match.trim().split('\n');
+                        const headerRow = rows[0];
+                        const bodyRows = rows.slice(2);
+                        let html = '<table class="markdown-table">';
+                        html += '<thead><tr>';
+                        headerRow.slice(1, -1).split('|').forEach(cell => {
+                            html += `<th>${cell.trim()}</th>`;
+                        });
+                        html += '</tr></thead>';
+                        html += '<tbody>';
+                        bodyRows.forEach(rowStr => {
+                            if (!rowStr.trim()) return;
+                            html += '<tr>';
+                            rowStr.slice(1, -1).split('|').forEach(cell => {
+                                html += `<td>${cell.trim()}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        return html;
+                    })
+                    .replace(/\n/g, '<br>');
+            }
+            if (index > 0) {
+                historyHtml += '<hr class="conversation-separator">';
+            }
+            let reasoningHtml = '';
+            if (turn.reasoning && turn.reasoning.trim() !== '' && turn.answer !== 'pending') {
+                const formattedReasoning = formatTooltipDescription("", turn.reasoning).reasoning;
+                const wasExpanded = expandedStates.get(index);
+                const expandedClass = wasExpanded ? ' expanded' : '';
+                const arrowChar = wasExpanded ? '▼' : '▶';
+                const contentStyle = wasExpanded ? 'style="max-height: 200px; padding: 8px;"' : 'style="max-height: 0; padding: 0 8px;"';
+                reasoningHtml = `
+                    <div class="reasoning-dropdown conversation-reasoning${expandedClass}" data-index="${index}">
+                        <div class="reasoning-toggle" role="button" tabindex="0" aria-expanded="${wasExpanded ? 'true' : 'false'}">
+                            <span class="reasoning-arrow">${arrowChar}</span> Show Reasoning Trace
                         </div>
-                        <div class="reasoning-content" ${d?'style="max-height: 200px; padding: 8px;"':'style="max-height: 0; padding: 0 8px;"'}>
-                            <p class="reasoning-text">${l}</p>
+                        <div class="reasoning-content" ${contentStyle}>
+                            <p class="reasoning-text">${formattedReasoning}</p>
                         </div>
                     </div>
-                `}e+=`
+                `;
+            }
+            historyHtml += `
                 <div class="conversation-turn">
-                    <div class="conversation-question"><strong>You:</strong> ${n}</div>
-                    ${r}
-                    ${s}
-                    <div class="conversation-answer"><strong>AI:</strong> ${a}</div>
+                    <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    ${uploadedImageHtml}
+                    ${reasoningHtml}
+                    <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
                 </div>
-            `}),e}_attachConversationReasoningListeners(){this.conversationContainerElement&&!this._boundHandlers.handleConversationReasoningToggle&&(this._boundHandlers.handleConversationReasoningToggle=t=>{let e=t.target.closest(".conversation-reasoning .reasoning-toggle");if(!e||"click"===t.type&&!t.isTrusted)return;let o=e.closest(".reasoning-dropdown"),i=o?.querySelector(".reasoning-content"),n=o?.querySelector(".reasoning-arrow");if(!o||!i||!n)return;let r=this.tooltipScrollableContentElement?.scrollTop||0,a=o.classList.toggle("expanded");n.textContent=a?"▼":"▶",e.setAttribute("aria-expanded",a),i.style.maxHeight=a?"200px":"0",i.style.padding=a?"8px":"0 8px",K()&&this.tooltipScrollableContentElement&&requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=r)})},this._registerDomListener(this.conversationContainerElement,"click",this._boundHandlers.handleConversationReasoningToggle))}_performAutoScroll(){this.tooltipScrollableContentElement&&this.autoScroll&&this.isVisible&&requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(this.tooltipScrollableContentElement&&this.autoScroll&&this.isVisible){let t=this.tooltipScrollableContentElement.scrollHeight;this.tooltipScrollableContentElement.scrollTo({top:t,behavior:"instant"})}})})}_setPosition(){if(!this.isVisible||!this.indicatorElement||!this.tooltipElement)return;let t=this.indicatorElement.getBoundingClientRect(),e=this.tooltipElement,o=K(),i=window.innerHeight,n=window.innerWidth,r=i-10,a=n-10;e.style.maxHeight="",e.style.overflowY="",e.style.visibility="hidden",e.style.display="block";let s=window.getComputedStyle(e),l=parseFloat(s.width),d=parseFloat(s.height),c,p,u="",h="";if(o){(c=Math.max(10,(n-l)/2))+l>a&&(c=a-l);let g=.8*i;d>g&&(u=`${g}px`,h="scroll",d=g),(p=Math.max(10,(i-d)/2))+d>r&&(p=r-d)}else c=t.right+10,p=t.top+t.height/2-d/2,c+l>a&&(c=t.left-l-10)<10&&(c=Math.max(10,(n-l)/2),t.bottom+d+10<=r?p=t.bottom+10:t.top-d-10>=10?p=t.top-d-10:(p=10,u=`${r-10}px`,h="scroll",d=r-10)),p<10&&(p=10),p+d>r&&(d>r-10?(p=10,u=`${r-10}px`,h="scroll"):p=r-d);e.style.position="fixed",e.style.left=`${c}px`,e.style.top=`${p}px`,e.style.zIndex="99999999",e.style.maxHeight=u,e.style.overflowY="",e.style.display="flex",e.style.visibility="visible"}_updateScrollButtonVisibility(){if(!this.tooltipScrollableContentElement||!this.scrollButton)return;let t="streaming"===this.status;if(!t){this.scrollButton.style.display="none";return}let e=this.tooltipScrollableContentElement.scrollHeight-this.tooltipScrollableContentElement.scrollTop-this.tooltipScrollableContentElement.clientHeight<(K()?40:55);this.scrollButton.style.display=e?"none":"block"}_handleMouseEnter(t){K()||this.show()}_handleMouseLeave(t){K()||setTimeout(()=>{this.tooltipElement&&!this.tooltipElement.matches(":hover")&&this.indicatorElement&&!this.indicatorElement.matches(":hover")&&this.hide()},100)}_handleIndicatorClick(t){t.stopPropagation(),t.preventDefault(),this.toggle()}_handleTooltipMouseEnter(){this.isPinned||this.show()}_handleTooltipMouseLeave(){setTimeout(()=>{this.isPinned||this.indicatorElement.matches(":hover")||this.tooltipElement.matches(":hover")||this.hide()},100)}_handleTooltipScroll(){if(!this.tooltipScrollableContentElement)return;let t=this.tooltipScrollableContentElement.scrollHeight-this.tooltipScrollableContentElement.scrollTop-this.tooltipScrollableContentElement.clientHeight<(K()?40:55);t?this.userInitiatedScroll&&(this.autoScroll=!0,this.tooltipElement.dataset.autoScroll="true",this.userInitiatedScroll=!1):this.autoScroll&&(this.autoScroll=!1,this.tooltipElement.dataset.autoScroll="false",this.userInitiatedScroll=!0),this._updateScrollButtonVisibility()}_handlePinClick(t){t&&t.stopPropagation(),this.isPinned?this.unpin():this.pin()}_handleCopyClick(t){if(t&&t.stopPropagation(),!this.descriptionElement||!this.reasoningTextElement||!this.copyButton)return;let e=this.descriptionElement.textContent||"",o=this.reasoningTextElement.textContent||"";o&&(e+="\n\nReasoning:\n"+o),navigator.clipboard.writeText(e).then(()=>{let t=this.copyButton.innerHTML;this.copyButton.innerHTML="✓",this.copyButton.disabled=!0,setTimeout(()=>{this.copyButton.innerHTML=t,this.copyButton.disabled=!1},1500)}).catch(t=>{})}_handleReasoningToggleClick(t){if(t&&t.stopPropagation(),!this.reasoningDropdown||!this.reasoningContent||!this.reasoningArrow)return;let e=this.tooltipScrollableContentElement?.scrollTop||0,o=this.reasoningDropdown.classList.toggle("expanded");this.reasoningArrow.textContent=o?"▼":"▶",o?(this.reasoningContent.style.maxHeight="300px",this.reasoningContent.style.padding="10px"):(this.reasoningContent.style.maxHeight="0",this.reasoningContent.style.padding="0 10px"),K()&&this.tooltipScrollableContentElement&&requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=e)})}_handleScrollButtonClick(t){t&&t.stopPropagation(),this.tooltipScrollableContentElement&&(this.autoScroll=!0,this.tooltipElement.dataset.autoScroll="true",this._performAutoScroll(),this._updateScrollButtonVisibility())}_handleFollowUpQuestionClick(t){t&&"function"==typeof t.preventDefault&&t.preventDefault();let o=t.target&&t.target.dataset&&t.target.dataset.questionText&&"function"!=typeof t.target.closest,i=o?t.target:t.target.closest(".follow-up-question-button");if(!i)return;t.stopPropagation();let n=i.dataset.questionText,r=e("openrouter-api-key","");this.currentFollowUpSource=o?"custom":"suggested",o?(this.customQuestionInput&&(this.customQuestionInput.disabled=!0),this.customQuestionButton&&(this.customQuestionButton.disabled=!0,this.customQuestionButton.textContent="Asking...")):(i.disabled=!0,i.textContent=`🤔 Asking: ${n}...`,this.followUpQuestionsElement.querySelectorAll(".follow-up-question-button").forEach(t=>t.disabled=!0)),this.conversationHistory.push({question:n,answer:"pending",uploadedImages:[...this.uploadedImageDataUrls],reasoning:""});let a=[{type:"text",text:n}];this.uploadedImageDataUrls&&this.uploadedImageDataUrls.length>0&&this.uploadedImageDataUrls.forEach(t=>{if(t.startsWith("data:application/pdf")){let e=this.followUpImageContainer?.querySelector(`[data-image-data-url="${CSS.escape(t)}"]`),o=e?.querySelector(".follow-up-pdf-preview span:last-child")?.textContent||"document.pdf";a.push({type:"file",file:{filename:o,file_data:t}})}else a.push({type:"image_url",image_url:{url:t}})});let s=[...this.qaConversationHistory,{role:"user",content:a}];if(this._clearFollowUpImage(),this._updateTooltipUI(),this.questions=[],this._updateTooltipUI(),!r){Z("API key missing. Cannot answer question.","error"),this._updateConversationHistory(n,"Error: API Key missing.",""),o||(i.disabled=!1,this.followUpQuestionsElement.querySelectorAll(".follow-up-question-button").forEach(t=>t.disabled=!1)),this.customQuestionInput&&(this.customQuestionInput.disabled=!1),this.customQuestionButton&&(this.customQuestionButton.disabled=!1,this.customQuestionButton.textContent="Ask"),this._clearFollowUpImage();return}if(!n){this._updateConversationHistory(n||"Error: Empty Question","Error: Could not identify question.",""),o||(i.disabled=!1,this.followUpQuestionsElement.querySelectorAll(".follow-up-question-button").forEach(t=>t.disabled=!1)),this.customQuestionInput&&(this.customQuestionInput.disabled=!1),this.customQuestionButton&&(this.customQuestionButton.disabled=!1,this.customQuestionButton.textContent="Ask"),this._clearFollowUpImage();return}let l=this.findCurrentArticleElement();tP(this.tweetId,s,r,l,this)}_handleCustomQuestionClick(t){if(t&&(t.preventDefault(),t.stopPropagation()),!this.customQuestionInput||!this.customQuestionButton)return;let e=this.customQuestionInput.value.trim(),o=this.uploadedImageDataUrls&&this.uploadedImageDataUrls.length>0;if(!e&&!o){Z("Please enter a question or attach a file.","warning"),this.customQuestionInput.focus();return}this.followUpQuestionsElement?.querySelectorAll(".follow-up-question-button").forEach(t=>t.disabled=!0),this._handleFollowUpQuestionClick({target:{dataset:{questionText:e||(o?"[file only message]":"")},disabled:!1,textContent:""},stopPropagation(){},preventDefault(){}}),this.customQuestionInput&&(this.customQuestionInput.value="",this.customQuestionInput.style.height="auto",this.customQuestionInput.rows=1)}async _handleFollowUpImageSelect(t){t&&t.preventDefault();let e=t.target.files;if(!e||0===e.length)return;this.followUpImageContainer&&e.length>0&&(this.followUpImageContainer.style.display="flex"),this.customQuestionButton&&(this.customQuestionButton.disabled=!0,this.customQuestionButton.textContent="Processing files...");let o=Array.from(e).map(t=>{if(t&&t.type.startsWith("image/")){var e;return(e=t,new Promise((t,o)=>{let i=new FileReader;i.onload=e=>{let i=new Image;i.onload=()=>{let{width:e,height:o}=i,n,r;e>o?e>1024?(n=1024,r=o*(1024/e)):(n=e,r=o):o>1024?(r=1024,n=e*(1024/o)):(n=e,r=o);let a=document.createElement("canvas");a.width=n,a.height=r;let s=a.getContext("2d");s.drawImage(i,0,0,n,r);let l=a.toDataURL("image/jpeg",.9);t(l)},i.onerror=t=>{o(Error("Could not load image for resizing."))},i.src=e.target.result},i.onerror=t=>{o(Error("Could not read file."))},i.readAsDataURL(e)})).then(t=>{this.uploadedImageDataUrls.push(t),this._addPreviewToContainer(t,"image")}).catch(e=>{Z(`Could not process image ${t.name}: ${e.message}`,"error")})}return t&&"application/pdf"===t.type?new Promise((e,o)=>{let i=new FileReader;i.onload=o=>{let i=o.target.result;this.uploadedImageDataUrls.push(i),this._addPreviewToContainer(i,"pdf",t.name),e()},i.onerror=e=>{Z(`Could not process PDF ${t.name}: ${e.message}`,"error"),o(e)},i.readAsDataURL(t)}):(t&&Z(`Skipping unsupported file type: ${t.name}`,"warning"),Promise.resolve())});await Promise.all(o),this.customQuestionButton&&(this.customQuestionButton.disabled=!1,this.customQuestionButton.textContent="Ask"),t.target.value=null}_addPreviewToContainer(t,e="image",o=""){if(!this.followUpImageContainer)return;let i=document.createElement("div");if(i.className="follow-up-image-preview-item",i.dataset.imageDataUrl=t,"pdf"===e){let n=document.createElement("div");n.className="follow-up-pdf-preview",n.innerHTML=`<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${o||"PDF"}</span>`,n.style.textAlign="center",n.style.padding="8px",n.style.width="60px",n.style.height="60px",n.style.display="flex",n.style.flexDirection="column",n.style.justifyContent="center",n.style.alignItems="center",i.appendChild(n)}else{let r=document.createElement("img");r.src=t,r.className="follow-up-image-preview-thumbnail",i.appendChild(r)}let a=document.createElement("button");a.textContent="\xd7",a.className="follow-up-image-remove-btn",a.title="Remove this file",a.addEventListener("click",e=>{e.preventDefault(),e.stopPropagation(),this._removeSpecificUploadedImage(t)}),i.appendChild(a),this.followUpImageContainer.appendChild(i)}_removeSpecificUploadedImage(t){if(this.uploadedImageDataUrls=this.uploadedImageDataUrls.filter(e=>e!==t),this.followUpImageContainer){let e=this.followUpImageContainer.querySelector(`div.follow-up-image-preview-item[data-image-data-url="${CSS.escape(t)}"]`);e&&e.remove(),0===this.uploadedImageDataUrls.length&&(this.followUpImageContainer.style.display="none")}}_clearFollowUpImage(){this.uploadedImageDataUrls=[],this.followUpImageContainer&&(this.followUpImageContainer.innerHTML="",this.followUpImageContainer.style.display="none"),this.followUpImageInput&&(this.followUpImageInput.value=null)}_finalizeFollowUpInteraction(){this.followUpQuestionsElement&&this.followUpQuestionsElement.querySelectorAll(".follow-up-question-button").forEach(t=>{t.disabled=!1}),"custom"===this.currentFollowUpSource&&(this.customQuestionInput&&(this.customQuestionInput.disabled=!1),this.customQuestionButton&&(this.customQuestionButton.disabled=!1,this.customQuestionButton.textContent="Ask")),this.currentFollowUpSource=null}refreshIndicatorUI(){this._updateIndicatorUI()}refreshTooltipUI(){this._updateTooltipUI()}setAuthorBlacklistState(t){this.isAuthorBlacklisted=Boolean(t)}setFollowUpQuestions(t){this.questions=Array.isArray(t)?t:[]}updateConversationHistoryEntry(t,e,o=""){this._updateConversationHistory(t,e,o)}renderStreamingAnswer(t,e=""){this._renderStreamingAnswer(t,e)}finalizeFollowUpInteraction(){this._finalizeFollowUpInteraction()}_updateConversationHistory(t,e,o=""){let i=this.conversationHistory.findIndex(e=>e.question===t&&"pending"===e.answer);-1!==i&&(this.conversationHistory[i].answer=e,this.conversationHistory[i].reasoning=o,this._updateTooltipUI())}_renderStreamingAnswer(t,e=""){if(!this.conversationContainerElement)return;let o=this.conversationContainerElement.querySelectorAll(".conversation-turn"),i=o.length>0?o[o.length-1]:null;if(!i)return;let n=this.conversationHistory.length>0?this.conversationHistory[this.conversationHistory.length-1]:null;if(!(n&&"pending"===n.answer))return;let r=i.querySelector(".streaming-reasoning-container"),a=e&&""!==e.trim();if(a&&!r){(r=document.createElement("div")).className="streaming-reasoning-container active",r.style.display="block";let s=document.createElement("div");s.className="streaming-reasoning-text",r.appendChild(s);let l=i.querySelector(".conversation-answer");l?i.insertBefore(r,l):i.appendChild(r)}if(r&&a){let d=r.querySelector(".streaming-reasoning-text");if(d){let c=e;e.length>200&&(c=e.slice(-200)),d.textContent=c}}let p=i.querySelector(".reasoning-dropdown");p&&(p.style.display="none");let u=i.querySelector(".conversation-answer");if(u){let h=t.replace(/```([\s\S]*?)```/g,(t,e)=>`<pre><code>${e.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</code></pre>`).replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>').replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\*(.*?)\*/g,"<em>$1</em>").replace(/`([^`]+)`/g,"<code>$1</code>").replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm,t=>{let e=t.trim().split("\n"),o=e[0],i=e.slice(2),n='<table class="markdown-table">';return n+="<thead><tr>",o.slice(1,-1).split("|").forEach(t=>{n+=`<th>${t.trim()}</th>`}),n+="</tr></thead>",n+="<tbody>",i.forEach(t=>{t.trim()&&(n+="<tr>",t.slice(1,-1).split("|").forEach(t=>{n+=`<td>${t.trim()}</td>`}),n+="</tr>")}),n+="</tbody></table>"}).replace(/\n/g,"<br>");u.innerHTML=`<strong>AI:</strong> ${h}<em class="pending-cursor">|</em>`}this.autoScroll&&this._performAutoScroll(),this._performConversationAutoScroll()}update({status:t,score:e=null,description:o="",reasoning:i="",metadata:n=null,questions:r}){let a=void 0!==t&&this.status!==t,s=null!==e&&this.score!==e,l=""!==o&&this.description!==o,d=""!==i&&this.reasoning!==i,c=null!==n&&JSON.stringify(this.metadata)!==JSON.stringify(n),p=void 0!==r&&JSON.stringify(this.questions)!==JSON.stringify(r);if(a||s||l||d||c||p){if(a&&(this.status=t),(s||a)&&(this.score="pending"===this.status||"error"===this.status?e:"streaming"===this.status&&null===e?this.score:e),l&&(this.description=o),d&&(this.reasoning=i),c&&(this.metadata=n),p&&(this.questions=r),a){let u="pending"===this.status||"streaming"===this.status;this.autoScroll!==u&&(this.autoScroll=u,this.tooltipElement&&(this.tooltipElement.dataset.autoScroll=this.autoScroll?"true":"false"))}(a||s)&&this._updateIndicatorUI(),l||d||a||c||p?this._updateTooltipUI():this._updateScrollButtonVisibility()}}show(){this.tooltipElement&&(this.isVisible=!0,this.tooltipElement.style.display="flex",this._setPosition(),this.autoScroll&&("streaming"===this.status||"pending"===this.status)&&this._performAutoScroll(),this._updateScrollButtonVisibility())}hide(){!this.isPinned&&this.tooltipElement&&(this.isVisible=!1,this.tooltipElement.style.display="none")}toggle(){this.isVisible&&!this.isPinned?this.hide():this.show()}pin(){this.tooltipElement&&this.pinButton&&(this.isPinned=!0,this.tooltipElement.classList.add("pinned"),this.pinButton.innerHTML="\uD83D\uDCCD",this.pinButton.title="Unpin tooltip")}unpin(){this.tooltipElement&&this.pinButton&&(this.isPinned=!1,this.tooltipElement.classList.remove("pinned"),this.pinButton.innerHTML="\uD83D\uDCCC",this.pinButton.title="Pin tooltip (prevents auto-closing)",setTimeout(()=>{this.tooltipElement&&!this.tooltipElement.matches(":hover")&&this.indicatorElement&&!this.indicatorElement.matches(":hover")&&this.hide()},0))}_handleCloseClick(t){t&&t.stopPropagation(),this.hide()}destroy(){window.activeStreamingRequests&&window.activeStreamingRequests[this.tweetId]&&(window.activeStreamingRequests[this.tweetId].abort(),delete window.activeStreamingRequests[this.tweetId]),this._removeRegisteredListeners(),this.indicatorElement?.remove(),this.tooltipElement?.remove(),to.remove(this.tweetId);let t=this.findCurrentArticleElement();t&&delete t.dataset.hasScoreIndicator,this.tweetArticle=null,this.indicatorElement=null,this.tooltipElement=null,this.pinButton=null,this.copyButton=null,this.tooltipCloseButton=null,this.reasoningToggle=null,this.scrollButton=null,this.conversationContainerElement=null,this.followUpQuestionsElement=null,this.customQuestionContainer=null,this.customQuestionInput=null,this.customQuestionButton=null,this.followUpImageContainer=null,this.followUpImageInput=null,this.uploadedImageDataUrls=[],this.refreshButton=null,this.rateButton=null,this.metadataDropdown=null,this.metadataToggle=null,this.metadataArrow=null,this.metadataContent=null,this.tooltipScrollableContentElement=null,this._boundMethodHandlers=Object.create(null),this._listenerTeardowns=[]}ensureIndicatorAttached(){if(!this.indicatorElement)return!1;let t=this.findCurrentArticleElement();if(!t)return!1;if(this.indicatorElement.parentElement!==t){let e=window.getComputedStyle(t).position;"relative"!==e&&"absolute"!==e&&"fixed"!==e&&"sticky"!==e&&(t.style.position="relative"),t.appendChild(this.indicatorElement)}return!0}findCurrentArticleElement(){let t=document.querySelector("main")||document.querySelector('div[data-testid="primaryColumn"]');if(!t)return null;let e=`a[href*="/status/${this.tweetId}"]`,o=t.querySelector(e),i=o?.closest('article[data-testid="tweet"]');if(i&&Y(i)===this.tweetId)return i;for(let n of t.querySelectorAll('article[data-testid="tweet"]'))if(Y(n)===this.tweetId)return n;return null}updateInitialReviewAndBuildHistory({fullContext:t,mediaUrls:e,apiResponseContent:o,reviewSystemPrompt:i,followUpSystemPrompt:n,userInstructions:r=""}){let a=o.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/),s=o.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/),l=tB(o);this.score=s?parseInt(s[1],10):null,this.description=a?a[1].trim():o,this.questions=l,this.status=null!==this.score?"rated":"error";let d=[{type:"text",text:t}];"function"==typeof t6&&"function"==typeof tD&&F(I)&&tD(d,t6(e,t));let c=n.replace("{USER_INSTRUCTIONS_PLACEHOLDER}",r||"Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.");this.qaConversationHistory=[{role:"system",content:[{type:"text",text:i}]},{role:"user",content:d},{role:"assistant",content:[{type:"text",text:o}]},{role:"system",content:[{type:"text",text:c}]}],this._updateIndicatorUI(),this._updateTooltipUI()}updateAfterFollowUp({assistantResponseContent:t,updatedQaHistory:e}){this.qaConversationHistory=e;let o=t.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/),i=tB(t),n=o?o[1].trim():t;if(this.questions=i,this.conversationHistory.length>0){let r=this.conversationHistory[this.conversationHistory.length-1];"pending"===r.answer&&(r.answer=n)}this._convertStreamingToDropdown(),this._updateTooltipUI()}_convertStreamingToDropdown(){if(!this.conversationContainerElement)return;let t=this.conversationContainerElement.querySelectorAll(".conversation-turn"),e=t.length>0?t[t.length-1]:null;if(!e)return;let o=e.querySelector(".streaming-reasoning-container");o&&o.remove();let i=this.conversationHistory.length>0?this.conversationHistory[this.conversationHistory.length-1]:null;if(!i||!i.reasoning||""===i.reasoning.trim())return;let n=e.querySelector(".reasoning-dropdown");if(!n){(n=document.createElement("div")).className="reasoning-dropdown conversation-reasoning";let r=document.createElement("div");r.className="reasoning-toggle";let a=document.createElement("span");a.className="reasoning-arrow",a.textContent="▶",r.appendChild(a),r.appendChild(document.createTextNode(" Show Reasoning Trace"));let s=document.createElement("div");s.className="reasoning-content";let l=document.createElement("p");l.className="reasoning-text",s.appendChild(l),n.appendChild(r),n.appendChild(s);let d=e.querySelector(".conversation-answer");d?e.insertBefore(n,d):e.appendChild(n),r.addEventListener("click",t=>{t.stopPropagation();let e=t.target.closest(".reasoning-dropdown"),o=e?.querySelector(".reasoning-content"),i=e?.querySelector(".reasoning-arrow");if(!e||!o||!i)return;let n=e.classList.toggle("expanded");i.textContent=n?"▼":"▶",o.style.maxHeight=n?"200px":"0",o.style.padding=n?"8px":"0 8px"})}let c=n.querySelector(".reasoning-text");if(c){let p=ti("",i.reasoning).reasoning;c.innerHTML=p}n.style.display="block"}rehydrateFromCache(t){if(this.score=t.score,this.description=t.description,this.reasoning=t.reasoning,this.questions=t.questions||[],this.status=t.status||(null!==t.score?t.fromStorage?"cached":"rated":"error"),this.metadata=t.metadata||null,this.qaConversationHistory=t.qaConversationHistory||[],this.isPinned=t.isPinned||!1,this.conversationHistory=[],this.qaConversationHistory.length>0){let e=null,o=[],i=0;for(let n=0;n<this.qaConversationHistory.length;n++){if("system"===this.qaConversationHistory[n].role&&this.qaConversationHistory[n].content[0].text.includes("FOLLOW_UP_SYSTEM_PROMPT")){i=n+1;break}3===n&&"system"===this.qaConversationHistory[n].role&&(i=n+1)}for(let r=i;r<this.qaConversationHistory.length;r++){let a=this.qaConversationHistory[r];if("user"===a.role){let s=a.content.find(t=>"text"===t.type);e=s?s.text:"[Question not found]",o=a.content.filter(t=>"image_url"===t.type&&t.image_url&&t.image_url.url.startsWith("data:image")).map(t=>t.image_url.url)}else if("assistant"===a.role&&e){let l=a.content.find(t=>"text"===t.type),d=l?l.text:"[Answer not found]",c=d.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/),p=c?c[1].trim():d;this.conversationHistory.push({question:e,answer:p,uploadedImages:o,reasoning:""}),e=null,o=[]}}}this.isPinned?(this.pinButton.innerHTML="\uD83D\uDCCD",this.tooltipElement?.classList.add("pinned")):(this.pinButton.innerHTML="\uD83D\uDCCC",this.tooltipElement?.classList.remove("pinned")),this._updateIndicatorUI(),this._updateTooltipUI()}_handleMetadataToggleClick(t){if(t&&t.stopPropagation(),!this.metadataDropdown||!this.metadataContent||!this.metadataArrow)return;let e=this.tooltipScrollableContentElement?.scrollTop||0,o=this.metadataDropdown.classList.toggle("expanded");this.metadataArrow.textContent=o?"▼":"▶",o?(this.metadataContent.style.maxHeight="300px",this.metadataContent.style.padding="10px"):(this.metadataContent.style.maxHeight="0",this.metadataContent.style.padding="0 10px"),K()&&this.tooltipScrollableContentElement&&requestAnimationFrame(()=>{this.tooltipScrollableContentElement&&(this.tooltipScrollableContentElement.scrollTop=e)})}_handleRefreshClick(t){if(t&&t.stopPropagation(),!this.tweetId)return;window.activeStreamingRequests&&window.activeStreamingRequests[this.tweetId]&&(window.activeStreamingRequests[this.tweetId].abort(),delete window.activeStreamingRequests[this.tweetId]),a.has(this.tweetId)&&a.delete(this.tweetId),y.has(this.tweetId)&&y.delete(this.tweetId);let e=this.findCurrentArticleElement();this.destroy(),e&&"function"==typeof t0&&t0(e)}_handleRateClick(t){if(t&&t.stopPropagation(),!this.tweetId)return;this.update({status:"pending",score:null,description:"Rating tweet...",reasoning:"",questions:[]});let e=this.findCurrentArticleElement();e&&"function"==typeof t0&&(y.has(this.tweetId)&&y.delete(this.tweetId),t0(e,!0))}_handleConversationScroll(){if(!this.conversationContainerElement)return;let t=this.conversationContainerElement.scrollHeight-this.conversationContainerElement.scrollTop-this.conversationContainerElement.clientHeight<40;t?this.autoScrollConversation||(this.autoScrollConversation=!0):this.autoScrollConversation&&(this.autoScrollConversation=!1)}_performConversationAutoScroll(){this.conversationContainerElement&&this.autoScrollConversation&&requestAnimationFrame(()=>{this.conversationContainerElement.scrollTo({top:this.conversationContainerElement.scrollHeight,behavior:"instant"})})}}let to={managers:new Map,get(t,e=null){if(!t)return null;if(this.managers.has(t)){let o=this.managers.get(t);return o}if(e)try{let i=e.querySelector(`.score-indicator[data-tweet-id="${t}"]`),n=document.querySelector(`.score-description[data-tweet-id="${t}"]`);return(i||n)&&(i?.remove(),n?.remove()),new te(e)}catch(r){}return null},add(t,e){this.managers.has(t),this.managers.set(t,e)},remove(t){this.managers.has(t)&&this.managers.delete(t)},cleanupOrphaned(){let t=0,e=document.querySelector("main")||document.querySelector('div[data-testid="primaryColumn"]');if(!e)return;let o=new Set;for(let[i,n]of(e.querySelectorAll('article[data-testid="tweet"]').forEach(t=>{let e=Y(t);e&&o.add(e)}),this.managers.entries())){let r=n.indicatorElement?.isConnected,a=o.has(i);(!r||!a)&&(n.destroy(),t++)}},destroyAll(){[...this.managers.values()].forEach(t=>t.destroy()),this.managers.clear()}};function ti(t="",e=""){let o="*Waiting for analysis...*"===t?t:(t||"*waiting for content...*").replace(/```([\s\S]*?)```/g,(t,e)=>`<pre><code>${e.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</code></pre>`).replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>').replace(/^# (.*$)/gm,"<h1>$1</h1>").replace(/^## (.*$)/gm,"<h2>$1</h2>").replace(/^### (.*$)/gm,"<h3>$1</h3>").replace(/^#### (.*$)/gm,"<h4>$1</h4>").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\*(.*?)\*/g,"<em>$1</em>").replace(/`([^`]+)`/g,"<code>$1</code>").replace(/SCORE_(\d+)/g,'<span class="score-highlight">SCORE: $1</span>').replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm,t=>{let e=t.trim().split("\n"),o=e[0],i=e.slice(2),n='<table class="markdown-table">';return n+="<thead><tr>",o.slice(1,-1).split("|").forEach(t=>{n+=`<th>${t.trim()}</th>`}),n+="</tr></thead>",n+="<tbody>",i.forEach(t=>{t.trim()&&(n+="<tr>",t.slice(1,-1).split("|").forEach(t=>{n+=`<td>${t.trim()}</td>`}),n+="</tr>")}),n+="</tbody></table>"}).replace(/\n\n/g,"<br><br>").replace(/\n/g,"<br>"),i="";return e&&e.trim()&&(i=e.replace(/\\n/g,"\n").replace(/```([\s\S]*?)```/g,(t,e)=>`<pre><code>${e.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</code></pre>`).replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>').replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\*(.*?)\*/g,"<em>$1</em>").replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\n\n/g,"<br><br>").replace(/\n/g,"<br>")),{description:o,reasoning:i}}function tn(t,e,o,i){if(!t||!e)return;let n=t.classList.contains("hidden");if(e.innerHTML=n?o:i,n?(t.style.display="flex",t.offsetHeight,t.classList.remove("hidden")):(t.classList.add("hidden"),setTimeout(()=>{t.classList.contains("hidden")&&(t.style.display="none")},500)),"settings-container"===t.id&&"settings-toggle"===e.id&&(K()&&t.classList.contains("hidden")?e.style.opacity="0.3":e.style.opacity=""),"tweet-filter-container"===t.id){let r=document.getElementById("filter-toggle");r&&(n?r.style.display="none":setTimeout(()=>{r.style.display="block"},500))}}function tr(){(K()||confirm("Are you sure you want to clear all cached tweet ratings?"))&&(a.clear(!0),E=0,window.threadRelationships&&(window.threadRelationships={},o("threadRelationships","{}")),Z("All cached ratings and thread relationships cleared!"),w&&w.querySelectorAll('article[data-testid="tweet"]').forEach(t=>{t.removeAttribute("data-slop-score"),t.removeAttribute("data-rating-status"),t.removeAttribute("data-rating-description"),t.removeAttribute("data-cached-rating");let e=t.querySelector(".score-indicator");e&&e.remove();let o=Y(t);if(o){y.delete(o);let i=to.get(o);i&&i.destroy(),t0(t)}}),document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(t=>{delete t.dataset.threadMapping,delete t.dataset.threadMappedAt,delete t.dataset.threadMappingInProgress,delete t.dataset.threadHist,delete t.dataset.threadMediaUrls}))}function ta(t,e){let i;if(i="checkbox"===t.type?t.checked:t.value,void 0!==window[e]&&(window[e]=i),o(e,i),"enableImageDescriptions"===e){let n=document.getElementById("image-model-container");n&&(n.style.display=i?"block":"none"),Z("Image descriptions "+(i?"enabled":"disabled"))}"enableWebSearch"===e&&Z("Web search for rating model "+(i?"enabled":"disabled")),"reasoningEffort"===e&&Z("none"===i?"Reasoning disabled":`Reasoning effort set to ${i}`),"enableAutoRating"===e&&Z("Auto-rating "+(i?"enabled":"disabled"))}function ts(){document.querySelectorAll("[data-setting]").forEach(t=>{let o=t.dataset.setting,i=e(o,window[o]);"checkbox"===t.type?(t.checked=i,ta(t,o)):t.value=i}),document.querySelectorAll(".parameter-row[data-param-name]").forEach(t=>{let o=t.dataset.paramName,i=t.querySelector(".parameter-slider"),n=t.querySelector(".parameter-value"),r=e(o,window[o]);i&&(i.value=r),n&&(n.value=r)});let t=document.getElementById("tweet-filter-slider"),o=document.getElementById("tweet-filter-value"),i=e("filterThreshold","5");if(t&&o){t.value=i,o.value=i;let n=parseInt(i,10)/10*100;t.style.setProperty("--slider-percent",`${n}%`)}tl(document.getElementById("handle-list")),th(),document.querySelectorAll(".advanced-content").forEach(t=>{t.classList.contains("expanded")||(t.style.maxHeight="0")}),document.querySelectorAll(".advanced-toggle-icon.expanded").forEach(t=>{t.closest(".advanced-toggle")?.nextElementSibling?.classList.contains("expanded")||t.classList.remove("expanded")}),tt()}function tl(t){if(t){if(t.innerHTML="",0===U.length){let e=document.createElement("div");e.style.cssText="padding: 8px; opacity: 0.7; font-style: italic;",e.textContent="No handles added yet",t.appendChild(e);return}U.forEach(e=>{let o=document.createElement("div");o.className="handle-item";let i=document.createElement("div");i.className="handle-text",i.textContent="@"+e,o.appendChild(i);let n=document.createElement("button");n.className="remove-handle",n.textContent="\xd7",n.title="Remove from list",o.appendChild(n),t.appendChild(o)})}}function td(t){return t?.slug||t?.canonical_slug||t?.endpoint?.model_variant_slug||t?.id||t?.name||""}let tc=["openai","anthropic","google","qwen"];function tp(t){let e=td(t);return e?(e.split("/")[0]||"").replace(/^~/,"").toLowerCase().trim():""}function tu(t){let e=(t||"").toString().toLowerCase().trim();return e?e.replace(/^~/,""):""}function th(){let t=document.getElementById("model-select-container"),i=document.getElementById("image-model-select-container"),n=document.getElementById("model-family-filter");C=[...S],k||(C=C.filter(t=>!td(t).endsWith(":free"))),C.sort((t,e)=>(Number(e.created)||0)-(Number(t.created)||0)),function t(i){if(!i)return;let n=[...new Set(S.map(tp).filter(Boolean))].sort(),r=n.length>0?n:tc,a=tu(e("modelFamilyFilter",A||""));A=n.length>0&&a&&!n.includes(a)?"":a,i.innerHTML="";let s=document.createElement("option");s.value="",s.textContent="All Providers",i.appendChild(s),r.forEach(t=>{var e;let o=document.createElement("option");o.value=t,o.textContent=(e=t).split(/[-_]/).filter(Boolean).map(t=>t.charAt(0).toUpperCase()+t.slice(1)).join(" "),i.appendChild(o)}),i.value=a,i.value!==A&&(i.value=A),e("modelFamilyFilter","")!==A&&o("modelFamilyFilter",A)}(n);let r=A?C.filter(t=>tp(t)===A):C;if(t&&(t.innerHTML="",tm(t,"model-selector",r.map(t=>({value:td(t),label:tg(t)})),I,t=>{o("selectedModel",I=t),Z("Rating model updated")},"Search rating models...")),i){let a=C.filter(t=>t.input_modalities?.includes("image")||t.architecture?.input_modalities?.includes("image")||t.architecture?.modality?.includes("image"));i.innerHTML="",tm(i,"image-model-selector",a.map(t=>({value:td(t),label:tg(t)})),T,t=>{o("selectedImageModel",T=t),Z("Image model updated")},"Search vision models...")}}function tg(t){let e=td(t)||"Unknown Model",o="",i=t.endpoint?.pricing||t.pricing;if(i){let n=parseFloat(i.prompt),r=parseFloat(i.completion);isNaN(n)?isNaN(r)||(o+=` - $${(1e6*r).toFixed(4)}/mil. tok.-out`):(o+=` - $${(1e6*n).toFixed(4)}/mil. tok.-in`,isNaN(r)||r===n||(o+=` $${(1e6*r).toFixed(4)}/mil. tok.-out`))}let a=t.input_modalities?.includes("image")||t.architecture?.input_modalities?.includes("image")||t.architecture?.modality?.includes("image");return a&&(e="\uD83D\uDDBC️ "+e),e+o}function tm(t,e,o,i,n,r){let a=i,s=document.createElement("div");s.className="custom-select",s.id=e;let l=document.createElement("div");l.className="select-selected";let d=document.createElement("div");d.className="select-items",d.style.display="none";let c=document.createElement("div");c.className="search-field";let p=document.createElement("input");function u(t=""){for(;d.childNodes.length>1;)d.removeChild(d.lastChild);let e=o.filter(e=>e.label.toLowerCase().includes(t.toLowerCase()));if(0===e.length){let i=document.createElement("div");i.textContent="No matches found",i.style.cssText="opacity: 0.7; font-style: italic; padding: 10px; text-align: center; cursor: default;",d.appendChild(i)}e.forEach(t=>{let e=document.createElement("div");e.textContent=t.label,e.dataset.value=t.value,t.value===a&&e.classList.add("same-as-selected"),e.addEventListener("click",e=>{e.stopPropagation(),a=t.value,l.textContent=t.label,d.style.display="none",l.classList.remove("select-arrow-active"),d.querySelectorAll("div[data-value]").forEach(t=>{t.classList.toggle("same-as-selected",t.dataset.value===a)}),n(a)}),d.appendChild(e)})}p.type="text",p.className="search-input",p.placeholder=r||"Search...",c.appendChild(p),d.appendChild(c);let h=o.find(t=>t.value===a);l.textContent=h?h.label:"Select an option",s.appendChild(l),s.appendChild(d),t.appendChild(s),u(),p.addEventListener("input",()=>u(p.value)),p.addEventListener("click",t=>t.stopPropagation()),l.addEventListener("click",t=>{t.stopPropagation(),tf(s);let e="none"===d.style.display;d.style.display=e?"block":"none",l.classList.toggle("select-arrow-active",e),e&&(p.focus(),p.select(),u(p.value))})}function tf(t=null){document.querySelectorAll(".custom-select").forEach(e=>{if(e===t)return;let o=e.querySelector(".select-items"),i=e.querySelector(".select-selected");o&&(o.style.display="none"),i&&i.classList.remove("select-arrow-active")})}function t$(t=!1){if(t||confirm("Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.")){a.clear();let e={selectedModel:"openai/gpt-4.1-nano",selectedImageModel:"openai/gpt-4.1-nano",enableImageDescriptions:!1,enableStreaming:!0,enableWebSearch:!1,enableAutoRating:!0,reasoningEffort:"none",modelTemperature:.5,modelTopP:.9,imageModelTemperature:.5,imageModelTopP:.9,maxTokens:0,filterThreshold:5,userDefinedInstructions:"Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.",modelFamilyFilter:""};for(let i in e)void 0!==window[i]&&(window[i]=e[i]),o(i,e[i]);ts(),tN(),Z("Settings reset to defaults")}}function tb(t){var o;let i=t.closest('div[data-testid="cellInnerDiv"]');if(!i)return;let n=X(t),r=n.length>0?n[0]:"",s=W(t)||"",l=j(t),d=Y(t),c={authorHandle:r,individualTweetText:s,individualMediaUrls:l,timestamp:Date.now()};if(a.set(d,c,!1),r&&v.has(r)){let p=Y(t);p&&to.get(p)?.destroy(),i.innerHTML="",i.dataset.filtered="true",i.dataset.isAd="true";return}i.dataset.tweetText=s,i.dataset.authorHandle=r,i.dataset.mediaUrls=JSON.stringify(l),i.dataset.tweetId=d;let u=parseInt(t.dataset.slopScore||"9",10),h=Y(t),g=to.get(h,t);g?.ensureIndicatorAttached();let m=parseInt(e("filterThreshold","1")),f=t.dataset.ratingStatus,$=(o=r,!!o&&(o=o.toLowerCase().trim(),U.some(t=>t.toLowerCase().trim()===o)));if(g&&g.setAuthorBlacklistState($),$)delete i.dataset.filtered,i.dataset.authorBlacklisted="true",g&&g.refreshIndicatorUI();else if(delete i.dataset.authorBlacklisted,"pending"===f||"streaming"===f)delete i.dataset.filtered;else if(isNaN(u)||u<m){let b=to.get(h,t);b&&b.destroy(),i.innerHTML="",i.dataset.filtered="true"}else delete i.dataset.filtered,g&&g.refreshIndicatorUI()}let ty=["rated","cached","blacklisted","manual"],tv=["pending","streaming"],tx=new Map;function tw(t){return ty.includes(t)}function t_(t){return tv.includes(t)}async function tE(t,o,i){let n=!1;try{let r=e("openrouter-api-key","");if(r){let s=5,l="",d="",c=[],p="";try{let u=a.get(o);!u||u.score||u.streaming||a.delete(o);let h=await tk(t,o,r);if(!h)throw Error("Failed to get tweet context");let g=[];if(document.querySelector('div[aria-label="Timeline: Conversation"]')){var m;let f=(m=o,tT(m));f&&f.replyTo&&(a.has(o)||a.set(o,{}),a.get(o).threadContext||(a.get(o).threadContext={replyTo:f.to,replyToId:f.replyTo,isRoot:!1}))}let $=h.split("\n"),b=new Set(["[MEDIA_URLS]:","[QUOTED_TWEET_MEDIA_URLS]:"]),v=new Set(["[VIDEO_DESCRIPTIONS]:","[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:"]),x=/^\[VIDEO \d+\]:\s*/;for(let w=0;w<$.length;w++){let _=$[w].trim();if(b.has(_)){let E=w+1;for(;E<$.length;){let S=$[E].trim();if(!S){E++;continue}if(S.startsWith("["))break;g.push(...S.split(",").map(t=>t.trim()).filter(Boolean)),E++}w=E-1;continue}if(v.has(_)){let C=w+1;for(;C<$.length;){let T=$[C].trim();if(!T){C++;continue}if(x.test(T)){let k=T.replace(x,"").trim();k&&g.push(`[VIDEO_DESCRIPTION]: ${k}`),C++;continue}if(T.startsWith("["))break;C++}w=C-1}}g=[...new Set(g.filter(t=>t.trim()))];let A=t.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]'),q=e("enableImageDescriptions",!1);if(A&&0===g.length&&(q||F(I)),h)try{let U=a.get(o),L=U&&!U.streaming&&void 0!==U.score&&null!==U.score;if(L){s=U.score,l=U.description||"",d=U.reasoning||"",c=U.questions||[],p=U.lastAnswer||"";let R=U.mediaUrls||[];n=!0,to.get(o,t)?.update({status:U.fromStorage?"cached":"rated",score:s,description:l,reasoning:d,questions:c,lastAnswer:p,metadata:U.metadata||null,mediaUrls:R}),tb(t);return}let H=g.filter(t=>!t.startsWith("[VIDEO_DESCRIPTION]:")),N=h.replace(/\n?\[THREAD_MEDIA_URLS\]:\s*\n[^\n]*(?=\n|$)/g,"").replace(/\n{3,}/g,"\n\n"),O=await t2(N,o,r,H,3,t,i);s=O.score,l=O.content,d=O.reasoning||"",c=O.questions||[],p="";let Q=O.error?"error":"rated";if(!O.error){let B=a.get(o);B&&B.fromStorage?Q="cached":O.cached&&(Q="cached")}t.dataset.ratingStatus=Q,t.dataset.ratingDescription=l||"not available",t.dataset.slopScore=s?.toString()||"",t.dataset.ratingReasoning=d,to.get(o,t)?.update({status:Q,score:s,description:l,reasoning:d,questions:c,lastAnswer:p,metadata:O.data?.id?{generationId:O.data.id}:null,mediaUrls:g}),n=!O.error,tb(t);return}catch(D){s=5,l=`API Error: ${D.message}`,d="",c=[],p="",n=!1,to.get(o,t)?.update({status:"error",score:s,description:l,questions:[],lastAnswer:""});let M=a.get(o)||{},P={...M,score:s,description:l,reasoning:d,questions:c,lastAnswer:p,streaming:!1,timestamp:Date.now()};a.set(o,P,!0),tb(t);return}tb(t)}catch(z){"Media content not extracted despite presence of media containers."===z.message&&a.has(o)&&a.delete(o),to.get(o,t)?.update({status:"error",score:5,description:"Error during processing: "+z.message,questions:[],lastAnswer:""}),n=!1}finally{n||y.delete(o)}}else t.dataset.ratingStatus="error",t.dataset.ratingDescription="No API key",to.get(o,t)?.update({status:"error",score:9,description:"No API key",questions:[],lastAnswer:""}),n=!0;tb(t);return}catch(W){let Y=to.get(o);Y&&Y.update({status:"error",score:5,description:"Error during processing: "+W.message,questions:[],lastAnswer:""}),tb(t),n=!1}finally{if(!n){y.delete(o);let X=to.get(o);X&&!tw(X.status)&&setTimeout(()=>{tw(to.get(o)?.status)||t0(t)},2)}}}let t3=new Set;async function t0(t,o=!1){let i=Y(t);if(!i||window.activeStreamingRequests&&window.activeStreamingRequests[i])return;let n=X(t),r=n.length>0?n[0]:"";if(r&&v.has(r)||G(t)){r&&!v.has(r)&&v.add(r),t.dataset.ratingStatus="rated",t.dataset.ratingDescription="Advertisement",t.dataset.slopScore="0",to.get(i,t)?.update({status:"rated",score:0,description:"Advertisement",questions:[],lastAnswer:""}),tb(t);return}let s=to.get(i);if(s?.ensureIndicatorAttached(),s&&!o){if(tw(s.status)||t_(s.status)&&y.has(i)){tb(t);return}y.delete(i)}let l=document.querySelector('div[aria-label="Timeline: Conversation"]')||document.querySelector('div[aria-label^="Timeline: Conversation"]');if(l){if(!l.dataset.threadMapping){t3.add(i);let d=to.get(i,t);d&&d.update({status:"pending",score:null,description:"Waiting for thread context...",questions:[],lastAnswer:""});return}try{let c=JSON.parse(l.dataset.threadMapping),p=c.find(t=>t.tweetId===i);if(!p){t3.add(i);let u=to.get(i,t);u&&u.update({status:"pending",score:null,description:"Waiting for thread context...",questions:[],lastAnswer:""});return}}catch(h){}}if(a.has(i)){let g=!0===a.get(i).streaming&&!a.get(i).score;if(!g&&function t(e){let o=Y(e),i=a.get(o);if(i){if(!0===i.streaming&&(void 0===i.score||null===i.score))return!1;if(void 0!==i.score&&null!==i.score){e.dataset.slopScore=i.score.toString(),e.dataset.ratingStatus=i.fromStorage?"cached":"rated",e.dataset.ratingDescription=i.description||"not available",e.dataset.ratingReasoning=i.reasoning||"";let n=to.get(o,e);return!!n&&(n.rehydrateFromCache(i),tb(e),!0)}i.streaming||a.delete(o)}return!1}(t))return}if(y.has(i)){let m=to.get(i);if(m&&(m.ensureIndicatorAttached(),"pending"===m.status||"streaming"===m.status)){tb(t);return}y.delete(i)}let f=to.get(i,t);if(f){if("blacklisted"!==f.status&&"cached"!==f.status&&"rated"!==f.status)f.update({status:"pending",score:null,description:"Rating scheduled...",questions:[],lastAnswer:""});else{f.ensureIndicatorAttached(),tb(t);return}}y.has(i)||y.add(i),setTimeout(()=>{try{if(!e("enableAutoRating",!0)&&!o){let n=to.get(i,t);n&&(n.update({status:"manual",score:null,description:"Click the Rate button to rate this tweet",reasoning:"",questions:[],lastAnswer:""}),tb(t));return}tE(t,i,r)}catch(a){y.delete(i)}},1)}let tS={},tC=!1;async function tI(t,e=1/0){if(!t||e<=0)return[];let o=[],i=new Set,n=t,r=0;for(;n&&r<e&&!i.has(n);){i.add(n);let a=tT(n);if(!a||!a.replyTo)break;o.push({fromId:n,toId:a.replyTo,from:a.from,to:a.to}),n=a.replyTo,r++}return o}function tT(t){if(!t)return null;let e=tS[t],o=a.get(t),i=o?.threadContext;if(e){let n=e.replyTo||i?.replyToId||null;return{...e,replyTo:n,from:e.from||o?.authorHandle||"",to:e.to||i?.replyTo||null,isRoot:!n&&(!0===e.isRoot||i?.isRoot===!0)}}return i?.replyToId?{replyTo:i.replyToId,from:o?.authorHandle||"",to:i.replyTo||null,isRoot:!1,timestamp:o?.timestamp||0}:i?.isRoot?{replyTo:null,from:o?.authorHandle||"",to:null,isRoot:!0,timestamp:o?.timestamp||0}:null}async function tk(t,o,i){if(tx.has(o))return tx.get(o);let n=(async()=>{try{let n=X(t),r=n.length>0?n[0]:"",s=n.length>1?n[1]:"",l=W(t),d=j(t),c="",p=[],u=null,h=t.querySelector(M);if(h){let g=h.querySelector('a[href*="/status/"]');if(g){let m=g.getAttribute("href"),f=m.match(/\/status\/(\d+)/);f&&f[1]&&(u=f[1])}c=function t(e){if(!e)return"";let o=e instanceof NodeList?Array.from(e):[e];for(let i of o){let n=z(i);if(n)return n}return""}(h.querySelector(P))||"",p=j(h)}let $=[...d||[]].filter(t=>!p.includes(t)),b=[],y=[];$.forEach(t=>{t.startsWith("[VIDEO_DESCRIPTION]:")?y.push(t.replace("[VIDEO_DESCRIPTION]: ","")):b.push(t)});let v="",x=t.querySelector('div[role="group"][aria-label$=" views"]');x&&(v=x.getAttribute("aria-label")?.trim()||"");let w=`[TWEET ${o}]
- Author:@${r}:
-`+l;if(y.length>0&&(w+=`
+            `;
+        });
+        return historyHtml;
+    }
+    /**
+     * Attaches event listeners to reasoning toggles within the conversation history.
+     * Uses event delegation.
+     */
+    _attachConversationReasoningListeners() {
+        if (!this.conversationContainerElement) return;
+        if (this._boundHandlers.handleConversationReasoningToggle) {
+            return;
+        }
+        this._boundHandlers.handleConversationReasoningToggle = (e) => {
+            const toggleButton = e.target.closest('.conversation-reasoning .reasoning-toggle');
+            if (!toggleButton) return;
+            if (e.type === 'click' && !e.isTrusted) {
+                return;
+            }
+            const dropdown = toggleButton.closest('.reasoning-dropdown');
+            const content = dropdown?.querySelector('.reasoning-content');
+            const arrow = dropdown?.querySelector('.reasoning-arrow');
+            if (!dropdown || !content || !arrow) return;
+            const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+            const isExpanded = dropdown.classList.toggle('expanded');
+            arrow.textContent = isExpanded ? '▼' : '▶';
+            toggleButton.setAttribute('aria-expanded', isExpanded);
+            content.style.maxHeight = isExpanded ? '200px' : '0';
+            content.style.padding = isExpanded ? '8px' : '0 8px';
+            if (isMobileDevice() && this.tooltipScrollableContentElement) {
+                requestAnimationFrame(() => {
+                    if (this.tooltipScrollableContentElement) {
+                        this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                    }
+                });
+            }
+        };
+        this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationReasoningToggle);
+    }
+    _performAutoScroll() {
+        if (!this.tooltipScrollableContentElement || !this.autoScroll || !this.isVisible) return;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement && this.autoScroll && this.isVisible) {
+                    const targetScroll = this.tooltipScrollableContentElement.scrollHeight;
+                    this.tooltipScrollableContentElement.scrollTo({
+                        top: targetScroll,
+                        behavior: 'instant'
+                    });
+                }
+            });
+        });
+    }
+    /** Calculates and sets the tooltip's position. */
+    _setPosition() {
+        if (!this.isVisible || !this.indicatorElement || !this.tooltipElement) return;
+        const indicatorRect = this.indicatorElement.getBoundingClientRect();
+        const tooltip = this.tooltipElement;
+        const margin = 10;
+        const isMobile = isMobileDevice();
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        const safeAreaHeight = viewportHeight - margin;
+        const safeAreaWidth = viewportWidth - margin;
+        tooltip.style.maxHeight = '';
+        tooltip.style.overflowY = '';
+        tooltip.style.visibility = 'hidden';
+        tooltip.style.display = 'block';
+        const computedStyle = window.getComputedStyle(tooltip);
+        const tooltipWidth = parseFloat(computedStyle.width);
+        let tooltipHeight = parseFloat(computedStyle.height);
+        let left, top;
+        let finalMaxHeight = '';
+        let finalOverflowY = '';
+        if (isMobile) {
+            left = Math.max(margin, (viewportWidth - tooltipWidth) / 2);
+            if (left + tooltipWidth > safeAreaWidth) {
+                left = safeAreaWidth - tooltipWidth;
+            }
+            const maxTooltipHeight = viewportHeight * 0.8;
+            if (tooltipHeight > maxTooltipHeight) {
+                finalMaxHeight = `${maxTooltipHeight}px`;
+                finalOverflowY = 'scroll';
+                tooltipHeight = maxTooltipHeight;
+            }
+            top = Math.max(margin, (viewportHeight - tooltipHeight) / 2);
+            if (top + tooltipHeight > safeAreaHeight) {
+                top = safeAreaHeight - tooltipHeight;
+            }
+        } else {
+            left = indicatorRect.right + margin;
+            top = indicatorRect.top + (indicatorRect.height / 2) - (tooltipHeight / 2);
+            if (left + tooltipWidth > safeAreaWidth) {
+                left = indicatorRect.left - tooltipWidth - margin;
+                if (left < margin) {
+                    left = Math.max(margin, (viewportWidth - tooltipWidth) / 2);
+                    if (indicatorRect.bottom + tooltipHeight + margin <= safeAreaHeight) {
+                        top = indicatorRect.bottom + margin;
+                    }
+                    else if (indicatorRect.top - tooltipHeight - margin >= margin) {
+                        top = indicatorRect.top - tooltipHeight - margin;
+                    }
+                    else {
+                        top = margin;
+                        finalMaxHeight = `${safeAreaHeight - margin}px`;
+                        finalOverflowY = 'scroll';
+                        tooltipHeight = safeAreaHeight - margin;
+                    }
+                }
+            }
+            if (top < margin) {
+                top = margin;
+            }
+            if (top + tooltipHeight > safeAreaHeight) {
+                if (tooltipHeight > safeAreaHeight - margin) {
+                    top = margin;
+                    finalMaxHeight = `${safeAreaHeight - margin}px`;
+                    finalOverflowY = 'scroll';
+                } else {
+                    top = safeAreaHeight - tooltipHeight;
+                }
+            }
+        }
+        tooltip.style.position = 'fixed';
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+        tooltip.style.zIndex = '99999999';
+        tooltip.style.maxHeight = finalMaxHeight;
+        tooltip.style.overflowY = '';
+        tooltip.style.display = 'flex';
+        tooltip.style.visibility = 'visible';
+    }
+    _updateScrollButtonVisibility() {
+        if (!this.tooltipScrollableContentElement || !this.scrollButton) return;
+        const isStreaming = this.status === TweetRatingStatus.STREAMING;
+        if (!isStreaming) {
+            this.scrollButton.style.display = 'none';
+            return;
+        }
+        const isNearBottom = this.tooltipScrollableContentElement.scrollHeight - this.tooltipScrollableContentElement.scrollTop - this.tooltipScrollableContentElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        this.scrollButton.style.display = isNearBottom ? 'none' : 'block';
+    }
+    _handleMouseEnter(event) {
+        if (isMobileDevice()) return;
+        this.show();
+    }
+    _handleMouseLeave(event) {
+        if (isMobileDevice()) return;
+        setTimeout(() => {
+            if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
+                this.indicatorElement && !this.indicatorElement.matches(':hover')) {
+                this.hide();
+            }
+        }, 100);
+    }
+    _handleIndicatorClick(event) {
+        event.stopPropagation();
+        event.preventDefault();
+        this.toggle();
+    }
+    _handleTooltipMouseEnter() {
+        if (!this.isPinned) {
+            this.show();
+        }
+    }
+    _handleTooltipMouseLeave() {
+        setTimeout(() => {
+            if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
+                this.hide();
+            }
+        }, 100);
+    }
+    _handleTooltipScroll() {
+        if (!this.tooltipScrollableContentElement) return;
+        const isNearBottom = this.tooltipScrollableContentElement.scrollHeight - this.tooltipScrollableContentElement.scrollTop - this.tooltipScrollableContentElement.clientHeight < (isMobileDevice() ? 40 : 55);
+        if (!isNearBottom) {
+            if (this.autoScroll) {
+                this.autoScroll = false;
+                this.tooltipElement.dataset.autoScroll = 'false';
+                this.userInitiatedScroll = true;
+            }
+        } else {
+            if (this.userInitiatedScroll) {
+                this.autoScroll = true;
+                this.tooltipElement.dataset.autoScroll = 'true';
+                this.userInitiatedScroll = false;
+            }
+        }
+        this._updateScrollButtonVisibility();
+    }
+    _handlePinClick(e) {
+        if (e) {
+            e.stopPropagation();
+        }
+        if (this.isPinned) {
+            this.unpin();
+        } else {
+            this.pin();
+        }
+    }
+    _handleCopyClick(e) {
+        if (e) {
+            e.stopPropagation();
+        }
+        if (!this.descriptionElement || !this.reasoningTextElement || !this.copyButton) return;
+        let textToCopy = this.descriptionElement.textContent || '';
+        const reasoningContent = this.reasoningTextElement.textContent || '';
+        if (reasoningContent) {
+            textToCopy += '\n\nReasoning:\n' + reasoningContent;
+        }
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const originalText = this.copyButton.innerHTML;
+            this.copyButton.innerHTML = '✓';
+            this.copyButton.disabled = true;
+            setTimeout(() => {
+                this.copyButton.innerHTML = originalText;
+                this.copyButton.disabled = false;
+            }, 1500);
+        }).catch(err => {
+            console.error('[ScoreIndicator] Failed to copy text: ', err);
+        });
+    }
+    _handleReasoningToggleClick(e) {
+        if (e) {
+            e.stopPropagation();
+        }
+        if (!this.reasoningDropdown || !this.reasoningContent || !this.reasoningArrow) return;
+        const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+        const isExpanded = this.reasoningDropdown.classList.toggle('expanded');
+        this.reasoningArrow.textContent = isExpanded ? '▼' : '▶';
+        if (isExpanded) {
+            this.reasoningContent.style.maxHeight = '300px';
+            this.reasoningContent.style.padding = '10px';
+        } else {
+            this.reasoningContent.style.maxHeight = '0';
+            this.reasoningContent.style.padding = '0 10px';
+        }
+        if (isMobileDevice() && this.tooltipScrollableContentElement) {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement) {
+                    this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                }
+            });
+        }
+    }
+    _handleScrollButtonClick(e) {
+        if (e) {
+            e.stopPropagation();
+        }
+        if (!this.tooltipScrollableContentElement) return;
+        this.autoScroll = true;
+        this.tooltipElement.dataset.autoScroll = 'true';
+        this._performAutoScroll();
+        this._updateScrollButtonVisibility();
+    }
+    _handleFollowUpQuestionClick(event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+        const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
+        const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
+        if (!button) return;
+        event.stopPropagation();
+        const questionText = button.dataset.questionText;
+        const apiKey = browserGet('openrouter-api-key', '');
+        this.currentFollowUpSource = isMockEvent ? 'custom' : 'suggested';
+        if (!isMockEvent) {
+        button.disabled = true;
+        button.textContent = `🤔 Asking: ${questionText}...`;
+        this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
+        } else {
+            if (this.customQuestionInput) this.customQuestionInput.disabled = true;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = true;
+                this.customQuestionButton.textContent = 'Asking...';
+            }
+        }
+        this.conversationHistory.push({
+            question: questionText,
+            answer: 'pending',
+            uploadedImages: [...this.uploadedImageDataUrls],
+            reasoning: ''
+        });
+        const userMessageContentForHistory = [{ type: "text", text: questionText }];
+        if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
+            this.uploadedImageDataUrls.forEach(url => {
+                if (url.startsWith('data:application/pdf')) {
+                    const previewItem = this.followUpImageContainer?.querySelector(`[data-image-data-url="${CSS.escape(url)}"]`);
+                    const fileName = previewItem?.querySelector('.follow-up-pdf-preview span:last-child')?.textContent || 'document.pdf';
+                    userMessageContentForHistory.push({
+                        type: "file",
+                        file: {
+                            filename: fileName,
+                            file_data: url
+                        }
+                    });
+                } else {
+                    const modelImageUrl = stripImageUrlNameParam(url);
+                    userMessageContentForHistory.push({
+                        type: "image_url",
+                        image_url: { "url": modelImageUrl }
+                    });
+                }
+            });
+        }
+        const userApiMessage = { role: "user", content: userMessageContentForHistory };
+        const historyForApiCall = [...this.qaConversationHistory, userApiMessage];
+        this._clearFollowUpImage();
+        this._updateTooltipUI();
+        this.questions = [];
+        this._updateTooltipUI();
+        if (!apiKey) {
+            showStatus('API key missing. Cannot answer question.', 'error');
+            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
+            if (!isMockEvent) {
+                button.disabled = false;
+                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            }
+            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+            this._clearFollowUpImage();
+            return;
+        }
+        if (!questionText) {
+            console.error("Follow-up question text not found on button.");
+            this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
+             if (!isMockEvent) {
+                button.disabled = false;
+                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
+            }
+            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+            this._clearFollowUpImage();
+            return;
+        }
+        const currentArticle = this.findCurrentArticleElement();
+        try {
+            answerFollowUpQuestion(this.tweetId, historyForApiCall, apiKey, currentArticle, this);
+        } finally {
+        }
+    }
+    _handleCustomQuestionClick(event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (!this.customQuestionInput || !this.customQuestionButton) return;
+        const questionText = this.customQuestionInput.value.trim();
+        const hasImages = this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0;
+        if (!questionText && !hasImages) {
+            showStatus("Please enter a question or attach a file.", "warning");
+            this.customQuestionInput.focus();
+            return;
+        }
+        const submissionText = questionText || (hasImages ? "[file only message]" : "");
+        const mockButton = {
+            dataset: { questionText: submissionText },
+            disabled: false,
+            textContent: ''
+        };
+        this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
+        this._handleFollowUpQuestionClick({
+            target: mockButton,
+            stopPropagation: () => {},
+            preventDefault: () => {}
+        });
+        if (this.customQuestionInput) {
+            this.customQuestionInput.value = '';
+            this.customQuestionInput.style.height = 'auto';
+            this.customQuestionInput.rows = 1;
+        }
+    }
+    async _handleFollowUpImageSelect(event) {
+        if (event) {
+            event.preventDefault();
+        }
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        if (this.followUpImageContainer && files.length > 0) {
+            this.followUpImageContainer.style.display = 'flex';
+        }
+        // Disable Ask button while processing files
+        if (this.customQuestionButton) {
+            this.customQuestionButton.disabled = true;
+            this.customQuestionButton.textContent = 'Processing files...';
+        }
+        const filePromises = Array.from(files).map(file => {
+            if (file && file.type.startsWith('image/')) {
+                return resizeImage(file, 1024)
+                    .then(resizedDataUrl => {
+                        this.uploadedImageDataUrls.push(resizedDataUrl);
+                        this._addPreviewToContainer(resizedDataUrl, 'image');
+                    })
+                    .catch(error => {
+                        console.error("Error resizing image:", error);
+                        showStatus(`Could not process image ${file.name}: ${error.message}`, "error");
+                    });
+            } else if (file && file.type === 'application/pdf') {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const dataUrl = e.target.result;
+                        this.uploadedImageDataUrls.push(dataUrl);
+                        this._addPreviewToContainer(dataUrl, 'pdf', file.name);
+                        resolve();
+                    };
+                    reader.onerror = (error) => {
+                        console.error("Error reading PDF:", error);
+                        showStatus(`Could not process PDF ${file.name}: ${error.message}`, "error");
+                        reject(error);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else if (file) {
+                showStatus(`Skipping unsupported file type: ${file.name}`, "warning");
+                return Promise.resolve();
+            }
+            return Promise.resolve();
+        });
+        // Wait for all files to be processed
+        await Promise.all(filePromises);
+        // Re-enable Ask button
+        if (this.customQuestionButton) {
+            this.customQuestionButton.disabled = false;
+            this.customQuestionButton.textContent = 'Ask';
+        }
+        event.target.value = null;
+    }
+    _addPreviewToContainer(dataUrl, fileType = 'image', fileName = '') {
+        if (!this.followUpImageContainer) return;
+        const previewItem = document.createElement('div');
+        previewItem.className = 'follow-up-image-preview-item';
+        previewItem.dataset.imageDataUrl = dataUrl;
+        if (fileType === 'pdf') {
+            const pdfIcon = document.createElement('div');
+            pdfIcon.className = 'follow-up-pdf-preview';
+            pdfIcon.innerHTML = `<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${fileName || 'PDF'}</span>`;
+            pdfIcon.style.textAlign = 'center';
+            pdfIcon.style.padding = '8px';
+            pdfIcon.style.width = '60px';
+            pdfIcon.style.height = '60px';
+            pdfIcon.style.display = 'flex';
+            pdfIcon.style.flexDirection = 'column';
+            pdfIcon.style.justifyContent = 'center';
+            pdfIcon.style.alignItems = 'center';
+            previewItem.appendChild(pdfIcon);
+        } else {
+            const img = document.createElement('img');
+            img.src = dataUrl;
+            img.className = 'follow-up-image-preview-thumbnail';
+            previewItem.appendChild(img);
+        }
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '×';
+        removeBtn.className = 'follow-up-image-remove-btn';
+        removeBtn.title = 'Remove this file';
+        removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._removeSpecificUploadedImage(dataUrl);
+        });
+        previewItem.appendChild(removeBtn);
+        this.followUpImageContainer.appendChild(previewItem);
+    }
+    _removeSpecificUploadedImage(imageDataUrl) {
+        this.uploadedImageDataUrls = this.uploadedImageDataUrls.filter(url => url !== imageDataUrl);
+        if (this.followUpImageContainer) {
+            const previewItemToRemove = this.followUpImageContainer.querySelector(`div.follow-up-image-preview-item[data-image-data-url="${CSS.escape(imageDataUrl)}"]`);
+            if (previewItemToRemove) {
+                previewItemToRemove.remove();
+                }
+            if (this.uploadedImageDataUrls.length === 0) {
+                this.followUpImageContainer.style.display = 'none';
+            }
+        }
+    }
+    _clearFollowUpImage() {
+        this.uploadedImageDataUrls = [];
+        if (this.followUpImageContainer) {
+            this.followUpImageContainer.innerHTML = '';
+            this.followUpImageContainer.style.display = 'none';
+        }
+        if (this.followUpImageInput) {
+            this.followUpImageInput.value = null;
+        }
+    }
+    _finalizeFollowUpInteraction() {
+        if (this.followUpQuestionsElement) {
+            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
+                btn.disabled = false;
+            });
+        }
+        if (this.currentFollowUpSource === 'custom') {
+            if (this.customQuestionInput) {
+                this.customQuestionInput.disabled = false;
+            }
+            if (this.customQuestionButton) {
+                this.customQuestionButton.disabled = false;
+                this.customQuestionButton.textContent = 'Ask';
+            }
+        }
+        this.currentFollowUpSource = null;
+    }
+    /** Public wrapper for indicator refresh. */
+    refreshIndicatorUI() {
+        this._updateIndicatorUI();
+    }
+    /** Public wrapper for tooltip refresh. */
+    refreshTooltipUI() {
+        this._updateTooltipUI();
+    }
+    /**
+     * Updates blacklist UI state without exposing internal rendering methods.
+     * @param {boolean} isBlacklisted
+     */
+    setAuthorBlacklistState(isBlacklisted) {
+        this.isAuthorBlacklisted = Boolean(isBlacklisted);
+    }
+    /**
+     * Sets follow-up question list while preserving internal state ownership.
+     * @param {string[]} questions
+     */
+    setFollowUpQuestions(questions) {
+        this.questions = Array.isArray(questions) ? questions : [];
+    }
+    /**
+     * Public wrapper used by streaming follow-up handlers.
+     * @param {string} question
+     * @param {string} answer
+     * @param {string} [reasoning='']
+     */
+    updateConversationHistoryEntry(question, answer, reasoning = '') {
+        this._updateConversationHistory(question, answer, reasoning);
+    }
+    /**
+     * Public wrapper used by streaming follow-up handlers.
+     * @param {string} streamingText
+     * @param {string} [reasoningText='']
+     */
+    renderStreamingAnswer(streamingText, reasoningText = '') {
+        this._renderStreamingAnswer(streamingText, reasoningText);
+    }
+    /** Public wrapper to finalize follow-up UI state. */
+    finalizeFollowUpInteraction() {
+        this._finalizeFollowUpInteraction();
+    }
+    /**
+     * Finds a pending entry in the conversation history by question text and updates its answer.
+     * Also updates the UI.
+     * @param {string} question - The text of the question that was asked.
+     * @param {string} answer - The new answer (or error message).
+     * @param {string} [reasoning=''] - Optional reasoning text associated with the answer.
+     */
+    _updateConversationHistory(question, answer, reasoning = '') {
+        const entryIndex = this.conversationHistory.findIndex(turn => turn.question === question && turn.answer === 'pending');
+        if (entryIndex !== -1) {
+            this.conversationHistory[entryIndex].answer = answer;
+            this.conversationHistory[entryIndex].reasoning = reasoning;
+            this._updateTooltipUI();
+        } else {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find pending history entry for question: "${question}"`);
+        }
+    }
+    /**
+     * Updates the visual display of the last answer element during streaming
+     * without changing the underlying conversationHistory state.
+     * @param {string} streamingText - The current aggregated text from the stream.
+     * @param {string} [reasoningText=''] - Optional reasoning text from the stream.
+     */
+    _renderStreamingAnswer(streamingText, reasoningText = '') {
+        if (!this.conversationContainerElement) return;
+        const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
+        const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
+        if (!lastTurnElement) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find last conversation turn to render streaming answer.`);
+            return;
+        }
+        const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length -1] : null;
+        if (!(lastHistoryEntry && lastHistoryEntry.answer === 'pending')) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
+            return;
+        }
+        let streamingReasoningContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
+        const hasReasoning = reasoningText && reasoningText.trim() !== '';
+        if (hasReasoning && !streamingReasoningContainer) {
+            streamingReasoningContainer = document.createElement('div');
+            streamingReasoningContainer.className = 'streaming-reasoning-container active';
+            streamingReasoningContainer.style.display = 'block';
+            const streamingReasoningText = document.createElement('div');
+            streamingReasoningText.className = 'streaming-reasoning-text';
+            streamingReasoningContainer.appendChild(streamingReasoningText);
+            const answerElement = lastTurnElement.querySelector('.conversation-answer');
+            if (answerElement) {
+                lastTurnElement.insertBefore(streamingReasoningContainer, answerElement);
+            } else {
+                lastTurnElement.appendChild(streamingReasoningContainer);
+            }
+        }
+        if (streamingReasoningContainer && hasReasoning) {
+            const streamingTextElement = streamingReasoningContainer.querySelector('.streaming-reasoning-text');
+            if (streamingTextElement) {
+                const maxDisplayLength = 200;
+                let displayText = reasoningText;
+                if (reasoningText.length > maxDisplayLength) {
+                    displayText = reasoningText.slice(-maxDisplayLength);
+                }
+                streamingTextElement.textContent = displayText;
+            }
+        }
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        if (reasoningDropdown) {
+            reasoningDropdown.style.display = 'none';
+        }
+        const lastAnswerElement = lastTurnElement.querySelector('.conversation-answer');
+        if (lastAnswerElement) {
+            const formattedStreamingAnswer = streamingText
+                .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                    const rows = match.trim().split('\n');
+                    const headerRow = rows[0];
+                    const bodyRows = rows.slice(2);
+                    let html = '<table class="markdown-table">';
+                    html += '<thead><tr>';
+                    headerRow.slice(1, -1).split('|').forEach(cell => {
+                        html += `<th>${cell.trim()}</th>`;
+                    });
+                    html += '</tr></thead>';
+                    html += '<tbody>';
+                    bodyRows.forEach(rowStr => {
+                        if (!rowStr.trim()) return;
+                        html += '<tr>';
+                        rowStr.slice(1, -1).split('|').forEach(cell => {
+                            html += `<td>${cell.trim()}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    return html;
+                })
+                .replace(/\n/g, '<br>');
+            lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
+        } else {
+             console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
+        }
+        if (this.autoScroll) {
+            this._performAutoScroll();
+        }
+        this._performConversationAutoScroll();
+    }
+    /**
+     * Updates the indicator's state and refreshes the UI.
+     * @param {object} options
+     * @param {string} [options.status] - New status ('pending', 'streaming', 'rated', 'error', 'cached', 'blacklisted').
+     * @param {number|null} [options.score] - New score.
+     * @param {string} [options.description] - New description text.
+     * @param {string} [options.reasoning] - New reasoning text.
+     * @param {object|null} [options.metadata] - New metadata object.
+     * @param {string[]} [options.questions] - New follow-up questions.
+     */
+    update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined }) {
+        const statusChanged = status !== undefined && this.status !== status;
+        const scoreChanged = score !== null && this.score !== score;
+        const descriptionChanged = description !== '' && this.description !== description;
+        const reasoningChanged = reasoning !== '' && this.reasoning !== reasoning;
+        const metadataChanged = metadata !== null && JSON.stringify(this.metadata) !== JSON.stringify(metadata);
+        const questionsChanged = questions !== undefined && JSON.stringify(this.questions) !== JSON.stringify(questions);
+        if (!statusChanged && !scoreChanged && !descriptionChanged && !reasoningChanged && !metadataChanged && !questionsChanged) {
+            return;
+        }
+        if (statusChanged) this.status = status;
+        if (scoreChanged || statusChanged) {
+            this.score = (this.status === TweetRatingStatus.PENDING || this.status === TweetRatingStatus.ERROR) ? score :
+                (this.status === TweetRatingStatus.STREAMING && score === null) ? this.score :
+                    score;
+        }
+        if (descriptionChanged) this.description = description;
+        if (reasoningChanged) this.reasoning = reasoning;
+        if (metadataChanged) this.metadata = metadata;
+        if (questionsChanged) this.questions = questions;
+        if (statusChanged) {
+            const shouldAutoScroll = (this.status === TweetRatingStatus.PENDING || this.status === TweetRatingStatus.STREAMING);
+            if (this.autoScroll !== shouldAutoScroll) {
+                this.autoScroll = shouldAutoScroll;
+                if (this.tooltipElement) {
+                    this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
+                }
+            }
+        }
+        if (statusChanged || scoreChanged) {
+            this._updateIndicatorUI();
+        }
+        if (descriptionChanged || reasoningChanged || statusChanged || metadataChanged || questionsChanged) {
+            this._updateTooltipUI();
+        } else {
+            this._updateScrollButtonVisibility();
+        }
+    }
+    /** Shows the tooltip and positions it correctly. */
+    show() {
+        if (!this.tooltipElement) return;
+        this.isVisible = true;
+        this.tooltipElement.style.display = 'flex';
+        this._setPosition();
+        if (this.autoScroll && (this.status === TweetRatingStatus.STREAMING || this.status === TweetRatingStatus.PENDING)) {
+            this._performAutoScroll();
+        }
+        this._updateScrollButtonVisibility();
+    }
+    /** Hides the tooltip unless it's pinned. */
+    hide() {
+        if (!this.isPinned && this.tooltipElement) {
+            this.isVisible = false;
+            this.tooltipElement.style.display = 'none';
+        }
+    }
+    /** Toggles the tooltip's visibility. */
+    toggle() {
+        if (this.isVisible && !this.isPinned) {
+            this.hide();
+        } else {
+            this.show();
+        }
+    }
+    /** Pins the tooltip open. */
+    pin() {
+        if (!this.tooltipElement || !this.pinButton) return;
+        this.isPinned = true;
+        this.tooltipElement.classList.add('pinned');
+        this.pinButton.innerHTML = '📍';
+        this.pinButton.title = 'Unpin tooltip';
+    }
+    /** Unpins the tooltip, allowing it to be hidden automatically. */
+    unpin() {
+        if (!this.tooltipElement || !this.pinButton) return;
+        this.isPinned = false;
+        this.tooltipElement.classList.remove('pinned');
+        this.pinButton.innerHTML = '📌';
+        this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        setTimeout(() => {
+            if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
+                this.indicatorElement && !this.indicatorElement.matches(':hover')) {
+                this.hide();
+            }
+        }, 0);
+    }
+    _handleCloseClick(e) {
+        if (e) {
+            e.stopPropagation();
+        }
+        this.hide();
+    }
+    /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
+    destroy() {
+        if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
+            console.log(`Cleaning up active streaming request for tweet ${this.tweetId}`);
+            window.activeStreamingRequests[this.tweetId].abort();
+            delete window.activeStreamingRequests[this.tweetId];
+        }
+        this._removeRegisteredListeners();
+        this.indicatorElement?.remove();
+        this.tooltipElement?.remove();
+        ScoreIndicatorRegistry.remove(this.tweetId);
+        const currentArticle = this.findCurrentArticleElement();
+        if (currentArticle) {
+            delete currentArticle.dataset.hasScoreIndicator;
+        }
+        this.tweetArticle = null;
+        this.indicatorElement = null;
+        this.tooltipElement = null;
+        this.pinButton = null;
+        this.copyButton = null;
+        this.tooltipCloseButton = null;
+        this.reasoningToggle = null;
+        this.scrollButton = null;
+        this.conversationContainerElement = null;
+        this.followUpQuestionsElement = null;
+        this.customQuestionContainer = null;
+        this.customQuestionInput = null;
+        this.customQuestionButton = null;
+        this.followUpImageContainer = null;
+        this.followUpImageInput = null;
+        this.uploadedImageDataUrls = [];
+        this.refreshButton = null;
+        this.rateButton = null;
+        this.metadataDropdown = null;
+        this.metadataToggle = null;
+        this.metadataArrow = null;
+        this.metadataContent = null;
+        this.tooltipScrollableContentElement = null;
+        this._boundMethodHandlers = Object.create(null);
+        this._listenerTeardowns = [];
+    }
+    /** Ensures the indicator element is attached to the correct current article element. */
+    ensureIndicatorAttached() {
+        if (!this.indicatorElement) return false;
+        const currentArticle = this.findCurrentArticleElement();
+        if (!currentArticle) return false;
+        if (this.indicatorElement.parentElement !== currentArticle) {
+            const currentPosition = window.getComputedStyle(currentArticle).position;
+            if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
+                currentArticle.style.position = 'relative';
+            }
+            currentArticle.appendChild(this.indicatorElement);
+        }
+        return true;
+    }
+    /** Finds the current DOM element for the tweet article based on tweetId. */
+    findCurrentArticleElement() {
+        const timeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
+        if (!timeline) return null;
+        const linkSelector = `a[href*="/status/${this.tweetId}"]`;
+        const linkElement = timeline.querySelector(linkSelector);
+        const article = linkElement?.closest('article[data-testid="tweet"]');
+        if (article && getTweetID(article) === this.tweetId) {
+            return article;
+        }
+        for (const art of timeline.querySelectorAll('article[data-testid="tweet"]')) {
+            if (getTweetID(art) === this.tweetId) return art;
+        }
+        return null;
+    }
+    /**
+     * Updates the indicator's state after an initial review and builds the conversation history.
+     * @param {object} params
+     * @param {string} params.fullContext - The full text context of the tweet.
+     * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
+     * @param {string} params.apiResponseContent - The raw content from the API response.
+     * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
+     * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
+     * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
+     */
+    updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
+        const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
+        const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
+        const initialQuestions = extractFollowUpQuestions(apiResponseContent);
+        this.score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+        this.description = analysisMatch ? analysisMatch[1].trim() : apiResponseContent;
+        this.questions = initialQuestions;
+        this.status = this.score !== null ? 'rated' : 'error';
+        const userMessageContent = [{ type: "text", text: fullContext }];
+        if (typeof collectRatingImageUrls === 'function' && typeof appendRatingMediaContent === 'function' && modelSupportsImages(selectedModel)) {
+            appendRatingMediaContent(userMessageContent, collectRatingImageUrls(mediaUrls, fullContext));
+        }
+        const followUpSystemPromptWithInstructions = followUpSystemPrompt.replace(
+            '{USER_INSTRUCTIONS_PLACEHOLDER}',
+            userInstructions || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'
+        );
+        this.qaConversationHistory = [
+            { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
+            { role: "user", content: userMessageContent },
+            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
+            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] }
+        ];
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+    }
+    /**
+     * Updates the indicator's state after a follow-up question has been answered.
+     * @param {object} params
+     * @param {string} params.assistantResponseContent - The raw content of the AI's response.
+     * @param {object[]} params.updatedQaHistory - The fully updated qaConversationHistory array.
+     */
+    updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
+        this.qaConversationHistory = updatedQaHistory;
+        const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+        const newFollowUpQuestions = extractFollowUpQuestions(assistantResponseContent);
+        const answerText = answerMatch ? answerMatch[1].trim() : assistantResponseContent;
+        this.questions = newFollowUpQuestions;
+        if (this.conversationHistory.length > 0) {
+            const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
+            if (lastTurn.answer === 'pending') {
+                lastTurn.answer = answerText;
+            }
+        }
+        this._convertStreamingToDropdown();
+        this._updateTooltipUI();
+    }
+    /**
+     * Converts the streaming reasoning container to a proper reasoning dropdown after streaming completes.
+     * @private
+     */
+    _convertStreamingToDropdown() {
+        if (!this.conversationContainerElement) return;
+        const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
+        const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
+        if (!lastTurnElement) return;
+        const streamingContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
+        if (streamingContainer) {
+            streamingContainer.remove();
+        }
+        const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length - 1] : null;
+        if (!lastHistoryEntry || !lastHistoryEntry.reasoning || lastHistoryEntry.reasoning.trim() === '') {
+            return;
+        }
+        let reasoningDropdown = lastTurnElement.querySelector('.reasoning-dropdown');
+        if (!reasoningDropdown) {
+            reasoningDropdown = document.createElement('div');
+            reasoningDropdown.className = 'reasoning-dropdown conversation-reasoning';
+            const reasoningToggle = document.createElement('div');
+            reasoningToggle.className = 'reasoning-toggle';
+            const reasoningArrow = document.createElement('span');
+            reasoningArrow.className = 'reasoning-arrow';
+            reasoningArrow.textContent = '▶';
+            reasoningToggle.appendChild(reasoningArrow);
+            reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
+            const reasoningContent = document.createElement('div');
+            reasoningContent.className = 'reasoning-content';
+            const reasoningTextElement = document.createElement('p');
+            reasoningTextElement.className = 'reasoning-text';
+            reasoningContent.appendChild(reasoningTextElement);
+            reasoningDropdown.appendChild(reasoningToggle);
+            reasoningDropdown.appendChild(reasoningContent);
+            const answerElement = lastTurnElement.querySelector('.conversation-answer');
+            if (answerElement) {
+                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+            } else {
+                lastTurnElement.appendChild(reasoningDropdown);
+            }
+            reasoningToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const dropdown = e.target.closest('.reasoning-dropdown');
+                const content = dropdown?.querySelector('.reasoning-content');
+                const arrow = dropdown?.querySelector('.reasoning-arrow');
+                if (!dropdown || !content || !arrow) return;
+                const isExpanded = dropdown.classList.toggle('expanded');
+                arrow.textContent = isExpanded ? '▼' : '▶';
+                content.style.maxHeight = isExpanded ? '200px' : '0';
+                content.style.padding = isExpanded ? '8px' : '0 8px';
+            });
+        }
+        const reasoningTextElement = reasoningDropdown.querySelector('.reasoning-text');
+        if (reasoningTextElement) {
+            const formattedReasoning = formatTooltipDescription("", lastHistoryEntry.reasoning).reasoning;
+            reasoningTextElement.innerHTML = formattedReasoning;
+        }
+        reasoningDropdown.style.display = 'block';
+    }
+    /**
+     * Rehydrates the ScoreIndicator instance from cached data.
+     * @param {object} cachedData - The cached data object.
+     */
+    rehydrateFromCache(cachedData) {
+        this.score = cachedData.score;
+        this.description = cachedData.description;
+        this.reasoning = cachedData.reasoning;
+        this.questions = cachedData.questions || [];
+        this.status = cachedData.status || (cachedData.score !== null ? (cachedData.fromStorage ? 'cached' : 'rated') : 'error');
+        this.metadata = cachedData.metadata || null;
+        this.qaConversationHistory = cachedData.qaConversationHistory || [];
+        this.isPinned = cachedData.isPinned || false;
+        this.conversationHistory = [];
+        if (this.qaConversationHistory.length > 0) {
+            let currentQuestion = null;
+            let currentUploadedImages = [];
+            let startIndex = 0;
+            for(let i=0; i < this.qaConversationHistory.length; i++) {
+                if (this.qaConversationHistory[i].role === 'system' && this.qaConversationHistory[i].content[0].text.includes('FOLLOW_UP_SYSTEM_PROMPT')) {
+                    startIndex = i + 1;
+                    break;
+                }
+                if (i === 3 && this.qaConversationHistory[i].role === 'system') {
+                    startIndex = i + 1;
+                }
+            }
+            for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
+                const message = this.qaConversationHistory[i];
+                if (message.role === 'user') {
+                    const textContent = message.content.find(c => c.type === 'text');
+                    currentQuestion = textContent ? textContent.text : "[Question not found]";
+                    currentUploadedImages = message.content
+                        .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
+                        .map(c => c.image_url.url);
+                } else if (message.role === 'assistant' && currentQuestion) {
+                    const assistantTextContent = message.content.find(c => c.type === 'text');
+                    const assistantAnswer = assistantTextContent ? assistantTextContent.text : "[Answer not found]";
+                    const answerMatch = assistantAnswer.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                    const uiAnswer = answerMatch ? answerMatch[1].trim() : assistantAnswer;
+                    this.conversationHistory.push({
+                        question: currentQuestion,
+                        answer: uiAnswer,
+                        uploadedImages: currentUploadedImages,
+                        reasoning: ''
+                    });
+                    currentQuestion = null;
+                    currentUploadedImages = [];
+                }
+            }
+        }
+        if (this.isPinned) {
+            this.pinButton.innerHTML = '📍';
+            this.tooltipElement?.classList.add('pinned');
+        } else {
+            this.pinButton.innerHTML = '📌';
+            this.tooltipElement?.classList.remove('pinned');
+        }
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
+    }
+    _handleMetadataToggleClick(e) {
+        if (e) {
+            e.stopPropagation();
+        }
+        if (!this.metadataDropdown || !this.metadataContent || !this.metadataArrow) return;
+        const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
+        const isExpanded = this.metadataDropdown.classList.toggle('expanded');
+        this.metadataArrow.textContent = isExpanded ? '▼' : '▶';
+        if (isExpanded) {
+            this.metadataContent.style.maxHeight = '300px';
+            this.metadataContent.style.padding = '10px';
+        } else {
+            this.metadataContent.style.maxHeight = '0';
+            this.metadataContent.style.padding = '0 10px';
+        }
+        if (isMobileDevice() && this.tooltipScrollableContentElement) {
+            requestAnimationFrame(() => {
+                if (this.tooltipScrollableContentElement) {
+                    this.tooltipScrollableContentElement.scrollTop = scrollTop;
+                }
+            });
+        }
+    }
+    _handleRefreshClick(e) {
+        e && e.stopPropagation();
+        if (!this.tweetId) return;
+        if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
+            window.activeStreamingRequests[this.tweetId].abort();
+            delete window.activeStreamingRequests[this.tweetId];
+        }
+        if (tweetCache.has(this.tweetId)) {
+            tweetCache.delete(this.tweetId);
+        }
+        tweetProcessingState.clear(this.tweetId);
+        const currentArticle = this.findCurrentArticleElement();
+        this.destroy();
+        if (currentArticle && typeof scheduleTweetProcessing === 'function') {
+            scheduleTweetProcessing(currentArticle);
+        }
+    }
+    _handleRateClick(e) {
+        e && e.stopPropagation();
+        if (!this.tweetId) return;
+        this.update({
+            status: TweetRatingStatus.PENDING,
+            score: null,
+            description: 'Rating tweet...',
+            reasoning: '',
+            questions: []
+        });
+        const currentArticle = this.findCurrentArticleElement();
+        if (currentArticle && typeof scheduleTweetProcessing === 'function') {
+            tweetProcessingState.clear(this.tweetId);
+            scheduleTweetProcessing(currentArticle, true);
+        }
+    }
+    /**
+     * Handle scroll events in the conversation history area for granular auto-scroll.
+     */
+    _handleConversationScroll() {
+        if (!this.conversationContainerElement) return;
+        const isNearBottom = this.conversationContainerElement.scrollHeight - this.conversationContainerElement.scrollTop - this.conversationContainerElement.clientHeight < 40;
+        if (!isNearBottom) {
+            if (this.autoScrollConversation) {
+                this.autoScrollConversation = false;
+            }
+        } else {
+            if (!this.autoScrollConversation) {
+                this.autoScrollConversation = true;
+            }
+        }
+    }
+    /**
+     * Auto-scroll the conversation history area to the bottom if allowed.
+     */
+    _performConversationAutoScroll() {
+        if (!this.conversationContainerElement || !this.autoScrollConversation) return;
+        requestAnimationFrame(() => {
+            this.conversationContainerElement.scrollTo({
+                top: this.conversationContainerElement.scrollHeight,
+                behavior: 'instant'
+            });
+        });
+    }
+}
+const ScoreIndicatorRegistry = {
+    managers: new Map(),
+    /**
+     * Gets an existing manager or creates a new one.
+     * Ensures only one manager exists per tweetId.
+     * @param {string} tweetId
+     * @param {Element} [tweetArticle=null] - Required if creating a new instance.
+     * @returns {ScoreIndicator | null}
+     */
+    get(tweetId, tweetArticle = null) {
+        if (!tweetId) {
+            console.error("[Registry] Attempted to get instance with invalid tweetId:", tweetId);
+            return null;
+        }
+        if (this.managers.has(tweetId)) {
+            const existingManager = this.managers.get(tweetId);
+            return existingManager;
+        } else if (tweetArticle) {
+            try {
+                const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
+                const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
+                if (existingIndicator || existingTooltip) {
+                    console.warn(`[Registry] Found existing indicator/tooltip elements for tweet ${tweetId} outside registry. Removing them before creating new manager.`);
+                    existingIndicator?.remove();
+                    existingTooltip?.remove();
+                }
+                return new ScoreIndicator(tweetArticle);
+            } catch (e) {
+                console.error(`[Registry] Error creating ScoreIndicator for ${tweetId}:`, e);
+                return null;
+            }
+        }
+        return null;
+    },
+    /**
+     * Adds an instance to the registry (called by constructor).
+     * @param {string} tweetId
+     * @param {ScoreIndicator} instance
+     */
+    add(tweetId, instance) {
+        if (this.managers.has(tweetId)) {
+            console.warn(`[Registry] Overwriting existing manager for tweet ${tweetId}. This may indicate an issue.`);
+        }
+        this.managers.set(tweetId, instance);
+    },
+    /**
+     * Removes an instance from the registry (called by destroy method).
+     * @param {string} tweetId
+     */
+    remove(tweetId) {
+        if (this.managers.has(tweetId)) {
+            this.managers.delete(tweetId);
+        }
+    },
+    /**
+     * Cleans up managers whose corresponding tweet articles are no longer in the main timeline DOM.
+     */
+    cleanupOrphaned() {
+        let removedCount = 0;
+        const observedTimeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
+        if (!observedTimeline) return;
+        const visibleTweetIds = new Set();
+        observedTimeline.querySelectorAll('article[data-testid="tweet"]').forEach(article => {
+            const id = getTweetID(article);
+            if (id) visibleTweetIds.add(id);
+        });
+        for (const [tweetId, manager] of this.managers.entries()) {
+            const isConnected = manager.indicatorElement?.isConnected;
+            const isVisible = visibleTweetIds.has(tweetId);
+            if (!isConnected || !isVisible) {
+                manager.destroy();
+                removedCount++;
+            }
+        }
+    },
+    /**
+     * Destroys all managed indicators. Useful for full cleanup on script unload/major UI reset.
+     */
+    destroyAll() {
+        console.log(`[Registry] Destroying all ${this.managers.size} indicators.`);
+        [...this.managers.values()].forEach(manager => manager.destroy());
+        this.managers.clear();
+    }
+};
+function formatTooltipDescription(description = "", reasoning = "") {
+    let formattedDescription = description === "*Waiting for analysis...*" ? description :
+        (description || "*waiting for content...*")
+            .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
+            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+            .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>')
+            .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
+                const rows = match.trim().split('\n');
+                const headerRow = rows[0];
+                const bodyRows = rows.slice(2);
+                let html = '<table class="markdown-table">';
+                html += '<thead><tr>';
+                headerRow.slice(1, -1).split('|').forEach(cell => {
+                    html += `<th>${cell.trim()}</th>`;
+                });
+                html += '</tr></thead>';
+                html += '<tbody>';
+                bodyRows.forEach(rowStr => {
+                    if (!rowStr.trim()) return;
+                    html += '<tr>';
+                    rowStr.slice(1, -1).split('|').forEach(cell => {
+                        html += `<td>${cell.trim()}</td>`;
+                    });
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                return html;
+            })
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+    let formattedReasoning = '';
+    if (reasoning && reasoning.trim()) {
+        formattedReasoning = reasoning
+            .replace(/\\n/g, '\n')
+            .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+    }
+    return { description: formattedDescription, reasoning: formattedReasoning };
+}
+    // ----- ui/ui.js -----
+/**
+ * Toggles the visibility of an element and updates the corresponding toggle button text.
+ * @param {HTMLElement} element - The element to toggle.
+ * @param {HTMLElement} toggleButton - The button that controls the toggle.
+ * @param {string} openText - Text for the button when the element is open.
+ * @param {string} closedText - Text for the button when the element is closed.
+ */
+function toggleElementVisibility(element, toggleButton, openText, closedText) {
+    if (!element || !toggleButton) return;
+    const isCurrentlyHidden = element.classList.contains('hidden');
+    toggleButton.innerHTML = isCurrentlyHidden ? openText : closedText;
+    if (isCurrentlyHidden) {
+        element.style.display = 'flex';
+        element.offsetHeight;
+        element.classList.remove('hidden');
+    } else {
+        element.classList.add('hidden');
+        setTimeout(() => {
+            if (element.classList.contains('hidden')) {
+                element.style.display = 'none';
+            }
+        }, 500);
+    }
+    if (element.id === 'settings-container' && toggleButton.id === 'settings-toggle') {
+        if (isMobileDevice()) {
+            if (element.classList.contains('hidden')) {
+                toggleButton.style.opacity = '0.3';
+            } else {
+                toggleButton.style.opacity = '';
+            }
+        } else {
+            toggleButton.style.opacity = '';
+        }
+    }
+    if (element.id === 'tweet-filter-container') {
+        const filterToggle = document.getElementById('filter-toggle');
+        if (filterToggle) {
+            if (!isCurrentlyHidden) {
+                setTimeout(() => {
+                    filterToggle.style.display = 'block';
+                }, 500);
+            } else {
+                filterToggle.style.display = 'none';
+            }
+        }
+    }
+}
+/**
+ * Injects the UI elements from the HTML resource into the page.
+ */
+function injectUI() {
+    let menuHTML;
+    if (typeof MENU !== 'undefined' && MENU) {
+        menuHTML = MENU;
+    } else {
+        menuHTML = browserGet('menuHTML');
+    }
+    if (!menuHTML) {
+        console.error('Failed to load Menu.html resource!');
+        showStatus('Error: Could not load UI components.');
+        return null;
+    }
+    const containerId = 'tweetfilter-root-container';
+    let uiContainer = document.getElementById(containerId);
+    if (uiContainer) {
+        console.warn('UI container already exists. Skipping injection.');
+        return uiContainer;
+    }
+    uiContainer = document.createElement('div');
+    uiContainer.id = containerId;
+    uiContainer.innerHTML = menuHTML;
+    document.body.appendChild(uiContainer);
+    console.log('TweetFilter UI Injected from HTML resource.');
+    const versionInfo = uiContainer.querySelector('#version-info');
+    if (versionInfo) {
+        versionInfo.textContent = `Twitter De-Sloppifier v${VERSION}`;
+    }
+    return uiContainer;
+}
+/**
+ * Initializes all UI event listeners using event delegation.
+ * @param {HTMLElement} uiContainer - The root container element for the UI.
+ */
+function initializeEventListeners(uiContainer) {
+    if (!uiContainer) {
+        console.error('UI Container not found for event listeners.');
+        return;
+    }
+    console.log('Wiring UI events...');
+    const settingsContainer = uiContainer.querySelector('#settings-container');
+    const filterContainer = uiContainer.querySelector('#tweet-filter-container');
+    const settingsToggleBtn = uiContainer.querySelector('#settings-toggle');
+    const filterToggleBtn = uiContainer.querySelector('#filter-toggle');
+    uiContainer.addEventListener('click', (event) => {
+        const target = event.target;
+        const actionElement = target.closest('[data-action]');
+        const action = actionElement?.dataset.action;
+        const setting = target.dataset.setting;
+        const paramName = target.closest('.parameter-row')?.dataset.paramName;
+        const tab = target.dataset.tab;
+        const toggleTargetId = target.closest('[data-toggle]')?.dataset.toggle;
+        if (action) {
+            switch (action) {
+                case 'close-filter':
+                    toggleElementVisibility(filterContainer, filterToggleBtn, 'Filter Slider', 'Filter Slider');
+                    break;
+                case 'toggle-settings':
+                case 'close-settings':
+                    toggleElementVisibility(settingsContainer, settingsToggleBtn, '<span style="font-size: 14px;">✕</span> Close', '<span style="font-size: 14px;">⚙️</span> Settings');
+                    break;
+                case 'save-api-key':
+                    saveApiKey();
+                    break;
+                case 'clear-cache':
+                    clearTweetRatingsAndRefreshUI();
+                    break;
+                case 'reset-settings':
+                    resetSettings(isMobileDevice());
+                    break;
+                case 'save-instructions':
+                    saveInstructions();
+                    break;
+                case 'add-handle':
+                    addHandleFromInput();
+                    break;
+                case 'clear-instructions-history':
+                    clearInstructionsHistory();
+                    break;
+                case 'export-cache':
+                    exportCacheToJson();
+                    break;
+            }
+        }
+        if (target.classList.contains('remove-handle')) {
+            const handleItem = target.closest('.handle-item');
+            const handleTextElement = handleItem?.querySelector('.handle-text');
+            if (handleTextElement) {
+                const handle = handleTextElement.textContent.substring(1);
+                removeHandleFromBlacklist(handle);
+            }
+        }
+        if (tab) {
+            switchTab(tab);
+        }
+        if (toggleTargetId) {
+            toggleAdvancedOptions(toggleTargetId);
+        }
+    });
+    uiContainer.addEventListener('input', (event) => {
+        const target = event.target;
+        const setting = target.dataset.setting;
+        const paramName = target.closest('.parameter-row')?.dataset.paramName;
+        if (setting) {
+            handleSettingChange(target, setting);
+        }
+        if (paramName) {
+            handleParameterChange(target, paramName);
+        }
+        if (target.id === 'tweet-filter-slider') {
+            handleFilterSliderChange(target);
+        }
+        if (target.id === 'tweet-filter-value') {
+            handleFilterValueInput(target);
+        }
+    });
+    uiContainer.addEventListener('change', (event) => {
+        const target = event.target;
+        const setting = target.dataset.setting;
+        if (setting === 'enableImageDescriptions') {
+            handleSettingChange(target, setting);
+        }
+    });
+    if (filterToggleBtn) {
+        filterToggleBtn.onclick = () => {
+            if (filterContainer) {
+                filterContainer.style.display = 'flex';
+                filterContainer.offsetHeight;
+                filterContainer.classList.remove('hidden');
+            }
+            filterToggleBtn.style.display = 'none';
+        };
+    }
+    document.addEventListener('click', closeAllSelectBoxes);
+    const showFreeModelsCheckbox = uiContainer.querySelector('#show-free-models');
+    if (showFreeModelsCheckbox) {
+        showFreeModelsCheckbox.addEventListener('change', function () {
+            showFreeModels = this.checked;
+            browserSet('showFreeModels', showFreeModels);
+            refreshModelsUI();
+        });
+    }
+    const modelFamilyFilterSelect = uiContainer.querySelector('#model-family-filter');
+    if (modelFamilyFilterSelect) {
+        modelFamilyFilterSelect.addEventListener('change', function () {
+            modelFamilyFilter = normalizeModelFamilyFilter(this.value);
+            browserSet('modelFamilyFilter', modelFamilyFilter);
+            refreshModelsUI();
+        });
+    }
+    const providerSortSelect = uiContainer.querySelector('#provider-sort');
+    if (providerSortSelect) {
+        providerSortSelect.addEventListener('change', function () {
+            providerSort = this.value;
+            browserSet('providerSort', providerSort);
+        });
+    }
+    console.log('UI events wired.');
+}
+/** Saves the API key from the input field. */
+function saveApiKey() {
+    const apiKeyInput = document.getElementById('openrouter-api-key');
+    const apiKey = apiKeyInput.value.trim();
+    let previousAPIKey = browserGet('openrouter-api-key', '').length > 0 ? true : false;
+    if (apiKey) {
+        if (!previousAPIKey) {
+            resetSettings(true);
+        }
+        browserSet('openrouter-api-key', apiKey);
+        showStatus('API key saved successfully!');
+        fetchAvailableModels();
+        location.reload();
+    } else {
+        showStatus('Please enter a valid API key');
+    }
+}
+/**
+ * Exports the current tweet cache to a JSON file.
+ */
+function exportCacheToJson() {
+    if (!tweetCache) {
+        showStatus('Error: Tweet cache not found.', 'error');
+        return;
+    }
+    try {
+        const cacheData = tweetCache.cache;
+        if (!cacheData || Object.keys(cacheData).length === 0) {
+            showStatus('Cache is empty. Nothing to export.', 'warning');
+            return;
+        }
+        const jsonString = JSON.stringify(cacheData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.setAttribute('download', `tweet-filter-cache-${timestamp}.json`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showStatus(`Cache exported successfully (${Object.keys(cacheData).length} items).`);
+    } catch (error) {
+        console.error('Error exporting cache:', error);
+        showStatus('Error exporting cache. Check console for details.', 'error');
+    }
+}
+/** Clears tweet ratings and updates the relevant UI parts. */
+function clearTweetRatingsAndRefreshUI() {
+    if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
+        tweetCache.clear(true);
+        tweetProcessingState.resetPending();
+        if (window.threadRelationships) {
+            window.threadRelationships = {};
+            browserSet('threadRelationships', '{}');
+            console.log('Cleared thread relationships cache');
+        }
+        showStatus('All cached ratings and thread relationships cleared!');
+        console.log('Cleared all tweet ratings and thread relationships');
+        if (observedTargetNode) {
+            observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
+                tweet.removeAttribute('data-slop-score');
+                tweet.removeAttribute('data-rating-status');
+                tweet.removeAttribute('data-rating-description');
+                tweet.removeAttribute('data-cached-rating');
+                const indicator = tweet.querySelector('.score-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+                const tweetId = getTweetID(tweet);
+                if (tweetId) {
+                    tweetProcessingState.clear(tweetId);
+                    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+                    if (indicatorInstance) {
+                        indicatorInstance.destroy();
+                    }
+                    scheduleTweetProcessing(tweet);
+                }
+            });
+        }
+        document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
+            delete conversation.dataset.threadMapping;
+            delete conversation.dataset.threadMappedAt;
+            delete conversation.dataset.threadMappingInProgress;
+            delete conversation.dataset.threadHist;
+            delete conversation.dataset.threadMediaUrls;
+        });
+    }
+}
+/** Adds a handle from the input field to the blacklist. */
+function addHandleFromInput() {
+    const handleInput = document.getElementById('handle-input');
+    const handle = handleInput.value.trim();
+    if (handle) {
+        addHandleToBlacklist(handle);
+        handleInput.value = '';
+    }
+}
+/**
+ * Handles changes to general setting inputs/toggles.
+ * @param {HTMLElement} target - The input/toggle element that changed.
+ * @param {string} settingName - The name of the setting (from data-setting).
+ */
+function handleSettingChange(target, settingName) {
+    let value;
+    if (target.type === 'checkbox') {
+        value = target.checked;
+    } else {
+        value = target.value;
+    }
+    switch (settingName) {
+        case 'enableImageDescriptions':
+            enableImageDescriptions = value;
+            break;
+        case 'enableStreaming':
+            enableStreaming = value;
+            break;
+        case 'enableWebSearch':
+            enableWebSearch = value;
+            break;
+        case 'enableAutoRating':
+            enableAutoRating = value;
+            break;
+        case 'reasoningEffort':
+            reasoningEffort = value;
+            break;
+        case 'showFreeModels':
+            showFreeModels = value;
+            break;
+        case 'modelFamilyFilter':
+            modelFamilyFilter = normalizeModelFamilyFilter(value);
+            value = modelFamilyFilter;
+            break;
+        case 'providerSort':
+            providerSort = value;
+            break;
+        case 'userDefinedInstructions':
+            userDefinedInstructions = value;
+            break;
+        default:
+            break;
+    }
+    browserSet(settingName, value);
+    if (settingName === 'enableImageDescriptions') {
+        const imageModelContainer = document.getElementById('image-model-container');
+        if (imageModelContainer) {
+            imageModelContainer.style.display = value ? 'block' : 'none';
+        }
+        showStatus('Image descriptions ' + (value ? 'enabled' : 'disabled'));
+    }
+    if (settingName === 'enableWebSearch') {
+        showStatus('Web search for rating model ' + (value ? 'enabled' : 'disabled'));
+    }
+    if (settingName === 'reasoningEffort') {
+        showStatus(value === 'none' ? 'Reasoning disabled' : `Reasoning effort set to ${value}`);
+    }
+    if (settingName === 'enableAutoRating') {
+        showStatus('Auto-rating ' + (value ? 'enabled' : 'disabled'));
+    }
+}
+/**
+ * Handles changes to parameter control sliders/number inputs.
+ * @param {HTMLElement} target - The slider or number input element.
+ * @param {string} paramName - The name of the parameter (from data-param-name).
+ */
+function handleParameterChange(target, paramName) {
+    const row = target.closest('.parameter-row');
+    if (!row) return;
+    const slider = row.querySelector('.parameter-slider');
+    const valueInput = row.querySelector('.parameter-value');
+    const min = parseFloat(slider.min);
+    const max = parseFloat(slider.max);
+    let newValue = parseFloat(target.value);
+    if (target.type === 'number' && !isNaN(newValue)) {
+        newValue = Math.max(min, Math.min(max, newValue));
+    }
+    if (slider && valueInput) {
+        slider.value = newValue;
+        valueInput.value = newValue;
+    }
+    switch (paramName) {
+        case 'modelTemperature':
+            modelTemperature = newValue;
+            break;
+        case 'modelTopP':
+            modelTopP = newValue;
+            break;
+        case 'imageModelTemperature':
+            imageModelTemperature = newValue;
+            break;
+        case 'imageModelTopP':
+            imageModelTopP = newValue;
+            break;
+        case 'maxTokens':
+            maxTokens = newValue;
+            break;
+        default:
+            break;
+    }
+    browserSet(paramName, newValue);
+}
+/**
+ * Handles changes to the main filter slider.
+ * @param {HTMLElement} slider - The filter slider element.
+ */
+function handleFilterSliderChange(slider) {
+    const valueInput = document.getElementById('tweet-filter-value');
+    currentFilterThreshold = parseInt(slider.value, 10);
+    if (valueInput) {
+        valueInput.value = currentFilterThreshold.toString();
+    }
+    const percentage = (currentFilterThreshold / 10) * 100;
+    slider.style.setProperty('--slider-percent', `${percentage}%`);
+    browserSet('filterThreshold', currentFilterThreshold);
+    applyFilteringToAll();
+}
+/**
+ * Handles changes to the numeric input for filter threshold.
+ * @param {HTMLElement} input - The numeric input element.
+ */
+function handleFilterValueInput(input) {
+    let value = parseInt(input.value, 10);
+    value = Math.max(0, Math.min(10, value));
+    input.value = value.toString();
+    const slider = document.getElementById('tweet-filter-slider');
+    if (slider) {
+        slider.value = value.toString();
+        const percentage = (value / 10) * 100;
+        slider.style.setProperty('--slider-percent', `${percentage}%`);
+    }
+    currentFilterThreshold = value;
+    browserSet('filterThreshold', currentFilterThreshold);
+    applyFilteringToAll();
+}
+/**
+ * Switches the active tab in the settings panel.
+ * @param {string} tabName - The name of the tab to activate (from data-tab).
+ */
+function switchTab(tabName) {
+    const settingsContent = document.querySelector('#settings-container .settings-content');
+    if (!settingsContent) return;
+    const tabs = settingsContent.querySelectorAll('.tab-content');
+    const buttons = settingsContent.querySelectorAll('.tab-navigation .tab-button');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    buttons.forEach(btn => btn.classList.remove('active'));
+    const tabToShow = settingsContent.querySelector(`#${tabName}-tab`);
+    const buttonToActivate = settingsContent.querySelector(`.tab-navigation .tab-button[data-tab="${tabName}"]`);
+    if (tabToShow) tabToShow.classList.add('active');
+    if (buttonToActivate) buttonToActivate.classList.add('active');
+}
+/**
+ * Toggles the visibility of advanced options sections.
+ * @param {string} contentId - The ID of the content element to toggle.
+ */
+function toggleAdvancedOptions(contentId) {
+    const content = document.getElementById(contentId);
+    const toggle = document.querySelector(`[data-toggle="${contentId}"]`);
+    if (!content || !toggle) return;
+    const icon = toggle.querySelector('.advanced-toggle-icon');
+    const isExpanded = content.classList.toggle('expanded');
+    if (icon) {
+        icon.classList.toggle('expanded', isExpanded);
+    }
+    if (isExpanded) {
+        content.style.maxHeight = content.scrollHeight + 'px';
+    } else {
+        content.style.maxHeight = '0';
+    }
+}
+/**
+ * Refreshes the entire settings UI to reflect current settings.
+ */
+function refreshSettingsUI() {
+    document.querySelectorAll('[data-setting]').forEach(input => {
+        const settingName = input.dataset.setting;
+        const value = browserGet(settingName, DEFAULT_SETTINGS[settingName]);
+        if (input.type === 'checkbox') {
+            input.checked = coerceBoolean(value, DEFAULT_SETTINGS[settingName]);
+        } else {
+            input.value = value;
+        }
+    });
+    document.querySelectorAll('.parameter-row[data-param-name]').forEach(row => {
+        const paramName = row.dataset.paramName;
+        const slider = row.querySelector('.parameter-slider');
+        const valueInput = row.querySelector('.parameter-value');
+        const value = browserGet(paramName, window[paramName]);
+        if (slider) slider.value = value;
+        if (valueInput) valueInput.value = value;
+    });
+    const filterSlider = document.getElementById('tweet-filter-slider');
+    const filterValueInput = document.getElementById('tweet-filter-value');
+    const currentThreshold = appSettings.getInteger('filterThreshold');
+    if (filterSlider && filterValueInput) {
+        filterSlider.value = currentThreshold;
+        filterValueInput.value = currentThreshold;
+        const percentage = (parseInt(currentThreshold, 10) / 10) * 100;
+        filterSlider.style.setProperty('--slider-percent', `${percentage}%`);
+    }
+    refreshHandleList(document.getElementById('handle-list'));
+    refreshModelsUI();
+    document.querySelectorAll('.advanced-content').forEach(content => {
+        if (!content.classList.contains('expanded')) {
+            content.style.maxHeight = '0';
+        }
+    });
+    document.querySelectorAll('.advanced-toggle-icon.expanded').forEach(icon => {
+        if (!icon.closest('.advanced-toggle')?.nextElementSibling?.classList.contains('expanded')) {
+            icon.classList.remove('expanded');
+        }
+    });
+    refreshInstructionsHistory();
+}
+/**
+ * Refreshes the handle list UI.
+ * @param {HTMLElement} listElement - The list element to refresh.
+ */
+function refreshHandleList(listElement) {
+    if (!listElement) return;
+    listElement.innerHTML = '';
+    if (blacklistedHandles.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = 'padding: 8px; opacity: 0.7; font-style: italic;';
+        emptyMsg.textContent = 'No handles added yet';
+        listElement.appendChild(emptyMsg);
+        return;
+    }
+    blacklistedHandles.forEach(handle => {
+        const item = document.createElement('div');
+        item.className = 'handle-item';
+        const handleText = document.createElement('div');
+        handleText.className = 'handle-text';
+        handleText.textContent = '@' + handle;
+        item.appendChild(handleText);
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-handle';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove from list';
+        item.appendChild(removeBtn);
+        listElement.appendChild(item);
+    });
+}
+/**
+ * Updates the model selection dropdowns based on availableModels.
+ */
+function getModelSlug(model) {
+    return model?.slug || model?.canonical_slug || model?.endpoint?.model_variant_slug || model?.id || model?.name || '';
+}
+const MODEL_PROVIDER_FALLBACKS = ['openai', 'anthropic', 'google', 'qwen'];
+function getModelProvider(model) {
+    const modelSlug = getModelSlug(model);
+    if (!modelSlug) return '';
+    return (modelSlug.split('/')[0] || '').replace(/^~/, '').toLowerCase().trim();
+}
+function getAvailableModelProviders() {
+    return [...new Set(availableModels.map(getModelProvider).filter(Boolean))].sort();
+}
+function formatProviderName(provider) {
+    return provider
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+function normalizeModelFamilyFilter(filterValue) {
+    const normalizedValue = (filterValue || '').toString().toLowerCase().trim();
+    if (!normalizedValue) return '';
+    return normalizedValue.replace(/^~/, '');
+}
+function syncModelFamilyFilterOptions(selectElement) {
+    if (!selectElement) return;
+    const providers = getAvailableModelProviders();
+    const providerOptions = providers.length > 0 ? providers : MODEL_PROVIDER_FALLBACKS;
+    const storedFilter = normalizeModelFamilyFilter(browserGet('modelFamilyFilter', modelFamilyFilter || ''));
+    modelFamilyFilter = providers.length > 0 && storedFilter && !providers.includes(storedFilter) ? '' : storedFilter;
+    selectElement.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = 'All Providers';
+    selectElement.appendChild(allOption);
+    providerOptions.forEach(provider => {
+        const option = document.createElement('option');
+        option.value = provider;
+        option.textContent = formatProviderName(provider);
+        selectElement.appendChild(option);
+    });
+    selectElement.value = storedFilter;
+    if (selectElement.value !== modelFamilyFilter) {
+        selectElement.value = modelFamilyFilter;
+    }
+    if (browserGet('modelFamilyFilter', '') !== modelFamilyFilter) {
+        browserSet('modelFamilyFilter', modelFamilyFilter);
+    }
+}
+function refreshModelsUI() {
+    const modelSelectContainer = document.getElementById('model-select-container');
+    const imageModelSelectContainer = document.getElementById('image-model-select-container');
+    const modelFamilyFilterSelect = document.getElementById('model-family-filter');
+    listedModels = [...availableModels];
+    if (!showFreeModels) {
+        listedModels = listedModels.filter(model => !getModelSlug(model).endsWith(':free'));
+    }
+    listedModels.sort((a, b) => (Number(b.created) || 0) - (Number(a.created) || 0));
+    syncModelFamilyFilterOptions(modelFamilyFilterSelect);
+    const familyFilteredModels = modelFamilyFilter
+        ? listedModels.filter(model => getModelProvider(model) === modelFamilyFilter)
+        : listedModels;
+    if (modelSelectContainer) {
+        modelSelectContainer.innerHTML = '';
+        createCustomSelect(
+            modelSelectContainer,
+            'model-selector',
+            familyFilteredModels.map(model => ({ value: getModelSlug(model), label: formatModelLabel(model) })),
+            selectedModel,
+            (newValue) => {
+                selectedModel = newValue;
+                browserSet('selectedModel', selectedModel);
+                showStatus('Rating model updated');
+            },
+            'Search rating models...'
+        );
+    }
+    if (imageModelSelectContainer) {
+        const visionModels = listedModels.filter(model =>
+            model.input_modalities?.includes('image') ||
+            model.architecture?.input_modalities?.includes('image') ||
+            model.architecture?.modality?.includes('image')
+        );
+        imageModelSelectContainer.innerHTML = '';
+        createCustomSelect(
+            imageModelSelectContainer,
+            'image-model-selector',
+            visionModels.map(model => ({ value: getModelSlug(model), label: formatModelLabel(model) })),
+            selectedImageModel,
+            (newValue) => {
+                selectedImageModel = newValue;
+                browserSet('selectedImageModel', selectedImageModel);
+                showStatus('Image model updated');
+            },
+            'Search vision models...'
+        );
+    }
+}
+/**
+ * Formats a model object into a string for display in dropdowns.
+ * @param {Object} model - The model object from the API.
+ * @returns {string} A formatted label string.
+ */
+function formatModelLabel(model) {
+    let label = getModelSlug(model) || 'Unknown Model';
+    let pricingInfo = '';
+    const pricing = model.endpoint?.pricing || model.pricing;
+    if (pricing) {
+        const promptPrice = parseFloat(pricing.prompt);
+        const completionPrice = parseFloat(pricing.completion);
+        if (!isNaN(promptPrice)) {
+            pricingInfo += ` - $${(promptPrice * 1e6).toFixed(4)}/mil. tok.-in`;
+            if (!isNaN(completionPrice) && completionPrice !== promptPrice) {
+                pricingInfo += ` $${(completionPrice * 1e6).toFixed(4)}/mil. tok.-out`;
+            }
+        } else if (!isNaN(completionPrice)) {
+            pricingInfo += ` - $${(completionPrice * 1e6).toFixed(4)}/mil. tok.-out`;
+        }
+    }
+    const isVision = model.input_modalities?.includes('image') ||
+        model.architecture?.input_modalities?.includes('image') ||
+        model.architecture?.modality?.includes('image');
+    if (isVision) {
+        label = '🖼️ ' + label;
+    }
+    return label + pricingInfo;
+}
+/**
+ * Creates a custom select dropdown with search functionality.
+ * @param {HTMLElement} container - Container to append the custom select to.
+ * @param {string} id - ID for the root custom-select div.
+ * @param {Array<{value: string, label: string}>} options - Options for the dropdown.
+ * @param {string} initialSelectedValue - Initially selected value.
+ * @param {Function} onChange - Callback function when selection changes.
+ * @param {string} searchPlaceholder - Placeholder text for the search input.
+ */
+function createCustomSelect(container, id, options, initialSelectedValue, onChange, searchPlaceholder) {
+    let currentSelectedValue = initialSelectedValue;
+    const customSelect = document.createElement('div');
+    customSelect.className = 'custom-select';
+    customSelect.id = id;
+    const selectSelected = document.createElement('div');
+    selectSelected.className = 'select-selected';
+    const selectItems = document.createElement('div');
+    selectItems.className = 'select-items';
+    selectItems.style.display = 'none';
+    const searchField = document.createElement('div');
+    searchField.className = 'search-field';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'search-input';
+    searchInput.placeholder = searchPlaceholder || 'Search...';
+    searchField.appendChild(searchInput);
+    selectItems.appendChild(searchField);
+    function renderOptions(filter = '') {
+        while (selectItems.childNodes.length > 1) {
+            selectItems.removeChild(selectItems.lastChild);
+        }
+        const filteredOptions = options.filter(opt =>
+            opt.label.toLowerCase().includes(filter.toLowerCase())
+        );
+        if (filteredOptions.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.textContent = 'No matches found';
+            noResults.style.cssText = 'opacity: 0.7; font-style: italic; padding: 10px; text-align: center; cursor: default;';
+            selectItems.appendChild(noResults);
+        }
+        filteredOptions.forEach(option => {
+            const optionDiv = document.createElement('div');
+            optionDiv.textContent = option.label;
+            optionDiv.dataset.value = option.value;
+            if (option.value === currentSelectedValue) {
+                optionDiv.classList.add('same-as-selected');
+            }
+            optionDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                currentSelectedValue = option.value;
+                selectSelected.textContent = option.label;
+                selectItems.style.display = 'none';
+                selectSelected.classList.remove('select-arrow-active');
+                selectItems.querySelectorAll('div[data-value]').forEach(div => {
+                    div.classList.toggle('same-as-selected', div.dataset.value === currentSelectedValue);
+                });
+                onChange(currentSelectedValue);
+            });
+            selectItems.appendChild(optionDiv);
+        });
+    }
+    const initialOption = options.find(opt => opt.value === currentSelectedValue);
+    selectSelected.textContent = initialOption ? initialOption.label : 'Select an option';
+    customSelect.appendChild(selectSelected);
+    customSelect.appendChild(selectItems);
+    container.appendChild(customSelect);
+    renderOptions();
+    searchInput.addEventListener('input', () => renderOptions(searchInput.value));
+    searchInput.addEventListener('click', e => e.stopPropagation());
+    selectSelected.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeAllSelectBoxes(customSelect);
+        const isHidden = selectItems.style.display === 'none';
+        selectItems.style.display = isHidden ? 'block' : 'none';
+        selectSelected.classList.toggle('select-arrow-active', isHidden);
+        if (isHidden) {
+            searchInput.focus();
+            searchInput.select();
+            renderOptions(searchInput.value);
+        }
+    });
+}
+/** Closes all custom select dropdowns except the one passed in. */
+function closeAllSelectBoxes(exceptThisOne = null) {
+    document.querySelectorAll('.custom-select').forEach(select => {
+        if (select === exceptThisOne) return;
+        const items = select.querySelector('.select-items');
+        const selected = select.querySelector('.select-selected');
+        if (items) items.style.display = 'none';
+        if (selected) selected.classList.remove('select-arrow-active');
+    });
+}
+/**
+ * Resets all configurable settings to their default values.
+ */
+function resetSettings(noconfirm = false) {
+    if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
+        tweetCache.clear();
+        const preservedHandles = [...blacklistedHandles];
+        const defaults = appSettings.reset();
+        selectedModel = defaults.selectedModel;
+        selectedImageModel = defaults.selectedImageModel;
+        showFreeModels = defaults.showFreeModels;
+        modelFamilyFilter = defaults.modelFamilyFilter;
+        providerSort = defaults.providerSort;
+        blacklistedHandles = appSettings.saveHandles(preservedHandles);
+        enableImageDescriptions = defaults.enableImageDescriptions;
+        enableStreaming = defaults.enableStreaming;
+        enableWebSearch = defaults.enableWebSearch;
+        enableAutoRating = defaults.enableAutoRating;
+        reasoningEffort = defaults.reasoningEffort;
+        modelTemperature = defaults.modelTemperature;
+        modelTopP = defaults.modelTopP;
+        imageModelTemperature = defaults.imageModelTemperature;
+        imageModelTopP = defaults.imageModelTopP;
+        maxTokens = defaults.maxTokens;
+        currentFilterThreshold = defaults.filterThreshold;
+        userDefinedInstructions = defaults.userDefinedInstructions;
+        refreshSettingsUI();
+        fetchAvailableModels();
+        showStatus('Settings reset to defaults');
+    }
+}
+/**
+ * Adds a handle to the blacklist, saves, and refreshes the UI.
+ * @param {string} handle - The Twitter handle to add (with or without @).
+ */
+function addHandleToBlacklist(handle) {
+    handle = handle.trim().replace(/^@/, '');
+    if (handle === '' || blacklistedHandles.includes(handle)) {
+        showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
+        return;
+    }
+    blacklistedHandles = appSettings.saveHandles([...blacklistedHandles, handle]);
+    refreshHandleList(document.getElementById('handle-list'));
+    showStatus(`Added @${handle} to auto-rate list.`);
+}
+/**
+ * Removes a handle from the blacklist, saves, and refreshes the UI.
+ * @param {string} handle - The Twitter handle to remove (without @).
+ */
+function removeHandleFromBlacklist(handle) {
+    const index = blacklistedHandles.indexOf(handle);
+    if (index > -1) {
+        blacklistedHandles.splice(index, 1);
+        blacklistedHandles = appSettings.saveHandles(blacklistedHandles);
+        refreshHandleList(document.getElementById('handle-list'));
+        showStatus(`Removed @${handle} from auto-rate list.`);
+    } else console.warn(`Attempted to remove non-existent handle: ${handle}`);
+}
+/**
+ * Main initialization function for the UI module.
+ */
+function initialiseUI() {
+    const uiContainer = injectUI();
+    if (!uiContainer) return;
+    initializeEventListeners(uiContainer);
+    refreshSettingsUI();
+    fetchAvailableModels();
+    initializeFloatingCacheStats();
+    setInterval(updateCacheStatsUI, 3000);
+    if (!window.activeStreamingRequests) window.activeStreamingRequests = {};
+}
+/**
+ * Initializes event listeners and functionality for the floating cache stats badge.
+ * This provides real-time feedback when tweets are rated and cached,
+ * even when the settings panel is not open.
+ */
+function initializeFloatingCacheStats() {
+    const statsBadge = document.getElementById('tweet-filter-stats-badge');
+    if (!statsBadge) return;
+    statsBadge.title = 'Click to open settings';
+    statsBadge.addEventListener('click', () => {
+        const settingsToggle = document.getElementById('settings-toggle');
+        if (settingsToggle) {
+            settingsToggle.click();
+        }
+    });
+    let fadeTimeout;
+    const resetFadeTimeout = () => {
+        clearTimeout(fadeTimeout);
+        statsBadge.style.opacity = '1';
+        fadeTimeout = setTimeout(() => {
+            statsBadge.style.opacity = '0.3';
+        }, 5000);
+    };
+    statsBadge.addEventListener('mouseenter', () => {
+        statsBadge.style.opacity = '1';
+        clearTimeout(fadeTimeout);
+    });
+    statsBadge.addEventListener('mouseleave', resetFadeTimeout);
+    resetFadeTimeout();
+    updateCacheStatsUI();
+}
+    // ----- ratingEngine.js -----
+/**
+ * Applies filtering to a single tweet by replacing its contents with a minimal placeholder.
+ * Also updates the rating indicator.
+ * @param {Element} tweetArticle - The tweet element.
+ */
+function filterSingleTweet(tweetArticle) {
+    const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
+    if (!cell) {
+        console.warn("Couldn't find cellInnerDiv for tweet");
+        return;
+    }
+    const handles = getUserHandles(tweetArticle);
+    const authorHandle = handles.length > 0 ? handles[0] : '';
+    const tweetText = getTweetText(tweetArticle) || '';
+    const mediaUrls = extractMediaLinks(tweetArticle);
+    const tid = getTweetID(tweetArticle);
+    const cacheUpdateData = {
+        authorHandle: authorHandle,
+        individualTweetText: tweetText,
+        individualMediaUrls: mediaUrls,
+        timestamp: Date.now()
+    };
+    tweetCache.set(tid, cacheUpdateData, false);
+    if (authorHandle && adAuthorCache.has(authorHandle)) {
+        const tweetId = getTweetID(tweetArticle);
+        if (tweetId) {
+            ScoreIndicatorRegistry.get(tweetId)?.destroy();
+        }
+        cell.innerHTML = '';
+        cell.dataset.filtered = 'true';
+        cell.dataset.isAd = 'true';
+        return;
+    }
+    cell.dataset.tweetText = tweetText;
+    cell.dataset.authorHandle = authorHandle;
+    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
+    cell.dataset.tweetId = tid;
+    const score = parseInt(tweetArticle.dataset.slopScore || '9', 10);
+    const tweetId = getTweetID(tweetArticle);
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+    indicatorInstance?.ensureIndicatorAttached();
+    const currentFilterThreshold = appSettings.getInteger('filterThreshold');
+    const ratingStatus = tweetArticle.dataset.ratingStatus;
+    const isAuthorCurrentlyBlacklisted = isUserBlacklisted(authorHandle);
+    if (indicatorInstance) {
+        indicatorInstance.setAuthorBlacklistState(isAuthorCurrentlyBlacklisted);
+    }
+    if (isAuthorCurrentlyBlacklisted) {
+        delete cell.dataset.filtered;
+        cell.dataset.authorBlacklisted = 'true';
+        if (indicatorInstance) {
+            indicatorInstance.refreshIndicatorUI();
+        }
+    } else {
+        delete cell.dataset.authorBlacklisted;
+        if (isActiveTweetStatus(ratingStatus)) {
+            delete cell.dataset.filtered;
+        } else if (isNaN(score) || score < currentFilterThreshold) {
+            const existingInstanceToDestroy = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (existingInstanceToDestroy) {
+                existingInstanceToDestroy.destroy();
+            }
+            cell.innerHTML = '';
+            cell.dataset.filtered = 'true';
+        } else {
+            delete cell.dataset.filtered;
+            if (indicatorInstance) {
+                indicatorInstance.refreshIndicatorUI();
+            }
+        }
+    }
+}
+/**
+ * Applies a cached rating (if available) to a tweet article.
+ * Also sets the rating status to 'rated' and updates the indicator.
+ * @param {Element} tweetArticle - The tweet element.
+ * @returns {boolean} True if a cached rating was applied.
+ */
+function applyTweetCachedRating(tweetArticle) {
+    const tweetId = getTweetID(tweetArticle);
+    const cachedRating = tweetCache.get(tweetId);
+    if (cachedRating) {
+        if (cachedRating.streaming === true &&
+            (cachedRating.score === undefined || cachedRating.score === null)) {
+            return false;
+        }
+        if (cachedRating.score !== undefined && cachedRating.score !== null) {
+            tweetArticle.dataset.slopScore = cachedRating.score.toString();
+            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED;
+            tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
+            tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (indicatorInstance) {
+                indicatorInstance.rehydrateFromCache(cachedRating);
+            } else {
+                console.warn(`[applyTweetCachedRating] Could not get/create ScoreIndicator for ${tweetId} to apply cached rating.`);
+                return false;
+            }
+            filterSingleTweet(tweetArticle);
+            tweetProcessingState.resetRetries(tweetId);
+            return true;
+        } else if (!cachedRating.streaming) {
+            //cached object with score undefined or null, and not pending rating.
+            tweetCache.delete(tweetId);
+            return false;
+        }
+    }
+    return false;
+}
+/**
+ * Checks if a given user handle is in the blacklist.
+ * @param {string} handle - The Twitter handle.
+ * @returns {boolean} True if blacklisted, false otherwise.
+ */
+function isUserBlacklisted(handle) {
+    if (!handle) return false;
+    handle = handle.toLowerCase().trim();
+    return blacklistedHandles.some(h => h.toLowerCase().trim() === handle);
+}
+const getFullContextPromises = new Map();
+function isValidFinalState(status) {
+    return isFinalTweetStatus(status);
+}
+function isValidInterimState(status) {
+    return isActiveTweetStatus(status);
+}
+async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
+    let processingSuccessful = false;
+    try {
+        const apiKey = browserGet('openrouter-api-key', '');
+        if (apiKey) {
+            let score = 5;
+            let description = "";
+            let reasoning = "";
+            let questions = [];
+            let lastAnswer = "";
+            try {
+                const cachedRating = tweetCache.get(tweetId);
+                if (cachedRating && !isCompleteCachedRating(cachedRating) && !cachedRating.streaming) {
+                    console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
+                    tweetCache.delete(tweetId);
+                }
+                const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
+                if (!fullContextWithImageDescription) {
+                    throw new Error("Failed to get tweet context");
+                }
+                let mediaURLs = [];
+                if (document.querySelector('div[aria-label="Timeline: Conversation"]')) {
+                    const replyInfo = getTweetReplyInfo(tweetId);
+                    if (replyInfo && replyInfo.replyTo) {
+                        if (!tweetCache.has(tweetId)) {
+                            tweetCache.set(tweetId, {});
+                        }
+                        if (!tweetCache.get(tweetId).threadContext) {
+                            tweetCache.get(tweetId).threadContext = {
+                                replyTo: replyInfo.to,
+                                replyToId: replyInfo.replyTo,
+                                isRoot: false
+                            };
+                        }
+                    }
+                }
+                const contextLines = fullContextWithImageDescription.split('\n');
+                const mediaSectionHeaders = new Set(['[MEDIA_URLS]:', '[QUOTED_TWEET_MEDIA_URLS]:']);
+                const videoSectionHeaders = new Set(['[VIDEO_DESCRIPTIONS]:', '[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:']);
+                const videoLinePattern = /^\[VIDEO \d+\]:\s*/;
+                for (let i = 0; i < contextLines.length; i++) {
+                    const trimmedLine = contextLines[i].trim();
+                    if (mediaSectionHeaders.has(trimmedLine)) {
+                        let cursor = i + 1;
+                        while (cursor < contextLines.length) {
+                            const mediaLine = contextLines[cursor].trim();
+                            if (!mediaLine) {
+                                cursor++;
+                                continue;
+                            }
+                            if (mediaLine.startsWith('[')) {
+                                break;
+                            }
+                            mediaURLs.push(...mediaLine.split(',').map(url => url.trim()).filter(Boolean));
+                            cursor++;
+                        }
+                        i = cursor - 1;
+                        continue;
+                    }
+                    if (videoSectionHeaders.has(trimmedLine)) {
+                        let cursor = i + 1;
+                        while (cursor < contextLines.length) {
+                            const videoLine = contextLines[cursor].trim();
+                            if (!videoLine) {
+                                cursor++;
+                                continue;
+                            }
+                            if (videoLinePattern.test(videoLine)) {
+                                const desc = videoLine.replace(videoLinePattern, '').trim();
+                                if (desc) {
+                                    mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
+                                }
+                                cursor++;
+                                continue;
+                            }
+                            if (videoLine.startsWith('[')) {
+                                break;
+                            }
+                            cursor++;
+                        }
+                        i = cursor - 1;
+                    }
+                }
+                mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
+                const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]');
+                const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
+                if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
+                    console.warn(`Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext.`);
+                }
+                if (fullContextWithImageDescription) {
+                    try {
+                        const currentCache = tweetCache.get(tweetId);
+                        const isCached = currentCache &&
+                            !currentCache.streaming &&
+                            currentCache.score !== undefined &&
+                            currentCache.score !== null;
+                        if (isCached) {
+                            score = currentCache.score;
+                            description = currentCache.description || "";
+                            reasoning = currentCache.reasoning || "";
+                            questions = currentCache.questions || [];
+                            lastAnswer = currentCache.lastAnswer || "";
+                            const mediaUrls = currentCache.mediaUrls || [];
+                            processingSuccessful = true;
+                            console.log(`Using valid cache entry found for ${tweetId} before API call.`);
+                            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                                status: currentCache.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED,
+                                score: score,
+                                description: description,
+                                reasoning: reasoning,
+                                questions: questions,
+                                lastAnswer: lastAnswer,
+                                metadata: currentCache.metadata || null,
+                                mediaUrls: mediaUrls
+                            });
+                            filterSingleTweet(tweetArticle);
+                            tweetProcessingState.resetRetries(tweetId);
+                            return;
+                        }
+                        const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
+                        const contextForApi = fullContextWithImageDescription
+                            .replace(/\n?\[THREAD_MEDIA_URLS\]:\s*\n[^\n]*(?=\n|$)/g, '')
+                            .replace(/\n{3,}/g, '\n\n');
+                        const rating = await rateTweetWithOpenRouter(contextForApi, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
+                        score = rating.score;
+                        description = rating.content;
+                        reasoning = rating.reasoning || '';
+                        questions = rating.questions || [];
+                        lastAnswer = "";
+                        let finalStatus = rating.error ? TweetRatingStatus.ERROR : TweetRatingStatus.RATED;
+                        if (!rating.error) {
+                            const cacheEntry = tweetCache.get(tweetId);
+                            if (cacheEntry && cacheEntry.fromStorage) {
+                                finalStatus = TweetRatingStatus.CACHED;
+                            } else if (rating.cached) {
+                                finalStatus = TweetRatingStatus.CACHED;
+                            }
+                        }
+                        tweetArticle.dataset.ratingStatus = finalStatus;
+                        tweetArticle.dataset.ratingDescription = description || "not available";
+                        tweetArticle.dataset.slopScore = score?.toString() || '';
+                        tweetArticle.dataset.ratingReasoning = reasoning;
+                        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                            status: finalStatus,
+                            score: score,
+                            description: description,
+                            reasoning: reasoning,
+                            questions: questions,
+                            lastAnswer: lastAnswer,
+                            metadata: rating.metadata || null,
+                            mediaUrls: mediaURLs
+                        });
+                        processingSuccessful = !rating.error;
+                        filterSingleTweet(tweetArticle);
+                        if (processingSuccessful) {
+                            tweetProcessingState.resetRetries(tweetId);
+                        }
+                        return;
+                    } catch (apiError) {
+                        console.error(`API error processing tweet ${tweetId}:`, apiError);
+                        score = 5;
+                        description = `API Error: ${apiError.message}`;
+                        reasoning = '';
+                        questions = [];
+                        lastAnswer = '';
+                        processingSuccessful = false;
+                        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                            status: TweetRatingStatus.ERROR,
+                            score: score,
+                            description: description,
+                            questions: [],
+                            lastAnswer: ""
+                        });
+                        const errorCacheEntry = tweetCache.get(tweetId) || {};
+                        const errorUpdate = {
+                            ...errorCacheEntry,
+                            score: score,
+                            description: description,
+                            reasoning: reasoning,
+                            questions: questions,
+                            lastAnswer: lastAnswer,
+                            streaming: false,
+                            timestamp: Date.now()
+                        };
+                        tweetCache.set(tweetId, errorUpdate, true);
+                        filterSingleTweet(tweetArticle);
+                        return;
+                    }
+                }
+                filterSingleTweet(tweetArticle);
+            } catch (error) {
+                console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
+                if (error.message === "Media content not extracted despite presence of media containers.") {
+                    if (tweetCache.has(tweetId)) {
+                        tweetCache.delete(tweetId);
+                        console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
+                    }
+                }
+                ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                    status: TweetRatingStatus.ERROR,
+                    score: 5,
+                    description: "Error during processing: " + error.message,
+                    questions: [],
+                    lastAnswer: ""
+                });
+                processingSuccessful = false;
+            } finally {
+                if (!processingSuccessful) {
+                    tweetProcessingState.clear(tweetId);
+                }
+            }
+        } else {
+            tweetArticle.dataset.ratingStatus = TweetRatingStatus.ERROR;
+            tweetArticle.dataset.ratingDescription = "No API key";
+            ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+                status: TweetRatingStatus.ERROR,
+                score: 9,
+                description: "No API key",
+                questions: [],
+                lastAnswer: ""
+            });
+            processingSuccessful = true;
+            tweetProcessingState.resetRetries(tweetId);
+        }
+        filterSingleTweet(tweetArticle);
+        return;
+    } catch (error) {
+        console.error(`Error processing tweet ${tweetId}:`, error);
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+        if (indicatorInstance) {
+            indicatorInstance.update({
+                status: TweetRatingStatus.ERROR,
+                score: 5,
+                description: "Error during processing: " + error.message,
+                questions: [],
+                lastAnswer: ""
+            });
+        }
+        filterSingleTweet(tweetArticle);
+        processingSuccessful = false;
+    } finally {
+        if (!processingSuccessful) {
+            tweetProcessingState.clear(tweetId);
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+            if (indicatorInstance && !isValidFinalState(indicatorInstance.status) && tweetProcessingState.shouldRetry(tweetId)) {
+                console.log(`Tweet ${tweetId} processing failed, will retry later`);
+                setTimeout(() => {
+                    if (!isValidFinalState(ScoreIndicatorRegistry.get(tweetId)?.status)) {
+                        scheduleTweetProcessing(tweetArticle);
+                    }
+                }, PROCESSING_DELAY_MS * 2);
+            }
+        }
+    }
+}
+const MAPPING_INCOMPLETE_TWEETS = new Set();
+async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
+    const tweetId = getTweetID(tweetArticle);
+    if (!tweetId) {
+        return;
+    }
+    if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
+        console.log(`Tweet ${tweetId} has an active streaming request, skipping processing`);
+        return;
+    }
+    const handles = getUserHandles(tweetArticle);
+    const authorHandle = handles.length > 0 ? handles[0] : '';
+    if ((authorHandle && adAuthorCache.has(authorHandle)) || isAd(tweetArticle)) {
+        if (authorHandle && !adAuthorCache.has(authorHandle)) adAuthorCache.add(authorHandle);
+        tweetArticle.dataset.ratingStatus = TweetRatingStatus.AD;
+        tweetArticle.dataset.ratingDescription = "Advertisement";
+        tweetArticle.dataset.slopScore = '0';
+        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+            status: TweetRatingStatus.AD,
+            score: 0,
+            description: "Advertisement",
+            questions: [],
+            lastAnswer: ""
+        });
+        filterSingleTweet(tweetArticle);
+        return;
+    }
+    const existingInstance = ScoreIndicatorRegistry.get(tweetId);
+    existingInstance?.ensureIndicatorAttached();
+    if (existingInstance && !rateAnyway) {
+        if (isValidFinalState(existingInstance.status) || (isValidInterimState(existingInstance.status) && tweetProcessingState.isScheduled(tweetId))) {
+            filterSingleTweet(tweetArticle);
+            return;
+        }
+        tweetProcessingState.clear(tweetId);
+    }
+    const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
+        document.querySelector('div[aria-label^="Timeline: Conversation"]');
+    if (conversation) {
+        if (!conversation.dataset.threadMapping) {
+            console.log(`[scheduleTweetProcessing] Tweet ${tweetId} waiting for thread mapping`);
+            MAPPING_INCOMPLETE_TWEETS.add(tweetId);
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (indicatorInstance) {
+                indicatorInstance.update({
+                    status: TweetRatingStatus.PENDING,
+                    score: null,
+                    description: 'Waiting for thread context...',
+                    questions: [],
+                    lastAnswer: ""
+                });
+            }
+            return;
+        }
+        try {
+            const mapping = JSON.parse(conversation.dataset.threadMapping);
+            const tweetMapping = mapping.find(m => m.tweetId === tweetId);
+            if (!tweetMapping) {
+                console.log(`[scheduleTweetProcessing] Tweet ${tweetId} not found in thread mapping, waiting`);
+                MAPPING_INCOMPLETE_TWEETS.add(tweetId);
+                const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+                if (indicatorInstance) {
+                    indicatorInstance.update({
+                    status: TweetRatingStatus.PENDING,
+                        score: null,
+                        description: 'Waiting for thread context...',
+                        questions: [],
+                        lastAnswer: ""
+                    });
+                }
+                return;
+            }
+        } catch (e) {
+            console.error("Error parsing thread mapping:", e);
+        }
+    }
+    if (tweetCache.has(tweetId)) {
+        const cachedEntry = tweetCache.get(tweetId);
+        const isIncompleteStreaming = cachedEntry.streaming === true && cachedEntry.score === null;
+        if (!isIncompleteStreaming && applyTweetCachedRating(tweetArticle)) {
+            return;
+        }
+    }
+    if (tweetProcessingState.isScheduled(tweetId)) {
+        const instance = ScoreIndicatorRegistry.get(tweetId);
+        if (instance) {
+            instance.ensureIndicatorAttached();
+            if (isActiveTweetStatus(instance.status)) {
+                filterSingleTweet(tweetArticle);
+                return;
+            }
+        }
+        tweetProcessingState.clear(tweetId);
+    }
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+    if (indicatorInstance) {
+        if (indicatorInstance.status !== TweetRatingStatus.BLACKLISTED &&
+            indicatorInstance.status !== TweetRatingStatus.CACHED &&
+            indicatorInstance.status !== TweetRatingStatus.RATED &&
+            indicatorInstance.status !== TweetRatingStatus.AD) {
+            indicatorInstance.update({ status: TweetRatingStatus.PENDING, score: null, description: 'Rating scheduled...', questions: [], lastAnswer: "" });
+        } else {
+            indicatorInstance.ensureIndicatorAttached();
+            filterSingleTweet(tweetArticle);
+            return;
+        }
+    } else {
+        console.error(`Failed to get/create indicator instance for tweet ${tweetId} during scheduling.`);
+    }
+    if (!tweetProcessingState.isScheduled(tweetId)) {
+        tweetProcessingState.markScheduled(tweetId);
+    }
+    setTimeout(() => {
+        try {
+            if (!appSettings.getBoolean('enableAutoRating') && !rateAnyway) {
+                const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+                if (indicatorInstance) {
+                    indicatorInstance.update({
+                        status: TweetRatingStatus.MANUAL,
+                        score: null,
+                        description: 'Click the Rate button to rate this tweet',
+                        reasoning: '',
+                        questions: [],
+                        lastAnswer: ""
+                    });
+                    filterSingleTweet(tweetArticle);
+                }
+                return;
+            }
+            delayedProcessTweet(tweetArticle, tweetId, authorHandle);
+        } catch (e) {
+            console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
+            tweetProcessingState.clear(tweetId);
+        }
+    }, PROCESSING_DELAY_MS);
+}
+let threadRelationships = {};
+const THREAD_CHECK_INTERVAL = 1500;
+const SWEEP_INTERVAL = 2500;
+const THREAD_MAPPING_TIMEOUT = 1000;
+let threadMappingInProgress = false;
+function loadThreadRelationships() {
+    try {
+        const savedRelationships = browserGet('threadRelationships', '{}');
+        threadRelationships = JSON.parse(savedRelationships);
+        console.log(`Loaded ${Object.keys(threadRelationships).length} thread relationships`);
+    } catch (e) {
+        console.error('Error loading thread relationships:', e);
+        threadRelationships = {};
+    }
+}
+function saveThreadRelationships() {
+    try {
+        const relationshipCount = Object.keys(threadRelationships).length;
+        if (relationshipCount > 1000) {
+            const entries = Object.entries(threadRelationships);
+            entries.sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+            const recent = entries.slice(0, 500);
+            threadRelationships = Object.fromEntries(recent);
+        }
+        browserSet('threadRelationships', JSON.stringify(threadRelationships));
+    } catch (e) {
+        console.error('Error saving thread relationships:', e);
+    }
+}
+loadThreadRelationships();
+async function buildReplyChain(tweetId, maxDepth = Infinity) {
+    if (!tweetId || maxDepth <= 0) return [];
+    const chain = [];
+    const visited = new Set();
+    let currentId = tweetId;
+    let depth = 0;
+    while (currentId && depth < maxDepth) {
+        if (visited.has(currentId)) {
+            console.warn(`[buildReplyChain] Detected reply chain cycle at ${currentId}`);
+            break;
+        }
+        visited.add(currentId);
+        const replyInfo = getStoredReplyInfo(currentId);
+        if (!replyInfo || !replyInfo.replyTo) break;
+        chain.push({
+            fromId: currentId,
+            toId: replyInfo.replyTo,
+            from: replyInfo.from,
+            to: replyInfo.to
+        });
+        currentId = replyInfo.replyTo;
+        depth++;
+    }
+    return chain;
+}
+function getStoredReplyInfo(tweetId) {
+    if (!tweetId) return null;
+    const relationship = threadRelationships[tweetId];
+    const cachedEntry = tweetCache.get(tweetId);
+    const threadContext = cachedEntry?.threadContext;
+    if (relationship) {
+        const replyTo = relationship.replyTo || threadContext?.replyToId || null;
+        return {
+            ...relationship,
+            replyTo,
+            from: relationship.from || cachedEntry?.authorHandle || '',
+            to: relationship.to || threadContext?.replyTo || null,
+            isRoot: replyTo ? false : (relationship.isRoot === true || threadContext?.isRoot === true)
+        };
+    }
+    if (threadContext?.replyToId) {
+        return {
+            replyTo: threadContext.replyToId,
+            from: cachedEntry?.authorHandle || '',
+            to: threadContext.replyTo || null,
+            isRoot: false,
+            timestamp: cachedEntry?.timestamp || 0
+        };
+    }
+    if (threadContext?.isRoot) {
+        return {
+            replyTo: null,
+            from: cachedEntry?.authorHandle || '',
+            to: null,
+            isRoot: true,
+            timestamp: cachedEntry?.timestamp || 0
+        };
+    }
+    return null;
+}
+/**
+ * Extracts the full context of a tweet article and returns a formatted string.
+ *
+ * Schema:
+ * [TWEET]:
+ * @[the author of the tweet]
+ * [the text of the tweet]
+ * [MEDIA_DESCRIPTION]:
+ * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ * [QUOTED_TWEET]:
+ * [the text of the quoted tweet]
+ * [QUOTED_TWEET_MEDIA_DESCRIPTION]:
+ * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ *
+ * @param {Element} tweetArticle - The tweet article element.
+ * @param {string} tweetId - The tweet's ID.
+ * @param {string} apiKey - API key used for getting image descriptions.
+ * @returns {Promise<string>} - The full context string.
+ */
+async function getFullContext(tweetArticle, tweetId, apiKey) {
+    if (getFullContextPromises.has(tweetId)) {
+        return getFullContextPromises.get(tweetId);
+    }
+    const contextPromise = (async () => {
+        try {
+            const handles = getUserHandles(tweetArticle);
+            const userHandle = handles.length > 0 ? handles[0] : '';
+            const quotedHandle = handles.length > 1 ? handles[1] : '';
+            const mainText = getTweetText(tweetArticle);
+            let allMediaLinks = extractMediaLinks(tweetArticle);
+            let quotedText = "";
+            let quotedMediaLinks = [];
+            let quotedTweetId = null;
+            const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+            if (quoteContainer) {
+                const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
+                if (quotedLink) {
+                    const href = quotedLink.getAttribute('href');
+                    const match = href.match(/\/status\/(\d+)/);
+                    if (match && match[1]) {
+                        quotedTweetId = match[1];
+                    }
+                }
+                quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
+                quotedMediaLinks = extractMediaLinks(quoteContainer);
+            }
+            let allAvailableMediaLinks = [...(allMediaLinks || [])];
+            let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
+            const mainImageUrls = [];
+            const mainVideoDescriptions = [];
+            mainMediaLinks.forEach(item => {
+                if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                    mainVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
+                } else {
+                    mainImageUrls.push(item);
+                }
+            });
+            let engagementStats = "";
+            const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
+            if (engagementDiv) {
+                engagementStats = engagementDiv.getAttribute('aria-label')?.trim() || "";
+            }
+            let fullContextWithImageDescription = `[TWEET ${tweetId}]
+ Author:@${userHandle}:
+` + mainText;
+            if (mainVideoDescriptions.length > 0) {
+                fullContextWithImageDescription += `
 [VIDEO_DESCRIPTIONS]:
-${y.map((t,e)=>`[VIDEO ${e+1}]: ${t}`).join("\n")}`),b.length>0){if(e("enableImageDescriptions",!1)){let _=await tO(b,i,o,r);w+=`
+${mainVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
+            }
+            if (mainImageUrls.length > 0) {
+                if (browserGet('enableImageDescriptions', false)) {
+                    let mainMediaLinksDescription = await getImageDescription(mainImageUrls, apiKey, tweetId, userHandle);
+                    fullContextWithImageDescription += `
 [MEDIA_DESCRIPTION]:
-${_}`}w+=`
+${mainMediaLinksDescription}`;
+                }
+                fullContextWithImageDescription += `
 [MEDIA_URLS]:
-${b.join(", ")}`}if(v&&(w+=`
+${mainImageUrls.join(", ")}`;
+            }
+            if (engagementStats) {
+                fullContextWithImageDescription += `
 [ENGAGEMENT_STATS]:
-${v}`),(c||p.length>0)&&(w+=`
-[QUOTED_TWEET${u?" "+u:""}]:
- Author:@${s}:
-${c}`,p.length>0)){let E=[],S=[];if(p.forEach(t=>{t.startsWith("[VIDEO_DESCRIPTION]:")?S.push(t.replace("[VIDEO_DESCRIPTION]: ","")):E.push(t)}),S.length>0&&(w+=`
+${engagementStats}`;
+            }
+            if (quotedText || quotedMediaLinks.length > 0) {
+                fullContextWithImageDescription += `
+[QUOTED_TWEET${quotedTweetId ? ' ' + quotedTweetId : ''}]:
+ Author:@${quotedHandle}:
+${quotedText}`;
+                if (quotedMediaLinks.length > 0) {
+                    const quotedImageUrls = [];
+                    const quotedVideoDescriptions = [];
+                    quotedMediaLinks.forEach(item => {
+                        if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
+                            quotedVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
+                        } else {
+                            quotedImageUrls.push(item);
+                        }
+                    });
+                    if (quotedVideoDescriptions.length > 0) {
+                        fullContextWithImageDescription += `
 [QUOTED_TWEET_VIDEO_DESCRIPTIONS]:
-${S.map((t,e)=>`[VIDEO ${e+1}]: ${t}`).join("\n")}`),E.length>0){if(e("enableImageDescriptions",!1)){let C=await tO(E,i,o,r);w+=`
+${quotedVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
+                    }
+                    if (quotedImageUrls.length > 0) {
+                        if (browserGet('enableImageDescriptions', false)) {
+                            let quotedMediaLinksDescription = await getImageDescription(quotedImageUrls, apiKey, tweetId, userHandle);
+                            fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_DESCRIPTION]:
-${C}`}w+=`
+${quotedMediaLinksDescription}`;
+                        }
+                        fullContextWithImageDescription += `
 [QUOTED_TWEET_MEDIA_URLS]:
-${E.join(", ")}`}}let I=document.querySelector('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]');if(I){var T;let k=await tI(o),A=!1;if(I.dataset.threadHist&&!function t(e){let o=e.nextElementSibling;for(;o;){if(o.matches&&o.matches('div[data-testid="inline_reply_offscreen"]'))return!0;o=o.nextElementSibling}return!1}(t)&&(w=I.dataset.threadHist+`
-[REPLY]
-`+w,A=!0),k.length>0&&!A){let q="",U=null;for(let L=k.length-1;L>=0;L--){let R=k[L],H=R.toId,N=R.to||"unknown",O=null,Q=a.get(H);if(Q&&Q.fullContext)O=Q.fullContext;else{let B=Array.from(document.querySelectorAll(D)).find(t=>Y(t)===H);if(B){let F=tS[H];delete tS[H];try{O=await tk(B,H,i)}finally{F&&(tS[H]=F)}}else if(Q&&Q.individualTweetText&&(O=`[TWEET ${H}]
- Author:@${Q.authorHandle||N}:
-${Q.individualTweetText}`,Q.individualMediaUrls&&Q.individualMediaUrls.length>0)){try{if(e("enableImageDescriptions",!1)){let V=await tO(Q.individualMediaUrls,i,H,Q.authorHandle||N);O+=`
-[MEDIA_DESCRIPTION]:
-${V}`}}catch(G){}O+=`
-[MEDIA_URLS]:
-${Q.individualMediaUrls.join(", ")}`}}if(U&&(q+=`
-[REPLY TO @${U}]
-`),O){let K=O.lastIndexOf("[TWEET ");K>0&&(O=O.substring(K)),q+=O}else q+=`[CONTEXT UNAVAILABLE FOR TWEET ${H} @${N}]`;U=N}U&&(q+=`
-[REPLY TO @${U}]
-`),w=q+w}let Z=(T=o,tT(T));Z&&Z.to&&!A&&0===k.length&&(w=`[REPLY TO @${Z.to}]
-`+w)}t.dataset.fullContext=w;let J=a.get(o)||{},tt={...J,fullContext:w,timestamp:J.timestamp||Date.now()};return void 0===J.score&&null===tt.score&&(tt.score=void 0),a.set(o,tt,!1),w}finally{tx.delete(o)}})();return tx.set(o,n),n}function t8(){if(!w)return;let t=w.querySelectorAll(D);t.forEach(tb)}async function tA(){try{let t=document.querySelector('div[aria-label="Timeline: Conversation"]');if(t||(t=document.querySelector('div[aria-label^="Timeline: Conversation"]')),!t||tC||"true"===t.dataset.threadMappingInProgress)return;let e=parseInt(t.dataset.threadMappedAt||"0",10);if(Date.now()-e<1e3)return;let o=location.pathname.match(/status\/(\d+)/),i=o?o[1]:null;if(!i)return;let n=i,r=new Set;for(;n&&!r.has(n);){r.add(n);let a=tT(n);if(!a||!a.replyTo)break;n=a.replyTo}await tq(t,n)}catch(s){tC=!1}}async function tq(t,e){if(!tC&&!t.dataset.threadMappingInProgress){t.dataset.threadMappingInProgress="true",tC=!0;try{let i=new Promise((t,e)=>setTimeout(()=>e(Error("Thread mapping timed out")),1e3)),n=async()=>{let i=location.pathname.match(/status\/(\d+)/),n=i?i[1]:null,r=Array.from(t.querySelectorAll('div[data-testid="cellInnerDiv"]'));if(!r.length){delete t.dataset.threadMappingInProgress,tC=!1;return}r.sort((t,e)=>{let o=parseInt(t.style.transform.match(/translateY\((\d+)/)?.[1]||"0"),i=parseInt(e.style.transform.match(/translateY\((\d+)/)?.[1]||"0");return o-i});let s=[],l=0,d=-1;for(let c=0;c<r.length;c++){let p=r[c],u,h,g,m=[],f=[],$=p.querySelector('article[data-testid="tweet"]');if($){if(!(u=Y($))){let b=$.querySelector('a[href*="/status/"]');if(b){let v=b.href.match(/status\/(\d+)/);v&&(u=v[1])}}let x=X($);h=x.length>0?x[0]:null,g=W($).replace(/\n+/g," ⏎ "),m=j($);let w=$.querySelector(M);w&&(f=j(w))}if(u=u||p.dataset.tweetId||"",h=h||p.dataset.authorHandle||"",g=g||p.dataset.tweetText||"",m=m||JSON.parse(p.dataset.mediaUrls)||[],u&&h){let _={type:"tweet",tweetNode:$,username:h,tweetId:u,text:g,mediaLinks:m,quotedMediaLinks:f,cellIndex:c,cellDiv:p,index:l};s.push(_),u===n&&(d=s.length-1),l++,$&&!y.has(u)&&t0($)}else s.push({type:"separator",cellDiv:p,cellIndex:c})}let E=-1!==d?s[d]:null,S=null;if(E)S={tweetId:E.tweetId,username:E.username};else if(n){let C=a.get(n);C&&C.authorHandle&&(S={tweetId:n,username:C.authorHandle})}let I=s.filter(t=>"tweet"===t.type);if(0===I.length){delete t.dataset.threadMappingInProgress,tC=!1;return}let T=t=>{let o=tT(t.tweetId);return!!o&&(o.replyTo&&t.tweetId!==e?(t.replyTo=o.to||a.get(o.replyTo)?.authorHandle||null,t.replyToId=o.replyTo,t.isRoot=!1,!0):(!!o.isRoot||t.tweetId===e)&&(t.replyTo=null,t.replyToId=null,t.isRoot=!0,!0))};for(let k=0;k<s.length;++k){let A=s[k];if("separator"!==A.type){if(0===k)T(A)||(A.replyTo=null,A.replyToId=null,A.isRoot=!0);else{let q=s[k-1];"separator"===q.type?S&&A.tweetId!==S.tweetId?(A.replyTo=S.username,A.replyToId=S.tweetId,A.isRoot=!1):(S&&(A.tweetId,S.tweetId),T(A)||(A.replyTo=null,A.replyToId=null,A.isRoot=!0)):"tweet"===q.type?(A.replyTo=q.username,A.replyToId=q.tweetId,A.isRoot=!1):T(A)||(A.replyTo=null,A.replyToId=null,A.isRoot=!0)}}}let U=s.filter(t=>"tweet"===t.type).map(t=>({from:t.username,tweetId:t.tweetId,to:t.replyTo,toId:t.replyToId,isRoot:!0===t.isRoot,text:t.text}));for(let L of(t.dataset.threadMapping=JSON.stringify(U),t3)){let R=U.find(t=>t.tweetId===L);if(R){let H=s.find(t=>t.tweetId===L)?.tweetNode;H&&(y.delete(L),t0(H))}}t3.clear();let N=Date.now();U.forEach(t=>{t.tweetId&&t.toId?tS[t.tweetId]={replyTo:t.toId,from:t.from,to:t.to,isRoot:!1,timestamp:N}:t.tweetId&&t.isRoot&&(tS[t.tweetId]={replyTo:null,from:t.from,isRoot:!0,timestamp:N})}),function t(){try{let e=Object.keys(tS).length;if(e>1e3){let i=Object.entries(tS);i.sort((t,e)=>(e[1].timestamp||0)-(t[1].timestamp||0));let n=i.slice(0,500);tS=Object.fromEntries(n)}o("threadRelationships",JSON.stringify(tS))}catch(r){}}();for(let O=0;O<U.length;O+=10){let Q=U.slice(O,O+10);Q.forEach(t=>{if(t.tweetId&&a.has(t.tweetId)&&(a.get(t.tweetId).threadContext={replyTo:t.to,replyToId:t.toId,isRoot:t.isRoot},t.tweetId&&y.has(t.tweetId))){let e=s.find(e=>e.tweetId===t.tweetId);if(e&&e.tweetNode){let o="streaming"===e.tweetNode.dataset.ratingStatus||a.has(t.tweetId)&&!0===a.get(t.tweetId).streaming;o||(y.delete(t.tweetId),t0(e.tweetNode))}}}),O+10<U.length&&await new Promise(t=>setTimeout(t,0))}delete t.dataset.threadMappingInProgress,tC=!1,t.dataset.threadMappedAt=Date.now().toString()};await Promise.race([n(),i])}catch(r){delete t.dataset.threadMappingInProgress,tC=!1}}}function tU(t){return tT(t)}async function tL(t,e,o=3e4){return new Promise(i=>{GM_xmlhttpRequest({method:"POST",url:"https://openrouter.ai/api/v1/chat/completions",headers:{"Content-Type":"application/json",Authorization:`Bearer ${e}`,"HTTP-Referer":"https://greasyfork.org/en/scripts/532459-tweetfilter-ai","X-Title":"TweetFilter-AI"},data:JSON.stringify(t),timeout:o,onload:function(t){if(t.status>=200&&t.status<300)try{let e=JSON.parse(t.responseText);""===e.content&&i({error:!0,message:`No content returned${"SAFETY"==e.choices[0].native_finish_reason?" (SAFETY FILTER)":""}`,data:e}),i({error:!1,message:"Request successful",data:e})}catch(o){i({error:!0,message:`Failed to parse response: ${o.message}`,data:null})}else i({error:!0,message:`Request failed with status ${t.status}: ${t.responseText}`,data:null})},onerror:function(t){i({error:!0,message:`Request error: ${t.toString()}`,data:null})},ontimeout:function(){i({error:!0,message:`Request timed out after ${o}ms`,data:null})}})})}function tR(t,e,o,i,n,r=9e4,s=null){let l={...t,stream:!0},d="",c="",p="",u=null,h=!1,g=GM_xmlhttpRequest({method:"POST",url:"https://openrouter.ai/api/v1/chat/completions",headers:{"Content-Type":"application/json",Authorization:`Bearer ${e}`,"HTTP-Referer":"https://greasyfork.org/en/scripts/532459-tweetfilter-ai","X-Title":"TweetFilter-AI"},data:JSON.stringify(l),timeout:r,responseType:"stream",onloadstart:function(t){let e=t.response.getReader(),r=null,a=!1,l=()=>{r&&clearTimeout(r),r=setTimeout(()=>{h||(h=!0,i({content:c,reasoning:p,fullResponse:d,data:u,timedOut:!0}))},3e4)},g=async()=>{try{let t=!1,g=0;for(;!t&&!h;){let{done:m,value:f}=await e.read();if(m){t=!0;break}a||(a=!0,l());let $=new TextDecoder().decode(f);if(clearTimeout(r),l(),""===$.trim()){if(++g>=3){t=!0;break}continue}g=0,d+=$;let b=$.split("\n");for(let y of b)if(y.startsWith("data: ")){let v=y.substring(6);if("[DONE]"===v){t=!0;break}try{let x=JSON.parse(v);if(u=x,x.choices&&x.choices[0]){if(x.choices[0].delta&&void 0!==x.choices[0].delta.content){let w=x.choices[0].delta.content||"";c+=w}if(x.choices[0].delta&&void 0!==x.choices[0].delta.reasoning){let _=x.choices[0].delta.reasoning||"";p+=_}o({chunk:x.choices[0].delta?.content||"",reasoningChunk:x.choices[0].delta?.reasoning||"",content:c,reasoning:p,data:x})}}catch(E){}}}h||(h=!0,r&&clearTimeout(r),s&&window.activeStreamingRequests&&delete window.activeStreamingRequests[s],i({content:c,reasoning:p,fullResponse:d,data:u}))}catch(S){r&&clearTimeout(r),h||(h=!0,s&&window.activeStreamingRequests&&delete window.activeStreamingRequests[s],n({error:!0,message:`Stream processing error: ${S.toString()}`,data:null}))}};g().catch(t=>{r&&clearTimeout(r),h||(h=!0,s&&window.activeStreamingRequests&&delete window.activeStreamingRequests[s],n({error:!0,message:`Unhandled stream error: ${t.toString()}`,data:null}))})},onerror:function(t){s&&window.activeStreamingRequests&&delete window.activeStreamingRequests[s],n({error:!0,message:`Request error: ${t.toString()}`,data:null})},ontimeout:function(){s&&window.activeStreamingRequests&&delete window.activeStreamingRequests[s],n({error:!0,message:`Request timed out after ${r}ms`,data:null})}}),m={abort:function(){h=!0,E--;try{g.abort()}catch(t){}if(s&&window.activeStreamingRequests&&delete window.activeStreamingRequests[s],s&&a.has(s)){let e=a.get(s);e.streaming&&(void 0===e.score||null===e.score)&&a.delete(s)}}};return s&&window.activeStreamingRequests&&(window.activeStreamingRequests[s]=m),m}!function t(){try{let o=e("threadRelationships","{}");tS=JSON.parse(o)}catch(i){tS={}}}(),setInterval(tA,1500),setInterval(function t(){if(document.querySelector('div[aria-label="Timeline: Conversation"]')||!e("enableAutoRating",!1)||!w)return;let o=w.querySelectorAll(D);o.length>0&&o.forEach(t=>{let e=Y(t);if(!e)return;let o=to.get(e),i=!o||!o.status||"error"===o.status||!tw(o.status)&&!t_(o.status)||y.has(e)&&!tw(o.status)&&!t_(o.status);i?(y.has(e)&&y.delete(e),t0(t)):o&&!t_(o.status)&&tb(t)})},2500);let tH=!1;function tN(){let t=e("openrouter-api-key","");if(!t){Z("Please enter your OpenRouter API key");return}function o(){Z("Back online. Fetching models..."),tN(),window.removeEventListener("online",o),tH=!1}Z("Fetching available models..."),GM_xmlhttpRequest({method:"GET",url:"https://openrouter.ai/api/v1/models",headers:{Authorization:`Bearer ${t}`,"HTTP-Referer":"https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter","X-Title":"Tweet Rating Tool"},onload:function(t){try{let e=JSON.parse(t.responseText);if(Array.isArray(e.data)){let o=e.data.filter(t=>t&&(t.id||t.canonical_slug));o.forEach(t=>{t.slug=t.canonical_slug||t.id}),o.sort((t,e)=>(Number(e.created)||0)-(Number(t.created)||0)),C=[...S=o||[]],th(),Z("Models updated!")}}catch(i){Z("Error parsing models list")}},onerror:function(t){navigator.onLine?Z("Error fetching models!"):tH?Z("Still offline. Waiting for connection to fetch models."):(Z("Offline. Will attempt to fetch models when connection returns."),window.addEventListener("online",o),tH=!0)}})}async function tO(t,o,i,n){let r=e("enableImageDescriptions",!1);if(!t?.length||!r)return r?"":"[Image descriptions disabled]";let a=[];for(let s of t){let l={model:T,messages:[{role:"user",content:[{type:"text",text:"Describe this image. Include any text visible in the image, try to describe the image in a way that preserves all of the information and context present in the image."},{type:"image_url",image_url:{url:s}}]}],temperature:O,top_p:Q,max_tokens:B};T.includes("gemini")&&(l.config={safetySettings:t7}),q&&(l.provider={sort:q,allow_fallbacks:!0});let d=await tL(l,o);!d.error&&d.data?.choices?.[0]?.message?.content?a.push(d.data.choices[0].message.content):a.push("[Error getting image description]")}return a.map((t,e)=>`[IMAGE ${e+1}]: ${t}`).join("\n")}async function tQ(t,e,o=1e4){return new Promise(i=>{GM_xmlhttpRequest({method:"GET",url:`https://openrouter.ai/api/v1/generation?id=${t}`,headers:{Authorization:`Bearer ${e}`,"HTTP-Referer":"https://greasyfork.org/en/scripts/532459-tweetfilter-ai","X-Title":"TweetFilter-AI"},timeout:o,onload:function(t){if(t.status>=200&&t.status<300)try{let e=JSON.parse(t.responseText);i({error:!1,message:"Metadata fetched successfully",data:e})}catch(o){i({error:!0,message:`Failed to parse metadata response: ${o.message}`,data:null})}else 404===t.status?i({error:!0,status:404,message:`Generation metadata not found (404): ${t.responseText}`,data:null}):i({error:!0,status:t.status,message:`Metadata request failed with status ${t.status}: ${t.responseText}`,data:null})},onerror:function(t){i({error:!0,message:`Metadata request error: ${t.toString()}`,data:null})},ontimeout:function(){i({error:!0,message:`Metadata request timed out after ${o}ms`,data:null})}})})}let t7=[{category:"HARM_CATEGORY_HARASSMENT",threshold:"BLOCK_NONE"},{category:"HARM_CATEGORY_HATE_SPEECH",threshold:"BLOCK_NONE"},{category:"HARM_CATEGORY_SEXUALLY_EXPLICIT",threshold:"BLOCK_NONE"},{category:"HARM_CATEGORY_DANGEROUS_CONTENT",threshold:"BLOCK_NONE"},{category:"HARM_CATEGORY_CIVIC_INTEGRITY",threshold:"BLOCK_NONE"},];function tB(t){if(!t)return[];let e=[1,2,3].map(e=>{let o=t.match(RegExp(`<Q${e}>([\\s\\S]*?)<\\/Q${e}>`));return o&&void 0!==o[1]?o[1].trim():""});if(e.every(t=>t.length>0))return e;let o=t.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/),i=o?o[1]:t,n=[],r="Q_1.",a="Q_2.",s="Q_3.",l=i.indexOf(r),d=i.indexOf(a),c=i.indexOf(s);if(-1!==l&&d>l&&c>d){let p=i.substring(l+r.length,d).trim();n.push(p);let u=i.substring(d+a.length,c).trim();n.push(u);let h=i.substring(c+s.length).trim();if(n.push(h),n.every(t=>t.length>0))return n}return[]}function t6(t,e){var o,i;let n=[],r=new Set,a=t=>{let e="string"==typeof t?t.trim():"";!(!e||e.startsWith("[VIDEO_DESCRIPTION]:")||r.has(e))&&(r.add(e),n.push(e))};if(Array.isArray(t)&&t.forEach(a),e){let s=e.match(/https?:\/\/[^\s,\])>]+/g)||[];s.forEach(t=>{(/\/\/pbs\.twimg\.com\//.test(t)||/\.(png|jpe?g|webp|gif)(\?|$)/i.test(t))&&a(t)})}return o=n,i=e,Array.isArray(o)&&!(o.length<=1)&&i?o.map((t,e)=>({url:t,originalIndex:e,firstIndex:"string"==typeof t?i.indexOf(t):-1})).sort((t,e)=>{let o=-1===t.firstIndex,i=-1===e.firstIndex;return o&&i?t.originalIndex-e.originalIndex:o?1:i?-1:t.firstIndex!==e.firstIndex?t.firstIndex-e.firstIndex:t.originalIndex-e.originalIndex}).map(t=>t.url):o}function tD(t,e){e.forEach(e=>{e.startsWith("data:application/pdf")?t.push({type:"file",file:{filename:"attachment.pdf",file_data:e}}):(e.startsWith("http://")||e.startsWith("https://")||e.startsWith("data:image/"))&&t.push({type:"image_url",image_url:{url:e}})})}async function t2(t,o,i,n,r=3,s=null,l=""){let d=()=>{Z(`Rating tweet... (${E=Math.max(0,E-1)} pending)`)},c=to.get(o,s);if(!c)return{score:5,content:"Failed to initialize UI components for rating.",reasoning:"",questions:[],lastAnswer:"",error:!0,cached:!1,data:null,qaConversationHistory:[]};if(v.has(l))return c.updateInitialReviewAndBuildHistory({fullContext:t,mediaUrls:[],apiResponseContent:"<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>",reviewSystemPrompt:L,followUpSystemPrompt:R,userInstructions:p}),{score:0,content:c.description,reasoning:"",error:!1,cached:!1,questions:c.questions,qaConversationHistory:c.qaConversationHistory};let p=b.getCurrentInstructions(),u=e("reasoningEffort","none"),h={model:I,messages:[{role:"system",content:[{type:"text",text:L+`
+${quotedImageUrls.join(", ")}`;
+                    }
+                }
+            }
+            const conversationElement = document.querySelector('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]');
+            if (conversationElement) {
+                const replyChain = await buildReplyChain(tweetId);
+                let threadHistoryIncluded = false;
+                if (conversationElement.dataset.threadHist) {
+                    if (!isOriginalTweet(tweetArticle)) {
+                        fullContextWithImageDescription = conversationElement.dataset.threadHist + `\n[REPLY]\n` + fullContextWithImageDescription;
+                        threadHistoryIncluded = true;
+                    }
+                }
+                if (replyChain.length > 0 && !threadHistoryIncluded) {
+                    let parentContextsString = "";
+                    let previousParentAuthor = null;
+                    for (let i = replyChain.length - 1; i >= 0; i--) {
+                        const link = replyChain[i];
+                        const parentId = link.toId;
+                        const parentUser = link.to || 'unknown';
+                        let currentParentContent = null;
+                        const parentCacheEntry = tweetCache.get(parentId);
+                        if (parentCacheEntry && parentCacheEntry.fullContext) {
+                            currentParentContent = parentCacheEntry.fullContext;
+                        } else {
+                            const parentArticleElement = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
+                                .find(el => getTweetID(el) === parentId);
+                            if (parentArticleElement) {
+                                const originalParentRelationship = threadRelationships[parentId];
+                                delete threadRelationships[parentId];
+                                try {
+                                    currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey);
+                                } finally {
+                                    if (originalParentRelationship) {
+                                        threadRelationships[parentId] = originalParentRelationship;
+                                    }
+                                }
+                            } else if (parentCacheEntry && parentCacheEntry.individualTweetText) {
+                                currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
+                                if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
+                                    try {
+                                        if (browserGet('enableImageDescriptions', false)) {
+                                            const parentMediaDesc = await getImageDescription(
+                                                parentCacheEntry.individualMediaUrls,
+                                                apiKey,
+                                                parentId,
+                                                parentCacheEntry.authorHandle || parentUser
+                                            );
+                                            currentParentContent += `\n[MEDIA_DESCRIPTION]:\n${parentMediaDesc}`;
+                                        }
+                                    } catch (e) {
+                                        console.warn(`[getFullContext] Failed to fetch parent media descriptions for ${parentId}:`, e);
+                                    }
+                                    currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
+                                }
+                            }
+                        }
+                        if (previousParentAuthor) {
+                            parentContextsString += `\n[REPLY TO @${previousParentAuthor}]\n`;
+                        }
+                        if (currentParentContent) {
+                            const lastTweetMarker = currentParentContent.lastIndexOf('[TWEET ');
+                            if (lastTweetMarker > 0) {
+                                currentParentContent = currentParentContent.substring(lastTweetMarker);
+                            }
+                            parentContextsString += currentParentContent;
+                        } else {
+                            parentContextsString += `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${parentUser}]`;
+                        }
+                        previousParentAuthor = parentUser;
+                    }
+                    if (previousParentAuthor) {
+                        parentContextsString += `\n[REPLY TO @${previousParentAuthor}]\n`;
+                    }
+                    fullContextWithImageDescription = parentContextsString + fullContextWithImageDescription;
+                }
+                const replyInfo = getTweetReplyInfo(tweetId);
+                if (replyInfo && replyInfo.to && !threadHistoryIncluded && replyChain.length === 0) {
+                    fullContextWithImageDescription = `[REPLY TO @${replyInfo.to}]\n` + fullContextWithImageDescription;
+                }
+            }
+            tweetArticle.dataset.fullContext = fullContextWithImageDescription;
+            const existingCacheEntryForCurrentTweet = tweetCache.get(tweetId) || {};
+            const updatedCacheEntry = {
+                ...existingCacheEntryForCurrentTweet,
+                fullContext: fullContextWithImageDescription,
+                timestamp: existingCacheEntryForCurrentTweet.timestamp || Date.now()
+            };
+            if (existingCacheEntryForCurrentTweet.score === undefined && updatedCacheEntry.score === null) {
+                updatedCacheEntry.score = undefined;
+            }
+            tweetCache.set(tweetId, updatedCacheEntry, false);
+            return fullContextWithImageDescription;
+        } finally {
+            getFullContextPromises.delete(tweetId);
+        }
+    })();
+    getFullContextPromises.set(tweetId, contextPromise);
+    return contextPromise;
+}
+/**
+ * Applies filtering to all tweets currently in the observed container.
+ */
+function applyFilteringToAll() {
+    if (!observedTargetNode) return;
+    const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+    tweets.forEach(filterSingleTweet);
+}
+function ensureAllTweetsRated() {
+    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !appSettings.getBoolean('enableAutoRating')) {
+        return;
+    }
+    if (!observedTargetNode) return;
+    const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
+    if (tweets.length > 0) {
+        console.log(`Checking ${tweets.length} tweets to ensure all are rated...`);
+        tweets.forEach(tweet => {
+            const tweetId = getTweetID(tweet);
+            if (!tweetId) return;
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
+            const needsProcessing = !indicatorInstance ||
+                !indicatorInstance.status ||
+                indicatorInstance.status === TweetRatingStatus.ERROR ||
+                (!isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status)) ||
+                (tweetProcessingState.isScheduled(tweetId) && !isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status));
+            if (needsProcessing) {
+                if (tweetProcessingState.isScheduled(tweetId)) {
+                    console.log(`Tweet ${tweetId} marked as processed but in invalid state: ${indicatorInstance?.status}`);
+                    tweetProcessingState.clear(tweetId);
+                }
+                scheduleTweetProcessing(tweet);
+            } else if (indicatorInstance && !isValidInterimState(indicatorInstance.status)) {
+                filterSingleTweet(tweet);
+            }
+        });
+    }
+}
+async function handleThreads() {
+    try {
+        let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
+        if (!conversation) {
+            conversation = document.querySelector('div[aria-label^="Timeline: Conversation"]');
+        }
+        if (!conversation) return;
+        if (threadMappingInProgress || conversation.dataset.threadMappingInProgress === "true") {
+            return;
+        }
+        const lastMappedTimestamp = parseInt(conversation.dataset.threadMappedAt || '0', 10);
+        const MAPPING_COOLDOWN_MS = 1000;
+        if (Date.now() - lastMappedTimestamp < MAPPING_COOLDOWN_MS) {
+            return;
+        }
+        const match = location.pathname.match(/status\/(\d+)/);
+        const pageTweetId = match ? match[1] : null;
+        if (!pageTweetId) return;
+        let rootTweetId = pageTweetId;
+        const visited = new Set();
+        while (rootTweetId) {
+            if (visited.has(rootTweetId)) {
+                console.warn(`[handleThreads] Detected reply chain cycle at ${rootTweetId}`);
+                break;
+            }
+            visited.add(rootTweetId);
+            const replyInfo = getStoredReplyInfo(rootTweetId);
+            if (!replyInfo || !replyInfo.replyTo) {
+                break;
+            }
+            rootTweetId = replyInfo.replyTo;
+        }
+        await mapThreadStructure(conversation, rootTweetId);
+    } catch (error) {
+        console.error("Error in handleThreads:", error);
+        threadMappingInProgress = false;
+    }
+}
+async function mapThreadStructure(conversation, localRootTweetId) {
+    if (threadMappingInProgress || conversation.dataset.threadMappingInProgress) {
+        return;
+    }
+    conversation.dataset.threadMappingInProgress = "true";
+    threadMappingInProgress = true;
+    try {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Thread mapping timed out')), THREAD_MAPPING_TIMEOUT)
+        );
+        const mapping = async () => {
+            const urlMatch = location.pathname.match(/status\/(\d+)/);
+            const urlTweetId = urlMatch ? urlMatch[1] : null;
+            let cellDivs = Array.from(conversation.querySelectorAll('div[data-testid="cellInnerDiv"]'));
+            if (!cellDivs.length) {
+                console.log("No cell divs found, thread mapping aborted");
+                delete conversation.dataset.threadMappingInProgress;
+                threadMappingInProgress = false;
+                return;
+            }
+            cellDivs.sort((a, b) => {
+                const aY = parseInt(a.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
+                const bY = parseInt(b.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
+                return aY - bY;
+            });
+            let tweetCells = [];
+            let processedCount = 0;
+            let urlTweetCellIndex = -1;
+            for (let idx = 0; idx < cellDivs.length; idx++) {
+                const cell = cellDivs[idx];
+                let tweetId, username, text, mediaLinks = [], quotedMediaLinks = [];
+                let article = cell.querySelector('article[data-testid="tweet"]');
+                if (article) {
+                    tweetId = getTweetID(article);
+                    if (!tweetId) {
+                        let tweetLink = article.querySelector('a[href*="/status/"]');
+                        if (tweetLink) {
+                            let match = tweetLink.href.match(/status\/(\d+)/);
+                            if (match) tweetId = match[1];
+                        }
+                    }
+                    const handles = getUserHandles(article);
+                    username = handles.length > 0 ? handles[0] : null;
+                    text = getTweetText(article).replace(/\n+/g, ' ⏎ ');
+                    mediaLinks = extractMediaLinks(article);
+                    const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
+                    if (quoteContainer) {
+                        quotedMediaLinks = extractMediaLinks(quoteContainer);
+                    }
+                }
+                tweetId = (tweetId || cell.dataset.tweetId) || '';
+                username = (username || cell.dataset.authorHandle) || '';
+                text = (text || cell.dataset.tweetText) || '';
+                mediaLinks = (mediaLinks || JSON.parse(cell.dataset.mediaUrls)) || [];
+                if (tweetId && username) {
+                    const currentCellItem = {
+                        type: 'tweet',
+                        tweetNode: article,
+                        username,
+                        tweetId,
+                        text,
+                        mediaLinks,
+                        quotedMediaLinks,
+                        cellIndex: idx,
+                        cellDiv: cell,
+                        index: processedCount
+                    };
+                    tweetCells.push(currentCellItem);
+                    if (tweetId === urlTweetId) {
+                        urlTweetCellIndex = tweetCells.length - 1;
+                    }
+                    processedCount++;
+                    if (article && !tweetProcessingState.isScheduled(tweetId)) {
+                        scheduleTweetProcessing(article);
+                    }
+                } else {
+                    tweetCells.push({
+                        type: 'separator',
+                        cellDiv: cell,
+                        cellIndex: idx,
+                    });
+                }
+            }
+            const urlTweetObject = urlTweetCellIndex !== -1 ? tweetCells[urlTweetCellIndex] : null;
+            let effectiveUrlTweetInfo = null;
+            if (urlTweetObject) {
+                effectiveUrlTweetInfo = {
+                    tweetId: urlTweetObject.tweetId,
+                    username: urlTweetObject.username
+                };
+            } else if (urlTweetId) {
+                const cachedUrlTweet = tweetCache.get(urlTweetId);
+                if (cachedUrlTweet && cachedUrlTweet.authorHandle) {
+                    effectiveUrlTweetInfo = {
+                        tweetId: urlTweetId,
+                        username: cachedUrlTweet.authorHandle
+                    };
+                } else {
+                }
+            } else {
+            }
+            const actualTweets = tweetCells.filter(tc => tc.type === 'tweet');
+            if (actualTweets.length === 0) {
+                console.log("No valid tweets found, thread mapping aborted");
+                delete conversation.dataset.threadMappingInProgress;
+                threadMappingInProgress = false;
+                return;
+            }
+            const applyStoredParentInfo = (currentItem) => {
+                const storedReplyInfo = getStoredReplyInfo(currentItem.tweetId);
+                if (!storedReplyInfo) {
+                    return false;
+                }
+                if (storedReplyInfo.replyTo && currentItem.tweetId !== localRootTweetId) {
+                    currentItem.replyTo = storedReplyInfo.to || tweetCache.get(storedReplyInfo.replyTo)?.authorHandle || null;
+                    currentItem.replyToId = storedReplyInfo.replyTo;
+                    currentItem.isRoot = false;
+                    return true;
+                }
+                if (storedReplyInfo.isRoot || currentItem.tweetId === localRootTweetId) {
+                    currentItem.replyTo = null;
+                    currentItem.replyToId = null;
+                    currentItem.isRoot = true;
+                    return true;
+                }
+                return false;
+            };
+            for (let i = 0; i < tweetCells.length; ++i) {
+                let currentItem = tweetCells[i];
+                if (currentItem.type === 'separator') {
+                    continue;
+                }
+                if (i === 0) {
+                    if (!applyStoredParentInfo(currentItem)) {
+                        currentItem.replyTo = null;
+                        currentItem.replyToId = null;
+                        currentItem.isRoot = true;
+                    }
+                } else {
+                    const previousItem = tweetCells[i - 1];
+                    if (previousItem.type === 'separator') {
+                        if (effectiveUrlTweetInfo && currentItem.tweetId !== effectiveUrlTweetInfo.tweetId) {
+                            currentItem.replyTo = effectiveUrlTweetInfo.username;
+                            currentItem.replyToId = effectiveUrlTweetInfo.tweetId;
+                            currentItem.isRoot = false;
+                        } else if (effectiveUrlTweetInfo && currentItem.tweetId === effectiveUrlTweetInfo.tweetId) {
+                            if (!applyStoredParentInfo(currentItem)) {
+                                currentItem.replyTo = null;
+                                currentItem.replyToId = null;
+                                currentItem.isRoot = true;
+                            }
+                        } else {
+                            if (!applyStoredParentInfo(currentItem)) {
+                                currentItem.replyTo = null;
+                                currentItem.replyToId = null;
+                                currentItem.isRoot = true;
+                            }
+                        }
+                    } else if (previousItem.type === 'tweet') {
+                        currentItem.replyTo = previousItem.username;
+                        currentItem.replyToId = previousItem.tweetId;
+                        currentItem.isRoot = false;
+                    } else {
+                        if (!applyStoredParentInfo(currentItem)) {
+                            currentItem.replyTo = null;
+                            currentItem.replyToId = null;
+                            currentItem.isRoot = true;
+                        }
+                    }
+                }
+            }
+            const replyDocs = tweetCells
+                .filter(tc => tc.type === 'tweet')
+                .map(tw => ({
+                    from: tw.username,
+                    tweetId: tw.tweetId,
+                    to: tw.replyTo,
+                    toId: tw.replyToId,
+                    isRoot: tw.isRoot === true,
+                    text: tw.text
+                }));
+            conversation.dataset.threadMapping = JSON.stringify(replyDocs);
+            for (const waitingTweetId of MAPPING_INCOMPLETE_TWEETS) {
+                const mappedTweet = replyDocs.find(doc => doc.tweetId === waitingTweetId);
+                if (mappedTweet) {
+                    const tweetArticle = tweetCells.find(tc => tc.tweetId === waitingTweetId)?.tweetNode;
+                    if (tweetArticle) {
+                        tweetProcessingState.clear(waitingTweetId);
+                        scheduleTweetProcessing(tweetArticle);
+                    }
+                }
+            }
+            MAPPING_INCOMPLETE_TWEETS.clear();
+            const timestamp = Date.now();
+            replyDocs.forEach(doc => {
+                if (doc.tweetId && doc.toId) {
+                    threadRelationships[doc.tweetId] = {
+                        replyTo: doc.toId,
+                        from: doc.from,
+                        to: doc.to,
+                        isRoot: false,
+                        timestamp
+                    };
+                } else if (doc.tweetId && doc.isRoot) {
+                    threadRelationships[doc.tweetId] = {
+                        replyTo: null,
+                        from: doc.from,
+                        isRoot: true,
+                        timestamp
+                    };
+                }
+            });
+            saveThreadRelationships();
+            const batchSize = 10;
+            for (let i = 0; i < replyDocs.length; i += batchSize) {
+                const batch = replyDocs.slice(i, i + batchSize);
+                batch.forEach(doc => {
+                    if (doc.tweetId && tweetCache.has(doc.tweetId)) {
+                        tweetCache.get(doc.tweetId).threadContext = {
+                            replyTo: doc.to,
+                            replyToId: doc.toId,
+                            isRoot: doc.isRoot
+                        };
+                        if (doc.tweetId && tweetProcessingState.isScheduled(doc.tweetId)) {
+                            const tweetCell = tweetCells.find(tc => tc.tweetId === doc.tweetId);
+                            if (tweetCell && tweetCell.tweetNode) {
+                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === TweetRatingStatus.STREAMING ||
+                                    (tweetCache.has(doc.tweetId) && tweetCache.get(doc.tweetId).streaming === true);
+                                if (!isStreaming) {
+                                    tweetProcessingState.clear(doc.tweetId);
+                                    scheduleTweetProcessing(tweetCell.tweetNode);
+                                }
+                            }
+                        }
+                    }
+                });
+                if (i + batchSize < replyDocs.length) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+            delete conversation.dataset.threadMappingInProgress;
+            threadMappingInProgress = false;
+            conversation.dataset.threadMappedAt = Date.now().toString();
+        };
+        await Promise.race([mapping(), timeout]);
+    } catch (error) {
+        console.error("Error in mapThreadStructure:", error);
+        delete conversation.dataset.threadMappingInProgress;
+        threadMappingInProgress = false;
+    }
+}
+function getTweetReplyInfo(tweetId) {
+    return getStoredReplyInfo(tweetId);
+}
+setInterval(handleThreads, THREAD_CHECK_INTERVAL);
+setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
+//setInterval(applyFilteringToAll, SWEEP_INTERVAL);
+    // ----- api/api_requests.js -----
+/**
+ * Gets a completion from OpenRouter API
+ *
+ * @param {CompletionRequest} request - The completion request
+ * @param {string} apiKey - OpenRouter API key
+ * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @returns {Promise<CompletionResult>} The completion result
+ */
+async function getCompletion(request, apiKey, timeout = 30000) {
+    return new Promise((resolve) => {
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: "https://openrouter.ai/api/v1/chat/completions",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`,
+                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
+                "X-Title": "TweetFilter-AI"
+            },
+            data: JSON.stringify(request),
+            timeout: timeout,
+            onload: function (response) {
+                if (response.status >= 200 && response.status < 300) {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        if (data.content==="") {
+                            resolve({
+                                error: true,
+                                message: `No content returned${data.choices[0].native_finish_reason=="SAFETY"?" (SAFETY FILTER)":""}`,
+                                data: data
+                            });
+                        }
+                        resolve({
+                            error: false,
+                            message: "Request successful",
+                            data: data
+                        });
+                    } catch (error) {
+                        resolve({
+                            error: true,
+                            message: `Failed to parse response: ${error.message}`,
+                            data: null
+                        });
+                    }
+                } else {
+                    resolve({
+                        error: true,
+                        message: `Request failed with status ${response.status}: ${response.responseText}`,
+                        data: null
+                    });
+                }
+            },
+            onerror: function (error) {
+                resolve({
+                    error: true,
+                    message: `Request error: ${error.toString()}`,
+                    data: null
+                });
+            },
+            ontimeout: function () {
+                resolve({
+                    error: true,
+                    message: `Request timed out after ${timeout}ms`,
+                    data: null
+                });
+            }
+        });
+    });
+}
+/**
+ * Gets a streaming completion from OpenRouter API
+ *
+ * @param {CompletionRequest} request - The completion request
+ * @param {string} apiKey - OpenRouter API key
+ * @param {Function} onChunk - Callback for each chunk of streamed response
+ * @param {Function} onComplete - Callback when streaming is complete
+ * @param {Function} onError - Callback when an error occurs
+ * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @param {string} [tweetId=null] - Optional tweet ID to associate with this request
+ * @returns {Object} The request object with an abort method
+ */
+function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 90000, tweetId = null) {
+    const streamingRequest = {
+        ...request,
+        stream: true
+    };
+    let fullResponse = "";
+    let content = "";
+    let reasoning = "";
+    let responseObj = null;
+    let streamComplete = false;
+    console.log(streamingRequest);
+    const reqObj = GM_xmlhttpRequest({
+        method: "POST",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
+            "X-Title": "TweetFilter-AI"
+        },
+        data: JSON.stringify(streamingRequest),
+        timeout: timeout,
+        responseType: "stream",
+        onloadstart: function(response) {
+            const reader = response.response.getReader();
+            let streamTimeout = null;
+            let firstChunkReceived = false;
+            const resetStreamTimeout = () => {
+                if (streamTimeout) clearTimeout(streamTimeout);
+                streamTimeout = setTimeout(() => {
+                    console.log("Stream timed out after inactivity");
+                    if (!streamComplete) {
+                        streamComplete = true;
+                        onComplete({
+                            content: content,
+                            reasoning: reasoning,
+                            fullResponse: fullResponse,
+                            data: responseObj,
+                            timedOut: true
+                        });
+                    }
+                }, 30000);
+            };
+            const processStream = async () => {
+                try {
+                    let isDone = false;
+                    let emptyChunksCount = 0;
+                    while (!isDone && !streamComplete) {
+                        const { done, value } = await reader.read();
+                        if (done) {
+                            isDone = true;
+                            break;
+                        }
+                        if (!firstChunkReceived) {
+                            firstChunkReceived = true;
+                            resetStreamTimeout();
+                        }
+                        const chunk = new TextDecoder().decode(value);
+                        clearTimeout(streamTimeout);
+                        resetStreamTimeout();
+                        if (chunk.trim() === '') {
+                            emptyChunksCount++;
+                            if (emptyChunksCount >= 3) {
+                                isDone = true;
+                                break;
+                            }
+                            continue;
+                        }
+                        emptyChunksCount = 0;
+                        fullResponse += chunk;
+                        const lines = chunk.split("\n");
+                        for (const line of lines) {
+                            if (line.startsWith("data: ")) {
+                                const data = line.substring(6);
+                                if (data === "[DONE]") {
+                                    isDone = true;
+                                    break;
+                                }
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    responseObj = parsed;
+                                    if (parsed.choices && parsed.choices[0]) {
+                                        if (parsed.choices[0].delta && parsed.choices[0].delta.content !== undefined) {
+                                            const delta = parsed.choices[0].delta.content || "";
+                                            content += delta;
+                                        }
+                                        if (parsed.choices[0].delta && parsed.choices[0].delta.reasoning !== undefined) {
+                                            const reasoningDelta = parsed.choices[0].delta.reasoning || "";
+                                            reasoning += reasoningDelta;
+                                        }
+                                        onChunk({
+                                            chunk: parsed.choices[0].delta?.content || "",
+                                            reasoningChunk: parsed.choices[0].delta?.reasoning || "",
+                                            content: content,
+                                            reasoning: reasoning,
+                                            data: parsed
+                                        });
+                                    }
+                                } catch (e) {
+                                    console.error("Error parsing SSE data:", e, data);
+                                }
+                            }
+                        }
+                    }
+                    if (!streamComplete) {
+                        streamComplete = true;
+                        if (streamTimeout) clearTimeout(streamTimeout);
+                        if (tweetId && window.activeStreamingRequests) {
+                            delete window.activeStreamingRequests[tweetId];
+                        }
+                        onComplete({
+                            content: content,
+                            reasoning: reasoning,
+                            fullResponse: fullResponse,
+                            data: responseObj
+                        });
+                    }
+                } catch (error) {
+                    console.error("Stream processing error:", error);
+                    if (streamTimeout) clearTimeout(streamTimeout);
+                    if (!streamComplete) {
+                        streamComplete = true;
+                        if (tweetId && window.activeStreamingRequests) {
+                            delete window.activeStreamingRequests[tweetId];
+                        }
+                        onError({
+                            error: true,
+                            message: `Stream processing error: ${error.toString()}`,
+                            data: null
+                        });
+                    }
+                }
+            };
+            processStream().catch(error => {
+                console.error("Unhandled stream error:", error);
+                if (streamTimeout) clearTimeout(streamTimeout);
+                if (!streamComplete) {
+                    streamComplete = true;
+                    if (tweetId && window.activeStreamingRequests) {
+                        delete window.activeStreamingRequests[tweetId];
+                    }
+                    onError({
+                        error: true,
+                        message: `Unhandled stream error: ${error.toString()}`,
+                        data: null
+                    });
+                }
+            });
+        },
+        onerror: function(error) {
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            onError({
+                error: true,
+                message: `Request error: ${error.toString()}`,
+                data: null
+            });
+        },
+        ontimeout: function() {
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            onError({
+                error: true,
+                message: `Request timed out after ${timeout}ms`,
+                data: null
+            });
+        }
+    });
+    const streamingRequestObj = {
+        abort: function() {
+            streamComplete = true;
+            tweetProcessingState.decrementPending();
+            try {
+                reqObj.abort();
+            } catch (e) {
+                console.error("Error aborting request:", e);
+            }
+            if (tweetId && window.activeStreamingRequests) {
+                delete window.activeStreamingRequests[tweetId];
+            }
+            if (tweetId && tweetCache.has(tweetId)) {
+                const entry = tweetCache.get(tweetId);
+                if (entry.streaming && (entry.score === undefined || entry.score === null)) {
+                    tweetCache.delete(tweetId);
+                }
+            }
+        }
+    };
+    if (tweetId && window.activeStreamingRequests) {
+        window.activeStreamingRequests[tweetId] = streamingRequestObj;
+    }
+    return streamingRequestObj;
+}
+let isOnlineListenerAttached = false;
+/**
+ * Fetches the list of available models from the OpenRouter API.
+ * Uses the stored API key, and updates the model selector upon success.
+ */
+function fetchAvailableModels() {
+    const apiKey = browserGet('openrouter-api-key', '');
+    if (!apiKey) {
+        showStatus('Please enter your OpenRouter API key');
+        return;
+    }
+    showStatus('Fetching available models...');
+    function handleOnline() {
+        showStatus('Back online. Fetching models...');
+        fetchAvailableModels();
+        window.removeEventListener('online', handleOnline);
+        isOnlineListenerAttached = false;
+    }
+    GM_xmlhttpRequest({
+        method: "GET",
+        url: 'https://openrouter.ai/api/v1/models',
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://greasyfork.org/en/scripts/532182-twitter-x-ai-tweet-filter",
+            "X-Title": "Tweet Rating Tool"
+        },
+        onload: function (response) {
+            try {
+                const data = JSON.parse(response.responseText);
+                if (Array.isArray(data.data)) {
+                    let filteredModels = data.data.filter(model => model && (model.id || model.canonical_slug));
+                    filteredModels.forEach(model => {
+                        model.slug = model.canonical_slug || model.id;
+                    });
+                    filteredModels.sort((a, b) => (Number(b.created) || 0) - (Number(a.created) || 0));
+                    availableModels = filteredModels || [];
+                    const imageCapableModelIds = [...new Set(availableModels
+                        .filter(modelHasImageInput)
+                        .flatMap(getModelIdentifierCandidates)
+                        .filter(Boolean))];
+                    browserSet('imageCapableModelIds', imageCapableModelIds);
+                    listedModels = [...availableModels];
+                    refreshModelsUI();
+                    showStatus('Models updated!');
+                }
+            } catch (error) {
+                console.error('Error parsing model list:', error);
+                showStatus('Error parsing models list');
+            }
+        },
+        onerror: function (error) {
+            console.error('Error fetching models:', error);
+            if (!navigator.onLine) {
+                if (!isOnlineListenerAttached) {
+                    showStatus('Offline. Will attempt to fetch models when connection returns.');
+                    window.addEventListener('online', handleOnline);
+                    isOnlineListenerAttached = true;
+                } else {
+                    showStatus('Still offline. Waiting for connection to fetch models.');
+                }
+            } else {
+                showStatus('Error fetching models!');
+            }
+        }
+    });
+}
+/**
+ * Removes Twitter's image size hint from image URLs before sending them to a model.
+ * @param {string} url
+ * @returns {string}
+ */
+function stripImageUrlNameParam(url) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+        return url;
+    }
+    try {
+        const parsedUrl = new URL(url);
+        for (const key of Array.from(parsedUrl.searchParams.keys())) {
+            if (key.toLowerCase() === 'name') {
+                parsedUrl.searchParams.delete(key);
+            }
+        }
+        return parsedUrl.toString();
+    } catch (error) {
+        return url;
+    }
+}
+/**
+ * Gets descriptions for images using the OpenRouter API
+ *
+ * @param {string[]} urls - Array of image URLs to get descriptions for
+ * @param {string} apiKey - The API key for authentication
+ * @param {string} tweetId - The unique tweet ID
+ * @param {string} userHandle - The Twitter user handle
+ * @returns {Promise<string>} Combined image descriptions
+ */
+async function getImageDescription(urls, apiKey, tweetId, userHandle) {
+    const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
+    if (!urls?.length || !imageDescriptionsEnabled) {
+        return !imageDescriptionsEnabled ? '[Image descriptions disabled]' : '';
+    }
+    let descriptions = [];
+    for (const url of urls) {
+        const modelImageUrl = stripImageUrlNameParam(url);
+        const request = {
+            model: selectedImageModel,
+            messages: [{
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: "Describe this image. Include any text visible in the image, try to describe the image in a way that preserves all of the information and context present in the image."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: { url: modelImageUrl }
+                    }
+                ]
+            }],
+            temperature: imageModelTemperature,
+            top_p: imageModelTopP,
+            max_tokens: maxTokens,
+        };
+        if (selectedImageModel.includes('gemini')) {
+            request.config = {
+                safetySettings: safetySettings,
+            }
+        }
+        if (providerSort) {
+            request.provider = {
+                sort: providerSort,
+                allow_fallbacks: true
+            };
+        }
+        const result = await getCompletion(request, apiKey);
+        if (!result.error && result.data?.choices?.[0]?.message?.content) {
+            descriptions.push(result.data.choices[0].message.content);
+        } else {
+            descriptions.push('[Error getting image description]');
+        }
+    }
+    return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
+}
+    // ----- api/api.js -----
+/**
+ * Formats description text for the tooltip.
+ * Copy of the function from ui.js to ensure it's available for streaming.
+ */
+const safetySettings = [
+    {
+        category: "HARM_CATEGORY_HARASSMENT",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_HATE_SPEECH",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_NONE",
+    },
+    {
+        category: "HARM_CATEGORY_CIVIC_INTEGRITY",
+        threshold: "BLOCK_NONE",
+    },
+];
+/**
+ * Extracts follow-up questions from the AI response content.
+ * @param {string} content - The full AI response content.
+ * @returns {string[]} An array of 3 questions, or an empty array if not found.
+ */
+function extractFollowUpQuestions(content) {
+    if (!content) return [];
+    const taggedQuestions = [1, 2, 3].map((index) => {
+        const taggedQuestionMatch = content.match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
+        return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
+            ? taggedQuestionMatch[1].trim()
+            : "";
+    });
+    if (taggedQuestions.every(q => q.length > 0)) {
+        return taggedQuestions;
+    }
+    const questionsBlockMatch = content.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
+    const legacyQuestionsBlock = questionsBlockMatch ? questionsBlockMatch[1] : content;
+    const questions = [];
+    const q1Marker = "Q_1.";
+    const q2Marker = "Q_2.";
+    const q3Marker = "Q_3.";
+    const q1Start = legacyQuestionsBlock.indexOf(q1Marker);
+    const q2Start = legacyQuestionsBlock.indexOf(q2Marker);
+    const q3Start = legacyQuestionsBlock.indexOf(q3Marker);
+    if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
+        const q1Text = legacyQuestionsBlock.substring(q1Start + q1Marker.length, q2Start).trim();
+        questions.push(q1Text);
+        const q2Text = legacyQuestionsBlock.substring(q2Start + q2Marker.length, q3Start).trim();
+        questions.push(q2Text);
+        const q3Text = legacyQuestionsBlock.substring(q3Start + q3Marker.length).trim();
+        questions.push(q3Text);
+        if (questions.every(q => q.length > 0)) {
+            return questions;
+        }
+    }
+    console.warn("[extractFollowUpQuestions] Failed to parse <Q1>/<Q2>/<Q3> tags or legacy Q_1/Q_2/Q_3 markers.");
+    return [];
+}
+/**
+ * Extracts display-ready metadata from an OpenRouter completion response object.
+ * @param {object|null} responseData
+ * @returns {object|null}
+ */
+function extractCompletionMetadata(responseData) {
+    if (!responseData) return null;
+    const usage = responseData.usage || {};
+    const completionTokenDetails = usage.completion_tokens_details || {};
+    const explicitMediaInputs = responseData.num_media_prompt ?? responseData.media_inputs ?? responseData.mediaInputs;
+    const totalCost = usage.cost ?? usage.total_cost ?? usage.cost_details?.upstream_inference_cost ?? responseData.total_cost;
+    const latencyMs = responseData.latency ?? responseData.latency_ms;
+    const metadata = {
+        generationId: responseData.id || null,
+        model: responseData.model || 'N/A',
+        promptTokens: usage.prompt_tokens ?? responseData.tokens_prompt ?? 0,
+        completionTokens: usage.completion_tokens ?? responseData.tokens_completion ?? 0,
+        reasoningTokens: completionTokenDetails.reasoning_tokens ?? responseData.native_tokens_reasoning ?? 0,
+        latency: latencyMs !== undefined ? (latencyMs / 1000).toFixed(2) + 's' : 'N/A',
+        mediaInputs: explicitMediaInputs ?? 0,
+        price: totalCost !== undefined ? `$${Number(totalCost).toFixed(6)}` : 'N/A',
+        providerName: responseData.provider || responseData.provider_name || 'N/A'
+    };
+    return metadata.generationId || metadata.model !== 'N/A' || Object.keys(usage).length > 0
+        ? metadata
+        : null;
+}
+/**
+ * Orders media URLs by their first appearance in the provided thread text.
+ * URLs not found in the text keep their original relative order and are placed last.
+ * @param {string[]} mediaUrls
+ * @param {string} threadText
+ * @returns {string[]}
+ */
+function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
+    if (!Array.isArray(mediaUrls) || mediaUrls.length <= 1 || !threadText) {
+        return mediaUrls;
+    }
+    return mediaUrls
+        .map((url, originalIndex) => ({
+            url,
+            originalIndex,
+            firstIndex: typeof url === 'string' ? threadText.indexOf(url) : -1
+        }))
+        .sort((a, b) => {
+            const aMissing = a.firstIndex === -1;
+            const bMissing = b.firstIndex === -1;
+            if (aMissing && bMissing) {
+                return a.originalIndex - b.originalIndex;
+            }
+            if (aMissing) {
+                return 1;
+            }
+            if (bMissing) {
+                return -1;
+            }
+            if (a.firstIndex !== b.firstIndex) {
+                return a.firstIndex - b.firstIndex;
+            }
+            return a.originalIndex - b.originalIndex;
+        })
+        .map(item => item.url);
+}
+function collectRatingImageUrls(mediaUrls, tweetText) {
+    const imageUrls = [];
+    const seenUrls = new Set();
+    const addUrl = (url) => {
+        const trimmedUrl = typeof url === 'string' ? url.trim() : '';
+        if (!trimmedUrl || trimmedUrl.startsWith('[VIDEO_DESCRIPTION]:') || seenUrls.has(trimmedUrl)) {
+            return;
+        }
+        seenUrls.add(trimmedUrl);
+        imageUrls.push(trimmedUrl);
+    };
+    if (Array.isArray(mediaUrls)) {
+        mediaUrls.forEach(addUrl);
+    }
+    if (tweetText) {
+        const urlPattern = /https?:\/\/[^\s,\])>]+/g;
+        const contextUrls = tweetText.match(urlPattern) || [];
+        contextUrls.forEach(url => {
+            if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+                addUrl(url);
+            }
+        });
+    }
+    return orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+}
+function appendRatingMediaContent(content, mediaUrls) {
+    mediaUrls.forEach(url => {
+        if (url.startsWith('data:application/pdf')) {
+            content.push({
+                type: "file",
+                file: {
+                    filename: "attachment.pdf",
+                    file_data: url
+                }
+            });
+        } else if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+            const modelImageUrl = stripImageUrlNameParam(url);
+            content.push({
+                type: "image_url",
+                image_url: { "url": modelImageUrl }
+            });
+        } else {
+            console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
+        }
+    });
+}
+/**
+ * Rates a tweet using the OpenRouter API with automatic retry functionality.
+ *
+ * @param {string} tweetText - The text content of the tweet
+ * @param {string} tweetId - The unique tweet ID
+ * @param {string} apiKey - The API key for authentication
+ * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
+ * @param {number} [maxRetries=3] - Maximum number of retry attempts
+ * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
+ * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
+ */
+async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
+    console.log("given tweettext\n", tweetText);
+    const cleanupRequest = () => {
+        tweetProcessingState.decrementPending();
+        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+    };
+    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+    if (!indicatorInstance) {
+        console.error(`[API rateTweetWithOpenRouter] Could not get/create ScoreIndicator for ${tweetId}.`);
+        return {
+            score: 5,
+            content: "Failed to initialize UI components for rating.",
+            reasoning: "",
+            questions: [],
+            lastAnswer: "",
+            error: true,
+            cached: false,
+            data: null,
+            qaConversationHistory: []
+        };
+    }
+    if (adAuthorCache.has(authorHandle)) {
+        indicatorInstance.updateInitialReviewAndBuildHistory({
+            fullContext: tweetText,
+            mediaUrls: [],
+            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>",
+            reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+            followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+            userInstructions: currentInstructions
+        });
+        return {
+            score: 0,
+            content: indicatorInstance.description,
+            reasoning: "",
+            error: false,
+            cached: false,
+            questions: indicatorInstance.questions,
+            qaConversationHistory: indicatorInstance.qaConversationHistory
+        };
+    }
+    const currentInstructions = instructionsManager.getCurrentInstructions();
+    const reasoningEffort = browserGet('reasoningEffort', 'none');
+    const requestBody = {
+        model: selectedModel,
+        messages: [
+            {
+                role: "system",
+                content: [{ type: "text", text: REVIEW_SYSTEM_PROMPT + `
 USER'S CUSTOM INSTRUCTIONS:
-${p}`}]},{role:"user",content:[{type:"text",text:`<TARGET_TWEET_ID>[${o}]</TARGET_TWEET_ID>
-<TWEET>[${t}]</TWEET>
+${currentInstructions}`}]
+            },
+            {
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
+<TWEET>[${tweetText}]</TWEET>
 Follow this expected response format exactly, or you break the UI:
-EXPECTED_RESPONSE_FORMAT:
-
-  <ANALYSIS>
-
-    
-(Your analysis according to the user instructions. Follow the user instructions EXACTLY.)
-  </ANALYSIS>
-
-  <SCORE>
-
-    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)
-
-  </SCORE>
-
-  <FOLLOW_UP_QUESTIONS>
-
-    <Q1>…</Q1>
-
-    <Q2>…</Q2>
-
-    <Q3>…</Q3>
-
+EXPECTED_RESPONSE_FORMAT:\n
+  <ANALYSIS>\n
+    \n(Your analysis according to the user instructions. Follow the user instructions EXACTLY.)
+  </ANALYSIS>\n
+  <SCORE>\n
+    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\n
+  </SCORE>\n
+  <FOLLOW_UP_QUESTIONS>\n
+    <Q1>…</Q1>\n
+    <Q2>…</Q2>\n
+    <Q3>…</Q3>\n
   </FOLLOW_UP_QUESTIONS>
-`}]}],temperature:H,top_p:N,max_tokens:B};"none"!==u&&(h.reasoning={effort:u}),e("enableWebSearch",!1)&&(h.tools=[{type:"openrouter:web_search"}]),I.includes("gemini")&&(h.config={safetySettings:t7});let g=t6(n,t);g.length>0&&F(I)&&tD(h.messages[1].content,g),q&&(h.provider={sort:q,allow_fallbacks:!0});let m=e("enableStreaming",!1);a.set(o,{streaming:!0,timestamp:Date.now(),tweetContent:t,mediaUrls:n});let f=0;for(;f<r;){f++;let $=Date.now(),y=$-_;y<1&&await new Promise(t=>setTimeout(t,Math.max(0,1-y))),_=$,Z(`Rating tweet... (${++E} pending)`);try{let x;if(x=m?await t1(h,i,o,t,s):await tM(h,i),d(),!x.error&&x.content){c.updateInitialReviewAndBuildHistory({fullContext:t,mediaUrls:n,apiResponseContent:x.content,reviewSystemPrompt:L,followUpSystemPrompt:R,userInstructions:p});let w=c.score,S=c.questions,C=c.description,T=c.qaConversationHistory;return a.set(o,{score:w,description:C,reasoning:x.reasoning||"",questions:S,lastAnswer:"",tweetContent:t,mediaUrls:n,streaming:!1,timestamp:Date.now(),metadata:x.data?.id?{generationId:x.data.id}:null,qaConversationHistory:T}),{score:w,content:x.content,reasoning:x.reasoning||"",questions:S,error:!1,cached:!1,data:x.data,qaConversationHistory:T}}if(f<r&&(x.error||!x.content)){let k=1e3*Math.pow(f,2);await new Promise(t=>setTimeout(t,k))}else if(x.error||!x.content)throw Error(x.content||"Failed to get valid rating content after multiple attempts")}catch(A){if(d(),f<r){let U=1e3*Math.pow(f,2);await new Promise(t=>setTimeout(t,U))}else{let O=`Failed to get valid rating after multiple attempts: ${A.message}`;return c.updateInitialReviewAndBuildHistory({fullContext:t,mediaUrls:n,apiResponseContent:`<ANALYSIS>${O}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,reviewSystemPrompt:L,followUpSystemPrompt:R,userInstructions:p}),a.set(o,{score:5,description:O,reasoning:"",questions:[],lastAnswer:"",error:!0,tweetContent:t,mediaUrls:n,streaming:!1,timestamp:Date.now(),qaConversationHistory:c.qaConversationHistory}),{score:5,content:O,reasoning:"",questions:[],lastAnswer:"",error:!0,data:null,qaConversationHistory:c.qaConversationHistory}}}}d();let Q="Unexpected failure in rating process.";return c.updateInitialReviewAndBuildHistory({fullContext:t,mediaUrls:n,apiResponseContent:`<ANALYSIS>${Q}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,reviewSystemPrompt:L,followUpSystemPrompt:R,userInstructions:p}),{score:5,content:Q,reasoning:"",questions:[],lastAnswer:"",error:!0,data:null,qaConversationHistory:c.qaConversationHistory}}async function tM(t,e){let o=t.tweetId,i=a.get(o)?.score,n=await tL(t,e);if(!n.error&&n.data?.choices?.[0]?.message){let r=n.data.choices[0].message.content||"",s=n.data.choices[0].message.reasoning||"",l=r.match(/SCORE_(\d+)/g),d=i||(l&&l.length>0?parseInt(l[l.length-1].match(/SCORE_(\d+)/)[1],10):null);return a.set(o,{score:d,description:r,tweetContent:t.tweetText,streaming:!1}),{content:r,reasoning:s}}return{error:!0,content:n.error||"Unknown error",reasoning:"",data:null}}async function t1(t,e,o,i,n){window.activeStreamingRequests&&window.activeStreamingRequests[o]&&(window.activeStreamingRequests[o].abort(),delete window.activeStreamingRequests[o]);let r=a.get(o);return r&&void 0!==r.score&&null!==r.score||a.set(o,{streaming:!0,timestamp:Date.now(),tweetContent:i,description:"",reasoning:"",questions:[],lastAnswer:"",score:null}),new Promise((s,l)=>{let d=to.get(o,n);if(!d)return a.has(o)&&(a.get(o).streaming=!1,a.get(o).error="Indicator initialization failed"),l(Error(`ScoreIndicator instance could not be initialized for tweet ${o}`));let c=r?.description||"",p=r?.reasoning||"",u=null,h=r?.score||null;tR(t,e,t=>{c=t.content||c,p=t.reasoning||p;let e=c.match(/SCORE_(\d+)/g);if(e&&e.length>0){let i=e[e.length-1];h=parseInt(i.match(/SCORE_(\d+)/)[1],10)}if(d.update({status:"streaming",score:h,description:c||"Rating in progress...",reasoning:p,questions:[],lastAnswer:""}),a.has(o)){let n=a.get(o);n.description=c,n.reasoning=p,n.score=h,n.streaming=!0}},t=>{c=t.content||c,p=t.reasoning||p,u=t.data;let r=c.match(/SCORE_(\d+)/g);if(r&&r.length>0){let l=r[r.length-1];h=parseInt(l.match(/SCORE_(\d+)/)[1],10)}let g="rated";null==h&&(g="error",h=5,c+="\n[No score detected - Error]");let m={tweetContent:i,score:h,description:c,reasoning:p,streaming:!1,timestamp:Date.now(),error:"error"===g?"No score detected":void 0,metadata:u?.id?{generationId:u.id}:null};a.set(o,m),d.update({status:g,score:h,description:c,reasoning:p,questions:tB(c),lastAnswer:"",metadata:u?.id?{generationId:u.id}:null}),n&&tb(n);let f=u?.id;f&&e&&t9(o,f,e,d),s({score:h,content:c,reasoning:p,error:"error"===g,cached:!1,data:u})},t=>{if(d.update({status:"error",score:5,description:`Stream Error: ${t.message}`,reasoning:"",questions:[],lastAnswer:""}),a.has(o)){let e=a.get(o);e.streaming=!1,e.error=t.message,e.score=5,e.description=`Stream Error: ${t.message}`}l(Error(t.message))},3e4,o)})}async function t9(t,e,o,i,n=0,r=[1e3,500,2e3,4e3,8e3]){if(n>=r.length)return;let s=r[n];await new Promise(t=>setTimeout(t,s));try{let l=await tQ(e,o);if(!l.error&&l.data?.data){let d=l.data.data,c={model:d.model||"N/A",promptTokens:d.tokens_prompt||0,completionTokens:d.tokens_completion||0,reasoningTokens:d.native_tokens_reasoning||0,latency:void 0!==d.latency?(d.latency/1e3).toFixed(2)+"s":"N/A",mediaInputs:d.num_media_prompt||0,price:void 0!==d.total_cost?`$${d.total_cost.toFixed(6)}`:"N/A",providerName:d.provider_name||"N/A"},p=a.get(t);p&&(p.metadata=c,a.set(t,p),i.update({metadata:c}));return}l.status,t9(t,e,o,i,n+1,r)}catch(u){t9(t,e,o,i,n+1,r)}}async function tP(t,o,i,n,r){let s=o.find(t=>"user"===t.role&&t===o[o.length-1])?.content.find(t=>"text"===t.type)?.text||"User's question",l=e("enableStreaming",!1),d=o.map((t,e)=>{if(e===o.length-1&&"user"===t.role){let i=t.content.find(t=>"text"===t.type)?.text||"",n=`<UserQuestion> ${i} </UserQuestion> `,r=[{type:"text",text:n}];return t.content.forEach(t=>{("image_url"===t.type||"file"===t.type)&&r.push(t)}),{...t,content:r}}return t}),c={model:I,messages:d,temperature:H,top_p:N,max_tokens:B,stream:l},p=e("reasoningEffort","none");"none"!==p&&(c.reasoning={effort:p}),e("enableWebSearch",!1)&&(c.tools=[{type:"openrouter:web_search"}]),I.includes("gemini")&&(c.config={safetySettings:t7}),q&&(c.provider={sort:q,allow_fallbacks:!0});try{try{let u="*Processing...*",h=[...o];if(l)await new Promise((e,o)=>{let n="",l="";tR(c,i,t=>{n=t.content||n,l=t.reasoning||l,r.renderStreamingAnswer(n,l)},o=>{u=o.content||n;let i=o.reasoning||l,s={role:"assistant",content:[{type:"text",text:u}]};if(h.push(s),r.conversationHistory.length>0){let d=r.conversationHistory[r.conversationHistory.length-1];"pending"===d.answer&&(d.reasoning=i)}r.updateAfterFollowUp({assistantResponseContent:u,updatedQaHistory:h});let c=a.get(t)||{};c.qaConversationHistory=h;let p=u.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);c.lastAnswer=p?p[1].trim():u,c.questions=tB(u),c.timestamp=Date.now(),a.set(t,c),e()},e=>{let i=`Error generating answer: ${e.message}`;r.updateConversationHistoryEntry(s,i),r.setFollowUpQuestions(a.get(t)?.questions||[]),r.refreshTooltipUI();let n=a.get(t)||{};n.lastAnswer=i,n.timestamp=Date.now(),a.set(t,n),o(Error(e.message))},6e4,`followup-${t}`)});else{let g=await tL(c,i,6e4);if(g.error||!g.data?.choices?.[0]?.message?.content)throw Error(g.message||"Failed to get follow-up answer.");u=g.data.choices[0].message.content;let m={role:"assistant",content:[{type:"text",text:u}]};h.push(m),r.updateAfterFollowUp({assistantResponseContent:u,updatedQaHistory:h});let f=a.get(t)||{};f.qaConversationHistory=h;let $=u.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);f.lastAnswer=$?$[1].trim():u,f.questions=tB(u),f.timestamp=Date.now(),a.set(t,f)}}catch(b){let y=`Error answering question: ${b.message}`;r.updateConversationHistoryEntry(s,y),r.setFollowUpQuestions(a.get(t)?.questions||[]),r.refreshTooltipUI();let v=a.get(t)||{};v.lastAnswer=y,v.timestamp=Date.now(),a.set(t,v)}}finally{r&&"function"==typeof r.finalizeFollowUpInteraction&&r.finalizeFollowUpInteraction()}}let tF;o("menuHTML",GM_getResourceText("MENU_HTML")),tF=e("firstRun",!0),function n(){let r=document.querySelector("main")||document.querySelector('div[data-testid="primaryColumn"]');if(r){w=r,function n(){let r=function o(){let i;if(!(i=t||e("menuHTML")))return Z("Error: Could not load UI components."),null;let n="tweetfilter-root-container",r=document.getElementById(n);if(r)return r;(r=document.createElement("div")).id=n,r.innerHTML=i,document.body.appendChild(r);let a=r.querySelector("#version-info");return a&&(a.textContent="Twitter De-Sloppifier v1.7.2"),r}();r&&(function t(i){if(!i)return;let n=i.querySelector("#settings-container"),r=i.querySelector("#tweet-filter-container"),s=i.querySelector("#settings-toggle"),l=i.querySelector("#filter-toggle");i.addEventListener("click",t=>{let i=t.target,d=i.closest("[data-action]"),c=d?.dataset.action;i.dataset.setting,i.closest(".parameter-row")?.dataset.paramName;let p=i.dataset.tab,u=i.closest("[data-toggle]")?.dataset.toggle;if(c)switch(c){case"close-filter":tn(r,l,"Filter Slider","Filter Slider");break;case"toggle-settings":case"close-settings":tn(n,s,'<span style="font-size: 14px;">✕</span> Close','<span style="font-size: 14px;">⚙️</span> Settings');break;case"save-api-key":(function t(){let i=document.getElementById("openrouter-api-key"),n=i.value.trim(),r=e("openrouter-api-key","").length>0;n?(r||t$(!0),o("openrouter-api-key",n),Z("API key saved successfully!"),tN(),location.reload()):Z("Please enter a valid API key")})();break;case"clear-cache":tr();break;case"reset-settings":t$(K());break;case"save-instructions":J();break;case"add-handle":(function t(){let e=document.getElementById("handle-input"),i=e.value.trim();i&&(function t(e){if(""===(e=e.trim().replace(/^@/,""))||U.includes(e)){Z(""===e?"Handle cannot be empty.":`@${e} is already on the list.`);return}U.push(e),o("blacklistedHandles",U.join("\n")),tl(document.getElementById("handle-list")),Z(`Added @${e} to auto-rate list.`)}(i),e.value="")})();break;case"clear-instructions-history":(K()||confirm("Are you sure you want to clear all instruction history?"))&&(b.clearHistory(),tt(),Z("Instructions history cleared"));break;case"export-cache":(function t(){if(!a){Z("Error: Tweet cache not found.","error");return}try{let e=a.cache;if(!e||0===Object.keys(e).length){Z("Cache is empty. Nothing to export.","warning");return}let o=JSON.stringify(e,null,2),i=new Blob([o],{type:"application/json;charset=utf-8;"}),n=URL.createObjectURL(i),r=document.createElement("a");r.setAttribute("href",n);let s=new Date().toISOString().replace(/[:.]/g,"-");r.setAttribute("download",`tweet-filter-cache-${s}.json`),r.style.visibility="hidden",document.body.appendChild(r),r.click(),document.body.removeChild(r),URL.revokeObjectURL(n),Z(`Cache exported successfully (${Object.keys(e).length} items).`)}catch(l){Z("Error exporting cache. Check console for details.","error")}})()}if(i.classList.contains("remove-handle")){let h=i.closest(".handle-item"),g=h?.querySelector(".handle-text");if(g){let m=g.textContent.substring(1);(function t(e){let i=U.indexOf(e);i>-1?(U.splice(i,1),o("blacklistedHandles",U.join("\n")),tl(document.getElementById("handle-list")),Z(`Removed @${e} from auto-rate list.`)):console.warn(`Attempted to remove non-existent handle: ${e}`)})(m)}}p&&function t(e){let o=document.querySelector("#settings-container .settings-content");if(!o)return;let i=o.querySelectorAll(".tab-content"),n=o.querySelectorAll(".tab-navigation .tab-button");i.forEach(t=>t.classList.remove("active")),n.forEach(t=>t.classList.remove("active"));let r=o.querySelector(`#${e}-tab`),a=o.querySelector(`.tab-navigation .tab-button[data-tab="${e}"]`);r&&r.classList.add("active"),a&&a.classList.add("active")}(p),u&&function t(e){let o=document.getElementById(e),i=document.querySelector(`[data-toggle="${e}"]`);if(!o||!i)return;let n=i.querySelector(".advanced-toggle-icon"),r=o.classList.toggle("expanded");n&&n.classList.toggle("expanded",r),r?o.style.maxHeight=o.scrollHeight+"px":o.style.maxHeight="0"}(u)}),i.addEventListener("input",t=>{let e=t.target,i=e.dataset.setting,n=e.closest(".parameter-row")?.dataset.paramName;i&&ta(e,i),n&&function t(e,i){let n=e.closest(".parameter-row");if(!n)return;let r=n.querySelector(".parameter-slider"),a=n.querySelector(".parameter-value"),s=parseFloat(r.min),l=parseFloat(r.max),d=parseFloat(e.value);"number"!==e.type||isNaN(d)||(d=Math.max(s,Math.min(l,d))),r&&a&&(r.value=d,a.value=d),void 0!==window[i]&&(window[i]=d),o(i,d)}(e,n),"tweet-filter-slider"===e.id&&function t(e){let i=document.getElementById("tweet-filter-value");x=parseInt(e.value,10),i&&(i.value=x.toString());let n=x/10*100;e.style.setProperty("--slider-percent",`${n}%`),o("filterThreshold",x),t8()}(e),"tweet-filter-value"===e.id&&function t(e){let i=parseInt(e.value,10);i=Math.max(0,Math.min(10,i)),e.value=i.toString();let n=document.getElementById("tweet-filter-slider");if(n){n.value=i.toString();let r=i/10*100;n.style.setProperty("--slider-percent",`${r}%`)}x=i,o("filterThreshold",x),t8()}(e)}),i.addEventListener("change",t=>{let e=t.target,o=e.dataset.setting;"enableImageDescriptions"===o&&ta(e,o)}),l&&(l.onclick=()=>{r&&(r.style.display="flex",r.offsetHeight,r.classList.remove("hidden")),l.style.display="none"}),document.addEventListener("click",tf);let d=i.querySelector("#show-free-models");d&&d.addEventListener("change",function(){o("showFreeModels",k=this.checked),th()});let c=i.querySelector("#model-family-filter");c&&c.addEventListener("change",function(){A=tu(this.value),o("modelFamilyFilter",A),th()});let p=i.querySelector("#provider-sort");p&&p.addEventListener("change",function(){o("providerSort",q=this.value)})}(r),ts(),tN(),function t(){let e=document.getElementById("tweet-filter-stats-badge");if(!e)return;e.title="Click to open settings",e.addEventListener("click",()=>{let t=document.getElementById("settings-toggle");t&&t.click()});let o,n=()=>{clearTimeout(o),e.style.opacity="1",o=setTimeout(()=>{e.style.opacity="0.3"},5e3)};e.addEventListener("mouseenter",()=>{e.style.opacity="1",clearTimeout(o)}),e.addEventListener("mouseleave",n),n(),i()}(),setInterval(i,3e3),window.activeStreamingRequests||(window.activeStreamingRequests={}))}(),tF&&(t$(!0),o("firstRun",!1));let s=e("openrouter-api-key","");s||alert("No API Key found. Please enter your API Key in Settings > General."),s&&(o("openrouter-api-key",s),Z(`Loaded ${a.size} cached ratings. Starting to rate visible tweets...`),tN()),document.querySelector('[aria-label="Timeline: Conversation"]')?tA():w.querySelectorAll(D).forEach(t0);let l=new MutationObserver(V);l.observe(w,{childList:!0,subtree:!0}),window.addEventListener("beforeunload",()=>{l.disconnect();let t=document.getElementById("tweet-filter-container");t&&t.remove();let e=document.getElementById("settings-container");e&&e.remove();let o=document.getElementById("status-indicator");o&&o.remove(),to.destroyAll()})}else setTimeout(n,1)}()}();
+`
+                    }
+                ]
+            }
+        ],
+        temperature: modelTemperature,
+        top_p: modelTopP,
+        max_tokens: maxTokens,
+    };
+    if (reasoningEffort !== 'none') {
+        requestBody.reasoning = { effort: reasoningEffort };
+    }
+    if(browserGet('enableWebSearch',false)){
+        requestBody.tools = [{type: "openrouter:web_search"}];
+    }
+    if (selectedModel.includes('gemini')) {
+        requestBody.config = { safetySettings: safetySettings };
+    }
+    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
+        appendRatingMediaContent(requestBody.messages[1].content, ratingImageUrls);
+    }
+    if (providerSort) {
+        requestBody.provider = { sort: providerSort, allow_fallbacks: true };
+    }
+    const useStreaming = browserGet('enableStreaming', false);
+    tweetCache.set(tweetId, {
+        streaming: true,
+        timestamp: Date.now(),
+        tweetContent: tweetText,
+        mediaUrls: mediaUrls
+    });
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        attempt++;
+        const now = Date.now();
+        const timeElapsed = now - lastAPICallTime;
+        if (timeElapsed < API_CALL_DELAY_MS) {
+            await new Promise(resolve => setTimeout(resolve, Math.max(0, API_CALL_DELAY_MS - timeElapsed)));
+        }
+        lastAPICallTime = now;
+        tweetProcessingState.incrementPending();
+        showStatus(`Rating tweet... (${pendingRequests} pending)`);
+        try {
+            let result;
+            if (useStreaming) {
+                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle);
+            } else {
+                result = await rateTweet(requestBody, apiKey, tweetId, tweetText);
+            }
+            cleanupRequest();
+            if (!result.error && result.content) {
+                indicatorInstance.updateInitialReviewAndBuildHistory({
+                    fullContext: tweetText,
+                    mediaUrls: mediaUrls,
+                    apiResponseContent: result.content,
+                    reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+                    userInstructions: currentInstructions
+                });
+                const finalScore = indicatorInstance.score;
+                const finalQuestions = indicatorInstance.questions;
+                const finalDescription = indicatorInstance.description;
+                const finalQaHistory = indicatorInstance.qaConversationHistory;
+                tweetCache.set(tweetId, {
+                    score: finalScore,
+                    description: finalDescription,
+                    reasoning: result.reasoning || "",
+                    questions: finalQuestions,
+                    lastAnswer: "",
+                    tweetContent: tweetText,
+                    mediaUrls: mediaUrls,
+                    streaming: false,
+                    timestamp: Date.now(),
+                    metadata: result.metadata || null,
+                    qaConversationHistory: finalQaHistory
+                });
+                return {
+                    score: finalScore,
+                    content: result.content,
+                    reasoning: result.reasoning || "",
+                    questions: finalQuestions,
+                    error: false,
+                    cached: false,
+                    data: result.data,
+                    metadata: result.metadata || null,
+                    qaConversationHistory: finalQaHistory
+                };
+            }
+            if (attempt < maxRetries && (result.error || !result.content)) {
+                const backoffDelay = Math.pow(attempt, 2) * 1000;
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else if (result.error || !result.content) {
+                throw new Error(result.content || "Failed to get valid rating content after multiple attempts");
+            }
+        } catch (error) {
+            cleanupRequest();
+            console.error(`API error during attempt ${attempt}:`, error);
+            if (attempt < maxRetries) {
+                const backoffDelay = Math.pow(attempt, 2) * 1000;
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            } else {
+                const errorContent = `Failed to get valid rating after multiple attempts: ${error.message}`;
+                indicatorInstance.updateInitialReviewAndBuildHistory({
+                    fullContext: tweetText,
+                    mediaUrls: mediaUrls,
+                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
+                    reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+                    followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+                    userInstructions: currentInstructions
+                });
+                tweetCache.set(tweetId, {
+                    score: 5,
+                    description: errorContent,
+                    reasoning: "",
+                    questions: [],
+                    lastAnswer: "",
+                    error: true,
+                    tweetContent: tweetText,
+                    mediaUrls: mediaUrls,
+                    streaming: false,
+                    timestamp: Date.now(),
+                    qaConversationHistory: indicatorInstance.qaConversationHistory
+                });
+                return {
+                    score: 5,
+                    content: errorContent,
+                    reasoning: "",
+                    questions: [],
+                    lastAnswer: "",
+                    error: true,
+                    data: null,
+                    qaConversationHistory: indicatorInstance.qaConversationHistory
+                };
+            }
+        }
+    }
+    cleanupRequest();
+    const fallbackError = "Unexpected failure in rating process.";
+    indicatorInstance.updateInitialReviewAndBuildHistory({
+        fullContext: tweetText,
+        mediaUrls: mediaUrls,
+        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
+        reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
+        followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
+        userInstructions: currentInstructions
+    });
+    return {
+        score: 5,
+        content: fallbackError,
+        reasoning: "",
+        questions: [],
+        lastAnswer: "",
+        error: true,
+        data: null,
+        qaConversationHistory: indicatorInstance.qaConversationHistory
+    };
+}
+/**
+ * Performs a non-streaming tweet rating request
+ *
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
+ */
+async function rateTweet(request, apiKey, tweetId, tweetText) {
+    const existingScore = tweetCache.get(tweetId)?.score;
+    const result = await getCompletion(request, apiKey);
+    if (!result.error && result.data?.choices?.[0]?.message) {
+        const content = result.data.choices[0].message.content || "";
+        const reasoning = result.data.choices[0].message.reasoning || "";
+        const scoreMatches = content.match(/SCORE_(\d+)/g);
+        const score = existingScore ?? (scoreMatches && scoreMatches.length > 0
+            ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10)
+            : null);
+        tweetCache.set(tweetId, {
+            score: score,
+            description: content,
+            tweetContent: tweetText,
+            streaming: false,
+            metadata: extractCompletionMetadata(result.data)
+        });
+        return {
+            content,
+            reasoning,
+            data: result.data,
+            metadata: extractCompletionMetadata(result.data)
+        };
+    }
+    return {
+        error: true,
+        content: result.error || "Unknown error",
+        reasoning: "",
+        data: null
+    };
+}
+/**
+ * Performs a streaming tweet rating request with real-time UI updates
+ *
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @param {string} tweetId - The tweet ID
+ * @param {string} tweetText - The text content of the tweet
+ * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
+ */
+async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
+    if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
+        console.log(`Aborting existing streaming request for tweet ${tweetId}`);
+        window.activeStreamingRequests[tweetId].abort();
+        delete window.activeStreamingRequests[tweetId];
+    }
+    const existingCache = tweetCache.get(tweetId);
+    if (!existingCache || existingCache.score === undefined || existingCache.score === null) {
+        tweetCache.set(tweetId, {
+            streaming: true,
+            timestamp: Date.now(),
+            tweetContent: tweetText,
+            description: "",
+            reasoning: "",
+            questions: [],
+            lastAnswer: "",
+            score: null
+        });
+    }
+    return new Promise((resolve, reject) => {
+        const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+        if (!indicatorInstance) {
+             console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
+             if (tweetCache.has(tweetId)) {
+                 tweetCache.get(tweetId).streaming = false;
+                 tweetCache.get(tweetId).error = "Indicator initialization failed";
+             }
+             return reject(new Error(`ScoreIndicator instance could not be initialized for tweet ${tweetId}`));
+        }
+        let aggregatedContent = existingCache?.description || "";
+        let aggregatedReasoning = existingCache?.reasoning || "";
+        let finalData = null;
+        let score = existingCache?.score || null;
+        getCompletionStreaming(
+            request,
+            apiKey,
+            (chunkData) => {
+                aggregatedContent = chunkData.content || aggregatedContent;
+                aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
+                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
+                if (scoreMatches && scoreMatches.length > 0) {
+                    const lastScore = scoreMatches[scoreMatches.length - 1];
+                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
+                }
+                 indicatorInstance.update({
+                    status: TweetRatingStatus.STREAMING,
+                    score: score,
+                    description: aggregatedContent || "Rating in progress...",
+                    reasoning: aggregatedReasoning,
+                    questions: [],
+                    lastAnswer: ""
+                });
+                if (tweetCache.has(tweetId)) {
+                    const entry = tweetCache.get(tweetId);
+                    entry.description = aggregatedContent;
+                    entry.reasoning = aggregatedReasoning;
+                    entry.score = score;
+                    entry.streaming = true;
+                }
+            },
+            (finalResult) => {
+                console.log(finalResult);
+                aggregatedContent = finalResult.content || aggregatedContent;
+                aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
+                finalData = finalResult.data;
+                const completionMetadata = extractCompletionMetadata(finalData);
+                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
+                if (scoreMatches && scoreMatches.length > 0) {
+                    const lastScore = scoreMatches[scoreMatches.length - 1];
+                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
+                }
+                let finalStatus = TweetRatingStatus.RATED;
+                if (score === null || score === undefined) {
+                    console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                    finalStatus = TweetRatingStatus.ERROR;
+                    score = 5;
+                    aggregatedContent += "\n[No score detected - Error]";
+                }
+                const finalCacheData = {
+                    tweetContent: tweetText,
+                    score: score,
+                    description: aggregatedContent,
+                    reasoning: aggregatedReasoning,
+                    streaming: false,
+                    timestamp: Date.now(),
+                    error: finalStatus === TweetRatingStatus.ERROR ? "No score detected" : undefined,
+                    metadata: completionMetadata
+                };
+                tweetCache.set(tweetId, finalCacheData);
+                indicatorInstance.update({
+                    status: finalStatus,
+                    score: score,
+                    description: aggregatedContent,
+                    reasoning: aggregatedReasoning,
+                    questions: extractFollowUpQuestions(aggregatedContent),
+                    lastAnswer: "",
+                    metadata: completionMetadata
+                });
+                if (tweetArticle) {
+                    filterSingleTweet(tweetArticle);
+                }
+                resolve({
+                    score: score,
+                    content: aggregatedContent,
+                    reasoning: aggregatedReasoning,
+                    error: finalStatus === TweetRatingStatus.ERROR,
+                    cached: false,
+                    data: finalData,
+                    metadata: completionMetadata
+                });
+            },
+            (errorData) => {
+                 console.error(`[API Stream Error] Tweet ${tweetId}: ${errorData.message}`);
+                indicatorInstance.update({
+                    status: TweetRatingStatus.ERROR,
+                    score: 5,
+                    description: `Stream Error: ${errorData.message}`,
+                    reasoning: '',
+                    questions: [],
+                    lastAnswer: ''
+                });
+                if (tweetCache.has(tweetId)) {
+                     const entry = tweetCache.get(tweetId);
+                     entry.streaming = false;
+                     entry.error = errorData.message;
+                     entry.score = 5;
+                     entry.description = `Stream Error: ${errorData.message}`;
+                }
+                reject(new Error(errorData.message));
+            },
+            30000,
+            tweetId
+        );
+    });
+}
+/**
+ * Answers a follow-up question about a tweet and generates new questions.
+ *
+ * @param {string} tweetId - The ID of the tweet being discussed.
+ * @param {object[]} qaHistoryForApiCall - The conversation history array, including the latest user message.
+ * @param {string} apiKey - The OpenRouter API key.
+ * @param {Element} [tweetArticle=null] - The DOM element for the tweet article.
+ * @param {ScoreIndicator} indicatorInstance - The ScoreIndicator instance to update.
+ * @returns {Promise<void>} Resolves when the answer is generated and UI updated.
+ */
+async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, tweetArticle, indicatorInstance) {
+    const questionTextForLogging = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
+    console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
+    const useStreaming = browserGet('enableStreaming', false);
+    const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
+        if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
+            const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
+            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
+            const templatedContent = [{ type: "text", text: templatedText }];
+            msg.content.forEach(contentItem => {
+                if (contentItem.type === "image_url" || contentItem.type === "file") {
+                    templatedContent.push(contentItem);
+                }
+            });
+            return { ...msg, content: templatedContent };
+        }
+        return msg;
+    });
+    const request = {
+        model: selectedModel,
+        messages: messagesForApi,
+        temperature: modelTemperature,
+        top_p: modelTopP,
+        max_tokens: maxTokens,
+        stream: useStreaming
+    };
+    const reasoningEffort = browserGet('reasoningEffort', 'none');
+    if (reasoningEffort !== 'none') {
+        request.reasoning = { effort: reasoningEffort };
+    }
+    if(browserGet('enableWebSearch',false)){
+        request.tools = [{type: "openrouter:web_search"}];
+    }
+    console.log(`followup request (templated): ${JSON.stringify(request)}`);
+    if (selectedModel.includes('gemini')) {
+        request.config = { safetySettings: safetySettings };
+    }
+    if (providerSort) {
+        request.provider = { sort: providerSort, allow_fallbacks: true };
+    }
+    try {
+        try {
+            let finalAnswerContent = "*Processing...*";
+            let finalQaHistory = [...qaHistoryForApiCall];
+            if (useStreaming) {
+                await new Promise((resolve, reject) => {
+                    let aggregatedContent = "";
+                    let aggregatedReasoning = "";
+                    getCompletionStreaming(
+                        request, apiKey,
+                        (chunkData) => {
+                            aggregatedContent = chunkData.content || aggregatedContent;
+                            aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
+                            indicatorInstance.renderStreamingAnswer(aggregatedContent, aggregatedReasoning);
+                        },
+                        (result) => {
+                            finalAnswerContent = result.content || aggregatedContent;
+                            const finalReasoning = result.reasoning || aggregatedReasoning;
+                            const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
+                            finalQaHistory.push(assistantMessage);
+                            if (indicatorInstance.conversationHistory.length > 0) {
+                                const lastTurn = indicatorInstance.conversationHistory[indicatorInstance.conversationHistory.length - 1];
+                                if (lastTurn.answer === 'pending') {
+                                    lastTurn.reasoning = finalReasoning;
+                                }
+                            }
+                            indicatorInstance.updateAfterFollowUp({
+                                assistantResponseContent: finalAnswerContent,
+                                updatedQaHistory: finalQaHistory
+                            });
+                            const currentCache = tweetCache.get(tweetId) || {};
+                            currentCache.qaConversationHistory = finalQaHistory;
+                            const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                            currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
+                            currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                            currentCache.timestamp = Date.now();
+                            tweetCache.set(tweetId, currentCache);
+                            resolve();
+                        },
+                        (error) => {
+                            console.error("[FollowUp Stream Error]", error);
+                            const errorMessage = `Error generating answer: ${error.message}`;
+                            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+                            indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
+                            indicatorInstance.refreshTooltipUI();
+                            const currentCache = tweetCache.get(tweetId) || {};
+                            currentCache.lastAnswer = errorMessage;
+                            currentCache.timestamp = Date.now();
+                            tweetCache.set(tweetId, currentCache);
+                            reject(new Error(error.message));
+                        },
+                        60000,
+                        `followup-${tweetId}`
+                    );
+                });
+            } else {
+                const result = await getCompletion(request, apiKey, 60000);
+                if (result.error || !result.data?.choices?.[0]?.message?.content) {
+                    throw new Error(result.message || "Failed to get follow-up answer.");
+                }
+                finalAnswerContent = result.data.choices[0].message.content;
+                const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
+                finalQaHistory.push(assistantMessage);
+                indicatorInstance.updateAfterFollowUp({
+                    assistantResponseContent: finalAnswerContent,
+                    updatedQaHistory: finalQaHistory
+                });
+                const currentCache = tweetCache.get(tweetId) || {};
+                currentCache.qaConversationHistory = finalQaHistory;
+                const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
+                currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
+                currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                currentCache.timestamp = Date.now();
+                tweetCache.set(tweetId, currentCache);
+            }
+        } catch (error) {
+            console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
+            const errorMessage = `Error answering question: ${error.message}`;
+            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+            indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
+            indicatorInstance.refreshTooltipUI();
+            const currentCache = tweetCache.get(tweetId) || {};
+            currentCache.lastAnswer = errorMessage;
+            currentCache.timestamp = Date.now();
+            tweetCache.set(tweetId, currentCache);
+        }
+    } finally {
+        if (indicatorInstance && typeof indicatorInstance.finalizeFollowUpInteraction === 'function') {
+            indicatorInstance.finalizeFollowUpInteraction();
+        }
+    }
+}
+    // ----- twitter-desloppifier.js -----
+const VERSION = '1.7.2';
+(function () {
+    'use strict';
+    console.log(`X/Twitter Tweet De-Sloppification Activated (v${VERSION} - Enhanced)`);
+    let menuhtml = GM_getResourceText("MENU_HTML");
+    browserSet('menuHTML', menuhtml);
+    let firstRun = browserGet('firstRun', true);
+    /**
+     * Initializes the observer on the main content area, adds the UI elements,
+     * starts processing visible tweets, and sets up periodic checks.
+     */
+    function initializeObserver() {
+        const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
+        if (target) {
+            observedTargetNode = target;
+            console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
+            initialiseUI();
+            if (firstRun) {
+                resetSettings(true);
+                browserSet('firstRun', false);
+            }
+            let apiKey = browserGet('openrouter-api-key', '');
+            if(!apiKey){
+                alert("No API Key found. Please enter your API Key in Settings > General.")
+            }
+            if (apiKey) {
+                browserSet('openrouter-api-key', apiKey);
+                showStatus(`Loaded ${tweetCache.size} cached ratings. Starting to rate visible tweets...`);
+                fetchAvailableModels();
+            }
+            if(document.querySelector('[aria-label="Timeline: Conversation"]')){
+                handleThreads();
+            }else{
+                observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+            }
+            const observer = new MutationObserver(handleMutations);
+            observer.observe(observedTargetNode, { childList: true, subtree: true });
+            window.addEventListener('beforeunload', () => {
+                observer.disconnect();
+                const sliderUI = document.getElementById('tweet-filter-container');
+                if (sliderUI) sliderUI.remove();
+                const settingsUI = document.getElementById('settings-container');
+                if (settingsUI) settingsUI.remove();
+                const statusIndicator = document.getElementById('status-indicator');
+                if (statusIndicator) statusIndicator.remove();
+                ScoreIndicatorRegistry.destroyAll();
+                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
+            });
+        } else {
+            setTimeout(initializeObserver, 1);
+        }
+    }
+    initializeObserver();
+})();
+})();

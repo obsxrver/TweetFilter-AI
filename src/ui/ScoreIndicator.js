@@ -689,31 +689,35 @@ class ScoreIndicator {
             indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '?';
         } else {
             switch (this.status) {
-                case 'pending':
+                case TweetRatingStatus.PENDING:
                     indicatorClass = 'pending-rating';
-                    indicatorText = '⏳';
+                    indicatorText = '...';
                     break;
-                case 'streaming':
+                case TweetRatingStatus.STREAMING:
                     indicatorClass = 'streaming-rating';
-                    indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '🔄';
+                    indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '~';
                     break;
-                case 'error':
+                case TweetRatingStatus.ERROR:
                     indicatorClass = 'error-rating';
-                    indicatorText = '⚠️';
+                    indicatorText = '!';
                     break;
-                case 'cached':
+                case TweetRatingStatus.CACHED:
                     indicatorClass = 'cached-rating';
                     indicatorText = String(this.score);
                     break;
-                case 'blacklisted':
+                case TweetRatingStatus.BLACKLISTED:
                     indicatorClass = 'blacklisted-rating';
                     indicatorText = String(this.score);
                     break;
-                case 'manual':
+                case TweetRatingStatus.MANUAL:
                     indicatorClass = 'manual-rating';
-                    indicatorText = '💭';
+                    indicatorText = 'Rate';
                     break;
-                case 'rated':
+                case TweetRatingStatus.AD:
+                    indicatorClass = 'rated-rating';
+                    indicatorText = 'Ad';
+                    break;
+                case TweetRatingStatus.RATED:
                 default:
                     indicatorClass = 'rated-rating';
                     indicatorText = String(this.score);
@@ -797,7 +801,7 @@ class ScoreIndicator {
             metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
             showMetadataDropdown = true;
         } else if (hasOnlyGenId) {
-            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
+            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId}</div>`;
             showMetadataDropdown = true;
         }
 
@@ -950,14 +954,14 @@ class ScoreIndicator {
             }
         }
 
-        const isStreaming = this.status === 'streaming';
+        const isStreaming = this.status === TweetRatingStatus.STREAMING;
         if (this.tooltipElement.classList.contains('streaming-tooltip') !== isStreaming) {
              this.tooltipElement.classList.toggle('streaming-tooltip', isStreaming);
              contentChanged = true;
         }
 
         if (this.rateButton) {
-            const showRateButton = this.status === 'manual';
+            const showRateButton = this.status === TweetRatingStatus.MANUAL;
             const currentDisplay = this.rateButton.style.display;
             const newDisplay = showRateButton ? 'inline-block' : 'none';
             if (currentDisplay !== newDisplay) {
@@ -1273,7 +1277,7 @@ class ScoreIndicator {
 
     _updateScrollButtonVisibility() {
         if (!this.tooltipScrollableContentElement || !this.scrollButton) return;
-        const isStreaming = this.status === 'streaming';
+        const isStreaming = this.status === TweetRatingStatus.STREAMING;
         if (!isStreaming) {
             this.scrollButton.style.display = 'none';
             return;
@@ -1477,9 +1481,10 @@ class ScoreIndicator {
                     });
                 } else {
 
+                    const modelImageUrl = stripImageUrlNameParam(url);
                     userMessageContentForHistory.push({
                         type: "image_url",
-                        image_url: { "url": url }
+                        image_url: { "url": modelImageUrl }
                     });
                 }
             });
@@ -1941,8 +1946,8 @@ class ScoreIndicator {
         if (statusChanged) this.status = status;
 
         if (scoreChanged || statusChanged) {
-            this.score = (this.status === 'pending' || this.status === 'error') ? score :
-                (this.status === 'streaming' && score === null) ? this.score :
+            this.score = (this.status === TweetRatingStatus.PENDING || this.status === TweetRatingStatus.ERROR) ? score :
+                (this.status === TweetRatingStatus.STREAMING && score === null) ? this.score :
                     score;
         }
         if (descriptionChanged) this.description = description;
@@ -1951,7 +1956,7 @@ class ScoreIndicator {
         if (questionsChanged) this.questions = questions;
 
         if (statusChanged) {
-            const shouldAutoScroll = (this.status === 'pending' || this.status === 'streaming');
+            const shouldAutoScroll = (this.status === TweetRatingStatus.PENDING || this.status === TweetRatingStatus.STREAMING);
             if (this.autoScroll !== shouldAutoScroll) {
                 this.autoScroll = shouldAutoScroll;
 
@@ -1981,7 +1986,7 @@ class ScoreIndicator {
         this.tooltipElement.style.display = 'flex';
         this._setPosition();
 
-        if (this.autoScroll && (this.status === 'streaming' || this.status === 'pending')) {
+        if (this.autoScroll && (this.status === TweetRatingStatus.STREAMING || this.status === TweetRatingStatus.PENDING)) {
             this._performAutoScroll();
         }
 
@@ -2390,9 +2395,7 @@ class ScoreIndicator {
             tweetCache.delete(this.tweetId);
         }
 
-        if (processedTweets.has(this.tweetId)) {
-            processedTweets.delete(this.tweetId);
-        }
+        tweetProcessingState.clear(this.tweetId);
 
         const currentArticle = this.findCurrentArticleElement();
         this.destroy();
@@ -2408,7 +2411,7 @@ class ScoreIndicator {
         if (!this.tweetId) return;
 
         this.update({
-            status: 'pending',
+            status: TweetRatingStatus.PENDING,
             score: null,
             description: 'Rating tweet...',
             reasoning: '',
@@ -2418,9 +2421,7 @@ class ScoreIndicator {
         const currentArticle = this.findCurrentArticleElement();
         if (currentArticle && typeof scheduleTweetProcessing === 'function') {
 
-            if (processedTweets.has(this.tweetId)) {
-                processedTweets.delete(this.tweetId);
-            }
+            tweetProcessingState.clear(this.tweetId);
             scheduleTweetProcessing(currentArticle, true);
         }
     }

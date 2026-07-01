@@ -17,8 +17,9 @@
 // ==/UserScript==
 (function() {
     'use strict';
+    console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
     // Embedded Menu.html
-    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter Slider</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">×</button><label for="tweet-filter-slider">SlopScore:</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings"><span style="font-size: 14px;">⚙️</span> Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">Twitter De-Sloppifier</div><button class="close-button" data-action="toggle-settings">×</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title"><span style="font-size: 14px;">🔑</span> OpenRouter API Key <a href="https://openrouter.ai/settings/keys" target="_blank">Get one here</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">🗄️</span> Cache Statistics</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Cached Tweet Ratings</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Whitelisted Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;"><span style="font-size: 14px;">💾</span> Backup &amp; Restore</div><div class="section-description">Export your settings and cached ratings to a file for backup, or import previously saved settings.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset to Defaults</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">Twitter De-Sloppifier v?.?</div></div><div id="models-tab" class="tab-content"><div class="section-title"><span style="font-size: 14px;">🧠</span> Tweet Rating Model</div><div class="section-description">The rating model is responsible for reviewing each tweet. <br>It will process images directly if you select an <strong>image-capable (🖼️)</strong> model.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Model Provider:</label><select id="model-family-filter" data-setting="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">API Endpoint Priority: </label><select id="provider-sort" data-setting="providerSort"><option value="">Default (load-balanced)</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show Free Models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select data-setting="reasoningEffort" selected="none"><option value="xhigh">xhigh</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option><option value="minimal">minimal</option><option value="none">none</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random the model responses should be (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling parameter (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum number of tokens for the response (0 means no limit)">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Stream API responses as they're generated for live updates">Enable Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Enable web search capabilities for the model.">Enable Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Automatically send tweets to API for rating. When disabled, tweets will show a 'Rate' button instead.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;"><span style="font-size: 14px;">🖼️</span> Image Processing Model</div><div class="section-description">This model generates <strong>text descriptions</strong> of images for the rating model.<br> Hint: If you selected an image-capable model (🖼️) as your <strong>main rating model</strong>, it will process images directly.</div><div class="toggle-row"><div class="toggle-label">Enable Image Descriptions</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions (0.0-1.0)">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image model (0.0-1.0)">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Custom Instructions</div><div class="section-description">Add custom instructions for how the model should score tweets:</div><textarea id="user-instructions" placeholder="Examples:- Give high scores to tweets about technology- Penalize clickbait-style tweets- Rate educational content higher" data-setting="userDefinedInstructions" value=""></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Custom Instructions History</div><div class="advanced-toggle-icon">▼</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"><!-- Instructions entries will be added here dynamically --></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear All History</button></div></div><div class="section-title" style="margin-top: 20px;">Auto-Rate Handles as 10/10</div><div class="section-description">Add Twitter handles to automatically rate as 10/10:</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Twitter handle (without @)"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
+    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">x</button><label for="tweet-filter-slider">Minimum score</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings">Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">TweetFilter AI</div><button class="close-button" data-action="toggle-settings">x</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title">OpenRouter API Key<a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Get one</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;">Cache</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Rated Tweets</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Always-Keep Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;">Backup</div><div class="section-description">Export cached ratings as JSON.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset Settings</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">TweetFilter AI</div></div><div id="models-tab" class="tab-content"><div class="section-title">Tweet Rating Model</div><div class="section-description">Choose the model that scores tweets. Image-capable models can inspect tweet images directly.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Provider</label><select id="model-family-filter" data-setting="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">Endpoint Priority</label><select id="provider-sort" data-setting="providerSort"><option value="">Default</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show free models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select id="reasoning-effort" data-setting="reasoningEffort"><option value="none">None</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra High</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random model responses should be.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling value.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum response tokens. Use 0 for provider default.">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Show API responses as they stream in.">Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Allow OpenRouter web search for rating requests.">Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="When disabled, tweets show a manual Rate button.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;">Image Description Model</div><div class="section-description">Use this only when your rating model cannot read images directly.</div><div class="toggle-row"><div class="toggle-label">Describe Images First</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image descriptions.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Scoring Instructions</div><div class="section-description">Describe what a high-quality tweet means to you.</div><textarea id="user-instructions" placeholder="Examples:- Reward original reporting and useful technical detail.- Penalize engagement bait and vague outrage.- Prefer concise, evidence-backed posts." data-setting="userDefinedInstructions"></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Instruction History</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear History</button></div></div><div class="section-title" style="margin-top: 20px;">Always Keep Handles</div><div class="section-description">Tweets from these handles stay visible regardless of score.</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Handle without @"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
     // Embedded style.css
     const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background: linear-gradient(180deg, rgba(22, 26, 31, 0.97), rgba(16, 18, 22, 0.97));color: #e7e9ea;padding: 0;border-radius: 18px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);display: flex;flex-direction: column;width: min(92vw, 420px);max-width: 420px;max-height: 88vh;overflow: hidden;border: 1px solid rgba(130, 178, 219, 0.24);line-height: 1.3;backdrop-filter: blur(12px);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 14px 16px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background: linear-gradient(180deg, rgba(28, 34, 40, 0.98), rgba(23, 27, 33, 0.96));z-index: 20;border-radius: 18px 18px 0 0;}.settings-title {font-weight: 700;font-size: 16px;letter-spacing: 0.2px;color: #f1f5f9;}.settings-content {overflow-y: auto;max-height: calc(88vh - 118px);padding: 0 0 14px;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(120, 167, 210, 0.18);position: sticky;top: 0;background: rgba(20, 24, 29, 0.95);z-index: 10;padding: 12px 14px 10px;gap: 10px;}.tab-button {padding: 8px 12px;background: rgba(255, 255, 255, 0.04);border: 1px solid transparent;color: #d7e2ec;font-weight: 600;cursor: pointer;border-radius: 10px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(85, 157, 218, 0.14);border-color: rgba(85, 157, 218, 0.3);}.tab-button.active {color: #79c1ff;background-color: rgba(45, 152, 237, 0.2);border-color: rgba(82, 178, 255, 0.5);box-shadow: inset 0 0 0 1px rgba(37, 131, 204, 0.25);}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 16px 16px 8px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 12px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(24, 29, 35, 0.98);padding: 8px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);z-index: 1;}.select-container .search-input {width: 100%;padding: 9px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(33, 39, 46, 0.92);color: #e7e9ea;font-size: 12.5px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background: linear-gradient(180deg, rgba(40, 47, 56, 0.95), rgba(32, 38, 45, 0.95));color: #e7e9ea;padding: 10px 12px;min-height: 40px;border: 1px solid rgba(137, 178, 214, 0.35);border-radius: 10px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(28, 34, 41, 0.99);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(120, 167, 210, 0.28);border-radius: 10px;margin-top: 6px;box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(120, 167, 210, 0.09);font-size: 12.5px;}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: 700;margin-top: 18px;margin-bottom: 8px;color: #f3f6fa;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12.5px;margin-bottom: 10px;color: rgba(225, 233, 241, 0.82);line-height: 1.45;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 8px;margin-bottom: 15px;border: 1px solid rgba(120, 167, 210, 0.2);border-radius: 12px;padding: 12px 12px 10px;background: rgba(255, 255, 255, 0.04);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: 700;font-size: 13px;color: #dce7f2;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;padding: 10px;display: flex;flex-direction: column;align-items: stretch;gap: 8px;border: 1px solid rgba(120, 167, 210, 0.16);border-radius: 10px;background: rgba(255, 255, 255, 0.03);}.sort-container label {font-size: 12px;color: #cfd9e3;font-weight: 600;white-space: normal;display: flex;align-items: center;gap: 8px;}.sort-container .controls-group {display: grid;grid-template-columns: minmax(0, 1fr) auto;gap: 8px;align-items: center;}.sort-container select {width: 100%;min-height: 34px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12.5px;cursor: pointer;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {min-height: 34px;min-width: 94px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.32);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12px;font-weight: 600;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}.sort-container label input[type="checkbox"] {width: 14px;height: 14px;margin: 0;accent-color: #1d9bf0;}@media (min-width: 601px) {#settings-container {width: min(430px, 90vw);max-width: 430px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}`;
     // Apply CSS
@@ -26,33 +27,201 @@
     // Set menu HTML
     GM_setValue('menuHTML', MENU);
     // ----- helpers/browserStorage.js -----
+/**
+ * Browser storage wrapper functions for userscript compatibility
+ */
+/**
+ * Gets a value from browser storage using Tampermonkey's GM_getValue
+ * @param {string} key - The key to get from storage
+ * @param {any} defaultValue - The default value if key doesn't exist
+ * @returns {any} - The value from storage or default value
+ */
 function browserGet(key, defaultValue = null) {
     try {
         return GM_getValue(key, defaultValue);
     } catch (error) {
+        console.error('Error reading from browser storage:', error);
         return defaultValue;
     }
 }
+/**
+ * Sets a value in browser storage using Tampermonkey's GM_setValue
+ * @param {string} key - The key to set in storage
+ * @param {any} value - The value to store
+ */
 function browserSet(key, value) {
     try {
         GM_setValue(key, value);
     } catch (error) {
+        console.error('Error writing to browser storage:', error);
     }
 }
+    // ----- appState.js -----
+const DEFAULT_INSTRUCTIONS = 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
+const DEFAULT_SETTINGS = Object.freeze({
+    selectedModel: 'openai/gpt-4.1-nano',
+    selectedImageModel: 'google/gemini-2.5-flash',
+    showFreeModels: true,
+    modelFamilyFilter: '',
+    providerSort: '',
+    enableImageDescriptions: false,
+    enableStreaming: true,
+    enableWebSearch: false,
+    enableAutoRating: true,
+    reasoningEffort: 'none',
+    modelTemperature: 0.5,
+    modelTopP: 0.9,
+    imageModelTemperature: 0.5,
+    imageModelTopP: 0.9,
+    maxTokens: 0,
+    filterThreshold: 5,
+    userDefinedInstructions: DEFAULT_INSTRUCTIONS,
+    blacklistedHandles: ''
+});
+const TweetRatingStatus = Object.freeze({
+    PENDING: 'pending',
+    STREAMING: 'streaming',
+    RATED: 'rated',
+    CACHED: 'cached',
+    MANUAL: 'manual',
+    ERROR: 'error',
+    BLACKLISTED: 'blacklisted',
+    AD: 'ad'
+});
+const FINAL_TWEET_STATUSES = new Set([
+    TweetRatingStatus.RATED,
+    TweetRatingStatus.CACHED,
+    TweetRatingStatus.MANUAL,
+    TweetRatingStatus.BLACKLISTED,
+    TweetRatingStatus.AD
+]);
+const ACTIVE_TWEET_STATUSES = new Set([
+    TweetRatingStatus.PENDING,
+    TweetRatingStatus.STREAMING
+]);
+function coerceBoolean(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return fallback;
+}
+function coerceNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+function coerceInteger(value, fallback = 0) {
+    const number = parseInt(value, 10);
+    return Number.isFinite(number) ? number : fallback;
+}
+function parseHandleList(value) {
+    return String(value || '')
+        .split('\n')
+        .map(handle => handle.trim().replace(/^@/, ''))
+        .filter(Boolean);
+}
+class AppSettingsStore {
+    get(key) {
+        return browserGet(key, DEFAULT_SETTINGS[key]);
+    }
+    set(key, value) {
+        browserSet(key, value);
+        window[key] = value;
+    }
+    getBoolean(key) {
+        return coerceBoolean(this.get(key), DEFAULT_SETTINGS[key]);
+    }
+    getNumber(key) {
+        return coerceNumber(this.get(key), DEFAULT_SETTINGS[key]);
+    }
+    getInteger(key) {
+        return coerceInteger(this.get(key), DEFAULT_SETTINGS[key]);
+    }
+    getHandles() {
+        return parseHandleList(this.get('blacklistedHandles'));
+    }
+    saveHandles(handles) {
+        const cleanHandles = [...new Set((handles || []).map(handle => handle.trim().replace(/^@/, '')).filter(Boolean))];
+        this.set('blacklistedHandles', cleanHandles.join('\n'));
+        return cleanHandles;
+    }
+    reset() {
+        Object.entries(DEFAULT_SETTINGS).forEach(([key, value]) => this.set(key, value));
+        return { ...DEFAULT_SETTINGS };
+    }
+}
+class TweetProcessingState {
+    constructor() {
+        this.processedTweetIds = new Set();
+        this.retryCounts = new Map();
+        this.pendingRequestCount = 0;
+        this.maxRetriesPerTweet = 2;
+    }
+    markScheduled(tweetId) {
+        this.processedTweetIds.add(tweetId);
+    }
+    isScheduled(tweetId) {
+        return this.processedTweetIds.has(tweetId);
+    }
+    clear(tweetId) {
+        this.processedTweetIds.delete(tweetId);
+    }
+    clearAll() {
+        this.processedTweetIds.clear();
+        this.retryCounts.clear();
+        this.pendingRequestCount = 0;
+        pendingRequests = 0;
+    }
+    resetRetries(tweetId) {
+        this.retryCounts.delete(tweetId);
+    }
+    shouldRetry(tweetId) {
+        const retryCount = this.retryCounts.get(tweetId) || 0;
+        if (retryCount >= this.maxRetriesPerTweet) {
+            return false;
+        }
+        this.retryCounts.set(tweetId, retryCount + 1);
+        return true;
+    }
+    incrementPending() {
+        this.pendingRequestCount += 1;
+        pendingRequests = this.pendingRequestCount;
+        return this.pendingRequestCount;
+    }
+    decrementPending() {
+        this.pendingRequestCount = Math.max(0, this.pendingRequestCount - 1);
+        pendingRequests = this.pendingRequestCount;
+        return this.pendingRequestCount;
+    }
+    resetPending() {
+        this.pendingRequestCount = 0;
+        pendingRequests = 0;
+    }
+}
+function isFinalTweetStatus(status) {
+    return FINAL_TWEET_STATUSES.has(status);
+}
+function isActiveTweetStatus(status) {
+    return ACTIVE_TWEET_STATUSES.has(status);
+}
+function isCompleteCachedRating(entry) {
+    return !!entry && entry.streaming !== true && entry.score !== undefined && entry.score !== null;
+}
+const appSettings = new AppSettingsStore();
+const tweetProcessingState = new TweetProcessingState();
     // ----- helpers/cache.js -----
+/** Updates the cache statistics display in the General tab. */
 function updateCacheStatsUI() {
     const cachedCountEl = document.getElementById('cached-ratings-count');
     const whitelistedCountEl = document.getElementById('whitelisted-handles-count');
     const cachedCount = tweetCache.size;
-    const wlCount = blacklistedHandles.length;
+    const keepCount = blacklistedHandles.length;
     if (cachedCountEl) cachedCountEl.textContent = cachedCount;
-    if (whitelistedCountEl) whitelistedCountEl.textContent = wlCount;
+    if (whitelistedCountEl) whitelistedCountEl.textContent = keepCount;
     const statsBadge = document.getElementById("tweet-filter-stats-badge");
     if (statsBadge) statsBadge.innerHTML = `
-            <span style="margin-right: 5px;">🧠</span>
             <span data-cached-count>${cachedCount} rated</span>
             <span data-pending-count> | ${pendingRequests} pending</span>
-            ${wlCount > 0 ? `<span style="margin-left: 5px;"> | ${wlCount} whitelisted</span>` : ''}
+            ${keepCount > 0 ? `<span style="margin-left: 5px;"> | ${keepCount} kept</span>` : ''}
         `;
 }
     // ----- backends/TweetCache.js -----
@@ -67,6 +236,52 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 };
+const EMPTY_TWEET_METADATA = Object.freeze({
+    model: null,
+    promptTokens: null,
+    completionTokens: null,
+    latency: null,
+    mediaInputs: null,
+    price: null
+});
+function normalizeScore(score) {
+    if (score === undefined || score === null || score === '') {
+        return null;
+    }
+    const parsedScore = Number(score);
+    if (!Number.isFinite(parsedScore)) {
+        return null;
+    }
+    return Math.max(0, Math.min(10, parsedScore));
+}
+function normalizeTweetCacheEntry(entry = {}) {
+    const normalizedScore = normalizeScore(entry.score);
+    return {
+        score: normalizedScore,
+        status: entry.status || null,
+        fullContext: entry.fullContext || '',
+        description: entry.description || '',
+        reasoning: entry.reasoning || '',
+        questions: Array.isArray(entry.questions) ? entry.questions : [],
+        lastAnswer: entry.lastAnswer || '',
+        mediaUrls: Array.isArray(entry.mediaUrls) ? entry.mediaUrls : [],
+        tweetContent: entry.tweetContent || '',
+        authorHandle: entry.authorHandle || '',
+        individualTweetText: entry.individualTweetText || '',
+        individualMediaUrls: Array.isArray(entry.individualMediaUrls) ? entry.individualMediaUrls : [],
+        qaConversationHistory: Array.isArray(entry.qaConversationHistory) ? entry.qaConversationHistory : [],
+        metadata: entry.metadata ? { ...entry.metadata } : { ...EMPTY_TWEET_METADATA },
+        threadContext: entry.threadContext || null,
+        streaming: entry.streaming === true,
+        blacklisted: entry.blacklisted === true,
+        error: entry.error || null,
+        fromStorage: entry.fromStorage === true,
+        timestamp: Number.isFinite(Number(entry.timestamp)) ? Number(entry.timestamp) : Date.now()
+    };
+}
+/**
+ * Class to manage the tweet rating cache with standardized data structure and centralized persistence.
+ */
 class TweetCache {
     static DEBOUNCE_DELAY = 1500;
     constructor() {
@@ -74,76 +289,71 @@ class TweetCache {
         this.loadFromStorage();
         this.debouncedSaveToStorage = debounce(this.#saveToStorageInternal.bind(this), TweetCache.DEBOUNCE_DELAY);
     }
+    /**
+     * Loads the cache from browser storage.
+     */
     loadFromStorage() {
         try {
             const storedCache = browserGet('tweetRatings', '{}');
             this.cache = JSON.parse(storedCache);
             for (const tweetId in this.cache) {
-                this.cache[tweetId].fromStorage = true;
+                this.cache[tweetId] = normalizeTweetCacheEntry({
+                    ...this.cache[tweetId],
+                    fromStorage: true
+                });
             }
         } catch (error) {
+            console.error('Error loading tweet cache:', error);
             this.cache = {};
         }
     }
+    /**
+     * Saves the current cache to browser storage. (Internal, synchronous implementation)
+     */
     #saveToStorageInternal() {
         try {
             browserSet('tweetRatings', JSON.stringify(this.cache));
             updateCacheStatsUI();
         } catch (error) {
+            console.error("Error saving tweet cache to storage:", error);
         }
     }
+    /**
+     * Gets a tweet rating from the cache.
+     * @param {string} tweetId - The ID of the tweet.
+     * @returns {Object|null} The tweet rating object or null if not found.
+     */
     get(tweetId) {
         return this.cache[tweetId] || null;
     }
+    /**
+     * Sets a tweet rating in the cache.
+     * @param {string} tweetId - The ID of the tweet.
+     * @param {Object} rating - The rating object. Can be a partial update.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or use debounced save.
+     */
     set(tweetId, rating, saveImmediately = true) {
-        const existingEntry = this.cache[tweetId] || {};
-        const updatedEntry = { ...existingEntry };
-        if (rating.score !== undefined) updatedEntry.score = rating.score;
-        if (rating.fullContext !== undefined) updatedEntry.fullContext = rating.fullContext;
-        if (rating.description !== undefined) updatedEntry.description = rating.description;
-        if (rating.reasoning !== undefined) updatedEntry.reasoning = rating.reasoning;
-        if (rating.questions !== undefined) updatedEntry.questions = rating.questions;
-        if (rating.lastAnswer !== undefined) updatedEntry.lastAnswer = rating.lastAnswer;
-        if (rating.mediaUrls !== undefined) updatedEntry.mediaUrls = rating.mediaUrls;
-        if (rating.timestamp !== undefined) updatedEntry.timestamp = rating.timestamp;
-        else if (updatedEntry.timestamp === undefined) updatedEntry.timestamp = Date.now();
-        if (rating.streaming !== undefined) updatedEntry.streaming = rating.streaming;
-        if (rating.blacklisted !== undefined) updatedEntry.blacklisted = rating.blacklisted;
-        if (rating.fromStorage !== undefined) updatedEntry.fromStorage = rating.fromStorage;
-        if (rating.metadata) {
-            updatedEntry.metadata = { ...(existingEntry.metadata || {}), ...rating.metadata };
-        } else if (!existingEntry.metadata) {
-            updatedEntry.metadata = { model: null, promptTokens: null, completionTokens: null, latency: null, mediaInputs: null, price: null };
+        if (!tweetId) {
+            return;
         }
-        if (rating.qaConversationHistory !== undefined) updatedEntry.qaConversationHistory = rating.qaConversationHistory;
-        updatedEntry.authorHandle = updatedEntry.authorHandle || '';
-        updatedEntry.individualTweetText = updatedEntry.individualTweetText || '';
-        updatedEntry.individualMediaUrls = updatedEntry.individualMediaUrls || [];
-        updatedEntry.qaConversationHistory = updatedEntry.qaConversationHistory || [];
-        if (rating.authorHandle !== undefined) {
-            updatedEntry.authorHandle = rating.authorHandle;
+        const existingEntry = normalizeTweetCacheEntry(this.cache[tweetId] || {});
+        const updatedEntry = normalizeTweetCacheEntry({
+            ...existingEntry,
+            ...rating,
+            metadata: rating.metadata ? { ...(existingEntry.metadata || {}), ...rating.metadata } : existingEntry.metadata,
+            timestamp: rating.timestamp !== undefined ? rating.timestamp : Date.now()
+        });
+        if (rating.individualTweetText !== undefined &&
+            existingEntry.individualTweetText &&
+            existingEntry.individualTweetText.length > String(rating.individualTweetText).length) {
+            updatedEntry.individualTweetText = existingEntry.individualTweetText;
         }
-        if (rating.individualTweetText !== undefined) {
-            if (!updatedEntry.individualTweetText || rating.individualTweetText.length > updatedEntry.individualTweetText.length) {
-                updatedEntry.individualTweetText = rating.individualTweetText;
-            }
+        if (rating.individualMediaUrls !== undefined &&
+            Array.isArray(existingEntry.individualMediaUrls) &&
+            Array.isArray(rating.individualMediaUrls) &&
+            existingEntry.individualMediaUrls.length > rating.individualMediaUrls.length) {
+            updatedEntry.individualMediaUrls = existingEntry.individualMediaUrls;
         }
-        if (rating.individualMediaUrls !== undefined && Array.isArray(rating.individualMediaUrls)) {
-            if (!updatedEntry.individualMediaUrls || updatedEntry.individualMediaUrls.length === 0 || rating.individualMediaUrls.length > updatedEntry.individualMediaUrls.length) {
-                updatedEntry.individualMediaUrls = rating.individualMediaUrls;
-            }
-        }
-        updatedEntry.score = updatedEntry.score;
-        updatedEntry.authorHandle = updatedEntry.authorHandle || '';
-        updatedEntry.fullContext = updatedEntry.fullContext || '';
-        updatedEntry.description = updatedEntry.description || '';
-        updatedEntry.reasoning = updatedEntry.reasoning || '';
-        updatedEntry.questions = updatedEntry.questions || [];
-        updatedEntry.lastAnswer = updatedEntry.lastAnswer || '';
-        updatedEntry.mediaUrls = updatedEntry.mediaUrls || [];
-        updatedEntry.streaming = updatedEntry.streaming || false;
-        updatedEntry.blacklisted = updatedEntry.blacklisted || false;
-        updatedEntry.fromStorage = updatedEntry.fromStorage || false;
         this.cache[tweetId] = updatedEntry;
         if (!saveImmediately) {
             this.debouncedSaveToStorage();
@@ -154,12 +364,24 @@ class TweetCache {
     has(tweetId) {
         return this.cache[tweetId] !== undefined;
     }
+    hasCompleteRating(tweetId) {
+        return isCompleteCachedRating(this.cache[tweetId]);
+    }
+    /**
+     * Removes a tweet rating from the cache.
+     * @param {string} tweetId - The ID of the tweet to remove.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
+     */
     delete(tweetId, saveImmediately = true) {
         if (this.has(tweetId)) {
             delete this.cache[tweetId];
             this.debouncedSaveToStorage();
         }
     }
+    /**
+     * Clears all ratings from the cache.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or debounce.
+     */
     clear(saveImmediately = false) {
         this.cache = {};
         if (saveImmediately) {
@@ -168,12 +390,19 @@ class TweetCache {
             this.debouncedSaveToStorage();
         }
     }
+    /**
+     * Gets the number of cached ratings.
+     * @returns {number} The number of cached ratings.
+     */
     get size() {
         return Object.keys(this.cache).length;
     }
 }
 const tweetCache = new TweetCache();
     // ----- backends/InstructionsHistory.js -----
+/**
+ * Manages the history of custom instructions
+ */
 class InstructionsHistory {
     constructor() {
         if (InstructionsHistory.instance) {
@@ -184,6 +413,12 @@ class InstructionsHistory {
         this.maxEntries = 10;
         this.loadFromStorage();
     }
+    /**
+     * Generates a simple hash of a string
+     * @private
+     * @param {string} str - String to hash
+     * @returns {string} - Hash of the string
+     */
     #hashString(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
@@ -193,6 +428,10 @@ class InstructionsHistory {
         }
         return hash.toString(36);
     }
+    /**
+     * Loads the history from browser storage
+     * @private
+     */
     loadFromStorage() {
         try {
             const stored = browserGet('instructionsHistory', '[]');
@@ -205,16 +444,28 @@ class InstructionsHistory {
                 hash: entry.hash || this.#hashString(entry.instructions)
             }));
         } catch (e) {
+            console.error('Error loading instructions history:', e);
             this.history = [];
         }
     }
+    /**
+     * Saves the current history to browser storage
+     * @private
+     */
     #saveToStorage() {
         try {
             browserSet('instructionsHistory', JSON.stringify(this.history));
         } catch (e) {
+            console.error('Error saving instructions history:', e);
             throw new Error('Failed to save instructions history');
         }
     }
+    /**
+     * Adds new instructions to the history
+     * @param {string} instructions - The instructions text
+     * @param {string} summary - The summary of the instructions
+     * @returns {Promise<boolean>} - Whether the operation was successful
+     */
     async add(instructions, summary) {
         try {
             if (!instructions?.trim() || !summary?.trim()) {
@@ -241,9 +492,15 @@ class InstructionsHistory {
             this.#saveToStorage();
             return true;
         } catch (e) {
+            console.error('Error adding instructions to history:', e);
             return false;
         }
     }
+    /**
+     * Removes an entry from history
+     * @param {number} index - The index of the entry to remove
+     * @returns {boolean} - Whether the operation was successful
+     */
     remove(index) {
         try {
             if (index < 0 || index >= this.history.length) {
@@ -253,12 +510,22 @@ class InstructionsHistory {
             this.#saveToStorage();
             return true;
         } catch (e) {
+            console.error('Error removing instructions from history:', e);
             return false;
         }
     }
+    /**
+     * Gets all history entries, sorted by timestamp (newest first)
+     * @returns {Array} The history entries
+     */
     getAll() {
         return [...this.history];
     }
+    /**
+     * Gets a specific entry from history
+     * @param {number} index - The index of the entry to get
+     * @returns {Object|null} The history entry or null if not found
+     */
     get(index) {
         try {
             if (index < 0 || index >= this.history.length) {
@@ -266,22 +533,34 @@ class InstructionsHistory {
             }
             return { ...this.history[index] };
         } catch (e) {
+            console.error('Error getting history entry:', e);
             return null;
         }
     }
+    /**
+     * Clears all history
+     */
     clear() {
         try {
             this.history = [];
             this.#saveToStorage();
         } catch (e) {
+            console.error('Error clearing instructions history:', e);
             throw new Error('Failed to clear instructions history');
         }
     }
+    /**
+     * Gets the number of entries in history
+     * @returns {number} The number of entries
+     */
     get size() {
         return this.history.length;
     }
 }
     // ----- backends/InstructionsManager.js -----
+/**
+ * Manages the business logic for instructions handling
+ */
 class InstructionsManager {
     constructor() {
         if (InstructionsManager.instance) {
@@ -289,8 +568,13 @@ class InstructionsManager {
         }
         InstructionsManager.instance = this;
         this.history = new InstructionsHistory();
-        this.currentInstructions = browserGet('userDefinedInstructions', '');
+        this.currentInstructions = browserGet('userDefinedInstructions', DEFAULT_INSTRUCTIONS);
     }
+    /**
+     * Saves new instructions and adds them to history
+     * @param {string} instructions - The instructions to save
+     * @returns {Promise<{success: boolean, message: string}>}
+     */
     async saveInstructions(instructions) {
         if (!instructions?.trim()) {
             return { success: false, message: 'Instructions cannot be empty' };
@@ -298,9 +582,6 @@ class InstructionsManager {
         instructions = instructions.trim();
         this.currentInstructions = instructions;
         browserSet('userDefinedInstructions', instructions);
-        if (typeof USER_DEFINED_INSTRUCTIONS !== 'undefined') {
-            USER_DEFINED_INSTRUCTIONS = instructions;
-        }
         const summary = this.#generateSummary(instructions);
         await this.history.add(instructions, summary);
         return {
@@ -309,6 +590,12 @@ class InstructionsManager {
             shouldClearCache: true
         };
     }
+    /**
+     * Creates a summary title using the first three words and the last word
+     * @private
+     * @param {string} instructions - Full instruction text
+     * @returns {string} Generated title
+     */
     #generateSummary(instructions) {
         const words = instructions.trim().split(/\s+/);
         if (words.length <= 3) {
@@ -318,44 +605,60 @@ class InstructionsManager {
         const lastWord = words[words.length - 1];
         return `${firstThree} … ${lastWord}`;
     }
+    /**
+     * Gets the current instructions
+     * @returns {string}
+     */
     getCurrentInstructions() {
         return this.currentInstructions;
     }
+    /**
+     * Gets all instruction history entries
+     * @returns {Array}
+     */
     getHistory() {
         return this.history.getAll();
     }
+    /**
+     * Removes an instruction from history
+     * @param {number} index
+     * @returns {boolean}
+     */
     removeFromHistory(index) {
         return this.history.remove(index);
     }
+    /**
+     * Clears all instruction history
+     */
     clearHistory() {
         this.history.clear();
     }
 }
 const instructionsManager = new InstructionsManager();
     // ----- config.js -----
-const processedTweets = new Set();
+const processedTweets = tweetProcessingState.processedTweetIds;
 const adAuthorCache = new Set();
 const PROCESSING_DELAY_MS = 1;
 const API_CALL_DELAY_MS = 1;
-let userDefinedInstructions = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
-let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5'));
+let userDefinedInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
+let currentFilterThreshold = appSettings.getInteger('filterThreshold');
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 5;
 let availableModels = [];
 let listedModels = [];
-let selectedModel = browserGet('selectedModel', 'openai/gpt-5.4-mini');
-let selectedImageModel = browserGet('selectedImageModel', 'google/gemini-2.5-flash');
-let showFreeModels = browserGet('showFreeModels', true);
-let modelFamilyFilter = browserGet('modelFamilyFilter', '');
-let providerSort = browserGet('providerSort', '');
-let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
-let enableImageDescriptions = browserGet('enableImageDescriptions', false);
-let enableStreaming = browserGet('enableStreaming', true);
-let enableWebSearch = browserGet('enableWebSearch', false);
-let enableAutoRating = browserGet('enableAutoRating', true);
-let reasoningEffort = browserGet('reasoningEffort', 'none');
+let selectedModel = appSettings.get('selectedModel');
+let selectedImageModel = appSettings.get('selectedImageModel');
+let showFreeModels = appSettings.getBoolean('showFreeModels');
+let modelFamilyFilter = appSettings.get('modelFamilyFilter');
+let providerSort = appSettings.get('providerSort');
+let blacklistedHandles = appSettings.getHandles();
+let enableImageDescriptions = appSettings.getBoolean('enableImageDescriptions');
+let enableStreaming = appSettings.getBoolean('enableStreaming');
+let enableWebSearch = appSettings.getBoolean('enableWebSearch');
+let enableAutoRating = appSettings.getBoolean('enableAutoRating');
+let reasoningEffort = appSettings.get('reasoningEffort');
 const REVIEW_SYSTEM_PROMPT = `
     You are TweetFilter-AI.
     Today's Date: ${new Date().toLocaleDateString()}.
@@ -425,11 +728,11 @@ NOTES:
       <Q3>What are the latest events happening in Paris?</Q3>
     </FOLLOW_UP_QUESTIONS>
 `;
-let modelTemperature = parseFloat(browserGet('modelTemperature', '1'));
-let modelTopP = parseFloat(browserGet('modelTopP', '0.95'));
-let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '1'));
-let imageModelTopP = parseFloat(browserGet('imageModelTopP', '0.95'));
-let maxTokens = parseInt(browserGet('maxTokens', '0'));
+let modelTemperature = appSettings.getNumber('modelTemperature');
+let modelTopP = appSettings.getNumber('modelTopP');
+let imageModelTemperature = appSettings.getNumber('imageModelTemperature');
+let imageModelTopP = appSettings.getNumber('imageModelTopP');
+let maxTokens = appSettings.getInteger('maxTokens');
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
@@ -437,18 +740,16 @@ const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
-function modelSupportsImages(modelId) {
-  if (!modelId || !availableModels || availableModels.length === 0) {
-    return false;
-  }
-  const normalizedModelId = modelId.toLowerCase();
-  const model = availableModels.find(m => [
-    m.slug,
-    m.id,
-    m.canonical_slug,
-    m.endpoint?.model_variant_slug,
-    m.name
-  ].filter(Boolean).some(value => value.toLowerCase() === normalizedModelId));
+function getModelIdentifierCandidates(model) {
+  return [
+    model?.slug,
+    model?.id,
+    model?.canonical_slug,
+    model?.endpoint?.model_variant_slug,
+    model?.name
+  ];
+}
+function modelHasImageInput(model) {
   if (!model) {
     return false;
   }
@@ -459,7 +760,46 @@ function modelSupportsImages(modelId) {
   ].map(modality => modality.toLowerCase());
   return modalities.includes('image');
 }
+function getCachedImageCapableModelIds() {
+  const cachedIds = browserGet('imageCapableModelIds', []);
+  if (Array.isArray(cachedIds)) {
+    return cachedIds;
+  }
+  try {
+    const parsedIds = JSON.parse(cachedIds);
+    return Array.isArray(parsedIds) ? parsedIds : [];
+  } catch (error) {
+    return [];
+  }
+}
+/**
+ * Helper function to check if a model supports images based on its architecture
+ * @param {string} modelId - The model ID to check
+ * @returns {boolean} - Whether the model supports image input
+ */
+function modelSupportsImages(modelId) {
+  if (!modelId) {
+    return false;
+  }
+  const normalizedModelId = modelId.toLowerCase();
+  const model = availableModels?.find(model =>
+    getModelIdentifierCandidates(model)
+      .filter(Boolean)
+      .some(value => value.toLowerCase() === normalizedModelId)
+  );
+  if (model) {
+    return modelHasImageInput(model);
+  }
+  return getCachedImageCapableModelIds()
+    .filter(Boolean)
+    .some(value => value.toLowerCase() === normalizedModelId);
+}
     // ----- domScraper.js -----
+/**
+     * Extracts and returns trimmed text content from the given element(s).
+     * @param {Node|NodeList} elements - A DOM element or a NodeList.
+     * @returns {string} The trimmed text content.
+     */
 function extractVisibleTextWithEmoji(element) {
     if (!element) return '';
     const textParts = [];
@@ -496,6 +836,11 @@ function getElementText(elements) {
     }
     return '';
 }
+/**
+ * Extracts the text of a tweet, excluding any text from quoted tweets.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {string} The text of the main tweet.
+ */
 function getTweetText(tweetArticle) {
     const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
     const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
@@ -507,7 +852,13 @@ function getTweetText(tweetArticle) {
     }
     return '';
 }
+/**
+ * Extracts the tweet ID from a tweet article element.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {string} The tweet ID.
+ */
 function getTweetID(tweetArticle) {
+    if (!tweetArticle) return '';
     const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
     let tweetId = timeEl?.parentElement?.href;
     if (tweetId && tweetId.includes('/status/')) {
@@ -517,8 +868,16 @@ function getTweetID(tweetArticle) {
         }
         return tweetId.substring(tweetId.indexOf('/status/') + 1);
     }
-    return `tweet-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+    if (!tweetArticle.dataset.tweetFilterGeneratedId) {
+        tweetArticle.dataset.tweetFilterGeneratedId = `generated-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+    }
+    return tweetArticle.dataset.tweetFilterGeneratedId;
 }
+/**
+ * Extracts the Twitter handle from a tweet article element.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {array} The user and quoted user handles.
+ */
 function getUserHandles(tweetArticle) {
     let handles = [];
     const handleElement = tweetArticle.querySelector(USER_HANDLE_SELECTOR);
@@ -554,6 +913,11 @@ function getUserHandles(tweetArticle) {
     }
     return handles.length > 0 ? handles : [''];
 }
+/**
+ * Synchronous version of extractMediaLinks without retry logic.
+ * @param {Element} scopeElement - The tweet element.
+ * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
+ */
 function extractMediaLinks(scopeElement) {
     if (!scopeElement) return [];
     const mediaLinks = new Set();
@@ -585,6 +949,10 @@ function isOriginalTweet(tweetArticle) {
     }
     return false;
 }
+/**
+ * Handles DOM mutations to detect new tweets added to the timeline.
+ * @param {MutationRecord[]} mutationsList - List of observed mutations.
+ */
 function handleMutations(mutationsList) {
     let tweetsAdded = false;
     let needsCleanup = false;
@@ -607,9 +975,9 @@ function handleMutations(mutationsList) {
             return true;
         }
         const tweetId = getTweetID(element);
-        if (processedTweets.has(tweetId)) {
+        if (tweetProcessingState.isScheduled(tweetId)) {
             const indicator = ScoreIndicatorRegistry.get(tweetId);
-            if (indicator && indicator.status !== 'error') {
+            if (indicator && indicator.status !== TweetRatingStatus.ERROR) {
                 return true;
             }
         }
@@ -627,6 +995,7 @@ function handleMutations(mutationsList) {
                             conversationTimeline = node.querySelector('div[aria-label^="Timeline: Conversation"]');
                         }
                         if (conversationTimeline) {
+                            console.log("[handleMutations] Conversation timeline detected. Triggering handleThreads.");
                             setTimeout(handleThreads, 5);
                         }
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
@@ -687,6 +1056,11 @@ function handleMutations(mutationsList) {
         ScoreIndicatorRegistry.cleanupOrphaned();
     }
 }
+/**
+ * Checks if a tweet article is an advertisement.
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {boolean} True if the tweet is an ad.
+ */
 function isAd(tweetArticle) {
     if (!tweetArticle) return false;
     const spans = tweetArticle.querySelectorAll('div[dir="ltr"] span');
@@ -698,18 +1072,34 @@ function isAd(tweetArticle) {
     return false;
 }
     // ----- ui/utils.js -----
+/**
+ * Detects if the user is on a mobile device
+ * @returns {boolean} true if mobile device detected
+ */
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
+/**
+ * Displays a temporary status message on the screen.
+ * @param {string} message - The message to display.
+ * @param {string} [type=\'info\'] - The type of message (info, error, warning, success).
+ */
 function showStatus(message, type = 'info') {
     const indicator = document.getElementById('status-indicator');
     if (!indicator) {
+        console.error('#status-indicator element not found.');
         return;
     }
     indicator.textContent = message;
     indicator.className = 'active ' + type;
     setTimeout(() => { indicator.classList.remove('active', type); }, 3000);
 }
+/**
+ * Resizes an image file to a maximum dimension.
+ * @param {File} file - The image file to resize.
+ * @param {number} maxDimPx - The maximum dimension (width or height) in pixels.
+ * @returns {Promise<string>} A promise that resolves with the data URL of the resized image (JPEG format).
+ */
 function resizeImage(file, maxDimPx) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -744,17 +1134,22 @@ function resizeImage(file, maxDimPx) {
                 resolve(dataUrl);
             };
             img.onerror = (error) => {
+                console.error("Error loading image for resizing:", error);
                 reject(new Error("Could not load image for resizing."));
             };
             img.src = event.target.result;
         };
         reader.onerror = (error) => {
+            console.error("FileReader error:", error);
             reject(new Error("Could not read file."));
         };
         reader.readAsDataURL(file);
     });
 }
     // ----- ui/InstructionsUI.js -----
+/**
+ * UI component for managing instructions
+ */
 async function saveInstructions() {
     const instructionsTextarea = document.getElementById('user-instructions');
     const result = await instructionsManager.saveInstructions(instructionsTextarea.value);
@@ -768,6 +1163,9 @@ async function saveInstructions() {
         refreshInstructionsHistory();
     }
 }
+/**
+ * Refreshes the instructions history list in the UI.
+ */
 function refreshInstructionsHistory() {
     const listElement = document.getElementById('instructions-list');
     if (!listElement) return;
@@ -785,6 +1183,12 @@ function refreshInstructionsHistory() {
         listElement.appendChild(item);
     });
 }
+/**
+ * Creates a history item element
+ * @param {Object} entry - The history entry
+ * @param {number} index - The index in the history
+ * @returns {HTMLElement}
+ */
 function createHistoryItem(entry, index) {
     const item = document.createElement('div');
     item.className = 'instruction-item';
@@ -811,6 +1215,10 @@ function createHistoryItem(entry, index) {
     item.appendChild(buttons);
     return item;
 }
+/**
+ * Uses the selected instructions from history.
+ * @param {string} instructions - The instructions to use.
+ */
 function useInstructions(instructions) {
     const textarea = document.getElementById('user-instructions');
     if (textarea) {
@@ -818,6 +1226,10 @@ function useInstructions(instructions) {
         saveInstructions();
     }
 }
+/**
+ * Removes instructions from history at the specified index.
+ * @param {number} index - The index of the instructions to remove.
+ */
 function removeInstructions(index) {
     if (instructionsManager.removeFromHistory(index)) {
         refreshInstructionsHistory();
@@ -826,6 +1238,9 @@ function removeInstructions(index) {
         showStatus('Error removing instructions');
     }
 }
+/**
+ * Clears all instructions history after confirmation
+ */
 function clearInstructionsHistory() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all instruction history?')) {
         instructionsManager.clearHistory();
@@ -834,7 +1249,13 @@ function clearInstructionsHistory() {
     }
 }
     // ----- ui/ScoreIndicator.js -----
+/**
+ * Manages the state and UI for a single score indicator and its associated tooltip.
+ */
 class ScoreIndicator {
+    /**
+     * @param {Element} tweetArticle - The tweet article element this indicator belongs to.
+     */
     constructor(tweetArticle) {
         if (!tweetArticle || !tweetArticle.nodeType || tweetArticle.nodeType !== Node.ELEMENT_NODE) {
             throw new Error("ScoreIndicator requires a valid tweet article DOM element.");
@@ -901,10 +1322,15 @@ class ScoreIndicator {
             this._addEventListeners();
             ScoreIndicatorRegistry.add(this.tweetId, this);
         } catch (error) {
+            console.error(`[ScoreIndicator ${this.tweetId}] Failed initialization:`, error);
             this.destroy();
             throw error;
         }
     }
+    /**
+     * Creates the indicator and tooltip DOM elements.
+     * @param {Element} initialTweetArticle - The article element to attach to initially.
+     */
     _createElements(initialTweetArticle) {
         this.indicatorElement = document.createElement('div');
         this.indicatorElement.className = 'score-indicator';
@@ -1017,6 +1443,7 @@ class ScoreIndicator {
             this.attachImageButton.title = 'Attach image(s) or PDF(s)';
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
+            // I escaped the slash here because it was messing up the comment stripping code.
             this.followUpImageInput.accept = `image${"/"}*,.pdf,application/pdf`;
             this.followUpImageInput.multiple = true;
             this.followUpImageInput.style.display = 'none';
@@ -1107,6 +1534,10 @@ class ScoreIndicator {
             this._initializeMobileInteractionFix();
         }
     }
+    /**
+     * Initializes the mobile scroll interaction workaround.
+     * @private
+     */
     _initializeMobileInteractionFix() {
         this._hasFirstInteraction = false;
         const handleFirstTap = (e) => {
@@ -1192,6 +1623,11 @@ class ScoreIndicator {
             this._registerDomListener(this.tooltipScrollableContentElement, 'touchstart', handleTooltipTouchStart, { passive: true });
         }
     }
+    /**
+     * Simulates initial tap events on mobile interactive elements to bypass
+     * the first-tap scrolling issue that occurs on some mobile browsers.
+     * @private
+     */
     _simulateInitialMobileTaps() {
         setTimeout(() => {
             const elementsToTap = [
@@ -1249,6 +1685,11 @@ class ScoreIndicator {
             });
         }, 100);
     }
+    /**
+     * Returns a memoized instance-bound handler for a class method.
+     * @param {string} methodName
+     * @returns {Function}
+     */
     _getBoundMethodHandler(methodName) {
         if (!this._boundMethodHandlers[methodName]) {
             const method = this[methodName];
@@ -1259,6 +1700,13 @@ class ScoreIndicator {
         }
         return this._boundMethodHandlers[methodName];
     }
+    /**
+     * Registers a DOM event listener and tracks teardown for `destroy()`.
+     * @param {EventTarget | null | undefined} target
+     * @param {string} eventName
+     * @param {Function} handler
+     * @param {AddEventListenerOptions|boolean} [options]
+     */
     _registerDomListener(target, eventName, handler, options) {
         if (!target || typeof target.addEventListener !== 'function' || typeof handler !== 'function') {
             return;
@@ -1270,15 +1718,20 @@ class ScoreIndicator {
             }
         });
     }
+    /**
+     * Runs and clears all registered listener teardowns.
+     */
     _removeRegisteredListeners() {
         for (let i = this._listenerTeardowns.length - 1; i >= 0; i -= 1) {
             try {
                 this._listenerTeardowns[i]();
             } catch (error) {
+                console.warn(`[ScoreIndicator ${this.tweetId}] Failed to remove a listener:`, error);
             }
         }
         this._listenerTeardowns = [];
     }
+    /** Adds necessary event listeners to the indicator and tooltip. */
     _addEventListeners() {
         if (!this.indicatorElement || !this.tooltipElement) return;
         this._registerDomListener(this.indicatorElement, 'mouseenter', this._getBoundMethodHandler('_handleMouseEnter'));
@@ -1345,6 +1798,7 @@ class ScoreIndicator {
             this._registerDomListener(this.followUpImageInput, 'change', this._getBoundMethodHandler('_handleFollowUpImageSelect'));
         }
     }
+    /** Updates the visual appearance of the indicator (icon/text, class). */
     _updateIndicatorUI() {
         if (!this.indicatorElement) return;
         const classList = this.indicatorElement.classList;
@@ -1360,31 +1814,35 @@ class ScoreIndicator {
             indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '?';
         } else {
             switch (this.status) {
-                case 'pending':
+                case TweetRatingStatus.PENDING:
                     indicatorClass = 'pending-rating';
-                    indicatorText = '⏳';
+                    indicatorText = '...';
                     break;
-                case 'streaming':
+                case TweetRatingStatus.STREAMING:
                     indicatorClass = 'streaming-rating';
-                    indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '🔄';
+                    indicatorText = (this.score !== null && this.score !== undefined) ? String(this.score) : '~';
                     break;
-                case 'error':
+                case TweetRatingStatus.ERROR:
                     indicatorClass = 'error-rating';
-                    indicatorText = '⚠️';
+                    indicatorText = '!';
                     break;
-                case 'cached':
+                case TweetRatingStatus.CACHED:
                     indicatorClass = 'cached-rating';
                     indicatorText = String(this.score);
                     break;
-                case 'blacklisted':
+                case TweetRatingStatus.BLACKLISTED:
                     indicatorClass = 'blacklisted-rating';
                     indicatorText = String(this.score);
                     break;
-                case 'manual':
+                case TweetRatingStatus.MANUAL:
                     indicatorClass = 'manual-rating';
-                    indicatorText = '💭';
+                    indicatorText = 'Rate';
                     break;
-                case 'rated':
+                case TweetRatingStatus.AD:
+                    indicatorClass = 'rated-rating';
+                    indicatorText = 'Ad';
+                    break;
+                case TweetRatingStatus.RATED:
                 default:
                     indicatorClass = 'rated-rating';
                     indicatorText = String(this.score);
@@ -1396,6 +1854,11 @@ class ScoreIndicator {
         }
         this.indicatorElement.textContent = indicatorText;
     }
+    /**
+     * Splits tagged API text into tooltip display sections.
+     * @param {string} fullDescription
+     * @returns {{analysisContent: string, scoreContent: string, questionsContent: string}}
+     */
     _extractDescriptionSections(fullDescription) {
         const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
         const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
@@ -1428,6 +1891,10 @@ class ScoreIndicator {
         }
         return { analysisContent, scoreContent, questionsContent };
     }
+    /**
+     * Computes metadata panel content and visibility from current metadata.
+     * @returns {{metadataHTML: string, showMetadataDropdown: boolean}}
+     */
     _buildMetadataDisplayState() {
         let metadataHTML = '';
         let showMetadataDropdown = false;
@@ -1449,11 +1916,12 @@ class ScoreIndicator {
             metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
             showMetadataDropdown = true;
         } else if (hasOnlyGenId) {
-            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId} (fetching details...)</div>`;
+            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId}</div>`;
             showMetadataDropdown = true;
         }
         return { metadataHTML, showMetadataDropdown };
     }
+    /** Updates the content and potentially scroll position of the tooltip. */
     _updateTooltipUI() {
         if (!this.tooltipElement || !this.tooltipScrollableContentElement || !this.descriptionElement || !this.scoreTextElement || !this.followUpQuestionsTextElement || !this.reasoningTextElement || !this.reasoningDropdown || !this.conversationContainerElement || !this.followUpQuestionsElement || !this.metadataElement || !this.metadataDropdown) {
             return;
@@ -1573,13 +2041,13 @@ class ScoreIndicator {
                 contentChanged = true;
             }
         }
-        const isStreaming = this.status === 'streaming';
+        const isStreaming = this.status === TweetRatingStatus.STREAMING;
         if (this.tooltipElement.classList.contains('streaming-tooltip') !== isStreaming) {
              this.tooltipElement.classList.toggle('streaming-tooltip', isStreaming);
              contentChanged = true;
         }
         if (this.rateButton) {
-            const showRateButton = this.status === 'manual';
+            const showRateButton = this.status === TweetRatingStatus.MANUAL;
             const currentDisplay = this.rateButton.style.display;
             const newDisplay = showRateButton ? 'inline-block' : 'none';
             if (currentDisplay !== newDisplay) {
@@ -1602,6 +2070,7 @@ class ScoreIndicator {
             this._updateScrollButtonVisibility();
         }
     }
+    /** Renders the conversation history into HTML string */
     _renderConversationHistory() {
         if (!this.conversationHistory || this.conversationHistory.length === 0) {
             return '';
@@ -1702,6 +2171,10 @@ class ScoreIndicator {
         });
         return historyHtml;
     }
+    /**
+     * Attaches event listeners to reasoning toggles within the conversation history.
+     * Uses event delegation.
+     */
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
         if (this._boundHandlers.handleConversationReasoningToggle) {
@@ -1747,6 +2220,7 @@ class ScoreIndicator {
             });
         });
     }
+    /** Calculates and sets the tooltip's position. */
     _setPosition() {
         if (!this.isVisible || !this.indicatorElement || !this.tooltipElement) return;
         const indicatorRect = this.indicatorElement.getBoundingClientRect();
@@ -1827,7 +2301,7 @@ class ScoreIndicator {
     }
     _updateScrollButtonVisibility() {
         if (!this.tooltipScrollableContentElement || !this.scrollButton) return;
-        const isStreaming = this.status === 'streaming';
+        const isStreaming = this.status === TweetRatingStatus.STREAMING;
         if (!isStreaming) {
             this.scrollButton.style.display = 'none';
             return;
@@ -1912,6 +2386,7 @@ class ScoreIndicator {
                 this.copyButton.disabled = false;
             }, 1500);
         }).catch(err => {
+            console.error('[ScoreIndicator] Failed to copy text: ', err);
         });
     }
     _handleReasoningToggleClick(e) {
@@ -1989,9 +2464,10 @@ class ScoreIndicator {
                         }
                     });
                 } else {
+                    const modelImageUrl = stripImageUrlNameParam(url);
                     userMessageContentForHistory.push({
                         type: "image_url",
-                        image_url: { "url": url }
+                        image_url: { "url": modelImageUrl }
                     });
                 }
             });
@@ -2018,6 +2494,7 @@ class ScoreIndicator {
             return;
         }
         if (!questionText) {
+            console.error("Follow-up question text not found on button.");
             this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
              if (!isMockEvent) {
                 button.disabled = false;
@@ -2077,6 +2554,7 @@ class ScoreIndicator {
         if (this.followUpImageContainer && files.length > 0) {
             this.followUpImageContainer.style.display = 'flex';
         }
+        // Disable Ask button while processing files
         if (this.customQuestionButton) {
             this.customQuestionButton.disabled = true;
             this.customQuestionButton.textContent = 'Processing files...';
@@ -2089,6 +2567,7 @@ class ScoreIndicator {
                         this._addPreviewToContainer(resizedDataUrl, 'image');
                     })
                     .catch(error => {
+                        console.error("Error resizing image:", error);
                         showStatus(`Could not process image ${file.name}: ${error.message}`, "error");
                     });
             } else if (file && file.type === 'application/pdf') {
@@ -2101,6 +2580,7 @@ class ScoreIndicator {
                         resolve();
                     };
                     reader.onerror = (error) => {
+                        console.error("Error reading PDF:", error);
                         showStatus(`Could not process PDF ${file.name}: ${error.message}`, "error");
                         reject(error);
                     };
@@ -2112,7 +2592,9 @@ class ScoreIndicator {
             }
             return Promise.resolve();
         });
+        // Wait for all files to be processed
         await Promise.all(filePromises);
+        // Re-enable Ask button
         if (this.customQuestionButton) {
             this.customQuestionButton.disabled = false;
             this.customQuestionButton.textContent = 'Ask';
@@ -2194,27 +2676,56 @@ class ScoreIndicator {
         }
         this.currentFollowUpSource = null;
     }
+    /** Public wrapper for indicator refresh. */
     refreshIndicatorUI() {
         this._updateIndicatorUI();
     }
+    /** Public wrapper for tooltip refresh. */
     refreshTooltipUI() {
         this._updateTooltipUI();
     }
+    /**
+     * Updates blacklist UI state without exposing internal rendering methods.
+     * @param {boolean} isBlacklisted
+     */
     setAuthorBlacklistState(isBlacklisted) {
         this.isAuthorBlacklisted = Boolean(isBlacklisted);
     }
+    /**
+     * Sets follow-up question list while preserving internal state ownership.
+     * @param {string[]} questions
+     */
     setFollowUpQuestions(questions) {
         this.questions = Array.isArray(questions) ? questions : [];
     }
+    /**
+     * Public wrapper used by streaming follow-up handlers.
+     * @param {string} question
+     * @param {string} answer
+     * @param {string} [reasoning='']
+     */
     updateConversationHistoryEntry(question, answer, reasoning = '') {
         this._updateConversationHistory(question, answer, reasoning);
     }
+    /**
+     * Public wrapper used by streaming follow-up handlers.
+     * @param {string} streamingText
+     * @param {string} [reasoningText='']
+     */
     renderStreamingAnswer(streamingText, reasoningText = '') {
         this._renderStreamingAnswer(streamingText, reasoningText);
     }
+    /** Public wrapper to finalize follow-up UI state. */
     finalizeFollowUpInteraction() {
         this._finalizeFollowUpInteraction();
     }
+    /**
+     * Finds a pending entry in the conversation history by question text and updates its answer.
+     * Also updates the UI.
+     * @param {string} question - The text of the question that was asked.
+     * @param {string} answer - The new answer (or error message).
+     * @param {string} [reasoning=''] - Optional reasoning text associated with the answer.
+     */
     _updateConversationHistory(question, answer, reasoning = '') {
         const entryIndex = this.conversationHistory.findIndex(turn => turn.question === question && turn.answer === 'pending');
         if (entryIndex !== -1) {
@@ -2222,17 +2733,26 @@ class ScoreIndicator {
             this.conversationHistory[entryIndex].reasoning = reasoning;
             this._updateTooltipUI();
         } else {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find pending history entry for question: "${question}"`);
         }
     }
+    /**
+     * Updates the visual display of the last answer element during streaming
+     * without changing the underlying conversationHistory state.
+     * @param {string} streamingText - The current aggregated text from the stream.
+     * @param {string} [reasoningText=''] - Optional reasoning text from the stream.
+     */
     _renderStreamingAnswer(streamingText, reasoningText = '') {
         if (!this.conversationContainerElement) return;
         const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
         const lastTurnElement = conversationTurns.length > 0 ? conversationTurns[conversationTurns.length - 1] : null;
         if (!lastTurnElement) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Could not find last conversation turn to render streaming answer.`);
             return;
         }
         const lastHistoryEntry = this.conversationHistory.length > 0 ? this.conversationHistory[this.conversationHistory.length -1] : null;
         if (!(lastHistoryEntry && lastHistoryEntry.answer === 'pending')) {
+            console.warn(`[ScoreIndicator ${this.tweetId}] Attempted to render streaming answer, but last history entry is not pending.`);
             return;
         }
         let streamingReasoningContainer = lastTurnElement.querySelector('.streaming-reasoning-container');
@@ -2300,12 +2820,23 @@ class ScoreIndicator {
                 .replace(/\n/g, '<br>');
             lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
         } else {
+             console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
         }
         if (this.autoScroll) {
             this._performAutoScroll();
         }
         this._performConversationAutoScroll();
     }
+    /**
+     * Updates the indicator's state and refreshes the UI.
+     * @param {object} options
+     * @param {string} [options.status] - New status ('pending', 'streaming', 'rated', 'error', 'cached', 'blacklisted').
+     * @param {number|null} [options.score] - New score.
+     * @param {string} [options.description] - New description text.
+     * @param {string} [options.reasoning] - New reasoning text.
+     * @param {object|null} [options.metadata] - New metadata object.
+     * @param {string[]} [options.questions] - New follow-up questions.
+     */
     update({ status, score = null, description = '', reasoning = '', metadata = null, questions = undefined }) {
         const statusChanged = status !== undefined && this.status !== status;
         const scoreChanged = score !== null && this.score !== score;
@@ -2318,8 +2849,8 @@ class ScoreIndicator {
         }
         if (statusChanged) this.status = status;
         if (scoreChanged || statusChanged) {
-            this.score = (this.status === 'pending' || this.status === 'error') ? score :
-                (this.status === 'streaming' && score === null) ? this.score :
+            this.score = (this.status === TweetRatingStatus.PENDING || this.status === TweetRatingStatus.ERROR) ? score :
+                (this.status === TweetRatingStatus.STREAMING && score === null) ? this.score :
                     score;
         }
         if (descriptionChanged) this.description = description;
@@ -2327,7 +2858,7 @@ class ScoreIndicator {
         if (metadataChanged) this.metadata = metadata;
         if (questionsChanged) this.questions = questions;
         if (statusChanged) {
-            const shouldAutoScroll = (this.status === 'pending' || this.status === 'streaming');
+            const shouldAutoScroll = (this.status === TweetRatingStatus.PENDING || this.status === TweetRatingStatus.STREAMING);
             if (this.autoScroll !== shouldAutoScroll) {
                 this.autoScroll = shouldAutoScroll;
                 if (this.tooltipElement) {
@@ -2344,22 +2875,25 @@ class ScoreIndicator {
             this._updateScrollButtonVisibility();
         }
     }
+    /** Shows the tooltip and positions it correctly. */
     show() {
         if (!this.tooltipElement) return;
         this.isVisible = true;
         this.tooltipElement.style.display = 'flex';
         this._setPosition();
-        if (this.autoScroll && (this.status === 'streaming' || this.status === 'pending')) {
+        if (this.autoScroll && (this.status === TweetRatingStatus.STREAMING || this.status === TweetRatingStatus.PENDING)) {
             this._performAutoScroll();
         }
         this._updateScrollButtonVisibility();
     }
+    /** Hides the tooltip unless it's pinned. */
     hide() {
         if (!this.isPinned && this.tooltipElement) {
             this.isVisible = false;
             this.tooltipElement.style.display = 'none';
         }
     }
+    /** Toggles the tooltip's visibility. */
     toggle() {
         if (this.isVisible && !this.isPinned) {
             this.hide();
@@ -2367,6 +2901,7 @@ class ScoreIndicator {
             this.show();
         }
     }
+    /** Pins the tooltip open. */
     pin() {
         if (!this.tooltipElement || !this.pinButton) return;
         this.isPinned = true;
@@ -2374,6 +2909,7 @@ class ScoreIndicator {
         this.pinButton.innerHTML = '📍';
         this.pinButton.title = 'Unpin tooltip';
     }
+    /** Unpins the tooltip, allowing it to be hidden automatically. */
     unpin() {
         if (!this.tooltipElement || !this.pinButton) return;
         this.isPinned = false;
@@ -2393,8 +2929,10 @@ class ScoreIndicator {
         }
         this.hide();
     }
+    /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
     destroy() {
         if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
+            console.log(`Cleaning up active streaming request for tweet ${this.tweetId}`);
             window.activeStreamingRequests[this.tweetId].abort();
             delete window.activeStreamingRequests[this.tweetId];
         }
@@ -2432,6 +2970,7 @@ class ScoreIndicator {
         this._boundMethodHandlers = Object.create(null);
         this._listenerTeardowns = [];
     }
+    /** Ensures the indicator element is attached to the correct current article element. */
     ensureIndicatorAttached() {
         if (!this.indicatorElement) return false;
         const currentArticle = this.findCurrentArticleElement();
@@ -2445,6 +2984,7 @@ class ScoreIndicator {
         }
         return true;
     }
+    /** Finds the current DOM element for the tweet article based on tweetId. */
     findCurrentArticleElement() {
         const timeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (!timeline) return null;
@@ -2459,6 +2999,16 @@ class ScoreIndicator {
         }
         return null;
     }
+    /**
+     * Updates the indicator's state after an initial review and builds the conversation history.
+     * @param {object} params
+     * @param {string} params.fullContext - The full text context of the tweet.
+     * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
+     * @param {string} params.apiResponseContent - The raw content from the API response.
+     * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
+     * @param {string} params.followUpSystemPrompt - The system prompt to be used for follow-ups.
+     * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
+     */
     updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
         const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
         const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
@@ -2484,6 +3034,12 @@ class ScoreIndicator {
         this._updateIndicatorUI();
         this._updateTooltipUI();
     }
+    /**
+     * Updates the indicator's state after a follow-up question has been answered.
+     * @param {object} params
+     * @param {string} params.assistantResponseContent - The raw content of the AI's response.
+     * @param {object[]} params.updatedQaHistory - The fully updated qaConversationHistory array.
+     */
     updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
         this.qaConversationHistory = updatedQaHistory;
         const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
@@ -2499,6 +3055,10 @@ class ScoreIndicator {
         this._convertStreamingToDropdown();
         this._updateTooltipUI();
     }
+    /**
+     * Converts the streaming reasoning container to a proper reasoning dropdown after streaming completes.
+     * @private
+     */
     _convertStreamingToDropdown() {
         if (!this.conversationContainerElement) return;
         const conversationTurns = this.conversationContainerElement.querySelectorAll('.conversation-turn');
@@ -2555,6 +3115,10 @@ class ScoreIndicator {
         }
         reasoningDropdown.style.display = 'block';
     }
+    /**
+     * Rehydrates the ScoreIndicator instance from cached data.
+     * @param {object} cachedData - The cached data object.
+     */
     rehydrateFromCache(cachedData) {
         this.score = cachedData.score;
         this.description = cachedData.description;
@@ -2645,9 +3209,7 @@ class ScoreIndicator {
         if (tweetCache.has(this.tweetId)) {
             tweetCache.delete(this.tweetId);
         }
-        if (processedTweets.has(this.tweetId)) {
-            processedTweets.delete(this.tweetId);
-        }
+        tweetProcessingState.clear(this.tweetId);
         const currentArticle = this.findCurrentArticleElement();
         this.destroy();
         if (currentArticle && typeof scheduleTweetProcessing === 'function') {
@@ -2658,7 +3220,7 @@ class ScoreIndicator {
         e && e.stopPropagation();
         if (!this.tweetId) return;
         this.update({
-            status: 'pending',
+            status: TweetRatingStatus.PENDING,
             score: null,
             description: 'Rating tweet...',
             reasoning: '',
@@ -2666,12 +3228,13 @@ class ScoreIndicator {
         });
         const currentArticle = this.findCurrentArticleElement();
         if (currentArticle && typeof scheduleTweetProcessing === 'function') {
-            if (processedTweets.has(this.tweetId)) {
-                processedTweets.delete(this.tweetId);
-            }
+            tweetProcessingState.clear(this.tweetId);
             scheduleTweetProcessing(currentArticle, true);
         }
     }
+    /**
+     * Handle scroll events in the conversation history area for granular auto-scroll.
+     */
     _handleConversationScroll() {
         if (!this.conversationContainerElement) return;
         const isNearBottom = this.conversationContainerElement.scrollHeight - this.conversationContainerElement.scrollTop - this.conversationContainerElement.clientHeight < 40;
@@ -2685,6 +3248,9 @@ class ScoreIndicator {
             }
         }
     }
+    /**
+     * Auto-scroll the conversation history area to the bottom if allowed.
+     */
     _performConversationAutoScroll() {
         if (!this.conversationContainerElement || !this.autoScrollConversation) return;
         requestAnimationFrame(() => {
@@ -2697,8 +3263,16 @@ class ScoreIndicator {
 }
 const ScoreIndicatorRegistry = {
     managers: new Map(),
+    /**
+     * Gets an existing manager or creates a new one.
+     * Ensures only one manager exists per tweetId.
+     * @param {string} tweetId
+     * @param {Element} [tweetArticle=null] - Required if creating a new instance.
+     * @returns {ScoreIndicator | null}
+     */
     get(tweetId, tweetArticle = null) {
         if (!tweetId) {
+            console.error("[Registry] Attempted to get instance with invalid tweetId:", tweetId);
             return null;
         }
         if (this.managers.has(tweetId)) {
@@ -2709,26 +3283,41 @@ const ScoreIndicatorRegistry = {
                 const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
                 const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
                 if (existingIndicator || existingTooltip) {
+                    console.warn(`[Registry] Found existing indicator/tooltip elements for tweet ${tweetId} outside registry. Removing them before creating new manager.`);
                     existingIndicator?.remove();
                     existingTooltip?.remove();
                 }
                 return new ScoreIndicator(tweetArticle);
             } catch (e) {
+                console.error(`[Registry] Error creating ScoreIndicator for ${tweetId}:`, e);
                 return null;
             }
         }
         return null;
     },
+    /**
+     * Adds an instance to the registry (called by constructor).
+     * @param {string} tweetId
+     * @param {ScoreIndicator} instance
+     */
     add(tweetId, instance) {
         if (this.managers.has(tweetId)) {
+            console.warn(`[Registry] Overwriting existing manager for tweet ${tweetId}. This may indicate an issue.`);
         }
         this.managers.set(tweetId, instance);
     },
+    /**
+     * Removes an instance from the registry (called by destroy method).
+     * @param {string} tweetId
+     */
     remove(tweetId) {
         if (this.managers.has(tweetId)) {
             this.managers.delete(tweetId);
         }
     },
+    /**
+     * Cleans up managers whose corresponding tweet articles are no longer in the main timeline DOM.
+     */
     cleanupOrphaned() {
         let removedCount = 0;
         const observedTimeline = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
@@ -2747,7 +3336,11 @@ const ScoreIndicatorRegistry = {
             }
         }
     },
+    /**
+     * Destroys all managed indicators. Useful for full cleanup on script unload/major UI reset.
+     */
     destroyAll() {
+        console.log(`[Registry] Destroying all ${this.managers.size} indicators.`);
         [...this.managers.values()].forEach(manager => manager.destroy());
         this.managers.clear();
     }
@@ -2806,6 +3399,13 @@ function formatTooltipDescription(description = "", reasoning = "") {
     return { description: formattedDescription, reasoning: formattedReasoning };
 }
     // ----- ui/ui.js -----
+/**
+ * Toggles the visibility of an element and updates the corresponding toggle button text.
+ * @param {HTMLElement} element - The element to toggle.
+ * @param {HTMLElement} toggleButton - The button that controls the toggle.
+ * @param {string} openText - Text for the button when the element is open.
+ * @param {string} closedText - Text for the button when the element is closed.
+ */
 function toggleElementVisibility(element, toggleButton, openText, closedText) {
     if (!element || !toggleButton) return;
     const isCurrentlyHidden = element.classList.contains('hidden');
@@ -2846,36 +3446,48 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
         }
     }
 }
+/**
+ * Injects the UI elements from the HTML resource into the page.
+ */
 function injectUI() {
     let menuHTML;
-    if (MENU) {
+    if (typeof MENU !== 'undefined' && MENU) {
         menuHTML = MENU;
     } else {
         menuHTML = browserGet('menuHTML');
     }
     if (!menuHTML) {
+        console.error('Failed to load Menu.html resource!');
         showStatus('Error: Could not load UI components.');
         return null;
     }
     const containerId = 'tweetfilter-root-container';
     let uiContainer = document.getElementById(containerId);
     if (uiContainer) {
+        console.warn('UI container already exists. Skipping injection.');
         return uiContainer;
     }
     uiContainer = document.createElement('div');
     uiContainer.id = containerId;
     uiContainer.innerHTML = menuHTML;
     document.body.appendChild(uiContainer);
+    console.log('TweetFilter UI Injected from HTML resource.');
     const versionInfo = uiContainer.querySelector('#version-info');
     if (versionInfo) {
         versionInfo.textContent = `Twitter De-Sloppifier v${VERSION}`;
     }
     return uiContainer;
 }
+/**
+ * Initializes all UI event listeners using event delegation.
+ * @param {HTMLElement} uiContainer - The root container element for the UI.
+ */
 function initializeEventListeners(uiContainer) {
     if (!uiContainer) {
+        console.error('UI Container not found for event listeners.');
         return;
     }
+    console.log('Wiring UI events...');
     const settingsContainer = uiContainer.querySelector('#settings-container');
     const filterContainer = uiContainer.querySelector('#tweet-filter-container');
     const settingsToggleBtn = uiContainer.querySelector('#settings-toggle');
@@ -2993,7 +3605,9 @@ function initializeEventListeners(uiContainer) {
             browserSet('providerSort', providerSort);
         });
     }
+    console.log('UI events wired.');
 }
+/** Saves the API key from the input field. */
 function saveApiKey() {
     const apiKeyInput = document.getElementById('openrouter-api-key');
     const apiKey = apiKeyInput.value.trim();
@@ -3010,6 +3624,9 @@ function saveApiKey() {
         showStatus('Please enter a valid API key');
     }
 }
+/**
+ * Exports the current tweet cache to a JSON file.
+ */
 function exportCacheToJson() {
     if (!tweetCache) {
         showStatus('Error: Tweet cache not found.', 'error');
@@ -3035,18 +3652,22 @@ function exportCacheToJson() {
         URL.revokeObjectURL(url);
         showStatus(`Cache exported successfully (${Object.keys(cacheData).length} items).`);
     } catch (error) {
+        console.error('Error exporting cache:', error);
         showStatus('Error exporting cache. Check console for details.', 'error');
     }
 }
+/** Clears tweet ratings and updates the relevant UI parts. */
 function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         tweetCache.clear(true);
-        pendingRequests = 0;
+        tweetProcessingState.resetPending();
         if (window.threadRelationships) {
             window.threadRelationships = {};
             browserSet('threadRelationships', '{}');
+            console.log('Cleared thread relationships cache');
         }
         showStatus('All cached ratings and thread relationships cleared!');
+        console.log('Cleared all tweet ratings and thread relationships');
         if (observedTargetNode) {
             observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
                 tweet.removeAttribute('data-slop-score');
@@ -3059,7 +3680,7 @@ function clearTweetRatingsAndRefreshUI() {
                 }
                 const tweetId = getTweetID(tweet);
                 if (tweetId) {
-                    processedTweets.delete(tweetId);
+                    tweetProcessingState.clear(tweetId);
                     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
                     if (indicatorInstance) {
                         indicatorInstance.destroy();
@@ -3077,6 +3698,7 @@ function clearTweetRatingsAndRefreshUI() {
         });
     }
 }
+/** Adds a handle from the input field to the blacklist. */
 function addHandleFromInput() {
     const handleInput = document.getElementById('handle-input');
     const handle = handleInput.value.trim();
@@ -3085,6 +3707,11 @@ function addHandleFromInput() {
         handleInput.value = '';
     }
 }
+/**
+ * Handles changes to general setting inputs/toggles.
+ * @param {HTMLElement} target - The input/toggle element that changed.
+ * @param {string} settingName - The name of the setting (from data-setting).
+ */
 function handleSettingChange(target, settingName) {
     let value;
     if (target.type === 'checkbox') {
@@ -3092,8 +3719,37 @@ function handleSettingChange(target, settingName) {
     } else {
         value = target.value;
     }
-    if (window[settingName] !== undefined) {
-        window[settingName] = value;
+    switch (settingName) {
+        case 'enableImageDescriptions':
+            enableImageDescriptions = value;
+            break;
+        case 'enableStreaming':
+            enableStreaming = value;
+            break;
+        case 'enableWebSearch':
+            enableWebSearch = value;
+            break;
+        case 'enableAutoRating':
+            enableAutoRating = value;
+            break;
+        case 'reasoningEffort':
+            reasoningEffort = value;
+            break;
+        case 'showFreeModels':
+            showFreeModels = value;
+            break;
+        case 'modelFamilyFilter':
+            modelFamilyFilter = normalizeModelFamilyFilter(value);
+            value = modelFamilyFilter;
+            break;
+        case 'providerSort':
+            providerSort = value;
+            break;
+        case 'userDefinedInstructions':
+            userDefinedInstructions = value;
+            break;
+        default:
+            break;
     }
     browserSet(settingName, value);
     if (settingName === 'enableImageDescriptions') {
@@ -3113,6 +3769,11 @@ function handleSettingChange(target, settingName) {
         showStatus('Auto-rating ' + (value ? 'enabled' : 'disabled'));
     }
 }
+/**
+ * Handles changes to parameter control sliders/number inputs.
+ * @param {HTMLElement} target - The slider or number input element.
+ * @param {string} paramName - The name of the parameter (from data-param-name).
+ */
 function handleParameterChange(target, paramName) {
     const row = target.closest('.parameter-row');
     if (!row) return;
@@ -3128,11 +3789,31 @@ function handleParameterChange(target, paramName) {
         slider.value = newValue;
         valueInput.value = newValue;
     }
-    if (window[paramName] !== undefined) {
-        window[paramName] = newValue;
+    switch (paramName) {
+        case 'modelTemperature':
+            modelTemperature = newValue;
+            break;
+        case 'modelTopP':
+            modelTopP = newValue;
+            break;
+        case 'imageModelTemperature':
+            imageModelTemperature = newValue;
+            break;
+        case 'imageModelTopP':
+            imageModelTopP = newValue;
+            break;
+        case 'maxTokens':
+            maxTokens = newValue;
+            break;
+        default:
+            break;
     }
     browserSet(paramName, newValue);
 }
+/**
+ * Handles changes to the main filter slider.
+ * @param {HTMLElement} slider - The filter slider element.
+ */
 function handleFilterSliderChange(slider) {
     const valueInput = document.getElementById('tweet-filter-value');
     currentFilterThreshold = parseInt(slider.value, 10);
@@ -3144,6 +3825,10 @@ function handleFilterSliderChange(slider) {
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
+/**
+ * Handles changes to the numeric input for filter threshold.
+ * @param {HTMLElement} input - The numeric input element.
+ */
 function handleFilterValueInput(input) {
     let value = parseInt(input.value, 10);
     value = Math.max(0, Math.min(10, value));
@@ -3158,6 +3843,10 @@ function handleFilterValueInput(input) {
     browserSet('filterThreshold', currentFilterThreshold);
     applyFilteringToAll();
 }
+/**
+ * Switches the active tab in the settings panel.
+ * @param {string} tabName - The name of the tab to activate (from data-tab).
+ */
 function switchTab(tabName) {
     const settingsContent = document.querySelector('#settings-container .settings-content');
     if (!settingsContent) return;
@@ -3170,6 +3859,10 @@ function switchTab(tabName) {
     if (tabToShow) tabToShow.classList.add('active');
     if (buttonToActivate) buttonToActivate.classList.add('active');
 }
+/**
+ * Toggles the visibility of advanced options sections.
+ * @param {string} contentId - The ID of the content element to toggle.
+ */
 function toggleAdvancedOptions(contentId) {
     const content = document.getElementById(contentId);
     const toggle = document.querySelector(`[data-toggle="${contentId}"]`);
@@ -3185,13 +3878,15 @@ function toggleAdvancedOptions(contentId) {
         content.style.maxHeight = '0';
     }
 }
+/**
+ * Refreshes the entire settings UI to reflect current settings.
+ */
 function refreshSettingsUI() {
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
-        const value = browserGet(settingName, window[settingName]);
+        const value = browserGet(settingName, DEFAULT_SETTINGS[settingName]);
         if (input.type === 'checkbox') {
-            input.checked = value;
-            handleSettingChange(input, settingName);
+            input.checked = coerceBoolean(value, DEFAULT_SETTINGS[settingName]);
         } else {
             input.value = value;
         }
@@ -3206,7 +3901,7 @@ function refreshSettingsUI() {
     });
     const filterSlider = document.getElementById('tweet-filter-slider');
     const filterValueInput = document.getElementById('tweet-filter-value');
-    const currentThreshold = browserGet('filterThreshold', '5');
+    const currentThreshold = appSettings.getInteger('filterThreshold');
     if (filterSlider && filterValueInput) {
         filterSlider.value = currentThreshold;
         filterValueInput.value = currentThreshold;
@@ -3227,6 +3922,10 @@ function refreshSettingsUI() {
     });
     refreshInstructionsHistory();
 }
+/**
+ * Refreshes the handle list UI.
+ * @param {HTMLElement} listElement - The list element to refresh.
+ */
 function refreshHandleList(listElement) {
     if (!listElement) return;
     listElement.innerHTML = '';
@@ -3252,6 +3951,9 @@ function refreshHandleList(listElement) {
         listElement.appendChild(item);
     });
 }
+/**
+ * Updates the model selection dropdowns based on availableModels.
+ */
 function getModelSlug(model) {
     return model?.slug || model?.canonical_slug || model?.endpoint?.model_variant_slug || model?.id || model?.name || '';
 }
@@ -3350,6 +4052,11 @@ function refreshModelsUI() {
         );
     }
 }
+/**
+ * Formats a model object into a string for display in dropdowns.
+ * @param {Object} model - The model object from the API.
+ * @returns {string} A formatted label string.
+ */
 function formatModelLabel(model) {
     let label = getModelSlug(model) || 'Unknown Model';
     let pricingInfo = '';
@@ -3374,6 +4081,15 @@ function formatModelLabel(model) {
     }
     return label + pricingInfo;
 }
+/**
+ * Creates a custom select dropdown with search functionality.
+ * @param {HTMLElement} container - Container to append the custom select to.
+ * @param {string} id - ID for the root custom-select div.
+ * @param {Array<{value: string, label: string}>} options - Options for the dropdown.
+ * @param {string} initialSelectedValue - Initially selected value.
+ * @param {Function} onChange - Callback function when selection changes.
+ * @param {string} searchPlaceholder - Placeholder text for the search input.
+ */
 function createCustomSelect(container, id, options, initialSelectedValue, onChange, searchPlaceholder) {
     let currentSelectedValue = initialSelectedValue;
     const customSelect = document.createElement('div');
@@ -3447,6 +4163,7 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         }
     });
 }
+/** Closes all custom select dropdowns except the one passed in. */
 function closeAllSelectBoxes(exceptThisOne = null) {
     document.querySelectorAll('.custom-select').forEach(select => {
         if (select === exceptThisOne) return;
@@ -3456,57 +4173,67 @@ function closeAllSelectBoxes(exceptThisOne = null) {
         if (selected) selected.classList.remove('select-arrow-active');
     });
 }
+/**
+ * Resets all configurable settings to their default values.
+ */
 function resetSettings(noconfirm = false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
         tweetCache.clear();
-        const defaults = {
-            selectedModel: 'openai/gpt-4.1-nano',
-            selectedImageModel: 'openai/gpt-4.1-nano',
-            enableImageDescriptions: false,
-            enableStreaming: true,
-            enableWebSearch: false,
-            enableAutoRating: true,
-            reasoningEffort: 'none',
-            modelTemperature: 0.5,
-            modelTopP: 0.9,
-            imageModelTemperature: 0.5,
-            imageModelTopP: 0.9,
-            maxTokens: 0,
-            filterThreshold: 5,
-            userDefinedInstructions: 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.',
-            modelFamilyFilter: ''
-        };
-        for (const key in defaults) {
-            if (window[key] !== undefined) {
-                window[key] = defaults[key];
-            }
-            browserSet(key, defaults[key]);
-        }
+        const preservedHandles = [...blacklistedHandles];
+        const defaults = appSettings.reset();
+        selectedModel = defaults.selectedModel;
+        selectedImageModel = defaults.selectedImageModel;
+        showFreeModels = defaults.showFreeModels;
+        modelFamilyFilter = defaults.modelFamilyFilter;
+        providerSort = defaults.providerSort;
+        blacklistedHandles = appSettings.saveHandles(preservedHandles);
+        enableImageDescriptions = defaults.enableImageDescriptions;
+        enableStreaming = defaults.enableStreaming;
+        enableWebSearch = defaults.enableWebSearch;
+        enableAutoRating = defaults.enableAutoRating;
+        reasoningEffort = defaults.reasoningEffort;
+        modelTemperature = defaults.modelTemperature;
+        modelTopP = defaults.modelTopP;
+        imageModelTemperature = defaults.imageModelTemperature;
+        imageModelTopP = defaults.imageModelTopP;
+        maxTokens = defaults.maxTokens;
+        currentFilterThreshold = defaults.filterThreshold;
+        userDefinedInstructions = defaults.userDefinedInstructions;
         refreshSettingsUI();
         fetchAvailableModels();
         showStatus('Settings reset to defaults');
     }
 }
+/**
+ * Adds a handle to the blacklist, saves, and refreshes the UI.
+ * @param {string} handle - The Twitter handle to add (with or without @).
+ */
 function addHandleToBlacklist(handle) {
     handle = handle.trim().replace(/^@/, '');
     if (handle === '' || blacklistedHandles.includes(handle)) {
         showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
         return;
     }
-    blacklistedHandles.push(handle);
-    browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
+    blacklistedHandles = appSettings.saveHandles([...blacklistedHandles, handle]);
     refreshHandleList(document.getElementById('handle-list'));
     showStatus(`Added @${handle} to auto-rate list.`);
 }
+/**
+ * Removes a handle from the blacklist, saves, and refreshes the UI.
+ * @param {string} handle - The Twitter handle to remove (without @).
+ */
 function removeHandleFromBlacklist(handle) {
     const index = blacklistedHandles.indexOf(handle);
     if (index > -1) {
         blacklistedHandles.splice(index, 1);
-        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
+        blacklistedHandles = appSettings.saveHandles(blacklistedHandles);
         refreshHandleList(document.getElementById('handle-list'));
         showStatus(`Removed @${handle} from auto-rate list.`);
     } else console.warn(`Attempted to remove non-existent handle: ${handle}`);
 }
+/**
+ * Main initialization function for the UI module.
+ */
 function initialiseUI() {
     const uiContainer = injectUI();
     if (!uiContainer) return;
@@ -3517,6 +4244,11 @@ function initialiseUI() {
     setInterval(updateCacheStatsUI, 3000);
     if (!window.activeStreamingRequests) window.activeStreamingRequests = {};
 }
+/**
+ * Initializes event listeners and functionality for the floating cache stats badge.
+ * This provides real-time feedback when tweets are rated and cached,
+ * even when the settings panel is not open.
+ */
 function initializeFloatingCacheStats() {
     const statsBadge = document.getElementById('tweet-filter-stats-badge');
     if (!statsBadge) return;
@@ -3544,9 +4276,15 @@ function initializeFloatingCacheStats() {
     updateCacheStatsUI();
 }
     // ----- ratingEngine.js -----
+/**
+ * Applies filtering to a single tweet by replacing its contents with a minimal placeholder.
+ * Also updates the rating indicator.
+ * @param {Element} tweetArticle - The tweet element.
+ */
 function filterSingleTweet(tweetArticle) {
     const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
     if (!cell) {
+        console.warn("Couldn't find cellInnerDiv for tweet");
         return;
     }
     const handles = getUserHandles(tweetArticle);
@@ -3579,7 +4317,7 @@ function filterSingleTweet(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     indicatorInstance?.ensureIndicatorAttached();
-    const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
+    const currentFilterThreshold = appSettings.getInteger('filterThreshold');
     const ratingStatus = tweetArticle.dataset.ratingStatus;
     const isAuthorCurrentlyBlacklisted = isUserBlacklisted(authorHandle);
     if (indicatorInstance) {
@@ -3593,7 +4331,7 @@ function filterSingleTweet(tweetArticle) {
         }
     } else {
         delete cell.dataset.authorBlacklisted;
-        if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
+        if (isActiveTweetStatus(ratingStatus)) {
             delete cell.dataset.filtered;
         } else if (isNaN(score) || score < currentFilterThreshold) {
             const existingInstanceToDestroy = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
@@ -3610,6 +4348,12 @@ function filterSingleTweet(tweetArticle) {
         }
     }
 }
+/**
+ * Applies a cached rating (if available) to a tweet article.
+ * Also sets the rating status to 'rated' and updates the indicator.
+ * @param {Element} tweetArticle - The tweet element.
+ * @returns {boolean} True if a cached rating was applied.
+ */
 function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const cachedRating = tweetCache.get(tweetId);
@@ -3620,37 +4364,43 @@ function applyTweetCachedRating(tweetArticle) {
         }
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
             tweetArticle.dataset.slopScore = cachedRating.score.toString();
-            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? 'cached' : 'rated';
+            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED;
             tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
             tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (indicatorInstance) {
                 indicatorInstance.rehydrateFromCache(cachedRating);
             } else {
+                console.warn(`[applyTweetCachedRating] Could not get/create ScoreIndicator for ${tweetId} to apply cached rating.`);
                 return false;
             }
             filterSingleTweet(tweetArticle);
+            tweetProcessingState.resetRetries(tweetId);
             return true;
         } else if (!cachedRating.streaming) {
+            //cached object with score undefined or null, and not pending rating.
             tweetCache.delete(tweetId);
             return false;
         }
     }
     return false;
 }
+/**
+ * Checks if a given user handle is in the blacklist.
+ * @param {string} handle - The Twitter handle.
+ * @returns {boolean} True if blacklisted, false otherwise.
+ */
 function isUserBlacklisted(handle) {
     if (!handle) return false;
     handle = handle.toLowerCase().trim();
     return blacklistedHandles.some(h => h.toLowerCase().trim() === handle);
 }
-const VALID_FINAL_STATES = ['rated', 'cached', 'blacklisted', 'manual'];
-const VALID_INTERIM_STATES = ['pending', 'streaming'];
 const getFullContextPromises = new Map();
 function isValidFinalState(status) {
-    return VALID_FINAL_STATES.includes(status);
+    return isFinalTweetStatus(status);
 }
 function isValidInterimState(status) {
-    return VALID_INTERIM_STATES.includes(status);
+    return isActiveTweetStatus(status);
 }
 async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
     let processingSuccessful = false;
@@ -3664,7 +4414,8 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             let lastAnswer = "";
             try {
                 const cachedRating = tweetCache.get(tweetId);
-                if (cachedRating && !cachedRating.score && !cachedRating.streaming) {
+                if (cachedRating && !isCompleteCachedRating(cachedRating) && !cachedRating.streaming) {
+                    console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
                     tweetCache.delete(tweetId);
                 }
                 const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
@@ -3738,6 +4489,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]');
                 const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
                 if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
+                    console.warn(`Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext.`);
                 }
                 if (fullContextWithImageDescription) {
                     try {
@@ -3754,8 +4506,9 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             lastAnswer = currentCache.lastAnswer || "";
                             const mediaUrls = currentCache.mediaUrls || [];
                             processingSuccessful = true;
+                            console.log(`Using valid cache entry found for ${tweetId} before API call.`);
                             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                                status: currentCache.fromStorage ? 'cached' : 'rated',
+                                status: currentCache.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED,
                                 score: score,
                                 description: description,
                                 reasoning: reasoning,
@@ -3765,6 +4518,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                                 mediaUrls: mediaUrls
                             });
                             filterSingleTweet(tweetArticle);
+                            tweetProcessingState.resetRetries(tweetId);
                             return;
                         }
                         const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
@@ -3777,13 +4531,13 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         reasoning = rating.reasoning || '';
                         questions = rating.questions || [];
                         lastAnswer = "";
-                        let finalStatus = rating.error ? 'error' : 'rated';
+                        let finalStatus = rating.error ? TweetRatingStatus.ERROR : TweetRatingStatus.RATED;
                         if (!rating.error) {
                             const cacheEntry = tweetCache.get(tweetId);
                             if (cacheEntry && cacheEntry.fromStorage) {
-                                finalStatus = 'cached';
+                                finalStatus = TweetRatingStatus.CACHED;
                             } else if (rating.cached) {
-                                finalStatus = 'cached';
+                                finalStatus = TweetRatingStatus.CACHED;
                             }
                         }
                         tweetArticle.dataset.ratingStatus = finalStatus;
@@ -3797,13 +4551,17 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             reasoning: reasoning,
                             questions: questions,
                             lastAnswer: lastAnswer,
-                            metadata: rating.data?.id ? { generationId: rating.data.id } : null,
+                            metadata: rating.metadata || null,
                             mediaUrls: mediaURLs
                         });
                         processingSuccessful = !rating.error;
                         filterSingleTweet(tweetArticle);
+                        if (processingSuccessful) {
+                            tweetProcessingState.resetRetries(tweetId);
+                        }
                         return;
                     } catch (apiError) {
+                        console.error(`API error processing tweet ${tweetId}:`, apiError);
                         score = 5;
                         description = `API Error: ${apiError.message}`;
                         reasoning = '';
@@ -3811,7 +4569,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         lastAnswer = '';
                         processingSuccessful = false;
                         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                            status: 'error',
+                            status: TweetRatingStatus.ERROR,
                             score: score,
                             description: description,
                             questions: [],
@@ -3835,13 +4593,15 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 }
                 filterSingleTweet(tweetArticle);
             } catch (error) {
+                console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
                 if (error.message === "Media content not extracted despite presence of media containers.") {
                     if (tweetCache.has(tweetId)) {
                         tweetCache.delete(tweetId);
+                        console.log(`[delayedProcessTweet] Deleted cache for ${tweetId} due to media extraction failure.`);
                     }
                 }
                 ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                    status: 'error',
+                    status: TweetRatingStatus.ERROR,
                     score: 5,
                     description: "Error during processing: " + error.message,
                     questions: [],
@@ -3850,28 +4610,30 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 processingSuccessful = false;
             } finally {
                 if (!processingSuccessful) {
-                    processedTweets.delete(tweetId);
+                    tweetProcessingState.clear(tweetId);
                 }
             }
         } else {
-            tweetArticle.dataset.ratingStatus = 'error';
+            tweetArticle.dataset.ratingStatus = TweetRatingStatus.ERROR;
             tweetArticle.dataset.ratingDescription = "No API key";
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'error',
+                status: TweetRatingStatus.ERROR,
                 score: 9,
                 description: "No API key",
                 questions: [],
                 lastAnswer: ""
             });
             processingSuccessful = true;
+            tweetProcessingState.resetRetries(tweetId);
         }
         filterSingleTweet(tweetArticle);
         return;
     } catch (error) {
+        console.error(`Error processing tweet ${tweetId}:`, error);
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
         if (indicatorInstance) {
             indicatorInstance.update({
-                status: 'error',
+                status: TweetRatingStatus.ERROR,
                 score: 5,
                 description: "Error during processing: " + error.message,
                 questions: [],
@@ -3882,9 +4644,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
         processingSuccessful = false;
     } finally {
         if (!processingSuccessful) {
-            processedTweets.delete(tweetId);
+            tweetProcessingState.clear(tweetId);
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
-            if (indicatorInstance && !isValidFinalState(indicatorInstance.status)) {
+            if (indicatorInstance && !isValidFinalState(indicatorInstance.status) && tweetProcessingState.shouldRetry(tweetId)) {
+                console.log(`Tweet ${tweetId} processing failed, will retry later`);
                 setTimeout(() => {
                     if (!isValidFinalState(ScoreIndicatorRegistry.get(tweetId)?.status)) {
                         scheduleTweetProcessing(tweetArticle);
@@ -3901,17 +4664,18 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
         return;
     }
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
+        console.log(`Tweet ${tweetId} has an active streaming request, skipping processing`);
         return;
     }
     const handles = getUserHandles(tweetArticle);
     const authorHandle = handles.length > 0 ? handles[0] : '';
     if ((authorHandle && adAuthorCache.has(authorHandle)) || isAd(tweetArticle)) {
         if (authorHandle && !adAuthorCache.has(authorHandle)) adAuthorCache.add(authorHandle);
-        tweetArticle.dataset.ratingStatus = 'rated';
+        tweetArticle.dataset.ratingStatus = TweetRatingStatus.AD;
         tweetArticle.dataset.ratingDescription = "Advertisement";
         tweetArticle.dataset.slopScore = '0';
         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-            status: 'rated',
+            status: TweetRatingStatus.AD,
             score: 0,
             description: "Advertisement",
             questions: [],
@@ -3923,21 +4687,22 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     const existingInstance = ScoreIndicatorRegistry.get(tweetId);
     existingInstance?.ensureIndicatorAttached();
     if (existingInstance && !rateAnyway) {
-        if (isValidFinalState(existingInstance.status) || (isValidInterimState(existingInstance.status) && processedTweets.has(tweetId))) {
+        if (isValidFinalState(existingInstance.status) || (isValidInterimState(existingInstance.status) && tweetProcessingState.isScheduled(tweetId))) {
             filterSingleTweet(tweetArticle);
             return;
         }
-        processedTweets.delete(tweetId);
+        tweetProcessingState.clear(tweetId);
     }
     const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
         document.querySelector('div[aria-label^="Timeline: Conversation"]');
     if (conversation) {
         if (!conversation.dataset.threadMapping) {
+            console.log(`[scheduleTweetProcessing] Tweet ${tweetId} waiting for thread mapping`);
             MAPPING_INCOMPLETE_TWEETS.add(tweetId);
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (indicatorInstance) {
                 indicatorInstance.update({
-                    status: 'pending',
+                    status: TweetRatingStatus.PENDING,
                     score: null,
                     description: 'Waiting for thread context...',
                     questions: [],
@@ -3950,11 +4715,12 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
             const mapping = JSON.parse(conversation.dataset.threadMapping);
             const tweetMapping = mapping.find(m => m.tweetId === tweetId);
             if (!tweetMapping) {
+                console.log(`[scheduleTweetProcessing] Tweet ${tweetId} not found in thread mapping, waiting`);
                 MAPPING_INCOMPLETE_TWEETS.add(tweetId);
                 const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
                 if (indicatorInstance) {
                     indicatorInstance.update({
-                        status: 'pending',
+                    status: TweetRatingStatus.PENDING,
                         score: null,
                         description: 'Waiting for thread context...',
                         questions: [],
@@ -3964,48 +4730,52 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
                 return;
             }
         } catch (e) {
+            console.error("Error parsing thread mapping:", e);
         }
     }
     if (tweetCache.has(tweetId)) {
-        const isIncompleteStreaming = tweetCache.get(tweetId).streaming === true && !tweetCache.get(tweetId).score;
+        const cachedEntry = tweetCache.get(tweetId);
+        const isIncompleteStreaming = cachedEntry.streaming === true && cachedEntry.score === null;
         if (!isIncompleteStreaming && applyTweetCachedRating(tweetArticle)) {
             return;
         }
     }
-    if (processedTweets.has(tweetId)) {
+    if (tweetProcessingState.isScheduled(tweetId)) {
         const instance = ScoreIndicatorRegistry.get(tweetId);
         if (instance) {
             instance.ensureIndicatorAttached();
-            if (instance.status === 'pending' || instance.status === 'streaming') {
+            if (isActiveTweetStatus(instance.status)) {
                 filterSingleTweet(tweetArticle);
                 return;
             }
         }
-        processedTweets.delete(tweetId);
+        tweetProcessingState.clear(tweetId);
     }
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     if (indicatorInstance) {
-        if (indicatorInstance.status !== 'blacklisted' &&
-            indicatorInstance.status !== 'cached' &&
-            indicatorInstance.status !== 'rated') {
-            indicatorInstance.update({ status: 'pending', score: null, description: 'Rating scheduled...', questions: [], lastAnswer: "" });
+        if (indicatorInstance.status !== TweetRatingStatus.BLACKLISTED &&
+            indicatorInstance.status !== TweetRatingStatus.CACHED &&
+            indicatorInstance.status !== TweetRatingStatus.RATED &&
+            indicatorInstance.status !== TweetRatingStatus.AD) {
+            indicatorInstance.update({ status: TweetRatingStatus.PENDING, score: null, description: 'Rating scheduled...', questions: [], lastAnswer: "" });
         } else {
             indicatorInstance.ensureIndicatorAttached();
             filterSingleTweet(tweetArticle);
             return;
         }
     } else {
+        console.error(`Failed to get/create indicator instance for tweet ${tweetId} during scheduling.`);
     }
-    if (!processedTweets.has(tweetId)) {
-        processedTweets.add(tweetId);
+    if (!tweetProcessingState.isScheduled(tweetId)) {
+        tweetProcessingState.markScheduled(tweetId);
     }
     setTimeout(() => {
         try {
-            if (!browserGet('enableAutoRating', true) && !rateAnyway) {
+            if (!appSettings.getBoolean('enableAutoRating') && !rateAnyway) {
                 const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
                 if (indicatorInstance) {
                     indicatorInstance.update({
-                        status: 'manual',
+                        status: TweetRatingStatus.MANUAL,
                         score: null,
                         description: 'Click the Rate button to rate this tweet',
                         reasoning: '',
@@ -4018,7 +4788,8 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
             }
             delayedProcessTweet(tweetArticle, tweetId, authorHandle);
         } catch (e) {
-            processedTweets.delete(tweetId);
+            console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
+            tweetProcessingState.clear(tweetId);
         }
     }, PROCESSING_DELAY_MS);
 }
@@ -4031,7 +4802,9 @@ function loadThreadRelationships() {
     try {
         const savedRelationships = browserGet('threadRelationships', '{}');
         threadRelationships = JSON.parse(savedRelationships);
+        console.log(`Loaded ${Object.keys(threadRelationships).length} thread relationships`);
     } catch (e) {
+        console.error('Error loading thread relationships:', e);
         threadRelationships = {};
     }
 }
@@ -4046,6 +4819,7 @@ function saveThreadRelationships() {
         }
         browserSet('threadRelationships', JSON.stringify(threadRelationships));
     } catch (e) {
+        console.error('Error saving thread relationships:', e);
     }
 }
 loadThreadRelationships();
@@ -4057,6 +4831,7 @@ async function buildReplyChain(tweetId, maxDepth = Infinity) {
     let depth = 0;
     while (currentId && depth < maxDepth) {
         if (visited.has(currentId)) {
+            console.warn(`[buildReplyChain] Detected reply chain cycle at ${currentId}`);
             break;
         }
         visited.add(currentId);
@@ -4108,6 +4883,25 @@ function getStoredReplyInfo(tweetId) {
     }
     return null;
 }
+/**
+ * Extracts the full context of a tweet article and returns a formatted string.
+ *
+ * Schema:
+ * [TWEET]:
+ * @[the author of the tweet]
+ * [the text of the tweet]
+ * [MEDIA_DESCRIPTION]:
+ * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ * [QUOTED_TWEET]:
+ * [the text of the quoted tweet]
+ * [QUOTED_TWEET_MEDIA_DESCRIPTION]:
+ * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ *
+ * @param {Element} tweetArticle - The tweet article element.
+ * @param {string} tweetId - The tweet's ID.
+ * @param {string} apiKey - API key used for getting image descriptions.
+ * @returns {Promise<string>} - The full context string.
+ */
 async function getFullContext(tweetArticle, tweetId, apiKey) {
     if (getFullContextPromises.has(tweetId)) {
         return getFullContextPromises.get(tweetId);
@@ -4256,6 +5050,7 @@ ${quotedImageUrls.join(", ")}`;
                                             currentParentContent += `\n[MEDIA_DESCRIPTION]:\n${parentMediaDesc}`;
                                         }
                                     } catch (e) {
+                                        console.warn(`[getFullContext] Failed to fetch parent media descriptions for ${parentId}:`, e);
                                     }
                                     currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
                                 }
@@ -4304,30 +5099,35 @@ ${quotedImageUrls.join(", ")}`;
     getFullContextPromises.set(tweetId, contextPromise);
     return contextPromise;
 }
+/**
+ * Applies filtering to all tweets currently in the observed container.
+ */
 function applyFilteringToAll() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
     tweets.forEach(filterSingleTweet);
 }
 function ensureAllTweetsRated() {
-    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !browserGet('enableAutoRating', false)) {
+    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !appSettings.getBoolean('enableAutoRating')) {
         return;
     }
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
     if (tweets.length > 0) {
+        console.log(`Checking ${tweets.length} tweets to ensure all are rated...`);
         tweets.forEach(tweet => {
             const tweetId = getTweetID(tweet);
             if (!tweetId) return;
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
             const needsProcessing = !indicatorInstance ||
                 !indicatorInstance.status ||
-                indicatorInstance.status === 'error' ||
+                indicatorInstance.status === TweetRatingStatus.ERROR ||
                 (!isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status)) ||
-                (processedTweets.has(tweetId) && !isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status));
+                (tweetProcessingState.isScheduled(tweetId) && !isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status));
             if (needsProcessing) {
-                if (processedTweets.has(tweetId)) {
-                    processedTweets.delete(tweetId);
+                if (tweetProcessingState.isScheduled(tweetId)) {
+                    console.log(`Tweet ${tweetId} marked as processed but in invalid state: ${indicatorInstance?.status}`);
+                    tweetProcessingState.clear(tweetId);
                 }
                 scheduleTweetProcessing(tweet);
             } else if (indicatorInstance && !isValidInterimState(indicatorInstance.status)) {
@@ -4358,6 +5158,7 @@ async function handleThreads() {
         const visited = new Set();
         while (rootTweetId) {
             if (visited.has(rootTweetId)) {
+                console.warn(`[handleThreads] Detected reply chain cycle at ${rootTweetId}`);
                 break;
             }
             visited.add(rootTweetId);
@@ -4369,6 +5170,7 @@ async function handleThreads() {
         }
         await mapThreadStructure(conversation, rootTweetId);
     } catch (error) {
+        console.error("Error in handleThreads:", error);
         threadMappingInProgress = false;
     }
 }
@@ -4387,6 +5189,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             const urlTweetId = urlMatch ? urlMatch[1] : null;
             let cellDivs = Array.from(conversation.querySelectorAll('div[data-testid="cellInnerDiv"]'));
             if (!cellDivs.length) {
+                console.log("No cell divs found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4443,7 +5246,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                         urlTweetCellIndex = tweetCells.length - 1;
                     }
                     processedCount++;
-                    if (article && !processedTweets.has(tweetId)) {
+                    if (article && !tweetProcessingState.isScheduled(tweetId)) {
                         scheduleTweetProcessing(article);
                     }
                 } else {
@@ -4474,6 +5277,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
             }
             const actualTweets = tweetCells.filter(tc => tc.type === 'tweet');
             if (actualTweets.length === 0) {
+                console.log("No valid tweets found, thread mapping aborted");
                 delete conversation.dataset.threadMappingInProgress;
                 threadMappingInProgress = false;
                 return;
@@ -4557,7 +5361,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 if (mappedTweet) {
                     const tweetArticle = tweetCells.find(tc => tc.tweetId === waitingTweetId)?.tweetNode;
                     if (tweetArticle) {
-                        processedTweets.delete(waitingTweetId);
+                        tweetProcessingState.clear(waitingTweetId);
                         scheduleTweetProcessing(tweetArticle);
                     }
                 }
@@ -4593,13 +5397,13 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             replyToId: doc.toId,
                             isRoot: doc.isRoot
                         };
-                        if (doc.tweetId && processedTweets.has(doc.tweetId)) {
+                        if (doc.tweetId && tweetProcessingState.isScheduled(doc.tweetId)) {
                             const tweetCell = tweetCells.find(tc => tc.tweetId === doc.tweetId);
                             if (tweetCell && tweetCell.tweetNode) {
-                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === 'streaming' ||
+                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === TweetRatingStatus.STREAMING ||
                                     (tweetCache.has(doc.tweetId) && tweetCache.get(doc.tweetId).streaming === true);
                                 if (!isStreaming) {
-                                    processedTweets.delete(doc.tweetId);
+                                    tweetProcessingState.clear(doc.tweetId);
                                     scheduleTweetProcessing(tweetCell.tweetNode);
                                 }
                             }
@@ -4616,6 +5420,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
         };
         await Promise.race([mapping(), timeout]);
     } catch (error) {
+        console.error("Error in mapThreadStructure:", error);
         delete conversation.dataset.threadMappingInProgress;
         threadMappingInProgress = false;
     }
@@ -4625,7 +5430,16 @@ function getTweetReplyInfo(tweetId) {
 }
 setInterval(handleThreads, THREAD_CHECK_INTERVAL);
 setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
+//setInterval(applyFilteringToAll, SWEEP_INTERVAL);
     // ----- api/api_requests.js -----
+/**
+ * Gets a completion from OpenRouter API
+ *
+ * @param {CompletionRequest} request - The completion request
+ * @param {string} apiKey - OpenRouter API key
+ * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @returns {Promise<CompletionResult>} The completion result
+ */
 async function getCompletion(request, apiKey, timeout = 30000) {
     return new Promise((resolve) => {
         GM_xmlhttpRequest({
@@ -4687,6 +5501,18 @@ async function getCompletion(request, apiKey, timeout = 30000) {
         });
     });
 }
+/**
+ * Gets a streaming completion from OpenRouter API
+ *
+ * @param {CompletionRequest} request - The completion request
+ * @param {string} apiKey - OpenRouter API key
+ * @param {Function} onChunk - Callback for each chunk of streamed response
+ * @param {Function} onComplete - Callback when streaming is complete
+ * @param {Function} onError - Callback when an error occurs
+ * @param {number} [timeout=30000] - Request timeout in milliseconds
+ * @param {string} [tweetId=null] - Optional tweet ID to associate with this request
+ * @returns {Object} The request object with an abort method
+ */
 function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, timeout = 90000, tweetId = null) {
     const streamingRequest = {
         ...request,
@@ -4697,6 +5523,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     let reasoning = "";
     let responseObj = null;
     let streamComplete = false;
+    console.log(streamingRequest);
     const reqObj = GM_xmlhttpRequest({
         method: "POST",
         url: "https://openrouter.ai/api/v1/chat/completions",
@@ -4716,6 +5543,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
             const resetStreamTimeout = () => {
                 if (streamTimeout) clearTimeout(streamTimeout);
                 streamTimeout = setTimeout(() => {
+                    console.log("Stream timed out after inactivity");
                     if (!streamComplete) {
                         streamComplete = true;
                         onComplete({
@@ -4784,6 +5612,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                                         });
                                     }
                                 } catch (e) {
+                                    console.error("Error parsing SSE data:", e, data);
                                 }
                             }
                         }
@@ -4802,6 +5631,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                         });
                     }
                 } catch (error) {
+                    console.error("Stream processing error:", error);
                     if (streamTimeout) clearTimeout(streamTimeout);
                     if (!streamComplete) {
                         streamComplete = true;
@@ -4817,6 +5647,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                 }
             };
             processStream().catch(error => {
+                console.error("Unhandled stream error:", error);
                 if (streamTimeout) clearTimeout(streamTimeout);
                 if (!streamComplete) {
                     streamComplete = true;
@@ -4855,10 +5686,11 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     const streamingRequestObj = {
         abort: function() {
             streamComplete = true;
-            pendingRequests--;
+            tweetProcessingState.decrementPending();
             try {
                 reqObj.abort();
             } catch (e) {
+                console.error("Error aborting request:", e);
             }
             if (tweetId && window.activeStreamingRequests) {
                 delete window.activeStreamingRequests[tweetId];
@@ -4877,6 +5709,10 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     return streamingRequestObj;
 }
 let isOnlineListenerAttached = false;
+/**
+ * Fetches the list of available models from the OpenRouter API.
+ * Uses the stored API key, and updates the model selector upon success.
+ */
 function fetchAvailableModels() {
     const apiKey = browserGet('openrouter-api-key', '');
     if (!apiKey) {
@@ -4908,15 +5744,22 @@ function fetchAvailableModels() {
                     });
                     filteredModels.sort((a, b) => (Number(b.created) || 0) - (Number(a.created) || 0));
                     availableModels = filteredModels || [];
+                    const imageCapableModelIds = [...new Set(availableModels
+                        .filter(modelHasImageInput)
+                        .flatMap(getModelIdentifierCandidates)
+                        .filter(Boolean))];
+                    browserSet('imageCapableModelIds', imageCapableModelIds);
                     listedModels = [...availableModels];
                     refreshModelsUI();
                     showStatus('Models updated!');
                 }
             } catch (error) {
+                console.error('Error parsing model list:', error);
                 showStatus('Error parsing models list');
             }
         },
         onerror: function (error) {
+            console.error('Error fetching models:', error);
             if (!navigator.onLine) {
                 if (!isOnlineListenerAttached) {
                     showStatus('Offline. Will attempt to fetch models when connection returns.');
@@ -4931,6 +5774,36 @@ function fetchAvailableModels() {
         }
     });
 }
+/**
+ * Removes Twitter's image size hint from image URLs before sending them to a model.
+ * @param {string} url
+ * @returns {string}
+ */
+function stripImageUrlNameParam(url) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+        return url;
+    }
+    try {
+        const parsedUrl = new URL(url);
+        for (const key of Array.from(parsedUrl.searchParams.keys())) {
+            if (key.toLowerCase() === 'name') {
+                parsedUrl.searchParams.delete(key);
+            }
+        }
+        return parsedUrl.toString();
+    } catch (error) {
+        return url;
+    }
+}
+/**
+ * Gets descriptions for images using the OpenRouter API
+ *
+ * @param {string[]} urls - Array of image URLs to get descriptions for
+ * @param {string} apiKey - The API key for authentication
+ * @param {string} tweetId - The unique tweet ID
+ * @param {string} userHandle - The Twitter user handle
+ * @returns {Promise<string>} Combined image descriptions
+ */
 async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
     if (!urls?.length || !imageDescriptionsEnabled) {
@@ -4938,6 +5811,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     }
     let descriptions = [];
     for (const url of urls) {
+        const modelImageUrl = stripImageUrlNameParam(url);
         const request = {
             model: selectedImageModel,
             messages: [{
@@ -4949,7 +5823,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                     },
                     {
                         type: "image_url",
-                        image_url: { url }
+                        image_url: { url: modelImageUrl }
                     }
                 ]
             }],
@@ -4977,67 +5851,11 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     }
     return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
 }
-async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
-    return new Promise((resolve) => {
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: `https://openrouter.ai/api/v1/generation?id=${generationId}`,
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
-                "X-Title": "TweetFilter-AI"
-            },
-            timeout: timeout,
-            onload: function(response) {
-                if (response.status >= 200 && response.status < 300) {
-                    try {
-                        const data = JSON.parse(response.responseText);
-                        resolve({
-                            error: false,
-                            message: "Metadata fetched successfully",
-                            data: data
-                        });
-                    } catch (error) {
-                        resolve({
-                            error: true,
-                            message: `Failed to parse metadata response: ${error.message}`,
-                            data: null
-                        });
-                    }
-                } else if (response.status === 404) {
-                     resolve({
-                         error: true,
-                         status: 404,
-                         message: `Generation metadata not found (404): ${response.responseText}`,
-                         data: null
-                     });
-                } else {
-                    resolve({
-                        error: true,
-                        status: response.status,
-                        message: `Metadata request failed with status ${response.status}: ${response.responseText}`,
-                        data: null
-                    });
-                }
-            },
-            onerror: function(error) {
-                resolve({
-                    error: true,
-                    message: `Metadata request error: ${error.toString()}`,
-                    data: null
-                });
-            },
-            ontimeout: function() {
-                resolve({
-                    error: true,
-                    message: `Metadata request timed out after ${timeout}ms`,
-                    data: null
-                });
-            }
-        });
-    });
-}
     // ----- api/api.js -----
+/**
+ * Formats description text for the tooltip.
+ * Copy of the function from ui.js to ensure it's available for streaming.
+ */
 const safetySettings = [
     {
         category: "HARM_CATEGORY_HARASSMENT",
@@ -5060,6 +5878,11 @@ const safetySettings = [
         threshold: "BLOCK_NONE",
     },
 ];
+/**
+ * Extracts follow-up questions from the AI response content.
+ * @param {string} content - The full AI response content.
+ * @returns {string[]} An array of 3 questions, or an empty array if not found.
+ */
 function extractFollowUpQuestions(content) {
     if (!content) return [];
     const taggedQuestions = [1, 2, 3].map((index) => {
@@ -5091,8 +5914,43 @@ function extractFollowUpQuestions(content) {
             return questions;
         }
     }
+    console.warn("[extractFollowUpQuestions] Failed to parse <Q1>/<Q2>/<Q3> tags or legacy Q_1/Q_2/Q_3 markers.");
     return [];
 }
+/**
+ * Extracts display-ready metadata from an OpenRouter completion response object.
+ * @param {object|null} responseData
+ * @returns {object|null}
+ */
+function extractCompletionMetadata(responseData) {
+    if (!responseData) return null;
+    const usage = responseData.usage || {};
+    const completionTokenDetails = usage.completion_tokens_details || {};
+    const explicitMediaInputs = responseData.num_media_prompt ?? responseData.media_inputs ?? responseData.mediaInputs;
+    const totalCost = usage.cost ?? usage.total_cost ?? usage.cost_details?.upstream_inference_cost ?? responseData.total_cost;
+    const latencyMs = responseData.latency ?? responseData.latency_ms;
+    const metadata = {
+        generationId: responseData.id || null,
+        model: responseData.model || 'N/A',
+        promptTokens: usage.prompt_tokens ?? responseData.tokens_prompt ?? 0,
+        completionTokens: usage.completion_tokens ?? responseData.tokens_completion ?? 0,
+        reasoningTokens: completionTokenDetails.reasoning_tokens ?? responseData.native_tokens_reasoning ?? 0,
+        latency: latencyMs !== undefined ? (latencyMs / 1000).toFixed(2) + 's' : 'N/A',
+        mediaInputs: explicitMediaInputs ?? 0,
+        price: totalCost !== undefined ? `$${Number(totalCost).toFixed(6)}` : 'N/A',
+        providerName: responseData.provider || responseData.provider_name || 'N/A'
+    };
+    return metadata.generationId || metadata.model !== 'N/A' || Object.keys(usage).length > 0
+        ? metadata
+        : null;
+}
+/**
+ * Orders media URLs by their first appearance in the provided thread text.
+ * URLs not found in the text keep their original relative order and are placed last.
+ * @param {string[]} mediaUrls
+ * @param {string} threadText
+ * @returns {string[]}
+ */
 function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
     if (!Array.isArray(mediaUrls) || mediaUrls.length <= 1 || !threadText) {
         return mediaUrls;
@@ -5158,21 +6016,36 @@ function appendRatingMediaContent(content, mediaUrls) {
                 }
             });
         } else if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+            const modelImageUrl = stripImageUrlNameParam(url);
             content.push({
                 type: "image_url",
-                image_url: { "url": url }
+                image_url: { "url": modelImageUrl }
             });
         } else {
+            console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
         }
     });
 }
+/**
+ * Rates a tweet using the OpenRouter API with automatic retry functionality.
+ *
+ * @param {string} tweetText - The text content of the tweet
+ * @param {string} tweetId - The unique tweet ID
+ * @param {string} apiKey - The API key for authentication
+ * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
+ * @param {number} [maxRetries=3] - Maximum number of retry attempts
+ * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
+ * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
+ */
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
+    console.log("given tweettext\n", tweetText);
     const cleanupRequest = () => {
-        pendingRequests = Math.max(0, pendingRequests - 1);
+        tweetProcessingState.decrementPending();
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
     };
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     if (!indicatorInstance) {
+        console.error(`[API rateTweetWithOpenRouter] Could not get/create ScoreIndicator for ${tweetId}.`);
         return {
             score: 5,
             content: "Failed to initialize UI components for rating.",
@@ -5276,14 +6149,14 @@ EXPECTED_RESPONSE_FORMAT:\n
             await new Promise(resolve => setTimeout(resolve, Math.max(0, API_CALL_DELAY_MS - timeElapsed)));
         }
         lastAPICallTime = now;
-        pendingRequests++;
+        tweetProcessingState.incrementPending();
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
         try {
             let result;
             if (useStreaming) {
                 result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle);
             } else {
-                result = await rateTweet(requestBody, apiKey);
+                result = await rateTweet(requestBody, apiKey, tweetId, tweetText);
             }
             cleanupRequest();
             if (!result.error && result.content) {
@@ -5309,7 +6182,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
-                    metadata: result.data?.id ? { generationId: result.data.id } : null,
+                    metadata: result.metadata || null,
                     qaConversationHistory: finalQaHistory
                 });
                 return {
@@ -5320,6 +6193,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                     error: false,
                     cached: false,
                     data: result.data,
+                    metadata: result.metadata || null,
                     qaConversationHistory: finalQaHistory
                 };
             }
@@ -5331,6 +6205,7 @@ EXPECTED_RESPONSE_FORMAT:\n
             }
         } catch (error) {
             cleanupRequest();
+            console.error(`API error during attempt ${attempt}:`, error);
             if (attempt < maxRetries) {
                 const backoffDelay = Math.pow(attempt, 2) * 1000;
                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
@@ -5391,26 +6266,35 @@ EXPECTED_RESPONSE_FORMAT:\n
         qaConversationHistory: indicatorInstance.qaConversationHistory
     };
 }
-async function rateTweet(request, apiKey) {
-    const tweetId = request.tweetId;
+/**
+ * Performs a non-streaming tweet rating request
+ *
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
+ */
+async function rateTweet(request, apiKey, tweetId, tweetText) {
     const existingScore = tweetCache.get(tweetId)?.score;
     const result = await getCompletion(request, apiKey);
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
         const reasoning = result.data.choices[0].message.reasoning || "";
         const scoreMatches = content.match(/SCORE_(\d+)/g);
-        const score = existingScore || (scoreMatches && scoreMatches.length > 0
+        const score = existingScore ?? (scoreMatches && scoreMatches.length > 0
             ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10)
             : null);
         tweetCache.set(tweetId, {
             score: score,
             description: content,
-            tweetContent: request.tweetText,
-            streaming: false
+            tweetContent: tweetText,
+            streaming: false,
+            metadata: extractCompletionMetadata(result.data)
         });
         return {
             content,
-            reasoning
+            reasoning,
+            data: result.data,
+            metadata: extractCompletionMetadata(result.data)
         };
     }
     return {
@@ -5420,8 +6304,19 @@ async function rateTweet(request, apiKey) {
         data: null
     };
 }
+/**
+ * Performs a streaming tweet rating request with real-time UI updates
+ *
+ * @param {Object} request - The formatted request body
+ * @param {string} apiKey - API key for authentication
+ * @param {string} tweetId - The tweet ID
+ * @param {string} tweetText - The text content of the tweet
+ * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
+ * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
+ */
 async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
+        console.log(`Aborting existing streaming request for tweet ${tweetId}`);
         window.activeStreamingRequests[tweetId].abort();
         delete window.activeStreamingRequests[tweetId];
     }
@@ -5441,6 +6336,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
     return new Promise((resolve, reject) => {
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
         if (!indicatorInstance) {
+             console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
              if (tweetCache.has(tweetId)) {
                  tweetCache.get(tweetId).streaming = false;
                  tweetCache.get(tweetId).error = "Indicator initialization failed";
@@ -5463,7 +6359,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
                  indicatorInstance.update({
-                    status: 'streaming',
+                    status: TweetRatingStatus.STREAMING,
                     score: score,
                     description: aggregatedContent || "Rating in progress...",
                     reasoning: aggregatedReasoning,
@@ -5479,17 +6375,20 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 }
             },
             (finalResult) => {
+                console.log(finalResult);
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
+                const completionMetadata = extractCompletionMetadata(finalData);
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
                 if (scoreMatches && scoreMatches.length > 0) {
                     const lastScore = scoreMatches[scoreMatches.length - 1];
                     score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
-                let finalStatus = 'rated';
+                let finalStatus = TweetRatingStatus.RATED;
                 if (score === null || score === undefined) {
-                    finalStatus = 'error';
+                    console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                    finalStatus = TweetRatingStatus.ERROR;
                     score = 5;
                     aggregatedContent += "\n[No score detected - Error]";
                 }
@@ -5500,8 +6399,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     streaming: false,
                     timestamp: Date.now(),
-                    error: finalStatus === 'error' ? "No score detected" : undefined,
-                    metadata: finalData?.id ? { generationId: finalData.id } : null
+                    error: finalStatus === TweetRatingStatus.ERROR ? "No score detected" : undefined,
+                    metadata: completionMetadata
                 };
                 tweetCache.set(tweetId, finalCacheData);
                 indicatorInstance.update({
@@ -5511,27 +6410,25 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     questions: extractFollowUpQuestions(aggregatedContent),
                     lastAnswer: "",
-                    metadata: finalData?.id ? { generationId: finalData.id } : null
+                    metadata: completionMetadata
                 });
                 if (tweetArticle) {
                     filterSingleTweet(tweetArticle);
-                }
-                const generationId = finalData?.id;
-                if (generationId && apiKey) {
-                    fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance);
                 }
                 resolve({
                     score: score,
                     content: aggregatedContent,
                     reasoning: aggregatedReasoning,
-                    error: finalStatus === 'error',
+                    error: finalStatus === TweetRatingStatus.ERROR,
                     cached: false,
-                    data: finalData
+                    data: finalData,
+                    metadata: completionMetadata
                 });
             },
             (errorData) => {
+                 console.error(`[API Stream Error] Tweet ${tweetId}: ${errorData.message}`);
                 indicatorInstance.update({
-                    status: 'error',
+                    status: TweetRatingStatus.ERROR,
                     score: 5,
                     description: `Stream Error: ${errorData.message}`,
                     reasoning: '',
@@ -5552,45 +6449,19 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         );
     });
 }
-async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt = 0, delays = [1000, 500, 2000, 4000, 8000]) {
-    if (attempt >= delays.length) {
-        return;
-    }
-    const delay = delays[attempt];
-    await new Promise(resolve => setTimeout(resolve, delay));
-    try {
-        const metadataResult = await getGenerationMetadata(generationId, apiKey);
-        if (!metadataResult.error && metadataResult.data?.data) {
-            const meta = metadataResult.data.data;
-            const extractedMetadata = {
-                model: meta.model || 'N/A',
-                promptTokens: meta.tokens_prompt || 0,
-                completionTokens: meta.tokens_completion || 0,
-                reasoningTokens: meta.native_tokens_reasoning || 0,
-                latency: meta.latency !== undefined ? (meta.latency / 1000).toFixed(2) + 's' : 'N/A',
-                mediaInputs: meta.num_media_prompt || 0,
-                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A',
-                providerName: meta.provider_name || 'N/A'
-            };
-            const currentCache = tweetCache.get(tweetId);
-            if (currentCache) {
-                currentCache.metadata = extractedMetadata;
-                tweetCache.set(tweetId, currentCache);
-                indicatorInstance.update({ metadata: extractedMetadata });
-            } else {
-            }
-            return;
-        } else if (metadataResult.status === 404) {
-            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
-        } else {
-            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
-        }
-    } catch (error) {
-        fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
-    }
-}
+/**
+ * Answers a follow-up question about a tweet and generates new questions.
+ *
+ * @param {string} tweetId - The ID of the tweet being discussed.
+ * @param {object[]} qaHistoryForApiCall - The conversation history array, including the latest user message.
+ * @param {string} apiKey - The OpenRouter API key.
+ * @param {Element} [tweetArticle=null] - The DOM element for the tweet article.
+ * @param {ScoreIndicator} indicatorInstance - The ScoreIndicator instance to update.
+ * @returns {Promise<void>} Resolves when the answer is generated and UI updated.
+ */
 async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, tweetArticle, indicatorInstance) {
     const questionTextForLogging = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
+    console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
     const useStreaming = browserGet('enableStreaming', false);
     const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
@@ -5621,6 +6492,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     if(browserGet('enableWebSearch',false)){
         request.tools = [{type: "openrouter:web_search"}];
     }
+    console.log(`followup request (templated): ${JSON.stringify(request)}`);
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
     }
@@ -5667,6 +6539,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                             resolve();
                         },
                         (error) => {
+                            console.error("[FollowUp Stream Error]", error);
                             const errorMessage = `Error generating answer: ${error.message}`;
                             indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
                             indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
@@ -5702,6 +6575,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                 tweetCache.set(tweetId, currentCache);
             }
         } catch (error) {
+            console.error(`[FollowUp] Error answering question for ${tweetId}:`, error);
             const errorMessage = `Error answering question: ${error.message}`;
             indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
             indicatorInstance.setFollowUpQuestions(tweetCache.get(tweetId)?.questions || []);
@@ -5721,13 +6595,19 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 const VERSION = '1.7.2';
 (function () {
     'use strict';
+    console.log(`X/Twitter Tweet De-Sloppification Activated (v${VERSION} - Enhanced)`);
     let menuhtml = GM_getResourceText("MENU_HTML");
     browserSet('menuHTML', menuhtml);
     let firstRun = browserGet('firstRun', true);
+    /**
+     * Initializes the observer on the main content area, adds the UI elements,
+     * starts processing visible tweets, and sets up periodic checks.
+     */
     function initializeObserver() {
         const target = document.querySelector('main') || document.querySelector('div[data-testid="primaryColumn"]');
         if (target) {
             observedTargetNode = target;
+            console.log("X/Twitter Tweet De-Sloppification: Target node found. Observing...");
             initialiseUI();
             if (firstRun) {
                 resetSettings(true);
@@ -5758,6 +6638,7 @@ const VERSION = '1.7.2';
                 const statusIndicator = document.getElementById('status-indicator');
                 if (statusIndicator) statusIndicator.remove();
                 ScoreIndicatorRegistry.destroyAll();
+                console.log("X/Twitter Tweet De-Sloppification Deactivated.");
             });
         } else {
             setTimeout(initializeObserver, 1);

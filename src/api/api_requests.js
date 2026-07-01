@@ -290,7 +290,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     const streamingRequestObj = {
         abort: function() {
             streamComplete = true;
-            pendingRequests--;
+            tweetProcessingState.decrementPending();
             try {
                 reqObj.abort();
             } catch (e) {
@@ -391,6 +391,29 @@ function fetchAvailableModels() {
 }
 
 /**
+ * Removes Twitter's image size hint from image URLs before sending them to a model.
+ * @param {string} url
+ * @returns {string}
+ */
+function stripImageUrlNameParam(url) {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+        return url;
+    }
+
+    try {
+        const parsedUrl = new URL(url);
+        for (const key of Array.from(parsedUrl.searchParams.keys())) {
+            if (key.toLowerCase() === 'name') {
+                parsedUrl.searchParams.delete(key);
+            }
+        }
+        return parsedUrl.toString();
+    } catch (error) {
+        return url;
+    }
+}
+
+/**
  * Gets descriptions for images using the OpenRouter API
  *
  * @param {string[]} urls - Array of image URLs to get descriptions for
@@ -407,6 +430,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
 
     let descriptions = [];
     for (const url of urls) {
+        const modelImageUrl = stripImageUrlNameParam(url);
         const request = {
             model: selectedImageModel,
             messages: [{
@@ -418,7 +442,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
                     },
                     {
                         type: "image_url",
-                        image_url: { url }
+                        image_url: { url: modelImageUrl }
                     }
                 ]
             }],
@@ -446,74 +470,5 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     }
 
     return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
-}
-
-/**
- * Fetches generation metadata from OpenRouter API by ID.
- *
- * @param {string} generationId - The ID of the generation to fetch metadata for.
- * @param {string} apiKey - OpenRouter API key.
- * @param {number} [timeout=10000] - Request timeout in milliseconds.
- * @returns {Promise<CompletionResult>} The result containing metadata or an error.
- */
-async function getGenerationMetadata(generationId, apiKey, timeout = 10000) {
-    return new Promise((resolve) => {
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: `https://openrouter.ai/api/v1/generation?id=${generationId}`,
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://greasyfork.org/en/scripts/532459-tweetfilter-ai",
-                "X-Title": "TweetFilter-AI"
-            },
-            timeout: timeout,
-            onload: function(response) {
-                if (response.status >= 200 && response.status < 300) {
-                    try {
-                        const data = JSON.parse(response.responseText);
-                        resolve({
-                            error: false,
-                            message: "Metadata fetched successfully",
-                            data: data
-                        });
-                    } catch (error) {
-                        resolve({
-                            error: true,
-                            message: `Failed to parse metadata response: ${error.message}`,
-                            data: null
-                        });
-                    }
-                } else if (response.status === 404) {
-                     resolve({
-                         error: true,
-                         status: 404,
-                         message: `Generation metadata not found (404): ${response.responseText}`,
-                         data: null
-                     });
-                } else {
-                    resolve({
-                        error: true,
-                        status: response.status,
-                        message: `Metadata request failed with status ${response.status}: ${response.responseText}`,
-                        data: null
-                    });
-                }
-            },
-            onerror: function(error) {
-                resolve({
-                    error: true,
-                    message: `Metadata request error: ${error.toString()}`,
-                    data: null
-                });
-            },
-            ontimeout: function() {
-                resolve({
-                    error: true,
-                    message: `Metadata request timed out after ${timeout}ms`,
-                    data: null
-                });
-            }
-        });
-    });
 }
 

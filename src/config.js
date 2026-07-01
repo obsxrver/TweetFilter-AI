@@ -1,28 +1,28 @@
-const processedTweets = new Set();
+const processedTweets = tweetProcessingState.processedTweetIds;
 const adAuthorCache = new Set();
 
 const PROCESSING_DELAY_MS = 1;
 const API_CALL_DELAY_MS = 1;
-let userDefinedInstructions = instructionsManager.getCurrentInstructions() || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
-let currentFilterThreshold = parseInt(browserGet('filterThreshold', '5'));
+let userDefinedInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
+let currentFilterThreshold = appSettings.getInteger('filterThreshold');
 let observedTargetNode = null;
 let lastAPICallTime = 0;
 let pendingRequests = 0;
 const MAX_RETRIES = 5;
 let availableModels = [];
 let listedModels = [];
-let selectedModel = browserGet('selectedModel', 'openai/gpt-5.4-mini');
-let selectedImageModel = browserGet('selectedImageModel', 'google/gemini-2.5-flash');
-let showFreeModels = browserGet('showFreeModels', true);
-let modelFamilyFilter = browserGet('modelFamilyFilter', '');
-let providerSort = browserGet('providerSort', '');
-let blacklistedHandles = browserGet('blacklistedHandles', '').split('\n').filter(h => h.trim() !== '');
+let selectedModel = appSettings.get('selectedModel');
+let selectedImageModel = appSettings.get('selectedImageModel');
+let showFreeModels = appSettings.getBoolean('showFreeModels');
+let modelFamilyFilter = appSettings.get('modelFamilyFilter');
+let providerSort = appSettings.get('providerSort');
+let blacklistedHandles = appSettings.getHandles();
 
-let enableImageDescriptions = browserGet('enableImageDescriptions', false);
-let enableStreaming = browserGet('enableStreaming', true);
-let enableWebSearch = browserGet('enableWebSearch', false);
-let enableAutoRating = browserGet('enableAutoRating', true);
-let reasoningEffort = browserGet('reasoningEffort', 'none');
+let enableImageDescriptions = appSettings.getBoolean('enableImageDescriptions');
+let enableStreaming = appSettings.getBoolean('enableStreaming');
+let enableWebSearch = appSettings.getBoolean('enableWebSearch');
+let enableAutoRating = appSettings.getBoolean('enableAutoRating');
+let reasoningEffort = appSettings.get('reasoningEffort');
 
 const REVIEW_SYSTEM_PROMPT = `
 
@@ -105,11 +105,11 @@ NOTES:
       <Q3>What are the latest events happening in Paris?</Q3>
     </FOLLOW_UP_QUESTIONS>
 `;
-let modelTemperature = parseFloat(browserGet('modelTemperature', '1'));
-let modelTopP = parseFloat(browserGet('modelTopP', '0.95'));
-let imageModelTemperature = parseFloat(browserGet('imageModelTemperature', '1'));
-let imageModelTopP = parseFloat(browserGet('imageModelTopP', '0.95'));
-let maxTokens = parseInt(browserGet('maxTokens', '0'));
+let modelTemperature = appSettings.getNumber('modelTemperature');
+let modelTopP = appSettings.getNumber('modelTopP');
+let imageModelTemperature = appSettings.getNumber('imageModelTemperature');
+let imageModelTopP = appSettings.getNumber('imageModelTopP');
+let maxTokens = appSettings.getInteger('maxTokens');
 
 const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';

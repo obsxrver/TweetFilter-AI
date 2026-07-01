@@ -15,6 +15,7 @@ args = parser.parse_args()
 files_to_combine = [
     # Helpers first
     "helpers/browserStorage.js",
+    "appState.js",
     
     "helpers/cache.js",
     "backends/TweetCache.js",

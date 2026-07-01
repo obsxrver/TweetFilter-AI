@@ -62,7 +62,7 @@ function toggleElementVisibility(element, toggleButton, openText, closedText) {
 function injectUI() {
 
     let menuHTML;
-    if (MENU) {
+    if (typeof MENU !== 'undefined' && MENU) {
         menuHTML = MENU;
     } else {
         menuHTML = browserGet('menuHTML');
@@ -308,7 +308,7 @@ function clearTweetRatingsAndRefreshUI() {
 
         tweetCache.clear(true);
 
-        pendingRequests = 0;
+        tweetProcessingState.resetPending();
 
         if (window.threadRelationships) {
             window.threadRelationships = {};
@@ -332,7 +332,7 @@ function clearTweetRatingsAndRefreshUI() {
 
                 const tweetId = getTweetID(tweet);
                 if (tweetId) {
-                    processedTweets.delete(tweetId);
+                    tweetProcessingState.clear(tweetId);
 
                     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
                     if (indicatorInstance) {
@@ -377,8 +377,37 @@ function handleSettingChange(target, settingName) {
         value = target.value;
     }
 
-    if (window[settingName] !== undefined) {
-        window[settingName] = value;
+    switch (settingName) {
+        case 'enableImageDescriptions':
+            enableImageDescriptions = value;
+            break;
+        case 'enableStreaming':
+            enableStreaming = value;
+            break;
+        case 'enableWebSearch':
+            enableWebSearch = value;
+            break;
+        case 'enableAutoRating':
+            enableAutoRating = value;
+            break;
+        case 'reasoningEffort':
+            reasoningEffort = value;
+            break;
+        case 'showFreeModels':
+            showFreeModels = value;
+            break;
+        case 'modelFamilyFilter':
+            modelFamilyFilter = normalizeModelFamilyFilter(value);
+            value = modelFamilyFilter;
+            break;
+        case 'providerSort':
+            providerSort = value;
+            break;
+        case 'userDefinedInstructions':
+            userDefinedInstructions = value;
+            break;
+        default:
+            break;
     }
 
     browserSet(settingName, value);
@@ -426,8 +455,24 @@ function handleParameterChange(target, paramName) {
         valueInput.value = newValue;
     }
 
-    if (window[paramName] !== undefined) {
-        window[paramName] = newValue;
+    switch (paramName) {
+        case 'modelTemperature':
+            modelTemperature = newValue;
+            break;
+        case 'modelTopP':
+            modelTopP = newValue;
+            break;
+        case 'imageModelTemperature':
+            imageModelTemperature = newValue;
+            break;
+        case 'imageModelTopP':
+            imageModelTopP = newValue;
+            break;
+        case 'maxTokens':
+            maxTokens = newValue;
+            break;
+        default:
+            break;
     }
 
     browserSet(paramName, newValue);
@@ -525,11 +570,9 @@ function refreshSettingsUI() {
 
     document.querySelectorAll('[data-setting]').forEach(input => {
         const settingName = input.dataset.setting;
-        const value = browserGet(settingName, window[settingName]);
+        const value = browserGet(settingName, DEFAULT_SETTINGS[settingName]);
         if (input.type === 'checkbox') {
-            input.checked = value;
-
-            handleSettingChange(input, settingName);
+            input.checked = coerceBoolean(value, DEFAULT_SETTINGS[settingName]);
         } else {
             input.value = value;
         }
@@ -547,7 +590,7 @@ function refreshSettingsUI() {
 
     const filterSlider = document.getElementById('tweet-filter-slider');
     const filterValueInput = document.getElementById('tweet-filter-value');
-    const currentThreshold = browserGet('filterThreshold', '5');
+    const currentThreshold = appSettings.getInteger('filterThreshold');
 
     if (filterSlider && filterValueInput) {
         filterSlider.value = currentThreshold;
@@ -889,30 +932,26 @@ function resetSettings(noconfirm = false) {
     if (noconfirm || confirm('Are you sure you want to reset all settings to their default values? This will not clear your cached ratings, blacklisted handles, or instruction history.')) {
         tweetCache.clear();
 
-        const defaults = {
-            selectedModel: 'openai/gpt-4.1-nano',
-            selectedImageModel: 'openai/gpt-4.1-nano',
-            enableImageDescriptions: false,
-            enableStreaming: true,
-            enableWebSearch: false,
-            enableAutoRating: true,
-            reasoningEffort: 'none',
-            modelTemperature: 0.5,
-            modelTopP: 0.9,
-            imageModelTemperature: 0.5,
-            imageModelTopP: 0.9,
-            maxTokens: 0,
-            filterThreshold: 5,
-            userDefinedInstructions: 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.',
-            modelFamilyFilter: ''
-        };
-
-        for (const key in defaults) {
-            if (window[key] !== undefined) {
-                window[key] = defaults[key];
-            }
-            browserSet(key, defaults[key]);
-        }
+        const preservedHandles = [...blacklistedHandles];
+        const defaults = appSettings.reset();
+        selectedModel = defaults.selectedModel;
+        selectedImageModel = defaults.selectedImageModel;
+        showFreeModels = defaults.showFreeModels;
+        modelFamilyFilter = defaults.modelFamilyFilter;
+        providerSort = defaults.providerSort;
+        blacklistedHandles = appSettings.saveHandles(preservedHandles);
+        enableImageDescriptions = defaults.enableImageDescriptions;
+        enableStreaming = defaults.enableStreaming;
+        enableWebSearch = defaults.enableWebSearch;
+        enableAutoRating = defaults.enableAutoRating;
+        reasoningEffort = defaults.reasoningEffort;
+        modelTemperature = defaults.modelTemperature;
+        modelTopP = defaults.modelTopP;
+        imageModelTemperature = defaults.imageModelTemperature;
+        imageModelTopP = defaults.imageModelTopP;
+        maxTokens = defaults.maxTokens;
+        currentFilterThreshold = defaults.filterThreshold;
+        userDefinedInstructions = defaults.userDefinedInstructions;
 
         refreshSettingsUI();
         fetchAvailableModels();
@@ -930,8 +969,7 @@ function addHandleToBlacklist(handle) {
         showStatus(handle === '' ? 'Handle cannot be empty.' : `@${handle} is already on the list.`);
         return;
     }
-    blacklistedHandles.push(handle);
-    browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
+    blacklistedHandles = appSettings.saveHandles([...blacklistedHandles, handle]);
     refreshHandleList(document.getElementById('handle-list'));
     showStatus(`Added @${handle} to auto-rate list.`);
 }
@@ -944,7 +982,7 @@ function removeHandleFromBlacklist(handle) {
     const index = blacklistedHandles.indexOf(handle);
     if (index > -1) {
         blacklistedHandles.splice(index, 1);
-        browserSet('blacklistedHandles', blacklistedHandles.join('\n'));
+        blacklistedHandles = appSettings.saveHandles(blacklistedHandles);
         refreshHandleList(document.getElementById('handle-list'));
         showStatus(`Removed @${handle} from auto-rate list.`);
     } else console.warn(`Attempted to remove non-existent handle: ${handle}`);

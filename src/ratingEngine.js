@@ -46,7 +46,7 @@ function filterSingleTweet(tweetArticle) {
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
 
     indicatorInstance?.ensureIndicatorAttached();
-    const currentFilterThreshold = parseInt(browserGet('filterThreshold', '1'));
+    const currentFilterThreshold = appSettings.getInteger('filterThreshold');
     const ratingStatus = tweetArticle.dataset.ratingStatus;
     const isAuthorCurrentlyBlacklisted = isUserBlacklisted(authorHandle);
 
@@ -62,7 +62,7 @@ function filterSingleTweet(tweetArticle) {
         }
     } else {
         delete cell.dataset.authorBlacklisted;
-        if (ratingStatus === 'pending' || ratingStatus === 'streaming') {
+        if (isActiveTweetStatus(ratingStatus)) {
             delete cell.dataset.filtered;
         } else if (isNaN(score) || score < currentFilterThreshold) {
             const existingInstanceToDestroy = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
@@ -101,7 +101,7 @@ function applyTweetCachedRating(tweetArticle) {
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
 
             tweetArticle.dataset.slopScore = cachedRating.score.toString();
-            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? 'cached' : 'rated';
+            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED;
             tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
             tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
 
@@ -114,6 +114,7 @@ function applyTweetCachedRating(tweetArticle) {
                 return false;
             }
             filterSingleTweet(tweetArticle);
+            tweetProcessingState.resetRetries(tweetId);
             return true;
         } else if (!cachedRating.streaming) {
             //cached object with score undefined or null, and not pending rating.
@@ -136,17 +137,14 @@ function isUserBlacklisted(handle) {
     return blacklistedHandles.some(h => h.toLowerCase().trim() === handle);
 }
 
-const VALID_FINAL_STATES = ['rated', 'cached', 'blacklisted', 'manual'];
-const VALID_INTERIM_STATES = ['pending', 'streaming'];
-
 const getFullContextPromises = new Map();
 
 function isValidFinalState(status) {
-    return VALID_FINAL_STATES.includes(status);
+    return isFinalTweetStatus(status);
 }
 
 function isValidInterimState(status) {
-    return VALID_INTERIM_STATES.includes(status);
+    return isActiveTweetStatus(status);
 }
 
 async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
@@ -164,7 +162,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             let lastAnswer = "";
             try {
                 const cachedRating = tweetCache.get(tweetId);
-                if (cachedRating && !cachedRating.score && !cachedRating.streaming) {
+                if (cachedRating && !isCompleteCachedRating(cachedRating) && !cachedRating.streaming) {
                     console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
                     tweetCache.delete(tweetId);
                 }
@@ -272,7 +270,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             console.log(`Using valid cache entry found for ${tweetId} before API call.`);
 
                             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                                status: currentCache.fromStorage ? 'cached' : 'rated',
+                                status: currentCache.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED,
                                 score: score,
                                 description: description,
                                 reasoning: reasoning,
@@ -282,6 +280,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                                 mediaUrls: mediaUrls
                             });
                             filterSingleTweet(tweetArticle);
+                            tweetProcessingState.resetRetries(tweetId);
                             return;
                         }
 
@@ -297,13 +296,13 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         questions = rating.questions || [];
                         lastAnswer = "";
 
-                        let finalStatus = rating.error ? 'error' : 'rated';
+                        let finalStatus = rating.error ? TweetRatingStatus.ERROR : TweetRatingStatus.RATED;
                         if (!rating.error) {
                             const cacheEntry = tweetCache.get(tweetId);
                             if (cacheEntry && cacheEntry.fromStorage) {
-                                finalStatus = 'cached';
+                                finalStatus = TweetRatingStatus.CACHED;
                             } else if (rating.cached) {
-                                finalStatus = 'cached';
+                                finalStatus = TweetRatingStatus.CACHED;
                             }
                         }
 
@@ -319,13 +318,16 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             reasoning: reasoning,
                             questions: questions,
                             lastAnswer: lastAnswer,
-                            metadata: rating.data?.id ? { generationId: rating.data.id } : null,
+                            metadata: rating.metadata || null,
                             mediaUrls: mediaURLs
                         });
 
                         processingSuccessful = !rating.error;
 
                         filterSingleTweet(tweetArticle);
+                        if (processingSuccessful) {
+                            tweetProcessingState.resetRetries(tweetId);
+                        }
                         return;
 
                     } catch (apiError) {
@@ -338,7 +340,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                         processingSuccessful = false;
 
                         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                            status: 'error',
+                            status: TweetRatingStatus.ERROR,
                             score: score,
                             description: description,
                             questions: [],
@@ -376,7 +378,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 }
 
                 ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                    status: 'error',
+                    status: TweetRatingStatus.ERROR,
                     score: 5,
                     description: "Error during processing: " + error.message,
                     questions: [],
@@ -385,20 +387,21 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 processingSuccessful = false;
             } finally {
                 if (!processingSuccessful) {
-                    processedTweets.delete(tweetId);
+                    tweetProcessingState.clear(tweetId);
                 }
             }
         } else {
-            tweetArticle.dataset.ratingStatus = 'error';
+            tweetArticle.dataset.ratingStatus = TweetRatingStatus.ERROR;
             tweetArticle.dataset.ratingDescription = "No API key";
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-                status: 'error',
+                status: TweetRatingStatus.ERROR,
                 score: 9,
                 description: "No API key",
                 questions: [],
                 lastAnswer: ""
             });
             processingSuccessful = true;
+            tweetProcessingState.resetRetries(tweetId);
         }
 
         filterSingleTweet(tweetArticle);
@@ -408,7 +411,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
         const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
         if (indicatorInstance) {
             indicatorInstance.update({
-                status: 'error',
+                status: TweetRatingStatus.ERROR,
                 score: 5,
                 description: "Error during processing: " + error.message,
                 questions: [],
@@ -420,10 +423,10 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
     } finally {
 
         if (!processingSuccessful) {
-            processedTweets.delete(tweetId);
+            tweetProcessingState.clear(tweetId);
 
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
-            if (indicatorInstance && !isValidFinalState(indicatorInstance.status)) {
+            if (indicatorInstance && !isValidFinalState(indicatorInstance.status) && tweetProcessingState.shouldRetry(tweetId)) {
                 console.log(`Tweet ${tweetId} processing failed, will retry later`);
                 setTimeout(() => {
                     if (!isValidFinalState(ScoreIndicatorRegistry.get(tweetId)?.status)) {
@@ -454,11 +457,11 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
 
     if ((authorHandle && adAuthorCache.has(authorHandle)) || isAd(tweetArticle)) {
         if (authorHandle && !adAuthorCache.has(authorHandle)) adAuthorCache.add(authorHandle);
-        tweetArticle.dataset.ratingStatus = 'rated';
+        tweetArticle.dataset.ratingStatus = TweetRatingStatus.AD;
         tweetArticle.dataset.ratingDescription = "Advertisement";
         tweetArticle.dataset.slopScore = '0';
         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
-            status: 'rated',
+            status: TweetRatingStatus.AD,
             score: 0,
             description: "Advertisement",
             questions: [],
@@ -471,12 +474,12 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     const existingInstance = ScoreIndicatorRegistry.get(tweetId);
     existingInstance?.ensureIndicatorAttached();
     if (existingInstance && !rateAnyway) {
-        if (isValidFinalState(existingInstance.status) || (isValidInterimState(existingInstance.status) && processedTweets.has(tweetId))) {
+        if (isValidFinalState(existingInstance.status) || (isValidInterimState(existingInstance.status) && tweetProcessingState.isScheduled(tweetId))) {
             filterSingleTweet(tweetArticle);
             return;
         }
 
-        processedTweets.delete(tweetId);
+        tweetProcessingState.clear(tweetId);
     }
     const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
         document.querySelector('div[aria-label^="Timeline: Conversation"]');
@@ -487,7 +490,7 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (indicatorInstance) {
                 indicatorInstance.update({
-                    status: 'pending',
+                    status: TweetRatingStatus.PENDING,
                     score: null,
                     description: 'Waiting for thread context...',
                     questions: [],
@@ -506,7 +509,7 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
                 const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
                 if (indicatorInstance) {
                     indicatorInstance.update({
-                        status: 'pending',
+                    status: TweetRatingStatus.PENDING,
                         score: null,
                         description: 'Waiting for thread context...',
                         questions: [],
@@ -520,31 +523,33 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
         }
     }
     if (tweetCache.has(tweetId)) {
-        const isIncompleteStreaming = tweetCache.get(tweetId).streaming === true && !tweetCache.get(tweetId).score;
+        const cachedEntry = tweetCache.get(tweetId);
+        const isIncompleteStreaming = cachedEntry.streaming === true && cachedEntry.score === null;
         if (!isIncompleteStreaming && applyTweetCachedRating(tweetArticle)) {
             return;
         }
     }
 
-    if (processedTweets.has(tweetId)) {
+    if (tweetProcessingState.isScheduled(tweetId)) {
         const instance = ScoreIndicatorRegistry.get(tweetId);
         if (instance) {
             instance.ensureIndicatorAttached();
-            if (instance.status === 'pending' || instance.status === 'streaming') {
+            if (isActiveTweetStatus(instance.status)) {
                 filterSingleTweet(tweetArticle);
                 return;
             }
         }
 
-        processedTweets.delete(tweetId);
+        tweetProcessingState.clear(tweetId);
     }
 
     const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
     if (indicatorInstance) {
-        if (indicatorInstance.status !== 'blacklisted' &&
-            indicatorInstance.status !== 'cached' &&
-            indicatorInstance.status !== 'rated') {
-            indicatorInstance.update({ status: 'pending', score: null, description: 'Rating scheduled...', questions: [], lastAnswer: "" });
+        if (indicatorInstance.status !== TweetRatingStatus.BLACKLISTED &&
+            indicatorInstance.status !== TweetRatingStatus.CACHED &&
+            indicatorInstance.status !== TweetRatingStatus.RATED &&
+            indicatorInstance.status !== TweetRatingStatus.AD) {
+            indicatorInstance.update({ status: TweetRatingStatus.PENDING, score: null, description: 'Rating scheduled...', questions: [], lastAnswer: "" });
         } else {
 
             indicatorInstance.ensureIndicatorAttached();
@@ -555,18 +560,18 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
         console.error(`Failed to get/create indicator instance for tweet ${tweetId} during scheduling.`);
     }
 
-    if (!processedTweets.has(tweetId)) {
-        processedTweets.add(tweetId);
+    if (!tweetProcessingState.isScheduled(tweetId)) {
+        tweetProcessingState.markScheduled(tweetId);
     }
 
     setTimeout(() => {
         try {
-            if (!browserGet('enableAutoRating', true) && !rateAnyway) {
+            if (!appSettings.getBoolean('enableAutoRating') && !rateAnyway) {
 
                 const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
                 if (indicatorInstance) {
                     indicatorInstance.update({
-                        status: 'manual',
+                        status: TweetRatingStatus.MANUAL,
                         score: null,
                         description: 'Click the Rate button to rate this tweet',
                         reasoning: '',
@@ -581,7 +586,7 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
             delayedProcessTweet(tweetArticle, tweetId, authorHandle);
         } catch (e) {
             console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
-            processedTweets.delete(tweetId);
+            tweetProcessingState.clear(tweetId);
         }
     }, PROCESSING_DELAY_MS);
 }
@@ -969,7 +974,7 @@ function applyFilteringToAll() {
 }
 
 function ensureAllTweetsRated() {
-    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !browserGet('enableAutoRating', false)) {
+    if (document.querySelector('div[aria-label="Timeline: Conversation"]') || !appSettings.getBoolean('enableAutoRating')) {
         return;
     }
     if (!observedTargetNode) return;
@@ -985,14 +990,14 @@ function ensureAllTweetsRated() {
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId);
             const needsProcessing = !indicatorInstance ||
                 !indicatorInstance.status ||
-                indicatorInstance.status === 'error' ||
+                indicatorInstance.status === TweetRatingStatus.ERROR ||
                 (!isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status)) ||
-                (processedTweets.has(tweetId) && !isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status));
+                (tweetProcessingState.isScheduled(tweetId) && !isValidFinalState(indicatorInstance.status) && !isValidInterimState(indicatorInstance.status));
 
             if (needsProcessing) {
-                if (processedTweets.has(tweetId)) {
+                if (tweetProcessingState.isScheduled(tweetId)) {
                     console.log(`Tweet ${tweetId} marked as processed but in invalid state: ${indicatorInstance?.status}`);
-                    processedTweets.delete(tweetId);
+                    tweetProcessingState.clear(tweetId);
                 }
                 scheduleTweetProcessing(tweet);
             } else if (indicatorInstance && !isValidInterimState(indicatorInstance.status)) {
@@ -1140,7 +1145,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     }
                     processedCount++;
 
-                    if (article && !processedTweets.has(tweetId)) {
+                    if (article && !tweetProcessingState.isScheduled(tweetId)) {
                         scheduleTweetProcessing(article);
                     }
                 } else {
@@ -1278,7 +1283,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
 
                     const tweetArticle = tweetCells.find(tc => tc.tweetId === waitingTweetId)?.tweetNode;
                     if (tweetArticle) {
-                        processedTweets.delete(waitingTweetId);
+                        tweetProcessingState.clear(waitingTweetId);
                         scheduleTweetProcessing(tweetArticle);
                     }
                 }
@@ -1318,16 +1323,16 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                             isRoot: doc.isRoot
                         };
 
-                        if (doc.tweetId && processedTweets.has(doc.tweetId)) {
+                        if (doc.tweetId && tweetProcessingState.isScheduled(doc.tweetId)) {
 
                             const tweetCell = tweetCells.find(tc => tc.tweetId === doc.tweetId);
                             if (tweetCell && tweetCell.tweetNode) {
 
-                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === 'streaming' ||
+                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === TweetRatingStatus.STREAMING ||
                                     (tweetCache.has(doc.tweetId) && tweetCache.get(doc.tweetId).streaming === true);
 
                                 if (!isStreaming) {
-                                    processedTweets.delete(doc.tweetId);
+                                    tweetProcessingState.clear(doc.tweetId);
                                     scheduleTweetProcessing(tweetCell.tweetNode);
                                 }
                             }

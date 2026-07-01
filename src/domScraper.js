@@ -72,6 +72,8 @@ function getTweetText(tweetArticle) {
  * @returns {string} The tweet ID.
  */
 function getTweetID(tweetArticle) {
+    if (!tweetArticle) return '';
+
     const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
     let tweetId = timeEl?.parentElement?.href;
     if (tweetId && tweetId.includes('/status/')) {
@@ -81,7 +83,11 @@ function getTweetID(tweetArticle) {
         }
         return tweetId.substring(tweetId.indexOf('/status/') + 1);
     }
-    return `tweet-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+
+    if (!tweetArticle.dataset.tweetFilterGeneratedId) {
+        tweetArticle.dataset.tweetFilterGeneratedId = `generated-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+    }
+    return tweetArticle.dataset.tweetFilterGeneratedId;
 }
 
 /**
@@ -208,9 +214,9 @@ function handleMutations(mutationsList) {
         }
 
         const tweetId = getTweetID(element);
-        if (processedTweets.has(tweetId)) {
+        if (tweetProcessingState.isScheduled(tweetId)) {
             const indicator = ScoreIndicatorRegistry.get(tweetId);
-            if (indicator && indicator.status !== 'error') {
+            if (indicator && indicator.status !== TweetRatingStatus.ERROR) {
                 return true;
             }
         }

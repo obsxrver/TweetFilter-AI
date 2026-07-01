@@ -74,6 +74,37 @@ function extractFollowUpQuestions(content) {
 }
 
 /**
+ * Extracts display-ready metadata from an OpenRouter completion response object.
+ * @param {object|null} responseData
+ * @returns {object|null}
+ */
+function extractCompletionMetadata(responseData) {
+    if (!responseData) return null;
+
+    const usage = responseData.usage || {};
+    const completionTokenDetails = usage.completion_tokens_details || {};
+    const explicitMediaInputs = responseData.num_media_prompt ?? responseData.media_inputs ?? responseData.mediaInputs;
+    const totalCost = usage.cost ?? usage.total_cost ?? usage.cost_details?.upstream_inference_cost ?? responseData.total_cost;
+    const latencyMs = responseData.latency ?? responseData.latency_ms;
+
+    const metadata = {
+        generationId: responseData.id || null,
+        model: responseData.model || 'N/A',
+        promptTokens: usage.prompt_tokens ?? responseData.tokens_prompt ?? 0,
+        completionTokens: usage.completion_tokens ?? responseData.tokens_completion ?? 0,
+        reasoningTokens: completionTokenDetails.reasoning_tokens ?? responseData.native_tokens_reasoning ?? 0,
+        latency: latencyMs !== undefined ? (latencyMs / 1000).toFixed(2) + 's' : 'N/A',
+        mediaInputs: explicitMediaInputs ?? 0,
+        price: totalCost !== undefined ? `$${Number(totalCost).toFixed(6)}` : 'N/A',
+        providerName: responseData.provider || responseData.provider_name || 'N/A'
+    };
+
+    return metadata.generationId || metadata.model !== 'N/A' || Object.keys(usage).length > 0
+        ? metadata
+        : null;
+}
+
+/**
  * Orders media URLs by their first appearance in the provided thread text.
  * URLs not found in the text keep their original relative order and are placed last.
  * @param {string[]} mediaUrls
@@ -153,9 +184,10 @@ function appendRatingMediaContent(content, mediaUrls) {
                 }
             });
         } else if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+            const modelImageUrl = stripImageUrlNameParam(url);
             content.push({
                 type: "image_url",
-                image_url: { "url": url }
+                image_url: { "url": modelImageUrl }
             });
         } else {
             console.warn(`[API] Skipping invalid URL for image processing: ${url.substring(0, 100)}...`);
@@ -177,7 +209,7 @@ function appendRatingMediaContent(content, mediaUrls) {
 async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
     console.log("given tweettext\n", tweetText);
     const cleanupRequest = () => {
-        pendingRequests = Math.max(0, pendingRequests - 1);
+        tweetProcessingState.decrementPending();
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
     };
 
@@ -303,7 +335,7 @@ EXPECTED_RESPONSE_FORMAT:\n
         }
         lastAPICallTime = now;
 
-        pendingRequests++;
+        tweetProcessingState.incrementPending();
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
 
         try {
@@ -311,7 +343,7 @@ EXPECTED_RESPONSE_FORMAT:\n
             if (useStreaming) {
                 result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle);
             } else {
-                result = await rateTweet(requestBody, apiKey);
+                result = await rateTweet(requestBody, apiKey, tweetId, tweetText);
             }
             cleanupRequest();
 
@@ -340,7 +372,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
-                    metadata: result.data?.id ? { generationId: result.data.id } : null,
+                    metadata: result.metadata || null,
                     qaConversationHistory: finalQaHistory
                 });
 
@@ -352,6 +384,7 @@ EXPECTED_RESPONSE_FORMAT:\n
                     error: false,
                     cached: false,
                     data: result.data,
+                    metadata: result.metadata || null,
                     qaConversationHistory: finalQaHistory
                 };
             }
@@ -437,8 +470,7 @@ EXPECTED_RESPONSE_FORMAT:\n
  * @param {string} apiKey - API key for authentication
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
-async function rateTweet(request, apiKey) {
-    const tweetId = request.tweetId;
+async function rateTweet(request, apiKey, tweetId, tweetText) {
     const existingScore = tweetCache.get(tweetId)?.score;
 
     const result = await getCompletion(request, apiKey);
@@ -448,20 +480,23 @@ async function rateTweet(request, apiKey) {
         const reasoning = result.data.choices[0].message.reasoning || "";
 
         const scoreMatches = content.match(/SCORE_(\d+)/g);
-        const score = existingScore || (scoreMatches && scoreMatches.length > 0
+        const score = existingScore ?? (scoreMatches && scoreMatches.length > 0
             ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10)
             : null);
 
         tweetCache.set(tweetId, {
             score: score,
             description: content,
-            tweetContent: request.tweetText,
-            streaming: false
+            tweetContent: tweetText,
+            streaming: false,
+            metadata: extractCompletionMetadata(result.data)
         });
 
         return {
             content,
-            reasoning
+            reasoning,
+            data: result.data,
+            metadata: extractCompletionMetadata(result.data)
         };
     }
 
@@ -539,7 +574,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 }
 
                  indicatorInstance.update({
-                    status: 'streaming',
+                    status: TweetRatingStatus.STREAMING,
                     score: score,
                     description: aggregatedContent || "Rating in progress...",
                     reasoning: aggregatedReasoning,
@@ -561,6 +596,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 aggregatedContent = finalResult.content || aggregatedContent;
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
+                const completionMetadata = extractCompletionMetadata(finalData);
 
                 const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
                 if (scoreMatches && scoreMatches.length > 0) {
@@ -568,11 +604,11 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
                 }
 
-                let finalStatus = 'rated';
+                let finalStatus = TweetRatingStatus.RATED;
 
                 if (score === null || score === undefined) {
                     console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
-                    finalStatus = 'error';
+                    finalStatus = TweetRatingStatus.ERROR;
                     score = 5;
                     aggregatedContent += "\n[No score detected - Error]";
                 }
@@ -584,8 +620,8 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     streaming: false,
                     timestamp: Date.now(),
-                    error: finalStatus === 'error' ? "No score detected" : undefined,
-                    metadata: finalData?.id ? { generationId: finalData.id } : null
+                    error: finalStatus === TweetRatingStatus.ERROR ? "No score detected" : undefined,
+                    metadata: completionMetadata
                 };
                 tweetCache.set(tweetId, finalCacheData);
 
@@ -596,25 +632,21 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     questions: extractFollowUpQuestions(aggregatedContent),
                     lastAnswer: "",
-                    metadata: finalData?.id ? { generationId: finalData.id } : null
+                    metadata: completionMetadata
                 });
 
                 if (tweetArticle) {
                     filterSingleTweet(tweetArticle);
                 }
 
-                const generationId = finalData?.id;
-                if (generationId && apiKey) {
-                    fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance);
-                }
-
                 resolve({
                     score: score,
                     content: aggregatedContent,
                     reasoning: aggregatedReasoning,
-                    error: finalStatus === 'error',
+                    error: finalStatus === TweetRatingStatus.ERROR,
                     cached: false,
-                    data: finalData
+                    data: finalData,
+                    metadata: completionMetadata
                 });
             },
 
@@ -622,7 +654,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                  console.error(`[API Stream Error] Tweet ${tweetId}: ${errorData.message}`);
 
                 indicatorInstance.update({
-                    status: 'error',
+                    status: TweetRatingStatus.ERROR,
                     score: 5,
                     description: `Stream Error: ${errorData.message}`,
                     reasoning: '',
@@ -644,68 +676,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             tweetId
         );
     });
-}
-
-/**
- * Fetches generation metadata with retry logic and updates cache/UI.
- * @param {string} tweetId
- * @param {string} generationId
- * @param {string} apiKey
- * @param {ScoreIndicator} indicatorInstance - The indicator instance to update.
- * @param {number} [attempt=0]
- * @param {number[]} [delays=[1000, 500, 2000, 4000, 8000]]
- */
-async function fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt = 0, delays = [1000, 500, 2000, 4000, 8000]) {
-    if (attempt >= delays.length) {
-        console.warn(`[Metadata Fetch ${tweetId}] Max retries reached for generation ${generationId}.`);
-        return;
-    }
-
-    const delay = delays[attempt];
-
-    await new Promise(resolve => setTimeout(resolve, delay));
-
-    try {
-
-        const metadataResult = await getGenerationMetadata(generationId, apiKey);
-
-        if (!metadataResult.error && metadataResult.data?.data) {
-            const meta = metadataResult.data.data;
-
-            const extractedMetadata = {
-                model: meta.model || 'N/A',
-                promptTokens: meta.tokens_prompt || 0,
-                completionTokens: meta.tokens_completion || 0,
-                reasoningTokens: meta.native_tokens_reasoning || 0,
-                latency: meta.latency !== undefined ? (meta.latency / 1000).toFixed(2) + 's' : 'N/A',
-                mediaInputs: meta.num_media_prompt || 0,
-                price: meta.total_cost !== undefined ? `$${meta.total_cost.toFixed(6)}` : 'N/A',
-                providerName: meta.provider_name || 'N/A'
-            };
-
-            const currentCache = tweetCache.get(tweetId);
-            if (currentCache) {
-                currentCache.metadata = extractedMetadata;
-                tweetCache.set(tweetId, currentCache);
-
-                indicatorInstance.update({ metadata: extractedMetadata });
-                console.log(`[Metadata Fetch ${tweetId}] Stored metadata and updated UI for generation ${generationId}`);
-            } else {
-                console.warn(`[Metadata Fetch ${tweetId}] Cache entry disappeared before metadata could be stored for generation ${generationId}.`);
-            }
-            return;
-        } else if (metadataResult.status === 404) {
-
-            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
-        } else {
-            console.warn(`[Metadata Fetch ${tweetId}] Error fetching metadata (Attempt ${attempt + 1}) for ${generationId}: ${metadataResult.message}`);
-            fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
-        }
-    } catch (error) {
-        console.error(`[Metadata Fetch ${tweetId}] Unexpected error during fetch (Attempt ${attempt + 1}) for ${generationId}:`, error);
-
-        fetchAndStoreGenerationMetadata(tweetId, generationId, apiKey, indicatorInstance, attempt + 1, delays);
-    }
 }
 
 /**

@@ -9,7 +9,7 @@ class InstructionsManager {
         InstructionsManager.instance = this;
 
         this.history = new InstructionsHistory();
-        this.currentInstructions = browserGet('userDefinedInstructions', '');
+        this.currentInstructions = browserGet('userDefinedInstructions', DEFAULT_INSTRUCTIONS);
     }
 
     /**
@@ -25,10 +25,6 @@ class InstructionsManager {
         instructions = instructions.trim();
         this.currentInstructions = instructions;
         browserSet('userDefinedInstructions', instructions);
-
-        if (typeof USER_DEFINED_INSTRUCTIONS !== 'undefined') {
-            USER_DEFINED_INSTRUCTIONS = instructions;
-        }
 
         const summary = this.#generateSummary(instructions);
         await this.history.add(instructions, summary);
