@@ -92,6 +92,29 @@ function applyTweetCachedRating(tweetArticle) {
     const cachedRating = tweetCache.get(tweetId);
     if (cachedRating) {
 
+        const hasCachedConversation = Array.isArray(cachedRating.qaConversationHistory) &&
+            cachedRating.qaConversationHistory.some(message => message.role === 'system');
+        if (cachedRating.score === null &&
+            cachedRating.streaming !== true &&
+            hasCachedConversation &&
+            !appSettings.getBoolean('enableAutoRating')) {
+            tweetArticle.dataset.ratingStatus = TweetRatingStatus.MANUAL;
+
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (!indicatorInstance) {
+                return false;
+            }
+
+            indicatorInstance.rehydrateFromCache({
+                ...cachedRating,
+                status: TweetRatingStatus.MANUAL,
+                description: cachedRating.description || 'This tweet has not been rated yet.'
+            });
+            filterSingleTweet(tweetArticle);
+            tweetProcessingState.resetRetries(tweetId);
+            return true;
+        }
+
         if (cachedRating.streaming === true &&
             (cachedRating.score === undefined || cachedRating.score === null)) {
 

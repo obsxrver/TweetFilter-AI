@@ -697,13 +697,14 @@ const REVIEW_SYSTEM_PROMPT = `
     </FOLLOW_UP_QUESTIONS>
 `;
 const FOLLOW_UP_SYSTEM_PROMPT = `
-You are TweetFilter-AI, continuing a conversation about a tweet you previously rated.
+You are TweetFilter-AI, having a conversation about a tweet.
 Today's Date: ${new Date().toLocaleDateString()}.
-CONTEXT: You previously rated a tweet using these user instructions:
+CONTEXT: The first user message contains the tweet and any available thread or media context. An earlier assistant message may contain a rating, but a rating is not required to discuss the tweet.
+Use these preferences as guidance for the style and focus of your answers. Do not rate the tweet unless the user asks you to:
 <USER_INSTRUCTIONS>
 {USER_INSTRUCTIONS_PLACEHOLDER}
 </USER_INSTRUCTIONS>
-Please provide an answer and then generate 3 new, relevant follow-up questions. Continue to follow the style and tone preferences of the user's instructions.
+Please answer the latest user question and then generate 3 new, relevant follow-up questions. Continue to follow the style and tone preferences of the user's instructions.
 Adhere to the new EXPECTED_RESPONSE_FORMAT, including all <formatting tags>.
 EXPECTED_RESPONSE_FORMAT:
 <ANSWER>
@@ -3132,7 +3133,10 @@ class ScoreIndicator {
         if (this.qaConversationHistory.length > 0) {
             let currentQuestion = null;
             let currentUploadedImages = [];
-            let startIndex = 3; //sys->user(tweet)->assistant(rating)->user(convo message1)->...
+            // Start after the system prompt and tweet context. For rated tweets,
+            // the initial assistant rating at index 2 is ignored until a user
+            // question is encountered. Unrated conversations begin at index 2.
+            let startIndex = 2;
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];
                 if (message.role === 'user') {
@@ -4355,6 +4359,26 @@ function applyTweetCachedRating(tweetArticle) {
     const tweetId = getTweetID(tweetArticle);
     const cachedRating = tweetCache.get(tweetId);
     if (cachedRating) {
+        const hasCachedConversation = Array.isArray(cachedRating.qaConversationHistory) &&
+            cachedRating.qaConversationHistory.some(message => message.role === 'system');
+        if (cachedRating.score === null &&
+            cachedRating.streaming !== true &&
+            hasCachedConversation &&
+            !appSettings.getBoolean('enableAutoRating')) {
+            tweetArticle.dataset.ratingStatus = TweetRatingStatus.MANUAL;
+            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
+            if (!indicatorInstance) {
+                return false;
+            }
+            indicatorInstance.rehydrateFromCache({
+                ...cachedRating,
+                status: TweetRatingStatus.MANUAL,
+                description: cachedRating.description || 'This tweet has not been rated yet.'
+            });
+            filterSingleTweet(tweetArticle);
+            tweetProcessingState.resetRetries(tweetId);
+            return true;
+        }
         if (cachedRating.streaming === true &&
             (cachedRating.score === undefined || cachedRating.score === null)) {
             return false;
@@ -6590,6 +6614,44 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
     });
 }
 /**
+ * Builds the initial conversation context when a question is asked before the
+ * tweet has been rated.
+ *
+ * @param {string} tweetId - The ID of the tweet being discussed.
+ * @param {string} apiKey - The OpenRouter API key.
+ * @param {Element|null} tweetArticle - The DOM element for the tweet article.
+ * @returns {Promise<object[]>} The system prompt and tweet context messages.
+ */
+async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle) {
+    const cachedEntry = tweetCache.get(tweetId);
+    let fullContext = cachedEntry?.fullContext || tweetArticle?.dataset?.fullContext || '';
+    if (!fullContext && tweetArticle) {
+        fullContext = await getFullContext(tweetArticle, tweetId, apiKey);
+    }
+    if (!fullContext && cachedEntry?.individualTweetText) {
+        fullContext = `[TWEET ${tweetId}]\n Author:@${cachedEntry.authorHandle || ''}:\n${cachedEntry.individualTweetText}`;
+    }
+    if (!fullContext) {
+        throw new Error('Could not collect tweet context for this conversation.');
+    }
+    const currentInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
+    const conversationSystemPrompt = FOLLOW_UP_SYSTEM_PROMPT.replace(
+        '{USER_INSTRUCTIONS_PLACEHOLDER}',
+        currentInstructions
+    );
+    const tweetContextContent = [{ type: 'text', text: fullContext }];
+    if (modelSupportsImages(selectedModel)) {
+        const mediaUrls = tweetArticle
+            ? extractMediaLinks(tweetArticle)
+            : (cachedEntry?.mediaUrls?.length ? cachedEntry.mediaUrls : cachedEntry?.individualMediaUrls || []);
+        appendRatingMediaContent(tweetContextContent, collectRatingImageUrls(mediaUrls, fullContext));
+    }
+    return [
+        { role: 'system', content: [{ type: 'text', text: conversationSystemPrompt }] },
+        { role: 'user', content: tweetContextContent }
+    ];
+}
+/**
  * Answers a follow-up question about a tweet and generates new questions.
  *
  * @param {string} tweetId - The ID of the tweet being discussed.
@@ -6603,6 +6665,19 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     const questionTextForLogging = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
     console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
     const useStreaming = browserGet('enableStreaming', false);
+    if (!qaHistoryForApiCall.some(message => message.role === 'system')) {
+        try {
+            const initialHistory = await buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle);
+            qaHistoryForApiCall = [...initialHistory, ...qaHistoryForApiCall];
+        } catch (error) {
+            console.error(`[FollowUp] Failed to initialize conversation for ${tweetId}:`, error);
+            const errorMessage = `Error starting conversation: ${error.message}`;
+            indicatorInstance.updateConversationHistoryEntry(questionTextForLogging, errorMessage);
+            showStatus(errorMessage, 'error');
+            indicatorInstance.finalizeFollowUpInteraction();
+            return;
+        }
+    }
     const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
             const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";

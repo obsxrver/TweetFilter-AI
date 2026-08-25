@@ -2298,7 +2298,10 @@ class ScoreIndicator {
             let currentQuestion = null;
             let currentUploadedImages = [];
 
-            let startIndex = 3; //sys->user(tweet)->assistant(rating)->user(convo message1)->...
+            // Start after the system prompt and tweet context. For rated tweets,
+            // the initial assistant rating at index 2 is ignored until a user
+            // question is encountered. Unrated conversations begin at index 2.
+            let startIndex = 2;
 
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];
