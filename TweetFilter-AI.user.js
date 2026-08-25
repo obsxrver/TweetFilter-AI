@@ -12,6 +12,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getResourceText
 // @connect      openrouter.ai
+// @connect      *
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
@@ -737,7 +738,7 @@ const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
-const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]';
+const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"], img[src*="pbs.twimg.com/amplify_video_thumb"]';
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 function getModelIdentifierCandidates(model) {
@@ -3026,10 +3027,9 @@ class ScoreIndicator {
             userInstructions || 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.'
         );
         this.qaConversationHistory = [
-            { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
+            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] },
             { role: "user", content: userMessageContent },
-            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
-            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] }
+            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] }
         ];
         this._updateIndicatorUI();
         this._updateTooltipUI();
@@ -3132,16 +3132,7 @@ class ScoreIndicator {
         if (this.qaConversationHistory.length > 0) {
             let currentQuestion = null;
             let currentUploadedImages = [];
-            let startIndex = 0;
-            for(let i=0; i < this.qaConversationHistory.length; i++) {
-                if (this.qaConversationHistory[i].role === 'system' && this.qaConversationHistory[i].content[0].text.includes('FOLLOW_UP_SYSTEM_PROMPT')) {
-                    startIndex = i + 1;
-                    break;
-                }
-                if (i === 3 && this.qaConversationHistory[i].role === 'system') {
-                    startIndex = i + 1;
-                }
-            }
+            let startIndex = 3; //sys->user(tweet)->assistant(rating)->user(convo message1)->...
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];
                 if (message.role === 'user') {
@@ -3782,12 +3773,18 @@ function handleParameterChange(target, paramName) {
     const min = parseFloat(slider.min);
     const max = parseFloat(slider.max);
     let newValue = parseFloat(target.value);
-    if (target.type === 'number' && !isNaN(newValue)) {
+    // Number inputs temporarily have no numeric value while the user is typing
+    // an intermediate decimal such as "0.". Leave the field untouched until
+    // the entry becomes valid so the next digit can complete it.
+    if (!Number.isFinite(newValue)) return;
+    if (target.type === 'number') {
         newValue = Math.max(min, Math.min(max, newValue));
     }
     if (slider && valueInput) {
         slider.value = newValue;
-        valueInput.value = newValue;
+        if (target !== valueInput || newValue !== parseFloat(target.value)) {
+            valueInput.value = newValue;
+        }
     }
     switch (paramName) {
         case 'modelTemperature':
@@ -5775,7 +5772,7 @@ function fetchAvailableModels() {
     });
 }
 /**
- * Removes Twitter's image size hint from image URLs before sending them to a model.
+ * Normalizes Twitter image URLs before sending them to a model.
  * @param {string} url
  * @returns {string}
  */
@@ -5785,6 +5782,17 @@ function stripImageUrlNameParam(url) {
     }
     try {
         const parsedUrl = new URL(url);
+        if (parsedUrl.hostname.toLowerCase() === 'pbs.twimg.com' && parsedUrl.pathname.includes('/amplify_video_thumb/')) {
+            const formatParam = Array.from(parsedUrl.searchParams.entries())
+                .find(([key]) => key.toLowerCase() === 'format');
+            const format = formatParam?.[1]?.toLowerCase();
+            if (format && /^[a-z0-9]+$/.test(format)) {
+                if (!parsedUrl.pathname.toLowerCase().endsWith(`.${format}`)) {
+                    parsedUrl.pathname += `.${format}`;
+                }
+                parsedUrl.searchParams.delete(formatParam[0]);
+            }
+        }
         for (const key of Array.from(parsedUrl.searchParams.keys())) {
             if (key.toLowerCase() === 'name') {
                 parsedUrl.searchParams.delete(key);
@@ -5794,6 +5802,127 @@ function stripImageUrlNameParam(url) {
     } catch (error) {
         return url;
     }
+}
+/**
+ * Infers an image MIME type when the response does not provide a useful one.
+ * @param {string} url
+ * @returns {string}
+ */
+function inferImageMimeType(url) {
+    try {
+        const parsedUrl = new URL(url);
+        const format = parsedUrl.searchParams.get('format');
+        const extension = (format || parsedUrl.pathname.split('.').pop() || '').toLowerCase();
+        const mimeTypes = {
+            avif: 'image/avif',
+            gif: 'image/gif',
+            jpeg: 'image/jpeg',
+            jpg: 'image/jpeg',
+            png: 'image/png',
+            webp: 'image/webp'
+        };
+        return mimeTypes[extension] || '';
+    } catch (error) {
+        return '';
+    }
+}
+/**
+ * Downloads an image and returns a Base64 data URL suitable for model input.
+ * Existing data URLs pass through unchanged.
+ * @param {string} url
+ * @returns {Promise<string>}
+ */
+async function encodeImageUrlAsDataUrl(url) {
+    if (typeof url !== 'string') {
+        throw new Error('Image URL must be a string.');
+    }
+    if (/^data:image\//i.test(url)) {
+        return url;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+        throw new Error('Only HTTP(S) image URLs can be encoded.');
+    }
+    const normalizedUrl = stripImageUrlNameParam(url);
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: normalizedUrl,
+            responseType: 'blob',
+            timeout: 30000,
+            anonymous: true,
+            onload: (response) => {
+                if (response.status < 200 || response.status >= 300) {
+                    reject(new Error(`Image download failed with status ${response.status}.`));
+                    return;
+                }
+                const headerMatch = response.responseHeaders?.match(/^content-type:\s*([^;\r\n]+)/im);
+                const responseMimeType = response.response?.type || headerMatch?.[1]?.trim() || '';
+                const mimeType = responseMimeType.toLowerCase().startsWith('image/')
+                    ? responseMimeType
+                    : inferImageMimeType(normalizedUrl);
+                if (!mimeType || !response.response) {
+                    reject(new Error('Downloaded resource is not a recognized image.'));
+                    return;
+                }
+                const imageBlob = response.response.type === mimeType
+                    ? response.response
+                    : new Blob([response.response], { type: mimeType });
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Failed to encode the downloaded image.'));
+                reader.readAsDataURL(imageBlob);
+            },
+            onerror: () => reject(new Error('Image download failed.')),
+            ontimeout: () => reject(new Error('Image download timed out.'))
+        });
+    });
+}
+/**
+ * Encodes remote image URLs while preserving data URLs and input order.
+ * Images that cannot be downloaded are omitted instead of leaking their links
+ * into model requests.
+ * @param {string[]} urls
+ * @returns {Promise<string[]>}
+ */
+async function encodeImageUrlsAsDataUrls(urls) {
+    const encodedUrls = await Promise.all((urls || []).map(async (url) => {
+        if (typeof url === 'string' && url.startsWith('data:application/pdf')) {
+            return url;
+        }
+        try {
+            return await encodeImageUrlAsDataUrl(url);
+        } catch (error) {
+            console.warn(`[Images] Skipping image that could not be Base64-encoded: ${error.message}`);
+            return null;
+        }
+    }));
+    return encodedUrls.filter(Boolean);
+}
+/**
+ * Clones message content and Base64-encodes every remote image before an API call.
+ * @param {object[]} messages
+ * @returns {Promise<object[]>}
+ */
+async function encodeMessageImagesAsDataUrls(messages) {
+    return Promise.all((messages || []).map(async (message) => {
+        if (!Array.isArray(message.content)) {
+            return { ...message };
+        }
+        const content = await Promise.all(message.content.map(async (item) => {
+            const imageUrl = item?.type === 'image_url' ? item.image_url?.url : null;
+            if (!imageUrl || /^data:image\//i.test(imageUrl)) {
+                return item;
+            }
+            try {
+                const dataUrl = await encodeImageUrlAsDataUrl(imageUrl);
+                return { ...item, image_url: { ...item.image_url, url: dataUrl } };
+            } catch (error) {
+                console.warn(`[Images] Removing image that could not be Base64-encoded: ${error.message}`);
+                return null;
+            }
+        }));
+        return { ...message, content: content.filter(Boolean) };
+    }));
 }
 /**
  * Gets descriptions for images using the OpenRouter API
@@ -5811,7 +5940,14 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
     }
     let descriptions = [];
     for (const url of urls) {
-        const modelImageUrl = stripImageUrlNameParam(url);
+        let modelImageUrl;
+        try {
+            modelImageUrl = await encodeImageUrlAsDataUrl(url);
+        } catch (error) {
+            console.warn(`[Images] Could not prepare image description input: ${error.message}`);
+            descriptions.push('[Error loading image for description]');
+            continue;
+        }
         const request = {
             model: selectedImageModel,
             messages: [{
@@ -5999,7 +6135,9 @@ function collectRatingImageUrls(mediaUrls, tweetText) {
         const contextUrls = tweetText.match(urlPattern) || [];
         contextUrls.forEach(url => {
             if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+                if(!url.includes("profile_image")){
                 addUrl(url);
+                }
             }
         });
     }
@@ -6127,8 +6265,10 @@ EXPECTED_RESPONSE_FORMAT:\n
         requestBody.config = { safetySettings: safetySettings };
     }
     const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    let ratingMediaForModel = [];
     if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
-        appendRatingMediaContent(requestBody.messages[1].content, ratingImageUrls);
+        ratingMediaForModel = await encodeImageUrlsAsDataUrls(ratingImageUrls);
+        appendRatingMediaContent(requestBody.messages[1].content, ratingMediaForModel);
     }
     if (providerSort) {
         requestBody.provider = { sort: providerSort, allow_fallbacks: true };
@@ -6463,7 +6603,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     const questionTextForLogging = qaHistoryForApiCall.find(m => m.role === 'user' && m === qaHistoryForApiCall[qaHistoryForApiCall.length - 1])?.content.find(c => c.type === 'text')?.text || "User's question";
     console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
     const useStreaming = browserGet('enableStreaming', false);
-    const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
+    const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
             const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
             const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
@@ -6476,7 +6616,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             return { ...msg, content: templatedContent };
         }
         return msg;
-    });
+    }));
     const request = {
         model: selectedModel,
         messages: messagesForApi,

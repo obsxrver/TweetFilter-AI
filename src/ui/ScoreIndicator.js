@@ -2165,10 +2165,9 @@ class ScoreIndicator {
         );
 
         this.qaConversationHistory = [
-            { role: "system", content: [{ type: "text", text: reviewSystemPrompt }] },
+            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] },
             { role: "user", content: userMessageContent },
-            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] },
-            { role: "system", content: [{ type: "text", text: followUpSystemPromptWithInstructions }] }
+            { role: "assistant", content: [{ type: "text", text: apiResponseContent }] }
         ];
 
         this._updateIndicatorUI();
@@ -2299,17 +2298,7 @@ class ScoreIndicator {
             let currentQuestion = null;
             let currentUploadedImages = [];
 
-            let startIndex = 0;
-            for(let i=0; i < this.qaConversationHistory.length; i++) {
-                if (this.qaConversationHistory[i].role === 'system' && this.qaConversationHistory[i].content[0].text.includes('FOLLOW_UP_SYSTEM_PROMPT')) {
-                    startIndex = i + 1;
-                    break;
-                }
-
-                if (i === 3 && this.qaConversationHistory[i].role === 'system') {
-                    startIndex = i + 1;
-                }
-            }
+            let startIndex = 3; //sys->user(tweet)->assistant(rating)->user(convo message1)->...
 
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];

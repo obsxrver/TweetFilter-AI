@@ -446,13 +446,20 @@ function handleParameterChange(target, paramName) {
     const max = parseFloat(slider.max);
     let newValue = parseFloat(target.value);
 
-    if (target.type === 'number' && !isNaN(newValue)) {
+    // Number inputs temporarily have no numeric value while the user is typing
+    // an intermediate decimal such as "0.". Leave the field untouched until
+    // the entry becomes valid so the next digit can complete it.
+    if (!Number.isFinite(newValue)) return;
+
+    if (target.type === 'number') {
         newValue = Math.max(min, Math.min(max, newValue));
     }
 
     if (slider && valueInput) {
         slider.value = newValue;
-        valueInput.value = newValue;
+        if (target !== valueInput || newValue !== parseFloat(target.value)) {
+            valueInput.value = newValue;
+        }
     }
 
     switch (paramName) {

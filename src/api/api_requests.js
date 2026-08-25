@@ -391,7 +391,7 @@ function fetchAvailableModels() {
 }
 
 /**
- * Removes Twitter's image size hint from image URLs before sending them to a model.
+ * Normalizes Twitter image URLs before sending them to a model.
  * @param {string} url
  * @returns {string}
  */
@@ -402,6 +402,17 @@ function stripImageUrlNameParam(url) {
 
     try {
         const parsedUrl = new URL(url);
+        if (parsedUrl.hostname.toLowerCase() === 'pbs.twimg.com' && parsedUrl.pathname.includes('/amplify_video_thumb/')) {
+            const formatParam = Array.from(parsedUrl.searchParams.entries())
+                .find(([key]) => key.toLowerCase() === 'format');
+            const format = formatParam?.[1]?.toLowerCase();
+            if (format && /^[a-z0-9]+$/.test(format)) {
+                if (!parsedUrl.pathname.toLowerCase().endsWith(`.${format}`)) {
+                    parsedUrl.pathname += `.${format}`;
+                }
+                parsedUrl.searchParams.delete(formatParam[0]);
+            }
+        }
         for (const key of Array.from(parsedUrl.searchParams.keys())) {
             if (key.toLowerCase() === 'name') {
                 parsedUrl.searchParams.delete(key);
@@ -411,6 +422,136 @@ function stripImageUrlNameParam(url) {
     } catch (error) {
         return url;
     }
+}
+
+/**
+ * Infers an image MIME type when the response does not provide a useful one.
+ * @param {string} url
+ * @returns {string}
+ */
+function inferImageMimeType(url) {
+    try {
+        const parsedUrl = new URL(url);
+        const format = parsedUrl.searchParams.get('format');
+        const extension = (format || parsedUrl.pathname.split('.').pop() || '').toLowerCase();
+        const mimeTypes = {
+            avif: 'image/avif',
+            gif: 'image/gif',
+            jpeg: 'image/jpeg',
+            jpg: 'image/jpeg',
+            png: 'image/png',
+            webp: 'image/webp'
+        };
+        return mimeTypes[extension] || '';
+    } catch (error) {
+        return '';
+    }
+}
+
+/**
+ * Downloads an image and returns a Base64 data URL suitable for model input.
+ * Existing data URLs pass through unchanged.
+ * @param {string} url
+ * @returns {Promise<string>}
+ */
+async function encodeImageUrlAsDataUrl(url) {
+    if (typeof url !== 'string') {
+        throw new Error('Image URL must be a string.');
+    }
+    if (/^data:image\//i.test(url)) {
+        return url;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+        throw new Error('Only HTTP(S) image URLs can be encoded.');
+    }
+
+    const normalizedUrl = stripImageUrlNameParam(url);
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: normalizedUrl,
+            responseType: 'blob',
+            timeout: 30000,
+            anonymous: true,
+            onload: (response) => {
+                if (response.status < 200 || response.status >= 300) {
+                    reject(new Error(`Image download failed with status ${response.status}.`));
+                    return;
+                }
+
+                const headerMatch = response.responseHeaders?.match(/^content-type:\s*([^;\r\n]+)/im);
+                const responseMimeType = response.response?.type || headerMatch?.[1]?.trim() || '';
+                const mimeType = responseMimeType.toLowerCase().startsWith('image/')
+                    ? responseMimeType
+                    : inferImageMimeType(normalizedUrl);
+                if (!mimeType || !response.response) {
+                    reject(new Error('Downloaded resource is not a recognized image.'));
+                    return;
+                }
+
+                const imageBlob = response.response.type === mimeType
+                    ? response.response
+                    : new Blob([response.response], { type: mimeType });
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Failed to encode the downloaded image.'));
+                reader.readAsDataURL(imageBlob);
+            },
+            onerror: () => reject(new Error('Image download failed.')),
+            ontimeout: () => reject(new Error('Image download timed out.'))
+        });
+    });
+}
+
+/**
+ * Encodes remote image URLs while preserving data URLs and input order.
+ * Images that cannot be downloaded are omitted instead of leaking their links
+ * into model requests.
+ * @param {string[]} urls
+ * @returns {Promise<string[]>}
+ */
+async function encodeImageUrlsAsDataUrls(urls) {
+    const encodedUrls = await Promise.all((urls || []).map(async (url) => {
+        if (typeof url === 'string' && url.startsWith('data:application/pdf')) {
+            return url;
+        }
+        try {
+            return await encodeImageUrlAsDataUrl(url);
+        } catch (error) {
+            console.warn(`[Images] Skipping image that could not be Base64-encoded: ${error.message}`);
+            return null;
+        }
+    }));
+    return encodedUrls.filter(Boolean);
+}
+
+/**
+ * Clones message content and Base64-encodes every remote image before an API call.
+ * @param {object[]} messages
+ * @returns {Promise<object[]>}
+ */
+async function encodeMessageImagesAsDataUrls(messages) {
+    return Promise.all((messages || []).map(async (message) => {
+        if (!Array.isArray(message.content)) {
+            return { ...message };
+        }
+
+        const content = await Promise.all(message.content.map(async (item) => {
+            const imageUrl = item?.type === 'image_url' ? item.image_url?.url : null;
+            if (!imageUrl || /^data:image\//i.test(imageUrl)) {
+                return item;
+            }
+            try {
+                const dataUrl = await encodeImageUrlAsDataUrl(imageUrl);
+                return { ...item, image_url: { ...item.image_url, url: dataUrl } };
+            } catch (error) {
+                console.warn(`[Images] Removing image that could not be Base64-encoded: ${error.message}`);
+                return null;
+            }
+        }));
+
+        return { ...message, content: content.filter(Boolean) };
+    }));
 }
 
 /**
@@ -430,7 +571,14 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
 
     let descriptions = [];
     for (const url of urls) {
-        const modelImageUrl = stripImageUrlNameParam(url);
+        let modelImageUrl;
+        try {
+            modelImageUrl = await encodeImageUrlAsDataUrl(url);
+        } catch (error) {
+            console.warn(`[Images] Could not prepare image description input: ${error.message}`);
+            descriptions.push('[Error loading image for description]');
+            continue;
+        }
         const request = {
             model: selectedImageModel,
             messages: [{

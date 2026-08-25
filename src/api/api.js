@@ -165,7 +165,9 @@ function collectRatingImageUrls(mediaUrls, tweetText) {
         const contextUrls = tweetText.match(urlPattern) || [];
         contextUrls.forEach(url => {
             if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+                if(!url.includes("profile_image")){
                 addUrl(url);
+                }
             }
         });
     }
@@ -308,8 +310,10 @@ EXPECTED_RESPONSE_FORMAT:\n
         requestBody.config = { safetySettings: safetySettings };
     }
     const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    let ratingMediaForModel = [];
     if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
-        appendRatingMediaContent(requestBody.messages[1].content, ratingImageUrls);
+        ratingMediaForModel = await encodeImageUrlsAsDataUrls(ratingImageUrls);
+        appendRatingMediaContent(requestBody.messages[1].content, ratingMediaForModel);
     }
     if (providerSort) {
         requestBody.provider = { sort: providerSort, allow_fallbacks: true };
@@ -693,7 +697,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     console.log(`[FollowUp] Answering question for ${tweetId}: "${questionTextForLogging}" using full history.`);
     const useStreaming = browserGet('enableStreaming', false);
 
-    const messagesForApi = qaHistoryForApiCall.map((msg, index) => {
+    const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall.map((msg, index) => {
         if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
             const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
             const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
@@ -706,7 +710,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             return { ...msg, content: templatedContent };
         }
         return msg;
-    });
+    }));
 
     const request = {
         model: selectedModel,
