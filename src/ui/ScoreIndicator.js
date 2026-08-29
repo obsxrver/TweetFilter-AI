@@ -732,45 +732,16 @@ class ScoreIndicator {
     }
 
     /**
-     * Splits tagged API text into tooltip display sections.
+     * Splits a unified JSON response into tooltip display sections.
      * @param {string} fullDescription
      * @returns {{analysisContent: string, scoreContent: string, questionsContent: string}}
      */
     _extractDescriptionSections(fullDescription) {
-        const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
-        const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
-        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
-
-        let analysisContent = "";
-        let scoreContent = "";
-        let questionsContent = "";
-
-        if (analysisMatch && analysisMatch[1] !== undefined) {
-            analysisContent = analysisMatch[1].trim();
-        } else if (!scoreMatch && !questionsMatch) {
-            analysisContent = fullDescription;
-        } else {
-            analysisContent = "*Waiting for analysis...*";
-        }
-
-        if (scoreMatch && scoreMatch[1] !== undefined) {
-            scoreContent = scoreMatch[1].trim();
-        }
-
-        if (questionsMatch && questionsMatch[1] !== undefined) {
-            const taggedQuestions = [1, 2, 3]
-                .map((index) => {
-                    const taggedQuestionMatch = questionsMatch[1].match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
-                    return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
-                        ? taggedQuestionMatch[1].trim()
-                        : "";
-                })
-                .filter(Boolean);
-
-            questionsContent = taggedQuestions.length > 0
-                ? taggedQuestions.join('\n')
-                : questionsMatch[1].trim();
-        }
+        const parsedResponse = parseTweetFilterResponse(fullDescription);
+        const analysisContent = parsedResponse.response ||
+            (parsedResponse.isValidJson ? "*Waiting for analysis...*" : fullDescription);
+        const scoreContent = parsedResponse.score !== null ? String(parsedResponse.score) : "";
+        const questionsContent = parsedResponse.questions.join('\n');
 
         return { analysisContent, scoreContent, questionsContent };
     }
@@ -833,10 +804,7 @@ class ScoreIndicator {
 
         if (scoreContent) {
 
-            const formattedScoreText = scoreContent
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>')
-                .replace(/\n/g, '<br>');
+            const formattedScoreText = `<span class="score-highlight">SCORE: ${scoreContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
 
             if (this.scoreTextElement.innerHTML !== formattedScoreText) {
                 this.scoreTextElement.innerHTML = formattedScoreText;
@@ -2143,15 +2111,11 @@ class ScoreIndicator {
      * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
      */
     updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
+        const parsedResponse = parseTweetFilterResponse(apiResponseContent);
 
-        const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
-        const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
-
-        const initialQuestions = extractFollowUpQuestions(apiResponseContent);
-
-        this.score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
-        this.description = analysisMatch ? analysisMatch[1].trim() : apiResponseContent;
-        this.questions = initialQuestions;
+        this.score = parsedResponse.score;
+        this.description = parsedResponse.response || apiResponseContent;
+        this.questions = parsedResponse.questions;
         this.status = this.score !== null ? 'rated' : 'error';
 
         const userMessageContent = [{ type: "text", text: fullContext }];
@@ -2183,12 +2147,10 @@ class ScoreIndicator {
     updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
         this.qaConversationHistory = updatedQaHistory;
 
-        const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-        const newFollowUpQuestions = extractFollowUpQuestions(assistantResponseContent);
+        const parsedResponse = parseTweetFilterResponse(assistantResponseContent);
+        const answerText = parsedResponse.response || assistantResponseContent;
 
-        const answerText = answerMatch ? answerMatch[1].trim() : assistantResponseContent;
-
-        this.questions = newFollowUpQuestions;
+        this.questions = parsedResponse.questions;
 
         if (this.conversationHistory.length > 0) {
             const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
@@ -2298,17 +2260,21 @@ class ScoreIndicator {
             let currentQuestion = null;
             let currentUploadedImages = [];
 
-            // Start after the system prompt and tweet context. For rated tweets,
-            // the initial assistant rating at index 2 is ignored until a user
-            // question is encountered. Unrated conversations begin at index 2.
-            let startIndex = 2;
+            const hasInitialRating = cachedData.score !== null &&
+                this.qaConversationHistory[2]?.role === 'assistant';
+            const startIndex = hasInitialRating ? 3 : 1;
 
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];
                 if (message.role === 'user') {
 
                     const textContent = message.content.find(c => c.type === 'text');
-                    currentQuestion = textContent ? textContent.text : "[Question not found]";
+                    const storedQuestion = textContent ? textContent.text : "[Question not found]";
+                    const questionMarker = '\n\nQuestion:\n';
+                    const questionMarkerIndex = storedQuestion.lastIndexOf(questionMarker);
+                    currentQuestion = questionMarkerIndex === -1
+                        ? storedQuestion
+                        : storedQuestion.slice(questionMarkerIndex + questionMarker.length).trim();
 
                     currentUploadedImages = message.content
                         .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
@@ -2318,8 +2284,8 @@ class ScoreIndicator {
                     const assistantTextContent = message.content.find(c => c.type === 'text');
                     const assistantAnswer = assistantTextContent ? assistantTextContent.text : "[Answer not found]";
 
-                    const answerMatch = assistantAnswer.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                    const uiAnswer = answerMatch ? answerMatch[1].trim() : assistantAnswer;
+                    const parsedAnswer = parseTweetFilterResponse(assistantAnswer);
+                    const uiAnswer = parsedAnswer.response || assistantAnswer;
 
                     this.conversationHistory.push({
                         question: currentQuestion,
@@ -2567,7 +2533,6 @@ function formatTooltipDescription(description = "", reasoning = "") {
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>')
 
             .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
                 const rows = match.trim().split('\n');

@@ -26,54 +26,6 @@ const safetySettings = [
 ];
 
 /**
- * Extracts follow-up questions from the AI response content.
- * @param {string} content - The full AI response content.
- * @returns {string[]} An array of 3 questions, or an empty array if not found.
- */
-function extractFollowUpQuestions(content) {
-    if (!content) return [];
-
-    const taggedQuestions = [1, 2, 3].map((index) => {
-        const taggedQuestionMatch = content.match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
-        return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
-            ? taggedQuestionMatch[1].trim()
-            : "";
-    });
-    if (taggedQuestions.every(q => q.length > 0)) {
-        return taggedQuestions;
-    }
-
-    const questionsBlockMatch = content.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
-    const legacyQuestionsBlock = questionsBlockMatch ? questionsBlockMatch[1] : content;
-    const questions = [];
-    const q1Marker = "Q_1.";
-    const q2Marker = "Q_2.";
-    const q3Marker = "Q_3.";
-
-    const q1Start = legacyQuestionsBlock.indexOf(q1Marker);
-    const q2Start = legacyQuestionsBlock.indexOf(q2Marker);
-    const q3Start = legacyQuestionsBlock.indexOf(q3Marker);
-
-    if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
-        const q1Text = legacyQuestionsBlock.substring(q1Start + q1Marker.length, q2Start).trim();
-        questions.push(q1Text);
-
-        const q2Text = legacyQuestionsBlock.substring(q2Start + q2Marker.length, q3Start).trim();
-        questions.push(q2Text);
-
-        const q3Text = legacyQuestionsBlock.substring(q3Start + q3Marker.length).trim();
-        questions.push(q3Text);
-
-        if (questions.every(q => q.length > 0)) {
-            return questions;
-        }
-    }
-
-    console.warn("[extractFollowUpQuestions] Failed to parse <Q1>/<Q2>/<Q3> tags or legacy Q_1/Q_2/Q_3 markers.");
-    return [];
-}
-
-/**
  * Extracts display-ready metadata from an OpenRouter completion response object.
  * @param {object|null} responseData
  * @returns {object|null}
@@ -232,12 +184,22 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         };
     }
 
+    const currentInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
+
     if (adAuthorCache.has(authorHandle)) {
+
+        const adResponseContent = JSON.stringify({
+            Response: 'This tweet is from an ad author.',
+            Score: 0,
+            Question1: 'N/A',
+            Question2: 'N/A',
+            Question3: 'N/A'
+        });
 
         indicatorInstance.updateInitialReviewAndBuildHistory({
             fullContext: tweetText,
             mediaUrls: [],
-            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>",
+            apiResponseContent: adResponseContent,
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
             followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
             userInstructions: currentInstructions
@@ -253,8 +215,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         };
     }
 
-    const currentInstructions = instructionsManager.getCurrentInstructions();
-    
     const reasoningEffort = browserGet('reasoningEffort', 'none');
 
     const requestBody = {
@@ -272,25 +232,7 @@ ${currentInstructions}`}]
                 content: [
                     {
                         type: "text",
-                        text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
-
-<TWEET>[${tweetText}]</TWEET>
-Follow this expected response format exactly, or you break the UI:
-EXPECTED_RESPONSE_FORMAT:\n
-  <ANALYSIS>\n
-    \n(Your analysis according to the user instructions. Follow the user instructions EXACTLY.)
-  </ANALYSIS>\n
-
-  <SCORE>\n
-    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\n
-  </SCORE>\n
-
-  <FOLLOW_UP_QUESTIONS>\n
-    <Q1>…</Q1>\n
-    <Q2>…</Q2>\n
-    <Q3>…</Q3>\n
-  </FOLLOW_UP_QUESTIONS>
-`
+                        text: `Tweet ID: ${tweetId}\n\nTweet context:\n${tweetText}`
                     }
                 ]
             }
@@ -413,7 +355,13 @@ EXPECTED_RESPONSE_FORMAT:\n
                 indicatorInstance.updateInitialReviewAndBuildHistory({
                     fullContext: tweetText,
                     mediaUrls: mediaUrls,
-                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
+                    apiResponseContent: JSON.stringify({
+                        Response: errorContent,
+                        Score: 5,
+                        Question1: 'N/A',
+                        Question2: 'N/A',
+                        Question3: 'N/A'
+                    }),
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
                     followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
                     userInstructions: currentInstructions
@@ -450,7 +398,13 @@ EXPECTED_RESPONSE_FORMAT:\n
     indicatorInstance.updateInitialReviewAndBuildHistory({
         fullContext: tweetText,
         mediaUrls: mediaUrls,
-        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
+        apiResponseContent: JSON.stringify({
+            Response: fallbackError,
+            Score: 5,
+            Question1: 'N/A',
+            Question2: 'N/A',
+            Question3: 'N/A'
+        }),
         reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
         followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
         userInstructions: currentInstructions
@@ -482,11 +436,18 @@ async function rateTweet(request, apiKey, tweetId, tweetText) {
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
         const reasoning = result.data.choices[0].message.reasoning || "";
+        const parsedResponse = parseTweetFilterResponse(content);
 
-        const scoreMatches = content.match(/SCORE_(\d+)/g);
-        const score = existingScore ?? (scoreMatches && scoreMatches.length > 0
-            ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10)
-            : null);
+        if (!isCompleteTweetAnalysisResponse(parsedResponse)) {
+            return {
+                error: true,
+                content: 'The model returned an invalid tweet-analysis JSON response.',
+                reasoning,
+                data: result.data
+            };
+        }
+
+        const score = existingScore ?? parsedResponse.score;
 
         tweetCache.set(tweetId, {
             score: score,
@@ -570,11 +531,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 aggregatedContent = chunkData.content || aggregatedContent;
                 aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
 
-                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
-
-                if (scoreMatches && scoreMatches.length > 0) {
-                    const lastScore = scoreMatches[scoreMatches.length - 1];
-                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
+                const streamedScore = extractTweetFilterScore(aggregatedContent);
+                if (streamedScore !== null) {
+                    score = streamedScore;
                 }
 
                  indicatorInstance.update({
@@ -602,19 +561,24 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 finalData = finalResult.data;
                 const completionMetadata = extractCompletionMetadata(finalData);
 
-                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
-                if (scoreMatches && scoreMatches.length > 0) {
-                    const lastScore = scoreMatches[scoreMatches.length - 1];
-                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
+                const finalParsedResponse = parseTweetFilterResponse(aggregatedContent);
+                if (finalParsedResponse.score !== null) {
+                    score = finalParsedResponse.score;
                 }
 
                 let finalStatus = TweetRatingStatus.RATED;
 
-                if (score === null || score === undefined) {
-                    console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                if (!isCompleteTweetAnalysisResponse(finalParsedResponse)) {
+                    console.warn(`[API Stream] Invalid JSON response for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
                     finalStatus = TweetRatingStatus.ERROR;
                     score = 5;
-                    aggregatedContent += "\n[No score detected - Error]";
+                    aggregatedContent = JSON.stringify({
+                        Response: `${finalParsedResponse.response || aggregatedContent}\n\nThe model returned an invalid tweet-analysis JSON response.`,
+                        Score: score,
+                        Question1: finalParsedResponse.questions[0] || 'N/A',
+                        Question2: finalParsedResponse.questions[1] || 'N/A',
+                        Question3: finalParsedResponse.questions[2] || 'N/A'
+                    });
                 }
 
                 const finalCacheData = {
@@ -624,7 +588,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     streaming: false,
                     timestamp: Date.now(),
-                    error: finalStatus === TweetRatingStatus.ERROR ? "No score detected" : undefined,
+                    error: finalStatus === TweetRatingStatus.ERROR ? "Invalid tweet-analysis JSON response" : undefined,
                     metadata: completionMetadata
                 };
                 tweetCache.set(tweetId, finalCacheData);
@@ -689,7 +653,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
  * @param {string} tweetId - The ID of the tweet being discussed.
  * @param {string} apiKey - The OpenRouter API key.
  * @param {Element|null} tweetArticle - The DOM element for the tweet article.
- * @returns {Promise<object[]>} The system prompt and tweet context messages.
+ * @returns {Promise<{systemMessage: object, tweetContextContent: object[]}>} The system prompt and tweet context content.
  */
 async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle) {
     const cachedEntry = tweetCache.get(tweetId);
@@ -721,10 +685,53 @@ async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticl
         appendRatingMediaContent(tweetContextContent, collectRatingImageUrls(mediaUrls, fullContext));
     }
 
-    return [
-        { role: 'system', content: [{ type: 'text', text: conversationSystemPrompt }] },
-        { role: 'user', content: tweetContextContent }
-    ];
+    return {
+        systemMessage: { role: 'system', content: [{ type: 'text', text: conversationSystemPrompt }] },
+        tweetContextContent
+    };
+}
+
+/**
+ * Migrates older unrated conversation histories that stored tweet context and
+ * the first question as adjacent user messages.
+ *
+ * @param {object[]} messages - Conversation messages.
+ * @returns {object[]} Messages without consecutive user roles.
+ */
+function mergeConsecutiveUserMessages(messages) {
+    return (messages || []).reduce((mergedMessages, message) => {
+        const clonedMessage = {
+            ...message,
+            content: Array.isArray(message.content)
+                ? message.content.map(contentItem => ({ ...contentItem }))
+                : []
+        };
+        const previousMessage = mergedMessages[mergedMessages.length - 1];
+        if (!previousMessage || previousMessage.role !== 'user' || clonedMessage.role !== 'user') {
+            mergedMessages.push(clonedMessage);
+            return mergedMessages;
+        }
+
+        const previousText = previousMessage.content
+            .filter(contentItem => contentItem.type === 'text')
+            .map(contentItem => contentItem.text || '')
+            .join('\n\n');
+        const currentText = clonedMessage.content
+            .filter(contentItem => contentItem.type === 'text')
+            .map(contentItem => contentItem.text || '')
+            .join('\n\n');
+        const previousLooksLikeTweetContext = previousText.includes('[TWEET ') || previousText.startsWith('Tweet context:');
+        const combinedText = previousLooksLikeTweetContext && !previousText.includes('\n\nQuestion:\n')
+            ? `Tweet context:\n${previousText}\n\nQuestion:\n${currentText}`
+            : `${previousText}\n\n${currentText}`.trim();
+
+        previousMessage.content = [
+            { type: 'text', text: combinedText },
+            ...previousMessage.content.filter(contentItem => contentItem.type !== 'text'),
+            ...clonedMessage.content.filter(contentItem => contentItem.type !== 'text')
+        ];
+        return mergedMessages;
+    }, []);
 }
 
 /**
@@ -744,8 +751,30 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 
     if (!qaHistoryForApiCall.some(message => message.role === 'system')) {
         try {
-            const initialHistory = await buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle);
-            qaHistoryForApiCall = [...initialHistory, ...qaHistoryForApiCall];
+            const { systemMessage, tweetContextContent } = await buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle);
+            const firstUserMessageIndex = qaHistoryForApiCall.findIndex(message => message.role === 'user');
+
+            if (firstUserMessageIndex === -1) {
+                throw new Error('Could not find the question message for this conversation.');
+            }
+
+            const firstUserMessage = qaHistoryForApiCall[firstUserMessageIndex];
+            const firstQuestion = firstUserMessage.content.find(contentItem => contentItem.type === 'text')?.text || '';
+            const combinedUserContent = [
+                {
+                    type: 'text',
+                    text: `Tweet context:\n${tweetContextContent[0].text}\n\nQuestion:\n${firstQuestion}`
+                },
+                ...tweetContextContent.slice(1),
+                ...firstUserMessage.content.filter(contentItem => contentItem.type !== 'text')
+            ];
+            const combinedHistory = qaHistoryForApiCall.map((message, index) =>
+                index === firstUserMessageIndex
+                    ? { ...message, content: combinedUserContent }
+                    : message
+            );
+
+            qaHistoryForApiCall = [systemMessage, ...combinedHistory];
         } catch (error) {
             console.error(`[FollowUp] Failed to initialize conversation for ${tweetId}:`, error);
             const errorMessage = `Error starting conversation: ${error.message}`;
@@ -756,20 +785,9 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
         }
     }
 
-    const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall.map((msg, index) => {
-        if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
-            const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
-            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
-            const templatedContent = [{ type: "text", text: templatedText }];
-            msg.content.forEach(contentItem => {
-                if (contentItem.type === "image_url" || contentItem.type === "file") {
-                    templatedContent.push(contentItem);
-                }
-            });
-            return { ...msg, content: templatedContent };
-        }
-        return msg;
-    }));
+    qaHistoryForApiCall = mergeConsecutiveUserMessages(qaHistoryForApiCall);
+
+    const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall);
 
     const request = {
         model: selectedModel,
@@ -786,7 +804,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     if(browserGet('enableWebSearch',false)){
         request.tools = [{type: "openrouter:web_search"}];
     }
-    console.log(`followup request (templated): ${JSON.stringify(request)}`);
+    console.log(`followup request: ${JSON.stringify(request)}`);
 
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
@@ -818,6 +836,13 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                         (result) => {
                             finalAnswerContent = result.content || aggregatedContent;
                             const finalReasoning = result.reasoning || aggregatedReasoning;
+                            const parsedAnswer = parseTweetFilterResponse(finalAnswerContent);
+
+                            if (!isCompleteConversationResponse(parsedAnswer)) {
+                                reject(new Error('The model returned an invalid conversation JSON response.'));
+                                return;
+                            }
+
                             const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                             finalQaHistory.push(assistantMessage);
 
@@ -836,9 +861,8 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                             const currentCache = tweetCache.get(tweetId) || {};
                             currentCache.qaConversationHistory = finalQaHistory;
 
-                            const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                            currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
-                            currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                            currentCache.lastAnswer = parsedAnswer.response || finalAnswerContent;
+                            currentCache.questions = parsedAnswer.questions;
                             currentCache.timestamp = Date.now();
                             tweetCache.set(tweetId, currentCache);
 
@@ -870,6 +894,10 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                     throw new Error(result.message || "Failed to get follow-up answer.");
                 }
                 finalAnswerContent = result.data.choices[0].message.content;
+                const parsedAnswer = parseTweetFilterResponse(finalAnswerContent);
+                if (!isCompleteConversationResponse(parsedAnswer)) {
+                    throw new Error('The model returned an invalid conversation JSON response.');
+                }
                 const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                 finalQaHistory.push(assistantMessage);
 
@@ -880,9 +908,8 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
 
                 const currentCache = tweetCache.get(tweetId) || {};
                 currentCache.qaConversationHistory = finalQaHistory;
-                const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
-                currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                currentCache.lastAnswer = parsedAnswer.response || finalAnswerContent;
+                currentCache.questions = parsedAnswer.questions;
                 currentCache.timestamp = Date.now();
                 tweetCache.set(tweetId, currentCache);
             }

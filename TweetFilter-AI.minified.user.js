@@ -661,74 +661,34 @@ let enableWebSearch = appSettings.getBoolean('enableWebSearch');
 let enableAutoRating = appSettings.getBoolean('enableAutoRating');
 let reasoningEffort = appSettings.get('reasoningEffort');
 const REVIEW_SYSTEM_PROMPT = `
-    You are TweetFilter-AI.
-    Today's Date: ${new Date().toLocaleDateString()}.
-    Overview: You will be given a tweet. You are tasked with analyzing this tweet and providing a score and follow-up questions. The score, tone of the analysis, and the follow-up questions should align with the preferences set by the user's custom instructions. 
-    Tasks:
-    1. Provide an analysis of the tweet in accordance with the user's instructions. It is crucial that your analysis follows the instructions and response preferences.
-    2. Assign a score according to the user's instructions in the format SCORE_X, where 0<=X<=10 (unless the user specifies a different range)
-    3. Write three follow-up questions the user might ask next.
-    Output formatting must match the EXPECTED_RESPONSE_FORMAT. Meaning, you must include all formatting tags.
-    EXPECTED_RESPONSE_FORMAT:
-    <ANALYSIS>
-      (Your analysis goes here. It must follow the user's response and style preferences.)
-    </ANALYSIS>
-    <SCORE>
-      SCORE_X (Where 0<=X<=10. If and only if the user requests a different range, use that range instead.)
-    </SCORE>
-    <FOLLOW_UP_QUESTIONS>
-      <Q1>(Your first follow-up question goes here)</Q1>
-      <Q2>(Your second follow-up question goes here)</Q2>
-      <Q3>(Your third follow-up question goes here)</Q3>
-    </FOLLOW_UP_QUESTIONS>
-    NOTES:
-    For follow-up questions, do not directly address the user. Instead, generate questions that would naturally encourage further exploration or discussion, and only include questions you can confidently answer. Examples:
-    GOOD follow-up questions:
-    <FOLLOW_UP_QUESTIONS>
-      <Q1>Why was the Eiffel Tower constructed?</Q1>
-      <Q2>When was the Eiffel Tower completed?</Q2>
-      <Q3>What are some interesting facts about the Eiffel Tower's history?</Q3>
-    </FOLLOW_UP_QUESTIONS>
-    BAD follow-up questions:
-    <FOLLOW_UP_QUESTIONS>
-      <Q1>Have you visited the Eiffel Tower?</Q1>
-      <Q2>What other tweets has this author posted regarding Paris?</Q2>
-      <Q3>What are the latest events happening in Paris?</Q3>
-    </FOLLOW_UP_QUESTIONS>
+You are TweetFilter-AI.
+Today's Date: ${new Date().toLocaleDateString()}.
+Analyze the supplied tweet according to the user's custom instructions, assign it an integer score from 0 through 10, and suggest three relevant follow-up questions that you can confidently answer.
+Return only one valid JSON object. Do not use Markdown fences, XML tags, or text outside the JSON object. Use exactly this schema:
+{
+  "Response": "Your tweet analysis",
+  "Score": 0,
+  "Question1": "First follow-up question",
+  "Question2": "Second follow-up question",
+  "Question3": "Third follow-up question"
+}
+"Response" must follow the user's response and style preferences. "Score" is required for tweet analysis and must be a JSON number. Do not directly address the user in the suggested questions.
 `;
 const FOLLOW_UP_SYSTEM_PROMPT = `
 You are TweetFilter-AI, having a conversation about a tweet.
 Today's Date: ${new Date().toLocaleDateString()}.
-CONTEXT: The first user message contains the tweet and any available thread or media context. An earlier assistant message may contain a rating, but a rating is not required to discuss the tweet.
+The conversation contains the tweet and any available thread or media context. An earlier assistant message may contain a rating, but a rating is not required to discuss the tweet.
 Use these preferences as guidance for the style and focus of your answers. Do not rate the tweet unless the user asks you to:
-<USER_INSTRUCTIONS>
 {USER_INSTRUCTIONS_PLACEHOLDER}
-</USER_INSTRUCTIONS>
-Please answer the latest user question and then generate 3 new, relevant follow-up questions. Continue to follow the style and tone preferences of the user's instructions.
-Adhere to the new EXPECTED_RESPONSE_FORMAT, including all <formatting tags>.
-EXPECTED_RESPONSE_FORMAT:
-<ANSWER>
-(Your answer here)
-</ANSWER>
-<FOLLOW_UP_QUESTIONS>
-<Q1>(New Question 1 here)</Q1>
-<Q2>(New Question 2 here)</Q2>
-<Q3>(New Question 3 here)</Q3>
-</FOLLOW_UP_QUESTIONS>
-NOTES:
-    For follow-up questions, do not directly address the user. Instead, generate questions that would naturally encourage further exploration or discussion, and only include questions you can confidently answer. Examples:
-    GOOD follow-up questions:
-    <FOLLOW_UP_QUESTIONS>
-      <Q1>Why was the Eiffel Tower constructed?</Q1>
-      <Q2>When was the Eiffel Tower completed?</Q2>
-      <Q3>What are some interesting facts about the Eiffel Tower's history?</Q3>
-    </FOLLOW_UP_QUESTIONS>
-    BAD follow-up questions:
-    <FOLLOW_UP_QUESTIONS>
-      <Q1>Have you visited the Eiffel Tower?</Q1>
-      <Q2>What other tweets has this author posted regarding Paris?</Q2>
-      <Q3>What are the latest events happening in Paris?</Q3>
-    </FOLLOW_UP_QUESTIONS>
+Answer the latest question and suggest three relevant follow-up questions that you can confidently answer.
+Return only one valid JSON object. Do not use Markdown fences, XML tags, or text outside the JSON object. Use exactly this schema:
+{
+  "Response": "Your answer",
+  "Question1": "First follow-up question",
+  "Question2": "Second follow-up question",
+  "Question3": "Third follow-up question"
+}
+Do not include "Score" in conversation responses. If the user asks about the tweet's rating, answer in "Response". Do not directly address the user in the suggested questions.
 `;
 let modelTemperature = appSettings.getNumber('modelTemperature');
 let modelTopP = appSettings.getNumber('modelTopP');
@@ -1147,6 +1107,107 @@ function resizeImage(file, maxDimPx) {
         };
         reader.readAsDataURL(file);
     });
+}
+    // ----- ui/responseParser.js -----
+/**
+ * Parses the JSON response schema shared by tweet ratings and conversations.
+ * Rating responses include Score; conversation responses omit it.
+ *
+ * @param {string} content - Raw model response text.
+ * @returns {{response: string, score: number|null, hasScore: boolean, questions: string[], isValidJson: boolean}}
+ */
+function parseTweetFilterResponse(content) {
+    const rawContent = typeof content === 'string' ? content.trim() : '';
+    let parsed = null;
+    if (rawContent) {
+        let jsonContent = rawContent
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim();
+        const firstBrace = jsonContent.indexOf('{');
+        const lastBrace = jsonContent.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace >= firstBrace) {
+            jsonContent = jsonContent.slice(firstBrace, lastBrace + 1);
+        }
+        try {
+            parsed = JSON.parse(jsonContent);
+        } catch (error) {
+            parsed = null;
+        }
+    }
+    const response = parsed && typeof parsed.Response === 'string'
+        ? parsed.Response.trim()
+        : '';
+    const hasScore = parsed !== null &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        Object.prototype.hasOwnProperty.call(parsed, 'Score');
+    const numericScore = parsed && parsed.Score !== undefined && parsed.Score !== null
+        ? Number(parsed.Score)
+        : NaN;
+    const score = Number.isInteger(numericScore) ? numericScore : null;
+    const questions = parsed
+        ? [parsed.Question1, parsed.Question2, parsed.Question3]
+            .map(question => typeof question === 'string' ? question.trim() : '')
+            .filter(Boolean)
+        : [];
+    return {
+        response,
+        score,
+        hasScore,
+        questions,
+        isValidJson: parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+    };
+}
+/**
+ * Extracts a score from a complete or partially streamed JSON response.
+ *
+ * @param {string} content - Raw or partially streamed model response text.
+ * @returns {number|null}
+ */
+function extractTweetFilterScore(content) {
+    const parsedScore = parseTweetFilterResponse(content).score;
+    if (parsedScore !== null) {
+        return parsedScore;
+    }
+    const partialScoreMatch = String(content || '').match(/"Score"\s*:\s*"?(-?\d+)"?/i);
+    return partialScoreMatch ? Number(partialScoreMatch[1]) : null;
+}
+/**
+ * Extracts follow-up questions from the unified JSON response schema.
+ *
+ * @param {string} content - Raw model response text.
+ * @returns {string[]}
+ */
+function extractFollowUpQuestions(content) {
+    return parseTweetFilterResponse(content).questions;
+}
+/**
+ * Checks whether a parsed tweet-analysis response satisfies the full schema.
+ *
+ * @param {ReturnType<parseTweetFilterResponse>} parsedResponse
+ * @returns {boolean}
+ */
+function isCompleteTweetAnalysisResponse(parsedResponse) {
+    return parsedResponse.isValidJson &&
+        parsedResponse.response.length > 0 &&
+        parsedResponse.hasScore &&
+        parsedResponse.score !== null &&
+        parsedResponse.score >= 0 &&
+        parsedResponse.score <= 10 &&
+        parsedResponse.questions.length === 3;
+}
+/**
+ * Checks whether a parsed conversation response satisfies the shared schema.
+ *
+ * @param {ReturnType<parseTweetFilterResponse>} parsedResponse
+ * @returns {boolean}
+ */
+function isCompleteConversationResponse(parsedResponse) {
+    return parsedResponse.isValidJson &&
+        parsedResponse.response.length > 0 &&
+        !parsedResponse.hasScore &&
+        parsedResponse.questions.length === 3;
 }
     // ----- ui/InstructionsUI.js -----
 /**
@@ -1857,40 +1918,16 @@ class ScoreIndicator {
         this.indicatorElement.textContent = indicatorText;
     }
     /**
-     * Splits tagged API text into tooltip display sections.
+     * Splits a unified JSON response into tooltip display sections.
      * @param {string} fullDescription
      * @returns {{analysisContent: string, scoreContent: string, questionsContent: string}}
      */
     _extractDescriptionSections(fullDescription) {
-        const analysisMatch = fullDescription.match(/<ANALYSIS>([^<]+)<\/ANALYSIS>/);
-        const scoreMatch = fullDescription.match(/<SCORE>([^<]+)<\/SCORE>/);
-        const questionsMatch = fullDescription.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
-        let analysisContent = "";
-        let scoreContent = "";
-        let questionsContent = "";
-        if (analysisMatch && analysisMatch[1] !== undefined) {
-            analysisContent = analysisMatch[1].trim();
-        } else if (!scoreMatch && !questionsMatch) {
-            analysisContent = fullDescription;
-        } else {
-            analysisContent = "*Waiting for analysis...*";
-        }
-        if (scoreMatch && scoreMatch[1] !== undefined) {
-            scoreContent = scoreMatch[1].trim();
-        }
-        if (questionsMatch && questionsMatch[1] !== undefined) {
-            const taggedQuestions = [1, 2, 3]
-                .map((index) => {
-                    const taggedQuestionMatch = questionsMatch[1].match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
-                    return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
-                        ? taggedQuestionMatch[1].trim()
-                        : "";
-                })
-                .filter(Boolean);
-            questionsContent = taggedQuestions.length > 0
-                ? taggedQuestions.join('\n')
-                : questionsMatch[1].trim();
-        }
+        const parsedResponse = parseTweetFilterResponse(fullDescription);
+        const analysisContent = parsedResponse.response ||
+            (parsedResponse.isValidJson ? "*Waiting for analysis...*" : fullDescription);
+        const scoreContent = parsedResponse.score !== null ? String(parsedResponse.score) : "";
+        const questionsContent = parsedResponse.questions.join('\n');
         return { analysisContent, scoreContent, questionsContent };
     }
     /**
@@ -1941,10 +1978,7 @@ class ScoreIndicator {
             contentChanged = true;
         }
         if (scoreContent) {
-            const formattedScoreText = scoreContent
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>')
-                .replace(/\n/g, '<br>');
+            const formattedScoreText = `<span class="score-highlight">SCORE: ${scoreContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
             if (this.scoreTextElement.innerHTML !== formattedScoreText) {
                 this.scoreTextElement.innerHTML = formattedScoreText;
                 contentChanged = true;
@@ -3012,12 +3046,10 @@ class ScoreIndicator {
      * @param {string} [params.userInstructions] - The user's custom instructions for rating tweets.
      */
     updateInitialReviewAndBuildHistory({ fullContext, mediaUrls, apiResponseContent, reviewSystemPrompt, followUpSystemPrompt, userInstructions = '' }) {
-        const analysisMatch = apiResponseContent.match(/<ANALYSIS>([\s\S]*?)<\/ANALYSIS>/);
-        const scoreMatch = apiResponseContent.match(/<SCORE>\s*SCORE_(\d+)\s*<\/SCORE>/);
-        const initialQuestions = extractFollowUpQuestions(apiResponseContent);
-        this.score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
-        this.description = analysisMatch ? analysisMatch[1].trim() : apiResponseContent;
-        this.questions = initialQuestions;
+        const parsedResponse = parseTweetFilterResponse(apiResponseContent);
+        this.score = parsedResponse.score;
+        this.description = parsedResponse.response || apiResponseContent;
+        this.questions = parsedResponse.questions;
         this.status = this.score !== null ? 'rated' : 'error';
         const userMessageContent = [{ type: "text", text: fullContext }];
         if (typeof collectRatingImageUrls === 'function' && typeof appendRatingMediaContent === 'function' && modelSupportsImages(selectedModel)) {
@@ -3043,10 +3075,9 @@ class ScoreIndicator {
      */
     updateAfterFollowUp({ assistantResponseContent, updatedQaHistory }) {
         this.qaConversationHistory = updatedQaHistory;
-        const answerMatch = assistantResponseContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-        const newFollowUpQuestions = extractFollowUpQuestions(assistantResponseContent);
-        const answerText = answerMatch ? answerMatch[1].trim() : assistantResponseContent;
-        this.questions = newFollowUpQuestions;
+        const parsedResponse = parseTweetFilterResponse(assistantResponseContent);
+        const answerText = parsedResponse.response || assistantResponseContent;
+        this.questions = parsedResponse.questions;
         if (this.conversationHistory.length > 0) {
             const lastTurn = this.conversationHistory[this.conversationHistory.length - 1];
             if (lastTurn.answer === 'pending') {
@@ -3133,23 +3164,27 @@ class ScoreIndicator {
         if (this.qaConversationHistory.length > 0) {
             let currentQuestion = null;
             let currentUploadedImages = [];
-            // Start after the system prompt and tweet context. For rated tweets,
-            // the initial assistant rating at index 2 is ignored until a user
-            // question is encountered. Unrated conversations begin at index 2.
-            let startIndex = 2;
+            const hasInitialRating = cachedData.score !== null &&
+                this.qaConversationHistory[2]?.role === 'assistant';
+            const startIndex = hasInitialRating ? 3 : 1;
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];
                 if (message.role === 'user') {
                     const textContent = message.content.find(c => c.type === 'text');
-                    currentQuestion = textContent ? textContent.text : "[Question not found]";
+                    const storedQuestion = textContent ? textContent.text : "[Question not found]";
+                    const questionMarker = '\n\nQuestion:\n';
+                    const questionMarkerIndex = storedQuestion.lastIndexOf(questionMarker);
+                    currentQuestion = questionMarkerIndex === -1
+                        ? storedQuestion
+                        : storedQuestion.slice(questionMarkerIndex + questionMarker.length).trim();
                     currentUploadedImages = message.content
                         .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
                         .map(c => c.image_url.url);
                 } else if (message.role === 'assistant' && currentQuestion) {
                     const assistantTextContent = message.content.find(c => c.type === 'text');
                     const assistantAnswer = assistantTextContent ? assistantTextContent.text : "[Answer not found]";
-                    const answerMatch = assistantAnswer.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                    const uiAnswer = answerMatch ? answerMatch[1].trim() : assistantAnswer;
+                    const parsedAnswer = parseTweetFilterResponse(assistantAnswer);
+                    const uiAnswer = parsedAnswer.response || assistantAnswer;
                     this.conversationHistory.push({
                         question: currentQuestion,
                         answer: uiAnswer,
@@ -3353,7 +3388,6 @@ function formatTooltipDescription(description = "", reasoning = "") {
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/SCORE_(\d+)/g, '<span class="score-highlight">SCORE: $1</span>')
             .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
                 const rows = match.trim().split('\n');
                 const headerRow = rows[0];
@@ -6039,45 +6073,6 @@ const safetySettings = [
     },
 ];
 /**
- * Extracts follow-up questions from the AI response content.
- * @param {string} content - The full AI response content.
- * @returns {string[]} An array of 3 questions, or an empty array if not found.
- */
-function extractFollowUpQuestions(content) {
-    if (!content) return [];
-    const taggedQuestions = [1, 2, 3].map((index) => {
-        const taggedQuestionMatch = content.match(new RegExp(`<Q${index}>([\\s\\S]*?)<\\/Q${index}>`));
-        return taggedQuestionMatch && taggedQuestionMatch[1] !== undefined
-            ? taggedQuestionMatch[1].trim()
-            : "";
-    });
-    if (taggedQuestions.every(q => q.length > 0)) {
-        return taggedQuestions;
-    }
-    const questionsBlockMatch = content.match(/<FOLLOW_UP_QUESTIONS>([\s\S]*?)<\/FOLLOW_UP_QUESTIONS>/);
-    const legacyQuestionsBlock = questionsBlockMatch ? questionsBlockMatch[1] : content;
-    const questions = [];
-    const q1Marker = "Q_1.";
-    const q2Marker = "Q_2.";
-    const q3Marker = "Q_3.";
-    const q1Start = legacyQuestionsBlock.indexOf(q1Marker);
-    const q2Start = legacyQuestionsBlock.indexOf(q2Marker);
-    const q3Start = legacyQuestionsBlock.indexOf(q3Marker);
-    if (q1Start !== -1 && q2Start > q1Start && q3Start > q2Start) {
-        const q1Text = legacyQuestionsBlock.substring(q1Start + q1Marker.length, q2Start).trim();
-        questions.push(q1Text);
-        const q2Text = legacyQuestionsBlock.substring(q2Start + q2Marker.length, q3Start).trim();
-        questions.push(q2Text);
-        const q3Text = legacyQuestionsBlock.substring(q3Start + q3Marker.length).trim();
-        questions.push(q3Text);
-        if (questions.every(q => q.length > 0)) {
-            return questions;
-        }
-    }
-    console.warn("[extractFollowUpQuestions] Failed to parse <Q1>/<Q2>/<Q3> tags or legacy Q_1/Q_2/Q_3 markers.");
-    return [];
-}
-/**
  * Extracts display-ready metadata from an OpenRouter completion response object.
  * @param {object|null} responseData
  * @returns {object|null}
@@ -6220,11 +6215,19 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             qaConversationHistory: []
         };
     }
+    const currentInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
     if (adAuthorCache.has(authorHandle)) {
+        const adResponseContent = JSON.stringify({
+            Response: 'This tweet is from an ad author.',
+            Score: 0,
+            Question1: 'N/A',
+            Question2: 'N/A',
+            Question3: 'N/A'
+        });
         indicatorInstance.updateInitialReviewAndBuildHistory({
             fullContext: tweetText,
             mediaUrls: [],
-            apiResponseContent: "<ANALYSIS>This tweet is from an ad author.</ANALYSIS><SCORE>SCORE_0</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>",
+            apiResponseContent: adResponseContent,
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
             followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
             userInstructions: currentInstructions
@@ -6239,7 +6242,6 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             qaConversationHistory: indicatorInstance.qaConversationHistory
         };
     }
-    const currentInstructions = instructionsManager.getCurrentInstructions();
     const reasoningEffort = browserGet('reasoningEffort', 'none');
     const requestBody = {
         model: selectedModel,
@@ -6255,22 +6257,7 @@ ${currentInstructions}`}]
                 content: [
                     {
                         type: "text",
-                        text: `<TARGET_TWEET_ID>[${tweetId}]</TARGET_TWEET_ID>
-<TWEET>[${tweetText}]</TWEET>
-Follow this expected response format exactly, or you break the UI:
-EXPECTED_RESPONSE_FORMAT:\n
-  <ANALYSIS>\n
-    \n(Your analysis according to the user instructions. Follow the user instructions EXACTLY.)
-  </ANALYSIS>\n
-  <SCORE>\n
-    SCORE_X (Where X is a number between 0 and 10, unless the user requests a different range)\n
-  </SCORE>\n
-  <FOLLOW_UP_QUESTIONS>\n
-    <Q1>…</Q1>\n
-    <Q2>…</Q2>\n
-    <Q3>…</Q3>\n
-  </FOLLOW_UP_QUESTIONS>
-`
+                        text: `Tweet ID: ${tweetId}\n\nTweet context:\n${tweetText}`
                     }
                 ]
             }
@@ -6378,7 +6365,13 @@ EXPECTED_RESPONSE_FORMAT:\n
                 indicatorInstance.updateInitialReviewAndBuildHistory({
                     fullContext: tweetText,
                     mediaUrls: mediaUrls,
-                    apiResponseContent: `<ANALYSIS>${errorContent}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
+                    apiResponseContent: JSON.stringify({
+                        Response: errorContent,
+                        Score: 5,
+                        Question1: 'N/A',
+                        Question2: 'N/A',
+                        Question3: 'N/A'
+                    }),
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
                     followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
                     userInstructions: currentInstructions
@@ -6414,7 +6407,13 @@ EXPECTED_RESPONSE_FORMAT:\n
     indicatorInstance.updateInitialReviewAndBuildHistory({
         fullContext: tweetText,
         mediaUrls: mediaUrls,
-        apiResponseContent: `<ANALYSIS>${fallbackError}</ANALYSIS><SCORE>SCORE_5</SCORE><FOLLOW_UP_QUESTIONS><Q1>N/A</Q1><Q2>N/A</Q2><Q3>N/A</Q3></FOLLOW_UP_QUESTIONS>`,
+        apiResponseContent: JSON.stringify({
+            Response: fallbackError,
+            Score: 5,
+            Question1: 'N/A',
+            Question2: 'N/A',
+            Question3: 'N/A'
+        }),
         reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
         followUpSystemPrompt: FOLLOW_UP_SYSTEM_PROMPT,
         userInstructions: currentInstructions
@@ -6443,10 +6442,16 @@ async function rateTweet(request, apiKey, tweetId, tweetText) {
     if (!result.error && result.data?.choices?.[0]?.message) {
         const content = result.data.choices[0].message.content || "";
         const reasoning = result.data.choices[0].message.reasoning || "";
-        const scoreMatches = content.match(/SCORE_(\d+)/g);
-        const score = existingScore ?? (scoreMatches && scoreMatches.length > 0
-            ? parseInt(scoreMatches[scoreMatches.length - 1].match(/SCORE_(\d+)/)[1], 10)
-            : null);
+        const parsedResponse = parseTweetFilterResponse(content);
+        if (!isCompleteTweetAnalysisResponse(parsedResponse)) {
+            return {
+                error: true,
+                content: 'The model returned an invalid tweet-analysis JSON response.',
+                reasoning,
+                data: result.data
+            };
+        }
+        const score = existingScore ?? parsedResponse.score;
         tweetCache.set(tweetId, {
             score: score,
             description: content,
@@ -6517,10 +6522,9 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             (chunkData) => {
                 aggregatedContent = chunkData.content || aggregatedContent;
                 aggregatedReasoning = chunkData.reasoning || aggregatedReasoning;
-                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
-                if (scoreMatches && scoreMatches.length > 0) {
-                    const lastScore = scoreMatches[scoreMatches.length - 1];
-                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
+                const streamedScore = extractTweetFilterScore(aggregatedContent);
+                if (streamedScore !== null) {
+                    score = streamedScore;
                 }
                  indicatorInstance.update({
                     status: TweetRatingStatus.STREAMING,
@@ -6544,17 +6548,22 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 aggregatedReasoning = finalResult.reasoning || aggregatedReasoning;
                 finalData = finalResult.data;
                 const completionMetadata = extractCompletionMetadata(finalData);
-                const scoreMatches = aggregatedContent.match(/SCORE_(\d+)/g);
-                if (scoreMatches && scoreMatches.length > 0) {
-                    const lastScore = scoreMatches[scoreMatches.length - 1];
-                    score = parseInt(lastScore.match(/SCORE_(\d+)/)[1], 10);
+                const finalParsedResponse = parseTweetFilterResponse(aggregatedContent);
+                if (finalParsedResponse.score !== null) {
+                    score = finalParsedResponse.score;
                 }
                 let finalStatus = TweetRatingStatus.RATED;
-                if (score === null || score === undefined) {
-                    console.warn(`[API Stream] No score found in final content for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
+                if (!isCompleteTweetAnalysisResponse(finalParsedResponse)) {
+                    console.warn(`[API Stream] Invalid JSON response for tweet ${tweetId}. Content: ${aggregatedContent.substring(0, 100)}...`);
                     finalStatus = TweetRatingStatus.ERROR;
                     score = 5;
-                    aggregatedContent += "\n[No score detected - Error]";
+                    aggregatedContent = JSON.stringify({
+                        Response: `${finalParsedResponse.response || aggregatedContent}\n\nThe model returned an invalid tweet-analysis JSON response.`,
+                        Score: score,
+                        Question1: finalParsedResponse.questions[0] || 'N/A',
+                        Question2: finalParsedResponse.questions[1] || 'N/A',
+                        Question3: finalParsedResponse.questions[2] || 'N/A'
+                    });
                 }
                 const finalCacheData = {
                     tweetContent: tweetText,
@@ -6563,7 +6572,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     reasoning: aggregatedReasoning,
                     streaming: false,
                     timestamp: Date.now(),
-                    error: finalStatus === TweetRatingStatus.ERROR ? "No score detected" : undefined,
+                    error: finalStatus === TweetRatingStatus.ERROR ? "Invalid tweet-analysis JSON response" : undefined,
                     metadata: completionMetadata
                 };
                 tweetCache.set(tweetId, finalCacheData);
@@ -6620,7 +6629,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
  * @param {string} tweetId - The ID of the tweet being discussed.
  * @param {string} apiKey - The OpenRouter API key.
  * @param {Element|null} tweetArticle - The DOM element for the tweet article.
- * @returns {Promise<object[]>} The system prompt and tweet context messages.
+ * @returns {Promise<{systemMessage: object, tweetContextContent: object[]}>} The system prompt and tweet context content.
  */
 async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle) {
     const cachedEntry = tweetCache.get(tweetId);
@@ -6646,10 +6655,50 @@ async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticl
             : (cachedEntry?.mediaUrls?.length ? cachedEntry.mediaUrls : cachedEntry?.individualMediaUrls || []);
         appendRatingMediaContent(tweetContextContent, collectRatingImageUrls(mediaUrls, fullContext));
     }
-    return [
-        { role: 'system', content: [{ type: 'text', text: conversationSystemPrompt }] },
-        { role: 'user', content: tweetContextContent }
-    ];
+    return {
+        systemMessage: { role: 'system', content: [{ type: 'text', text: conversationSystemPrompt }] },
+        tweetContextContent
+    };
+}
+/**
+ * Migrates older unrated conversation histories that stored tweet context and
+ * the first question as adjacent user messages.
+ *
+ * @param {object[]} messages - Conversation messages.
+ * @returns {object[]} Messages without consecutive user roles.
+ */
+function mergeConsecutiveUserMessages(messages) {
+    return (messages || []).reduce((mergedMessages, message) => {
+        const clonedMessage = {
+            ...message,
+            content: Array.isArray(message.content)
+                ? message.content.map(contentItem => ({ ...contentItem }))
+                : []
+        };
+        const previousMessage = mergedMessages[mergedMessages.length - 1];
+        if (!previousMessage || previousMessage.role !== 'user' || clonedMessage.role !== 'user') {
+            mergedMessages.push(clonedMessage);
+            return mergedMessages;
+        }
+        const previousText = previousMessage.content
+            .filter(contentItem => contentItem.type === 'text')
+            .map(contentItem => contentItem.text || '')
+            .join('\n\n');
+        const currentText = clonedMessage.content
+            .filter(contentItem => contentItem.type === 'text')
+            .map(contentItem => contentItem.text || '')
+            .join('\n\n');
+        const previousLooksLikeTweetContext = previousText.includes('[TWEET ') || previousText.startsWith('Tweet context:');
+        const combinedText = previousLooksLikeTweetContext && !previousText.includes('\n\nQuestion:\n')
+            ? `Tweet context:\n${previousText}\n\nQuestion:\n${currentText}`
+            : `${previousText}\n\n${currentText}`.trim();
+        previousMessage.content = [
+            { type: 'text', text: combinedText },
+            ...previousMessage.content.filter(contentItem => contentItem.type !== 'text'),
+            ...clonedMessage.content.filter(contentItem => contentItem.type !== 'text')
+        ];
+        return mergedMessages;
+    }, []);
 }
 /**
  * Answers a follow-up question about a tweet and generates new questions.
@@ -6667,8 +6716,27 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     const useStreaming = browserGet('enableStreaming', false);
     if (!qaHistoryForApiCall.some(message => message.role === 'system')) {
         try {
-            const initialHistory = await buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle);
-            qaHistoryForApiCall = [...initialHistory, ...qaHistoryForApiCall];
+            const { systemMessage, tweetContextContent } = await buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle);
+            const firstUserMessageIndex = qaHistoryForApiCall.findIndex(message => message.role === 'user');
+            if (firstUserMessageIndex === -1) {
+                throw new Error('Could not find the question message for this conversation.');
+            }
+            const firstUserMessage = qaHistoryForApiCall[firstUserMessageIndex];
+            const firstQuestion = firstUserMessage.content.find(contentItem => contentItem.type === 'text')?.text || '';
+            const combinedUserContent = [
+                {
+                    type: 'text',
+                    text: `Tweet context:\n${tweetContextContent[0].text}\n\nQuestion:\n${firstQuestion}`
+                },
+                ...tweetContextContent.slice(1),
+                ...firstUserMessage.content.filter(contentItem => contentItem.type !== 'text')
+            ];
+            const combinedHistory = qaHistoryForApiCall.map((message, index) =>
+                index === firstUserMessageIndex
+                    ? { ...message, content: combinedUserContent }
+                    : message
+            );
+            qaHistoryForApiCall = [systemMessage, ...combinedHistory];
         } catch (error) {
             console.error(`[FollowUp] Failed to initialize conversation for ${tweetId}:`, error);
             const errorMessage = `Error starting conversation: ${error.message}`;
@@ -6678,20 +6746,8 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
             return;
         }
     }
-    const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall.map((msg, index) => {
-        if (index === qaHistoryForApiCall.length - 1 && msg.role === 'user') {
-            const rawUserText = msg.content.find(c => c.type === 'text')?.text || "";
-            const templatedText = `<UserQuestion> ${rawUserText} </UserQuestion> `;
-            const templatedContent = [{ type: "text", text: templatedText }];
-            msg.content.forEach(contentItem => {
-                if (contentItem.type === "image_url" || contentItem.type === "file") {
-                    templatedContent.push(contentItem);
-                }
-            });
-            return { ...msg, content: templatedContent };
-        }
-        return msg;
-    }));
+    qaHistoryForApiCall = mergeConsecutiveUserMessages(qaHistoryForApiCall);
+    const messagesForApi = await encodeMessageImagesAsDataUrls(qaHistoryForApiCall);
     const request = {
         model: selectedModel,
         messages: messagesForApi,
@@ -6707,7 +6763,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     if(browserGet('enableWebSearch',false)){
         request.tools = [{type: "openrouter:web_search"}];
     }
-    console.log(`followup request (templated): ${JSON.stringify(request)}`);
+    console.log(`followup request: ${JSON.stringify(request)}`);
     if (selectedModel.includes('gemini')) {
         request.config = { safetySettings: safetySettings };
     }
@@ -6732,6 +6788,11 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                         (result) => {
                             finalAnswerContent = result.content || aggregatedContent;
                             const finalReasoning = result.reasoning || aggregatedReasoning;
+                            const parsedAnswer = parseTweetFilterResponse(finalAnswerContent);
+                            if (!isCompleteConversationResponse(parsedAnswer)) {
+                                reject(new Error('The model returned an invalid conversation JSON response.'));
+                                return;
+                            }
                             const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                             finalQaHistory.push(assistantMessage);
                             if (indicatorInstance.conversationHistory.length > 0) {
@@ -6746,9 +6807,8 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                             });
                             const currentCache = tweetCache.get(tweetId) || {};
                             currentCache.qaConversationHistory = finalQaHistory;
-                            const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                            currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
-                            currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                            currentCache.lastAnswer = parsedAnswer.response || finalAnswerContent;
+                            currentCache.questions = parsedAnswer.questions;
                             currentCache.timestamp = Date.now();
                             tweetCache.set(tweetId, currentCache);
                             resolve();
@@ -6775,6 +6835,10 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                     throw new Error(result.message || "Failed to get follow-up answer.");
                 }
                 finalAnswerContent = result.data.choices[0].message.content;
+                const parsedAnswer = parseTweetFilterResponse(finalAnswerContent);
+                if (!isCompleteConversationResponse(parsedAnswer)) {
+                    throw new Error('The model returned an invalid conversation JSON response.');
+                }
                 const assistantMessage = { role: "assistant", content: [{ type: "text", text: finalAnswerContent }] };
                 finalQaHistory.push(assistantMessage);
                 indicatorInstance.updateAfterFollowUp({
@@ -6783,9 +6847,8 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
                 });
                 const currentCache = tweetCache.get(tweetId) || {};
                 currentCache.qaConversationHistory = finalQaHistory;
-                const parsedAnswer = finalAnswerContent.match(/<ANSWER>([\s\S]*?)<\/ANSWER>/);
-                currentCache.lastAnswer = parsedAnswer ? parsedAnswer[1].trim() : finalAnswerContent;
-                currentCache.questions = extractFollowUpQuestions(finalAnswerContent);
+                currentCache.lastAnswer = parsedAnswer.response || finalAnswerContent;
+                currentCache.questions = parsedAnswer.questions;
                 currentCache.timestamp = Date.now();
                 tweetCache.set(tweetId, currentCache);
             }

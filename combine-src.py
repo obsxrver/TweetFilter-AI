@@ -28,6 +28,7 @@ files_to_combine = [
     # Core DOM/UI definitions needed by ScoreIndicator
     "domScraper.js",
     "ui/utils.js",
+    "ui/responseParser.js",
     "ui/InstructionsUI.js",
     "ui/ScoreIndicator.js",
     "ui/ui.js", 
