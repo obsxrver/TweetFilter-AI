@@ -1,6 +1,6 @@
-# X/Twitter De-Sloppifier
+# TweetFilter-AI
 
-A powerful AI-powered userscript that rates and filters tweets to enhance your Twitter/X experience.
+Analyze and discuss tweets with an LLM. Custom AI-Powered analysis for X.com
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-General.jpg" width="800" alt="General UI"/>
@@ -11,20 +11,16 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
 
 - 🧠 **AI-Powered Rating**: Rates tweets from 1-10 based on quality
 - 🎯 **Smart Filtering**: Hides low-quality content based on your threshold
-- 🖼️ **Image Analysis**: Understands images and media in tweets
 - 💬 **Conversations**: Chat with AI about any tweet to learn more 
 - 📝 **Custom Instructions**: Define your own rating criteria
-- 🔄 **Live Streaming**: Watch AI analyze tweets in real-time
 - 🧵 **Thread Context**: Understands full conversation context
-- ⭐ **Handle Management**: Auto-whitelist your favorite accounts
 
-## Quick Start
+## Installation
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/)
-2. Install De-Sloppifier from [GreasyFork](https://greasyfork.org/en/scripts/532459-tweetfilter-ai)
-3. Get an API key from [OpenRouter](https://openrouter.ai/)
-4. Configure the script with your API key
-5. Enjoy a cleaner Twitter experience!
+1. Download Tampermonkey https://www.tampermonkey.net/
+2. Install the UserScript https://greasyfork.org/en/scripts/532459-tweetfilter-ai?version=1916539
+3. Add your https://openrouter.ai API key in settings
+
 
 ## Configuration
 
@@ -33,7 +29,6 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
   <img src="https://raw.githubusercontent.com/obsxrver/TweetFilter-AI/refs/heads/main/images/UI-Models.jpg" width="400" alt="Model Selection" style="margin-left: 10px;"/>
 </div>
 
-## Features in Detail
 
 ### AI Rating System
 - Uses advanced language models to evaluate tweet quality
@@ -62,16 +57,6 @@ A powerful AI-powered userscript that rates and filters tweets to enhance your T
 - Twitter/X web interface
 - Userscript manager extension
 - OpenRouter API key
-
-## Limitations
-
-- API usage based on OpenRouter plan
-- Web interface only (no mobile app support)
-- Processing time varies by model choice
-
-## License
-
-MIT License
 
 ---
 
