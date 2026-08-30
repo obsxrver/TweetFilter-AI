@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      Version 1.7.2
+// @version      Version 2.0
 // @description  A highly customizable AI rates tweets 1-10 and removes all the slop, saving your braincells!
 // @author       Obsxrver(3than)
 // @match        *://twitter.com/*
@@ -22,7 +22,7 @@
     // Embedded Menu.html
     const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">x</button><label for="tweet-filter-slider">Minimum score</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings">Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">TweetFilter AI</div><button class="close-button" data-action="toggle-settings">x</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title">OpenRouter API Key<a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Get one</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;">Cache</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Rated Tweets</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Always-Keep Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;">Backup</div><div class="section-description">Export cached ratings as JSON.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset Settings</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">TweetFilter AI</div></div><div id="models-tab" class="tab-content"><div class="section-title">Tweet Rating Model</div><div class="section-description">Choose the model that scores tweets. Image-capable models can inspect tweet images directly.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Provider</label><select id="model-family-filter" data-setting="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">Endpoint Priority</label><select id="provider-sort" data-setting="providerSort"><option value="">Default</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show free models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select id="reasoning-effort" data-setting="reasoningEffort"><option value="none">None</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra High</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random model responses should be.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling value.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum response tokens. Use 0 for provider default.">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Show API responses as they stream in.">Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Allow OpenRouter web search for rating requests.">Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="When disabled, tweets show a manual Rate button.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;">Image Description Model</div><div class="section-description">Use this only when your rating model cannot read images directly.</div><div class="toggle-row"><div class="toggle-label">Describe Images First</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image descriptions.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Scoring Instructions</div><div class="section-description">Describe what a high-quality tweet means to you.</div><textarea id="user-instructions" placeholder="Examples:- Reward original reporting and useful technical detail.- Penalize engagement bait and vague outrage.- Prefer concise, evidence-backed posts." data-setting="userDefinedInstructions"></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Instruction History</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear History</button></div></div><div class="section-title" style="margin-top: 20px;">Always Keep Handles</div><div class="section-description">Tweets from these handles stay visible regardless of score.</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Handle without @"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
     // Embedded style.css
-    const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background: linear-gradient(180deg, rgba(22, 26, 31, 0.97), rgba(16, 18, 22, 0.97));color: #e7e9ea;padding: 0;border-radius: 18px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);display: flex;flex-direction: column;width: min(92vw, 420px);max-width: 420px;max-height: 88vh;overflow: hidden;border: 1px solid rgba(130, 178, 219, 0.24);line-height: 1.3;backdrop-filter: blur(12px);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 14px 16px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background: linear-gradient(180deg, rgba(28, 34, 40, 0.98), rgba(23, 27, 33, 0.96));z-index: 20;border-radius: 18px 18px 0 0;}.settings-title {font-weight: 700;font-size: 16px;letter-spacing: 0.2px;color: #f1f5f9;}.settings-content {overflow-y: auto;max-height: calc(88vh - 118px);padding: 0 0 14px;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(120, 167, 210, 0.18);position: sticky;top: 0;background: rgba(20, 24, 29, 0.95);z-index: 10;padding: 12px 14px 10px;gap: 10px;}.tab-button {padding: 8px 12px;background: rgba(255, 255, 255, 0.04);border: 1px solid transparent;color: #d7e2ec;font-weight: 600;cursor: pointer;border-radius: 10px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(85, 157, 218, 0.14);border-color: rgba(85, 157, 218, 0.3);}.tab-button.active {color: #79c1ff;background-color: rgba(45, 152, 237, 0.2);border-color: rgba(82, 178, 255, 0.5);box-shadow: inset 0 0 0 1px rgba(37, 131, 204, 0.25);}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 16px 16px 8px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 12px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(24, 29, 35, 0.98);padding: 8px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);z-index: 1;}.select-container .search-input {width: 100%;padding: 9px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(33, 39, 46, 0.92);color: #e7e9ea;font-size: 12.5px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background: linear-gradient(180deg, rgba(40, 47, 56, 0.95), rgba(32, 38, 45, 0.95));color: #e7e9ea;padding: 10px 12px;min-height: 40px;border: 1px solid rgba(137, 178, 214, 0.35);border-radius: 10px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(28, 34, 41, 0.99);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(120, 167, 210, 0.28);border-radius: 10px;margin-top: 6px;box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(120, 167, 210, 0.09);font-size: 12.5px;}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: 700;margin-top: 18px;margin-bottom: 8px;color: #f3f6fa;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12.5px;margin-bottom: 10px;color: rgba(225, 233, 241, 0.82);line-height: 1.45;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 8px;margin-bottom: 15px;border: 1px solid rgba(120, 167, 210, 0.2);border-radius: 12px;padding: 12px 12px 10px;background: rgba(255, 255, 255, 0.04);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: 700;font-size: 13px;color: #dce7f2;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;padding: 10px;display: flex;flex-direction: column;align-items: stretch;gap: 8px;border: 1px solid rgba(120, 167, 210, 0.16);border-radius: 10px;background: rgba(255, 255, 255, 0.03);}.sort-container label {font-size: 12px;color: #cfd9e3;font-weight: 600;white-space: normal;display: flex;align-items: center;gap: 8px;}.sort-container .controls-group {display: grid;grid-template-columns: minmax(0, 1fr) auto;gap: 8px;align-items: center;}.sort-container select {width: 100%;min-height: 34px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12.5px;cursor: pointer;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {min-height: 34px;min-width: 94px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.32);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12px;font-weight: 600;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}.sort-container label input[type="checkbox"] {width: 14px;height: 14px;margin: 0;accent-color: #1d9bf0;}@media (min-width: 601px) {#settings-container {width: min(430px, 90vw);max-width: 430px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}`;
+    const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background: linear-gradient(180deg, rgba(22, 26, 31, 0.97), rgba(16, 18, 22, 0.97));color: #e7e9ea;padding: 0;border-radius: 18px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);display: flex;flex-direction: column;width: min(92vw, 420px);max-width: 420px;max-height: 88vh;overflow: hidden;border: 1px solid rgba(130, 178, 219, 0.24);line-height: 1.3;backdrop-filter: blur(12px);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 14px 16px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background: linear-gradient(180deg, rgba(28, 34, 40, 0.98), rgba(23, 27, 33, 0.96));z-index: 20;border-radius: 18px 18px 0 0;}.settings-title {font-weight: 700;font-size: 16px;letter-spacing: 0.2px;color: #f1f5f9;}.settings-content {overflow-y: auto;max-height: calc(88vh - 118px);padding: 0 0 14px;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(120, 167, 210, 0.18);position: sticky;top: 0;background: rgba(20, 24, 29, 0.95);z-index: 10;padding: 12px 14px 10px;gap: 10px;}.tab-button {padding: 8px 12px;background: rgba(255, 255, 255, 0.04);border: 1px solid transparent;color: #d7e2ec;font-weight: 600;cursor: pointer;border-radius: 10px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(85, 157, 218, 0.14);border-color: rgba(85, 157, 218, 0.3);}.tab-button.active {color: #79c1ff;background-color: rgba(45, 152, 237, 0.2);border-color: rgba(82, 178, 255, 0.5);box-shadow: inset 0 0 0 1px rgba(37, 131, 204, 0.25);}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 16px 16px 8px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 12px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(24, 29, 35, 0.98);padding: 8px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);z-index: 1;}.select-container .search-input {width: 100%;padding: 9px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(33, 39, 46, 0.92);color: #e7e9ea;font-size: 12.5px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background: linear-gradient(180deg, rgba(40, 47, 56, 0.95), rgba(32, 38, 45, 0.95));color: #e7e9ea;padding: 10px 12px;min-height: 40px;border: 1px solid rgba(137, 178, 214, 0.35);border-radius: 10px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(28, 34, 41, 0.99);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(120, 167, 210, 0.28);border-radius: 10px;margin-top: 6px;box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(120, 167, 210, 0.09);font-size: 12.5px;}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: 700;margin-top: 18px;margin-bottom: 8px;color: #f3f6fa;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12.5px;margin-bottom: 10px;color: rgba(225, 233, 241, 0.82);line-height: 1.45;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 8px;margin-bottom: 15px;border: 1px solid rgba(120, 167, 210, 0.2);border-radius: 12px;padding: 12px 12px 10px;background: rgba(255, 255, 255, 0.04);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: 700;font-size: 13px;color: #dce7f2;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;padding: 10px;display: flex;flex-direction: column;align-items: stretch;gap: 8px;border: 1px solid rgba(120, 167, 210, 0.16);border-radius: 10px;background: rgba(255, 255, 255, 0.03);}.sort-container label {font-size: 12px;color: #cfd9e3;font-weight: 600;white-space: normal;display: flex;align-items: center;gap: 8px;}.sort-container .controls-group {display: grid;grid-template-columns: minmax(0, 1fr) auto;gap: 8px;align-items: center;}.sort-container select {width: 100%;min-height: 34px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12.5px;cursor: pointer;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {min-height: 34px;min-width: 94px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.32);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12px;font-weight: 600;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}.sort-container label input[type="checkbox"] {width: 14px;height: 14px;margin: 0;accent-color: #1d9bf0;}@media (min-width: 601px) {#settings-container {width: min(430px, 90vw);max-width: 430px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}/* Inline tweet score ----------------------------------------------------- */.score-indicator,.score-indicator.mobile-indicator {position: relative !important;inset: auto !important;display: inline-flex !important;align-items: center !important;justify-content: center !important;flex: 0 0 auto !important;min-width: 0 !important;min-height: 20px !important;margin: 0 0 0 8px !important;padding: 1px 8px !important;border: 0 !important;border-radius: 9999px !important;box-shadow: none !important;font-size: 11px !important;line-height: 18px !important;white-space: nowrap !important;vertical-align: middle !important;z-index: auto !important;}.score-indicator.rated-rating {background: #1d9bf0 !important;}.score-indicator:hover,.score-indicator:focus-visible {filter: brightness(1.12);transform: none !important;outline: 2px solid rgba(29, 155, 240, 0.35) !important;outline-offset: 2px !important;}/* Tooltip usability ----------------------------------------------------- */.score-description {width: min(620px, calc(100vw - 32px)) !important;max-width: calc(100vw - 32px) !important;max-height: min(760px, calc(100dvh - 32px)) !important;padding: 0 !important;overflow: hidden !important;background: rgba(22, 24, 28, 0.985) !important;}.tooltip-controls {align-items: center !important;gap: 4px !important;min-height: 48px !important;padding: 6px 8px 6px 14px !important;}.tooltip-title {min-width: 0;margin-right: auto;overflow: hidden;color: #e7e9ea;font-size: 14px;font-weight: 700;text-overflow: ellipsis;white-space: nowrap;}.tooltip-pin-button,.tooltip-copy-button,.tooltip-refresh-button,.tooltip-rate-button,.tooltip-close-button {display: inline-flex !important;align-items: center !important;justify-content: center !important;width: 36px !important;height: 36px !important;min-width: 36px !important;margin: 0 !important;padding: 0 !important;border-radius: 9999px !important;}.tooltip-scrollable-content {padding: 14px 18px 20px !important;overflow-x: hidden !important;scrollbar-gutter: stable;}.tooltip-custom-question-container {gap: 8px !important;padding: 10px 12px !important;}.tooltip-custom-question-input {min-width: 0;max-height: 120px;overflow-y: auto;}.tooltip-custom-question-button,.tooltip-attach-image-button {min-width: 44px;min-height: 40px;margin: 0;touch-action: manipulation;}.tooltip-follow-up-image-preview-container {max-height: 126px;padding: 10px 12px !important;overflow-y: auto;}/* Markdown responses ---------------------------------------------------- */.description-text > :first-child,.conversation-answer > :first-child,.reasoning-text > :first-child {margin-top: 0;}.score-description.streaming-tooltip p::after {content: none;}.score-description.streaming-tooltip .description-text > :last-child::after {content: '|';display: inline-block;margin-left: 2px;color: #1d9bf0;font-weight: bold;animation: blink 0.7s infinite;}.description-text > :last-child,.conversation-answer > :last-child,.reasoning-text > :last-child {margin-bottom: 0;}.description-text p,.conversation-answer p,.reasoning-text p {margin: 0 0 0.75em;}.description-text h1,.description-text h2,.description-text h3,.description-text h4,.description-text h5,.description-text h6,.conversation-answer h1,.conversation-answer h2,.conversation-answer h3,.conversation-answer h4,.conversation-answer h5,.conversation-answer h6,.reasoning-text h1,.reasoning-text h2,.reasoning-text h3,.reasoning-text h4,.reasoning-text h5,.reasoning-text h6 {margin: 1em 0 0.45em;color: #f2f4f5;line-height: 1.25;}.description-text h1,.conversation-answer h1 { font-size: 1.35em; }.description-text h2,.conversation-answer h2 { font-size: 1.2em; }.description-text h3,.conversation-answer h3 { font-size: 1.08em; }.description-text h4,.description-text h5,.description-text h6,.conversation-answer h4,.conversation-answer h5,.conversation-answer h6 { font-size: 1em; }.description-text ul,.description-text ol,.conversation-answer ul,.conversation-answer ol,.reasoning-text ul,.reasoning-text ol {margin: 0.6em 0 0.85em;padding-left: 1.5em;}.description-text li,.conversation-answer li,.reasoning-text li {margin: 0.25em 0;}.markdown-task-item {list-style: none;margin-left: -1.25em !important;}.markdown-task-item input {margin: 0 0.4em 0 0;accent-color: #1d9bf0;}.description-text blockquote,.conversation-answer blockquote,.reasoning-text blockquote {margin: 0.75em 0;padding: 0.2em 0 0.2em 0.85em;border-left: 3px solid #1d9bf0;color: #b9c2c9;}.description-text hr,.conversation-answer hr,.reasoning-text hr {margin: 1em 0;border: 0;border-top: 1px solid rgba(255, 255, 255, 0.16);}.markdown-table-wrapper {width: 100%;margin: 0.85em 0;overflow-x: auto;}.markdown-table-wrapper .markdown-table {width: max-content;min-width: 100%;margin: 0;}.description-text del,.conversation-answer del,.reasoning-text del {color: #8b98a5;}/* Linear conversation editing and reroll controls ---------------------- */.conversation-question-row,.conversation-answer-row {display: flex;align-items: flex-start;gap: 8px;}.conversation-question,.conversation-answer {min-width: 0;flex: 1 1 auto;}.conversation-action-button {flex: 0 0 auto;min-height: 30px;padding: 4px 8px;border: 1px solid rgba(139, 152, 165, 0.35);border-radius: 9999px;background: transparent;color: #8b98a5;cursor: pointer;font: inherit;font-size: 12px;font-weight: 600;touch-action: manipulation;}.conversation-action-button:hover,.conversation-action-button:focus-visible {border-color: #1d9bf0;background: rgba(29, 155, 240, 0.12);color: #1d9bf0;outline: none;}.conversation-action-button:disabled {cursor: not-allowed;opacity: 0.45;}.conversation-edit-form {display: grid;gap: 8px;margin-bottom: 10px;}.conversation-edit-form label {color: #cfd8dc;font-size: 12px;font-weight: 700;}.conversation-edit-input {width: 100%;min-height: 76px;max-height: 180px;box-sizing: border-box;padding: 9px 10px;resize: vertical;border: 1px solid rgba(255, 255, 255, 0.22);border-radius: 8px;outline: none;background: #202327;color: #e7e9ea;font: inherit;line-height: 1.4;}.conversation-edit-input:focus {border-color: #1d9bf0;box-shadow: 0 0 0 1px #1d9bf0;}.conversation-edit-actions {display: flex;justify-content: flex-end;gap: 8px;}@media (max-width: 600px) {.score-indicator,.score-indicator.mobile-indicator {position: relative !important;inset: auto !important;margin-left: 6px !important;}.score-description,.score-description.mobile-tooltip {top: auto !important;right: 0 !important;bottom: 0 !important;left: 0 !important;width: 100% !important;max-width: 100% !important;height: min(88dvh, 760px) !important;max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px) !important;border-radius: 18px 18px 0 0 !important;}.tooltip-controls {min-height: 52px !important;padding: 6px 8px 6px 16px !important;}.tooltip-pin-button,.tooltip-copy-button,.tooltip-refresh-button,.tooltip-rate-button,.tooltip-close-button {width: 44px !important;height: 44px !important;min-width: 44px !important;}.tooltip-scrollable-content {padding: 12px 14px 20px !important;}.tooltip-custom-question-container {padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;}.follow-up-question-button,.conversation-action-button {min-height: 44px;}.conversation-question-row,.conversation-answer-row {flex-wrap: wrap;}.conversation-edit-actions .conversation-action-button {flex: 1 1 0;}}`;
     // Apply CSS
     GM_addStyle(STYLE);
     // Set menu HTML
@@ -664,15 +664,15 @@ const REVIEW_SYSTEM_PROMPT = `
 You are TweetFilter-AI.
 Today's Date: ${new Date().toLocaleDateString()}.
 Analyze the supplied tweet according to the user's custom instructions, assign it an integer score from 0 through 10, and suggest three relevant follow-up questions that you can confidently answer.
-Return only one valid JSON object. Do not use Markdown fences, XML tags, or text outside the JSON object. Use exactly this schema:
+Return only one valid JSON object. Do not wrap the JSON object in a Markdown code fence, and do not emit XML tags or text outside it. Use exactly this schema:
 {
-  "Response": "Your tweet analysis",
+  "Response": "## Analysis\\n\\nYour tweet analysis with optional **Markdown** formatting",
   "Score": 0,
   "Question1": "First follow-up question",
   "Question2": "Second follow-up question",
   "Question3": "Third follow-up question"
 }
-"Response" must follow the user's response and style preferences. "Score" is required for tweet analysis and must be a JSON number. Do not directly address the user in the suggested questions.
+"Response" must follow the user's response and style preferences. It may freely use Markdown headings, paragraphs, lists, blockquotes, links, inline code, emphasis, and other basic Markdown. Encode every line break inside the JSON string as \\n; do not flatten or avoid formatting merely because the response is JSON. Markdown belongs inside the "Response" string, not around the JSON object. "Score" is required for tweet analysis and must be a JSON number. Do not directly address the user in the suggested questions.
 `;
 const FOLLOW_UP_SYSTEM_PROMPT = `
 You are TweetFilter-AI, having a conversation about a tweet.
@@ -681,14 +681,14 @@ The conversation contains the tweet and any available thread or media context. A
 Use these preferences as guidance for the style and focus of your answers. Do not rate the tweet unless the user asks you to:
 {USER_INSTRUCTIONS_PLACEHOLDER}
 Answer the latest question and suggest three relevant follow-up questions that you can confidently answer.
-Return only one valid JSON object. Do not use Markdown fences, XML tags, or text outside the JSON object. Use exactly this schema:
+Return only one valid JSON object. Do not wrap the JSON object in a Markdown code fence, and do not emit XML tags or text outside it. Use exactly this schema:
 {
-  "Response": "Your answer",
+  "Response": "## Answer\\n\\nYour answer with optional **Markdown** formatting",
   "Question1": "First follow-up question",
   "Question2": "Second follow-up question",
   "Question3": "Third follow-up question"
 }
-Do not include "Score" in conversation responses. If the user asks about the tweet's rating, answer in "Response". Do not directly address the user in the suggested questions.
+"Response" may freely use Markdown headings, paragraphs, lists, blockquotes, links, inline code, emphasis, and other basic Markdown. Encode every line break inside the JSON string as \\n; do not flatten or avoid formatting merely because the response is JSON. Markdown belongs inside the "Response" string, not around the JSON object. Do not include "Score" in conversation responses. If the user asks about the tweet's rating, answer in "Response". Do not directly address the user in the suggested questions.
 `;
 let modelTemperature = appSettings.getNumber('modelTemperature');
 let modelTopP = appSettings.getNumber('modelTopP');
@@ -1160,6 +1160,69 @@ function parseTweetFilterResponse(content) {
     };
 }
 /**
+ * Extracts and incrementally decodes the Response JSON string while a model is
+ * still streaming an otherwise incomplete JSON object. Template fields stay
+ * hidden and JSON escape sequences become display-ready characters.
+ *
+ * @param {string} content - Complete or partial model response text.
+ * @returns {{text: string, started: boolean, complete: boolean}}
+ */
+function extractStreamingResponse(content) {
+    const source = String(content || '');
+    const propertyMatch = /["']Response["']\s*:\s*["']/i.exec(source);
+    if (!propertyMatch) {
+        return { text: '', started: false, complete: false };
+    }
+    const openingQuote = propertyMatch[0].slice(-1);
+    let text = '';
+    let index = propertyMatch.index + propertyMatch[0].length;
+    while (index < source.length) {
+        const character = source[index];
+        if (character === openingQuote) {
+            return { text, started: true, complete: true };
+        }
+        if (character !== '\\') {
+            text += character;
+            index += 1;
+            continue;
+        }
+        if (index + 1 >= source.length) {
+            break;
+        }
+        const escapedCharacter = source[index + 1];
+        const simpleEscapes = {
+            '"': '"',
+            "'": "'",
+            '\\': '\\',
+            '/': '/',
+            b: '\b',
+            f: '\f',
+            n: '\n',
+            r: '\n',
+            t: '\t'
+        };
+        if (Object.prototype.hasOwnProperty.call(simpleEscapes, escapedCharacter)) {
+            text += simpleEscapes[escapedCharacter];
+            index += 2;
+            continue;
+        }
+        if (escapedCharacter === 'u') {
+            const unicodeEscape = source.slice(index + 2, index + 6);
+            if (unicodeEscape.length < 4) break;
+            if (/^[0-9a-f]{4}$/i.test(unicodeEscape)) {
+                text += String.fromCharCode(parseInt(unicodeEscape, 16));
+                index += 6;
+                continue;
+            }
+        }
+        // Be forgiving while streaming malformed escape sequences. The final
+        // response still goes through strict JSON schema validation.
+        text += escapedCharacter;
+        index += 2;
+    }
+    return { text, started: true, complete: false };
+}
+/**
  * Extracts a score from a complete or partially streamed JSON response.
  *
  * @param {string} content - Raw or partially streamed model response text.
@@ -1208,6 +1271,191 @@ function isCompleteConversationResponse(parsedResponse) {
         parsedResponse.response.length > 0 &&
         !parsedResponse.hasScore &&
         parsedResponse.questions.length === 3;
+}
+    // ----- ui/markdown.js -----
+/**
+ * Escapes text before it is inserted into tooltip HTML.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function escapeTooltipHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+/**
+ * Only allows links that are safe to open from an AI-generated response.
+ * @param {string} value
+ * @returns {string|null}
+ */
+function sanitizeMarkdownUrl(value) {
+    const url = String(value || '').trim();
+    if (/^(https?:|mailto:)/i.test(url) || url.startsWith('/') || url.startsWith('#')) {
+        return url;
+    }
+    return null;
+}
+/**
+ * Renders the inline subset of Markdown used by AI responses.
+ * @param {string} source
+ * @returns {string}
+ */
+function renderInlineMarkdown(source) {
+    const protectedFragments = [];
+    const protect = (html) => {
+        const token = `\u0000TFMARKDOWN${protectedFragments.length}\u0000`;
+        protectedFragments.push(html);
+        return token;
+    };
+    let text = String(source || '');
+    text = text.replace(/`([^`\n]+)`/g, (match, code) =>
+        protect(`<code>${escapeTooltipHtml(code)}</code>`)
+    );
+    text = text.replace(/\[([^\]\n]+)\]\(([^)\s]+)(?:\s+["']([^"']*)["'])?\)/g, (match, label, url, title) => {
+        const safeUrl = sanitizeMarkdownUrl(url);
+        if (!safeUrl) {
+            return `${label} (${url})`;
+        }
+        const titleAttribute = title ? ` title="${escapeTooltipHtml(title)}"` : '';
+        return protect(
+            `<a href="${escapeTooltipHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="ai-generated-link"${titleAttribute}>${escapeTooltipHtml(label)}</a>`
+        );
+    });
+    text = escapeTooltipHtml(text)
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+        .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+        .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/(^|[^_\w])_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
+    return text.replace(/\u0000TFMARKDOWN(\d+)\u0000/g, (match, index) =>
+        protectedFragments[Number(index)] || ''
+    );
+}
+function splitMarkdownTableRow(row) {
+    return String(row || '')
+        .trim()
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split(/(?<!\\)\|/)
+        .map(cell => cell.trim().replace(/\\\|/g, '|'));
+}
+function isMarkdownTableDivider(line) {
+    const cells = splitMarkdownTableRow(line);
+    return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+}
+/**
+ * Converts a safe, practical subset of Markdown into tooltip HTML. This covers
+ * headings, paragraphs, links, emphasis, strike-through, code, quotes, lists,
+ * task lists, horizontal rules, and tables without accepting arbitrary HTML.
+ * @param {string} source
+ * @returns {string}
+ */
+function renderTooltipMarkdown(source) {
+    const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+    const output = [];
+    let index = 0;
+    while (index < lines.length) {
+        const line = lines[index];
+        if (!line.trim()) {
+            index += 1;
+            continue;
+        }
+        const fenceMatch = line.match(/^\s*```\s*([\w+-]*)\s*$/);
+        if (fenceMatch) {
+            const codeLines = [];
+            index += 1;
+            while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) {
+                codeLines.push(lines[index]);
+                index += 1;
+            }
+            if (index < lines.length) index += 1;
+            const languageClass = fenceMatch[1]
+                ? ` class="language-${escapeTooltipHtml(fenceMatch[1])}"`
+                : '';
+            output.push(`<pre><code${languageClass}>${escapeTooltipHtml(codeLines.join('\n'))}</code></pre>`);
+            continue;
+        }
+        const headingMatch = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (headingMatch) {
+            const level = headingMatch[1].length;
+            output.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+            index += 1;
+            continue;
+        }
+        if (/^\s{0,3}((\*|-|_)\s*){3,}$/.test(line)) {
+            output.push('<hr>');
+            index += 1;
+            continue;
+        }
+        if (index + 1 < lines.length && line.includes('|') && isMarkdownTableDivider(lines[index + 1])) {
+            const headers = splitMarkdownTableRow(line);
+            index += 2;
+            const rows = [];
+            while (index < lines.length && lines[index].includes('|') && lines[index].trim()) {
+                rows.push(splitMarkdownTableRow(lines[index]));
+                index += 1;
+            }
+            const headerHtml = headers.map(cell => `<th>${renderInlineMarkdown(cell)}</th>`).join('');
+            const bodyHtml = rows.map(row => {
+                const cells = headers.map((unused, cellIndex) =>
+                    `<td>${renderInlineMarkdown(row[cellIndex] || '')}</td>`
+                ).join('');
+                return `<tr>${cells}</tr>`;
+            }).join('');
+            output.push(`<div class="markdown-table-wrapper"><table class="markdown-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`);
+            continue;
+        }
+        if (/^\s{0,3}>/.test(line)) {
+            const quoteLines = [];
+            while (index < lines.length && /^\s{0,3}>/.test(lines[index])) {
+                quoteLines.push(lines[index].replace(/^\s{0,3}>\s?/, ''));
+                index += 1;
+            }
+            output.push(`<blockquote>${quoteLines.map(renderInlineMarkdown).join('<br>')}</blockquote>`);
+            continue;
+        }
+        const listMatch = line.match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/);
+        if (listMatch) {
+            const ordered = /^\d/.test(listMatch[1]);
+            const tag = ordered ? 'ol' : 'ul';
+            const items = [];
+            while (index < lines.length) {
+                const itemMatch = lines[index].match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/);
+                if (!itemMatch || /^\d/.test(itemMatch[1]) !== ordered) break;
+                let itemText = itemMatch[2];
+                const taskMatch = itemText.match(/^\[([ xX])\]\s+(.+)$/);
+                if (taskMatch) {
+                    const checked = taskMatch[1].toLowerCase() === 'x';
+                    itemText = `<input type="checkbox" disabled${checked ? ' checked' : ''}> ${renderInlineMarkdown(taskMatch[2])}`;
+                    items.push(`<li class="markdown-task-item">${itemText}</li>`);
+                } else {
+                    items.push(`<li>${renderInlineMarkdown(itemText)}</li>`);
+                }
+                index += 1;
+            }
+            output.push(`<${tag}>${items.join('')}</${tag}>`);
+            continue;
+        }
+        const paragraphLines = [line.trim()];
+        index += 1;
+        while (index < lines.length && lines[index].trim()) {
+            const nextLine = lines[index];
+            const startsBlock = /^\s*```/.test(nextLine) ||
+                /^\s{0,3}(#{1,6})\s+/.test(nextLine) ||
+                /^\s{0,3}>/.test(nextLine) ||
+                /^\s{0,3}([-+*]|\d+[.)])\s+/.test(nextLine) ||
+                /^\s{0,3}((\*|-|_)\s*){3,}$/.test(nextLine) ||
+                (index + 1 < lines.length && nextLine.includes('|') && isMarkdownTableDivider(lines[index + 1]));
+            if (startsBlock) break;
+            paragraphLines.push(nextLine.trim());
+            index += 1;
+        }
+        output.push(`<p>${paragraphLines.map(renderInlineMarkdown).join('<br>')}</p>`);
+    }
+    return output.join('');
 }
     // ----- ui/InstructionsUI.js -----
 /**
@@ -1370,13 +1618,17 @@ class ScoreIndicator {
         this.uploadedImageDataUrls = [];
         this.qaConversationHistory = [];
         this.currentFollowUpSource = null;
+        this.isFollowUpPending = false;
+        this.editingTurnIndex = null;
         this._lastScrollPosition = 0;
         this._boundHandlers = {
             handleAttachImageClick: null,
             handleKeyDown: null,
             handleFollowUpTouchStart: null,
             handleFollowUpTouchEnd: null,
-            handleConversationReasoningToggle: null
+            handleConversationReasoningToggle: null,
+            handleConversationAction: null,
+            handleQuestionPaste: null
         };
         this._boundMethodHandlers = Object.create(null);
         this._listenerTeardowns = [];
@@ -1395,14 +1647,14 @@ class ScoreIndicator {
      * @param {Element} initialTweetArticle - The article element to attach to initially.
      */
     _createElements(initialTweetArticle) {
-        this.indicatorElement = document.createElement('div');
+        this.indicatorElement = document.createElement('button');
+        this.indicatorElement.type = 'button';
         this.indicatorElement.className = 'score-indicator';
         this.indicatorElement.dataset.tweetId = this.tweetId;
-        const currentPosition = window.getComputedStyle(initialTweetArticle).position;
-        if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
-            initialTweetArticle.style.position = 'relative';
-        }
+        this.indicatorElement.setAttribute('aria-label', 'Open TweetFilter AI score details');
+        this.indicatorElement.title = 'Open TweetFilter AI score details';
         initialTweetArticle.appendChild(this.indicatorElement);
+        this._attachIndicatorToMetadataRow(initialTweetArticle);
         this.tooltipElement = document.createElement('div');
         this.tooltipElement.className = 'score-description';
         this.tooltipElement.style.display = 'none';
@@ -1413,32 +1665,46 @@ class ScoreIndicator {
         }
         this.tooltipControls = document.createElement('div');
         this.tooltipControls.className = 'tooltip-controls';
+        const tooltipTitle = document.createElement('div');
+        tooltipTitle.className = 'tooltip-title';
+        tooltipTitle.textContent = 'TweetFilter AI';
+        this.tooltipControls.appendChild(tooltipTitle);
         this.tooltipCloseButton = document.createElement('button');
         this.tooltipCloseButton.className = 'close-button tooltip-close-button';
         this.tooltipCloseButton.innerHTML = '×';
         this.tooltipCloseButton.title = 'Close tooltip';
+        this.tooltipCloseButton.type = 'button';
+        this.tooltipCloseButton.setAttribute('aria-label', 'Close score details');
         this.pinButton = document.createElement('button');
         this.pinButton.className = 'tooltip-pin-button';
         this.pinButton.innerHTML = '📌';
         this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        this.pinButton.type = 'button';
+        this.pinButton.setAttribute('aria-label', 'Pin score details');
         this.copyButton = document.createElement('button');
         this.copyButton.className = 'tooltip-copy-button';
         this.copyButton.innerHTML = '📋';
         this.copyButton.title = 'Copy content to clipboard';
+        this.copyButton.type = 'button';
+        this.copyButton.setAttribute('aria-label', 'Copy score details');
         this.refreshButton = document.createElement('button');
         this.refreshButton.className = 'tooltip-refresh-button';
         this.refreshButton.innerHTML = '🔄';
         this.refreshButton.title = 'Re-rate this tweet';
+        this.refreshButton.type = 'button';
+        this.refreshButton.setAttribute('aria-label', 'Re-rate this tweet');
         this.rateButton = document.createElement('button');
         this.rateButton.className = 'tooltip-rate-button';
         this.rateButton.innerHTML = '⭐';
         this.rateButton.title = 'Rate this tweet';
+        this.rateButton.type = 'button';
+        this.rateButton.setAttribute('aria-label', 'Rate this tweet');
         this.rateButton.style.display = 'none';
         this.tooltipControls.appendChild(this.pinButton);
         this.tooltipControls.appendChild(this.copyButton);
-        this.tooltipControls.appendChild(this.tooltipCloseButton);
         this.tooltipControls.appendChild(this.refreshButton);
         this.tooltipControls.appendChild(this.rateButton);
+        this.tooltipControls.appendChild(this.tooltipCloseButton);
         this.tooltipElement.appendChild(this.tooltipControls);
         this.tooltipScrollableContentElement = document.createElement('div');
         this.tooltipScrollableContentElement.className = 'tooltip-scrollable-content';
@@ -1458,7 +1724,7 @@ class ScoreIndicator {
         this.reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
         this.reasoningContent = document.createElement('div');
         this.reasoningContent.className = 'reasoning-content';
-        this.reasoningTextElement = document.createElement('p');
+        this.reasoningTextElement = document.createElement('div');
         this.reasoningTextElement.className = 'reasoning-text';
         this.reasoningContent.appendChild(this.reasoningTextElement);
         this.reasoningDropdown.appendChild(this.reasoningToggle);
@@ -1504,6 +1770,8 @@ class ScoreIndicator {
             this.attachImageButton.textContent = '📎';
             this.attachImageButton.className = 'tooltip-attach-image-button';
             this.attachImageButton.title = 'Attach image(s) or PDF(s)';
+            this.attachImageButton.type = 'button';
+            this.attachImageButton.setAttribute('aria-label', 'Attach images or PDFs');
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
             // I escaped the slash here because it was messing up the comment stripping code.
@@ -1514,6 +1782,7 @@ class ScoreIndicator {
         this.customQuestionButton = document.createElement('button');
         this.customQuestionButton.textContent = 'Ask';
         this.customQuestionButton.className = 'tooltip-custom-question-button';
+        this.customQuestionButton.type = 'button';
         this.customQuestionContainer.appendChild(this.customQuestionInput);
         if (this.attachImageButton) {
             this.customQuestionContainer.appendChild(this.attachImageButton);
@@ -1850,6 +2119,8 @@ class ScoreIndicator {
             }
         };
         this._registerDomListener(this.customQuestionInput, 'keydown', this._boundHandlers.handleKeyDown);
+        this._boundHandlers.handleQuestionPaste = this._getBoundMethodHandler('_handleQuestionPaste');
+        this._registerDomListener(this.customQuestionInput, 'paste', this._boundHandlers.handleQuestionPaste);
         this._registerDomListener(this.metadataToggle, 'click', this._getBoundMethodHandler('_handleMetadataToggleClick'));
         if (this.attachImageButton && this.followUpImageInput) {
             this._boundHandlers.handleAttachImageClick = (event) => {
@@ -1860,6 +2131,40 @@ class ScoreIndicator {
             this._registerDomListener(this.attachImageButton, 'click', this._boundHandlers.handleAttachImageClick);
             this._registerDomListener(this.followUpImageInput, 'change', this._getBoundMethodHandler('_handleFollowUpImageSelect'));
         }
+    }
+    /**
+     * Finds the tweet metadata row containing the post time and, on detail
+     * pages, the Views link.
+     * @param {Element} article
+     * @returns {Element|null}
+     */
+    _findTweetMetadataRow(article) {
+        if (!article || !this.tweetId) return null;
+        const timeLinks = Array.from(article.querySelectorAll(`a[href*="/status/${this.tweetId}"]`))
+            .filter(link => link.querySelector('time'));
+        for (const timeLink of timeLinks) {
+            let candidate = timeLink.parentElement;
+            for (let depth = 0; candidate && candidate !== article && depth < 4; depth += 1) {
+                const hasViewsLink = candidate.querySelector(`a[href*="/status/${this.tweetId}/analytics"]`);
+                const hasTime = candidate.querySelector('time');
+                if (hasTime && hasViewsLink) {
+                    return candidate;
+                }
+                candidate = candidate.parentElement;
+            }
+        }
+        const primaryTimeLink = timeLinks[0];
+        return primaryTimeLink?.parentElement?.parentElement || primaryTimeLink?.parentElement || null;
+    }
+    /** Places the score in normal document flow next to post time and views. */
+    _attachIndicatorToMetadataRow(article) {
+        if (!this.indicatorElement || !article) return false;
+        const metadataRow = this._findTweetMetadataRow(article);
+        if (!metadataRow) return false;
+        if (this.indicatorElement.parentElement !== metadataRow) {
+            metadataRow.appendChild(this.indicatorElement);
+        }
+        return true;
     }
     /** Updates the visual appearance of the indicator (icon/text, class). */
     _updateIndicatorUI() {
@@ -1915,7 +2220,9 @@ class ScoreIndicator {
         if (indicatorClass) {
             classList.add(indicatorClass);
         }
-        this.indicatorElement.textContent = indicatorText;
+        const readableText = `Score: ${indicatorText}`;
+        this.indicatorElement.textContent = `SCORE: ${indicatorText}`;
+        this.indicatorElement.setAttribute('aria-label', `${readableText}. Open TweetFilter AI score details`);
     }
     /**
      * Splits a unified JSON response into tooltip display sections.
@@ -1924,8 +2231,10 @@ class ScoreIndicator {
      */
     _extractDescriptionSections(fullDescription) {
         const parsedResponse = parseTweetFilterResponse(fullDescription);
-        const analysisContent = parsedResponse.response ||
-            (parsedResponse.isValidJson ? "*Waiting for analysis...*" : fullDescription);
+        const streamingResponse = extractStreamingResponse(fullDescription);
+        const looksLikeJsonEnvelope = /^\s*(?:```(?:json)?\s*)?\{/i.test(String(fullDescription || ''));
+        const analysisContent = parsedResponse.response || streamingResponse.text ||
+            ((parsedResponse.isValidJson || looksLikeJsonEnvelope) ? "*Waiting for analysis...*" : fullDescription);
         const scoreContent = parsedResponse.score !== null ? String(parsedResponse.score) : "";
         const questionsContent = parsedResponse.questions.join('\n');
         return { analysisContent, scoreContent, questionsContent };
@@ -1941,21 +2250,21 @@ class ScoreIndicator {
         const hasOnlyGenId = this.metadata && this.metadata.generationId && Object.keys(this.metadata).length === 1;
         if (hasFullMetadata) {
             if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
-                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
+                metadataHTML += `<div class="metadata-line">Provider: ${escapeTooltipHtml(this.metadata.providerName)}</div>`;
             }
-            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
-            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+            metadataHTML += `<div class="metadata-line">Model: ${escapeTooltipHtml(this.metadata.model)}</div>`;
+            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${escapeTooltipHtml(this.metadata.promptTokens)} / completion: ${escapeTooltipHtml(this.metadata.completionTokens)}</div>`;
             if (this.metadata.reasoningTokens > 0) {
-                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
+                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${escapeTooltipHtml(this.metadata.reasoningTokens)}</div>`;
             }
-            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+            metadataHTML += `<div class="metadata-line">Latency: ${escapeTooltipHtml(this.metadata.latency)}</div>`;
             if (this.metadata.mediaInputs > 0) {
-                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+                metadataHTML += `<div class="metadata-line">Media: ${escapeTooltipHtml(this.metadata.mediaInputs)}</div>`;
             }
-            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+            metadataHTML += `<div class="metadata-line">Price: ${escapeTooltipHtml(this.metadata.price)}</div>`;
             showMetadataDropdown = true;
         } else if (hasOnlyGenId) {
-            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId}</div>`;
+            metadataHTML += `<div class="metadata-line">Generation ID: ${escapeTooltipHtml(this.metadata.generationId)}</div>`;
             showMetadataDropdown = true;
         }
         return { metadataHTML, showMetadataDropdown };
@@ -2113,14 +2422,16 @@ class ScoreIndicator {
         }
         const expandedStates = new Map();
         if (this.conversationContainerElement) {
-            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach((dropdown, index) => {
-                expandedStates.set(index, dropdown.classList.contains('expanded'));
+            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach(dropdown => {
+                expandedStates.set(Number(dropdown.dataset.index), dropdown.classList.contains('expanded'));
             });
         }
         let historyHtml = '';
         this.conversationHistory.forEach((turn, index) => {
-            const formattedQuestion = turn.question
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const formattedQuestion = escapeTooltipHtml(turn.question).replace(/\n/g, '<br>');
+            const isEditing = this.editingTurnIndex === index;
+            const actionsDisabled = this.isFollowUpPending ? ' disabled' : '';
+            const canRevise = turn.answer !== 'pending' && Number.isInteger(turn.qaUserIndex);
             let uploadedImageHtml = '';
             if (turn.uploadedImages && turn.uploadedImages.length > 0) {
                 uploadedImageHtml = `
@@ -2134,7 +2445,7 @@ class ScoreIndicator {
                                     </div>
                                 `;
                             } else {
-                                return `<img src="${url}" alt="User uploaded image" class="conversation-uploaded-image">`;
+                                return `<img src="${escapeTooltipHtml(url)}" alt="User uploaded image" class="conversation-uploaded-image">`;
                             }
                         }).join('')}
                     </div>
@@ -2144,36 +2455,7 @@ class ScoreIndicator {
             if (turn.answer === 'pending') {
                 formattedAnswer = '<em class="pending-answer">Answering...</em>';
             } else {
-                formattedAnswer = turn.answer
-                    .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-                    .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-                    .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
-                        const rows = match.trim().split('\n');
-                        const headerRow = rows[0];
-                        const bodyRows = rows.slice(2);
-                        let html = '<table class="markdown-table">';
-                        html += '<thead><tr>';
-                        headerRow.slice(1, -1).split('|').forEach(cell => {
-                            html += `<th>${cell.trim()}</th>`;
-                        });
-                        html += '</tr></thead>';
-                        html += '<tbody>';
-                        bodyRows.forEach(rowStr => {
-                            if (!rowStr.trim()) return;
-                            html += '<tr>';
-                            rowStr.slice(1, -1).split('|').forEach(cell => {
-                                html += `<td>${cell.trim()}</td>`;
-                            });
-                            html += '</tr>';
-                        });
-                        html += '</tbody></table>';
-                        return html;
-                    })
-                    .replace(/\n/g, '<br>');
+                formattedAnswer = renderTooltipMarkdown(turn.answer);
             }
             if (index > 0) {
                 historyHtml += '<hr class="conversation-separator">';
@@ -2196,12 +2478,33 @@ class ScoreIndicator {
                     </div>
                 `;
             }
+            const questionHtml = isEditing
+                ? `
+                    <div class="conversation-edit-form" data-turn-index="${index}">
+                        <label for="conversation-edit-${this.tweetId}-${index}">Edit your message</label>
+                        <textarea id="conversation-edit-${this.tweetId}-${index}" class="conversation-edit-input" rows="3">${escapeTooltipHtml(turn.question)}</textarea>
+                        <div class="conversation-edit-actions">
+                            <button type="button" class="conversation-action-button conversation-save-edit" data-turn-index="${index}">Save & resubmit</button>
+                            <button type="button" class="conversation-action-button conversation-cancel-edit" data-turn-index="${index}">Cancel</button>
+                        </div>
+                    </div>`
+                : `
+                    <div class="conversation-question-row">
+                        <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                        ${canRevise ? `<button type="button" class="conversation-action-button conversation-edit-button" data-turn-index="${index}" aria-label="Edit and resubmit this message" title="Edit and resubmit"${actionsDisabled}>Edit</button>` : ''}
+                    </div>`;
+            const rerollButton = canRevise && !isEditing
+                ? `<button type="button" class="conversation-action-button conversation-reroll-button" data-turn-index="${index}" aria-label="Reroll this AI response" title="Reroll response"${actionsDisabled}>Reroll</button>`
+                : '';
             historyHtml += `
                 <div class="conversation-turn">
-                    <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    ${questionHtml}
                     ${uploadedImageHtml}
                     ${reasoningHtml}
-                    <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
+                    <div class="conversation-answer-row">
+                        <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
+                        ${rerollButton}
+                    </div>
                 </div>
             `;
         });
@@ -2213,6 +2516,10 @@ class ScoreIndicator {
      */
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
+        if (!this._boundHandlers.handleConversationAction) {
+            this._boundHandlers.handleConversationAction = this._getBoundMethodHandler('_handleConversationAction');
+            this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationAction);
+        }
         if (this._boundHandlers.handleConversationReasoningToggle) {
             return;
         }
@@ -2241,6 +2548,150 @@ class ScoreIndicator {
             }
         };
         this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationReasoningToggle);
+    }
+    /** Handles edit, save, cancel, and reroll actions for prior turns. */
+    _handleConversationAction(event) {
+        const actionButton = event.target.closest('.conversation-action-button');
+        if (!actionButton) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.isFollowUpPending) return;
+        const turnIndex = Number(actionButton.dataset.turnIndex);
+        if (!Number.isInteger(turnIndex) || !this.conversationHistory[turnIndex]) return;
+        if (actionButton.classList.contains('conversation-edit-button')) {
+            this.editingTurnIndex = turnIndex;
+            this.autoScroll = false;
+            this.userInitiatedScroll = true;
+            this._updateTooltipUI();
+            requestAnimationFrame(() => {
+                const input = this.conversationContainerElement?.querySelector(`.conversation-edit-input[id$="-${turnIndex}"]`);
+                input?.focus({ preventScroll: true });
+                input?.setSelectionRange(input.value.length, input.value.length);
+            });
+            return;
+        }
+        if (actionButton.classList.contains('conversation-cancel-edit')) {
+            this.editingTurnIndex = null;
+            this._updateTooltipUI();
+            return;
+        }
+        if (actionButton.classList.contains('conversation-save-edit')) {
+            const input = actionButton.closest('.conversation-edit-form')?.querySelector('.conversation-edit-input');
+            const revisedQuestion = input?.value.trim() || '';
+            const hasFiles = (this.conversationHistory[turnIndex].uploadedImages || []).length > 0;
+            if (!revisedQuestion && !hasFiles) {
+                showStatus('A message cannot be empty.', 'warning');
+                input?.focus();
+                return;
+            }
+            this._resubmitConversationTurn(turnIndex, revisedQuestion || '[file only message]');
+            return;
+        }
+        if (actionButton.classList.contains('conversation-reroll-button')) {
+            this._resubmitConversationTurn(turnIndex, this.conversationHistory[turnIndex].question, true);
+        }
+    }
+    _cloneConversationMessage(message) {
+        if (!message) return null;
+        if (typeof structuredClone === 'function') {
+            return structuredClone(message);
+        }
+        return JSON.parse(JSON.stringify(message));
+    }
+    /** Maps each rendered turn to its user/assistant messages in API history. */
+    _syncConversationHistoryApiIndices() {
+        if (!Array.isArray(this.qaConversationHistory) || !Array.isArray(this.conversationHistory)) return;
+        const initialAssistantText = this.qaConversationHistory[2]?.role === 'assistant'
+            ? this.qaConversationHistory[2].content?.find(item => item.type === 'text')?.text || ''
+            : '';
+        const hasInitialRating = this.qaConversationHistory[1]?.role === 'user' &&
+            this.qaConversationHistory[2]?.role === 'assistant' &&
+            parseTweetFilterResponse(initialAssistantText).hasScore;
+        let turnIndex = 0;
+        for (let messageIndex = hasInitialRating ? 3 : 1; messageIndex < this.qaConversationHistory.length; messageIndex += 1) {
+            if (this.qaConversationHistory[messageIndex]?.role !== 'user') continue;
+            const assistantIndex = this.qaConversationHistory.findIndex((message, index) =>
+                index > messageIndex && message.role === 'assistant'
+            );
+            if (assistantIndex === -1 || !this.conversationHistory[turnIndex]) break;
+            this.conversationHistory[turnIndex].qaUserIndex = messageIndex;
+            this.conversationHistory[turnIndex].qaAssistantIndex = assistantIndex;
+            turnIndex += 1;
+            messageIndex = assistantIndex;
+        }
+    }
+    _replaceQuestionInApiMessage(message, questionText) {
+        const clonedMessage = this._cloneConversationMessage(message);
+        if (!clonedMessage || !Array.isArray(clonedMessage.content)) return clonedMessage;
+        const textItem = clonedMessage.content.find(item => item.type === 'text');
+        if (!textItem) {
+            clonedMessage.content.unshift({ type: 'text', text: questionText });
+            return clonedMessage;
+        }
+        const questionMarker = '\n\nQuestion:\n';
+        const markerIndex = String(textItem.text || '').lastIndexOf(questionMarker);
+        textItem.text = markerIndex === -1
+            ? questionText
+            : `${String(textItem.text).slice(0, markerIndex + questionMarker.length)}${questionText}`;
+        return clonedMessage;
+    }
+    /**
+     * Resubmits an edited user message or rerolls its answer. Later turns are
+     * deliberately discarded; this UI maintains one linear conversation.
+     */
+    _resubmitConversationTurn(turnIndex, questionText, isReroll = false) {
+        if (this.isFollowUpPending) return;
+        const apiKey = browserGet('openrouter-api-key', '');
+        if (!apiKey) {
+            showStatus('API key missing. Cannot resubmit this message.', 'error');
+            return;
+        }
+        this._syncConversationHistoryApiIndices();
+        const originalTurn = this.conversationHistory[turnIndex];
+        const userMessageIndex = originalTurn?.qaUserIndex;
+        const originalUserMessage = Number.isInteger(userMessageIndex)
+            ? this.qaConversationHistory[userMessageIndex]
+            : null;
+        if (!originalTurn || !originalUserMessage) {
+            showStatus('Could not locate this message in conversation history.', 'error');
+            return;
+        }
+        const userApiMessage = isReroll
+            ? this._cloneConversationMessage(originalUserMessage)
+            : this._replaceQuestionInApiMessage(originalUserMessage, questionText);
+        const historyPrefix = this.qaConversationHistory
+            .slice(0, userMessageIndex)
+            .map(message => this._cloneConversationMessage(message));
+        this.qaConversationHistory = historyPrefix;
+        this.conversationHistory = this.conversationHistory.slice(0, turnIndex);
+        this.conversationHistory.push({
+            question: questionText,
+            answer: 'pending',
+            uploadedImages: [...(originalTurn.uploadedImages || [])],
+            reasoning: ''
+        });
+        this.questions = [];
+        this.editingTurnIndex = null;
+        this.isFollowUpPending = true;
+        this.currentFollowUpSource = 'revision';
+        this._setFollowUpControlsDisabled(true, isReroll ? 'Rerolling...' : 'Resubmitting...');
+        const currentCache = tweetCache.get(this.tweetId) || {};
+        tweetCache.set(this.tweetId, {
+            ...currentCache,
+            qaConversationHistory: historyPrefix,
+            lastAnswer: '',
+            questions: [],
+            timestamp: Date.now()
+        });
+        this._updateTooltipUI();
+        const currentArticle = this.findCurrentArticleElement();
+        answerFollowUpQuestion(
+            this.tweetId,
+            [...historyPrefix, userApiMessage],
+            apiKey,
+            currentArticle,
+            this
+        );
     }
     _performAutoScroll() {
         if (!this.tooltipScrollableContentElement || !this.autoScroll || !this.isVisible) return;
@@ -2464,21 +2915,24 @@ class ScoreIndicator {
         }
         const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
         const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
-        if (!button) return;
+        if (!button) return false;
         event.stopPropagation();
         const questionText = button.dataset.questionText;
         const apiKey = browserGet('openrouter-api-key', '');
+        if (!questionText) {
+            showStatus('Could not identify the follow-up question.', 'error');
+            return false;
+        }
+        if (!apiKey) {
+            showStatus('API key missing. Cannot answer question.', 'error');
+            return false;
+        }
         this.currentFollowUpSource = isMockEvent ? 'custom' : 'suggested';
+        this.isFollowUpPending = true;
+        this.editingTurnIndex = null;
+        this._setFollowUpControlsDisabled(true, 'Asking...');
         if (!isMockEvent) {
-        button.disabled = true;
-        button.textContent = `🤔 Asking: ${questionText}...`;
-        this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        } else {
-            if (this.customQuestionInput) this.customQuestionInput.disabled = true;
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = true;
-                this.customQuestionButton.textContent = 'Asking...';
-            }
+            button.textContent = `🤔 Asking: ${questionText}...`;
         }
         this.conversationHistory.push({
             question: questionText,
@@ -2514,41 +2968,12 @@ class ScoreIndicator {
         this._updateTooltipUI();
         this.questions = [];
         this._updateTooltipUI();
-        if (!apiKey) {
-            showStatus('API key missing. Cannot answer question.', 'error');
-            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
-            if (!isMockEvent) {
-                button.disabled = false;
-                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-            }
-            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = false;
-                this.customQuestionButton.textContent = 'Ask';
-            }
-            this._clearFollowUpImage();
-            return;
-        }
-        if (!questionText) {
-            console.error("Follow-up question text not found on button.");
-            this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
-             if (!isMockEvent) {
-                button.disabled = false;
-                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-            }
-            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = false;
-                this.customQuestionButton.textContent = 'Ask';
-            }
-            this._clearFollowUpImage();
-            return;
-        }
         const currentArticle = this.findCurrentArticleElement();
         try {
             answerFollowUpQuestion(this.tweetId, historyForApiCall, apiKey, currentArticle, this);
         } finally {
         }
+        return true;
     }
     _handleCustomQuestionClick(event) {
         if (event) {
@@ -2570,11 +2995,12 @@ class ScoreIndicator {
             textContent: ''
         };
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        this._handleFollowUpQuestionClick({
+        const submitted = this._handleFollowUpQuestionClick({
             target: mockButton,
             stopPropagation: () => {},
             preventDefault: () => {}
         });
+        if (!submitted) return;
         if (this.customQuestionInput) {
             this.customQuestionInput.value = '';
             this.customQuestionInput.style.height = 'auto';
@@ -2585,8 +3011,26 @@ class ScoreIndicator {
         if (event) {
             event.preventDefault();
         }
-        const files = event.target.files;
+        const files = event?.target?.files;
         if (!files || files.length === 0) return;
+        await this._processFollowUpFiles(Array.from(files));
+        event.target.value = null;
+    }
+    async _handleQuestionPaste(event) {
+        const imageFiles = Array.from(event.clipboardData?.items || [])
+            .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+            .map(item => item.getAsFile())
+            .filter(Boolean);
+        if (imageFiles.length === 0) return;
+        if (!this.followUpImageContainer || !this.attachImageButton) {
+            showStatus('The selected model does not support pasted images.', 'warning');
+            return;
+        }
+        event.preventDefault();
+        await this._processFollowUpFiles(imageFiles);
+    }
+    async _processFollowUpFiles(files) {
+        if (!files || files.length === 0 || this.isFollowUpPending) return;
         if (this.followUpImageContainer && files.length > 0) {
             this.followUpImageContainer.style.display = 'flex';
         }
@@ -2629,13 +3073,12 @@ class ScoreIndicator {
             return Promise.resolve();
         });
         // Wait for all files to be processed
-        await Promise.all(filePromises);
+        await Promise.allSettled(filePromises);
         // Re-enable Ask button
         if (this.customQuestionButton) {
             this.customQuestionButton.disabled = false;
             this.customQuestionButton.textContent = 'Ask';
         }
-        event.target.value = null;
     }
     _addPreviewToContainer(dataUrl, fileType = 'image', fileName = '') {
         if (!this.followUpImageContainer) return;
@@ -2645,7 +3088,7 @@ class ScoreIndicator {
         if (fileType === 'pdf') {
             const pdfIcon = document.createElement('div');
             pdfIcon.className = 'follow-up-pdf-preview';
-            pdfIcon.innerHTML = `<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${fileName || 'PDF'}</span>`;
+            pdfIcon.innerHTML = `<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${escapeTooltipHtml(fileName || 'PDF')}</span>`;
             pdfIcon.style.textAlign = 'center';
             pdfIcon.style.padding = '8px';
             pdfIcon.style.width = '60px';
@@ -2695,22 +3138,22 @@ class ScoreIndicator {
             this.followUpImageInput.value = null;
         }
     }
+    _setFollowUpControlsDisabled(disabled, buttonText = 'Ask') {
+        this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(button => {
+            button.disabled = disabled;
+        });
+        if (this.customQuestionInput) this.customQuestionInput.disabled = disabled;
+        if (this.customQuestionButton) {
+            this.customQuestionButton.disabled = disabled;
+            this.customQuestionButton.textContent = disabled ? buttonText : 'Ask';
+        }
+        if (this.attachImageButton) this.attachImageButton.disabled = disabled;
+    }
     _finalizeFollowUpInteraction() {
-        if (this.followUpQuestionsElement) {
-            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
-                btn.disabled = false;
-            });
-        }
-        if (this.currentFollowUpSource === 'custom') {
-            if (this.customQuestionInput) {
-                this.customQuestionInput.disabled = false;
-            }
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = false;
-                this.customQuestionButton.textContent = 'Ask';
-            }
-        }
+        this.isFollowUpPending = false;
+        this._setFollowUpControlsDisabled(false);
         this.currentFollowUpSource = null;
+        this._updateTooltipUI();
     }
     /** Public wrapper for indicator refresh. */
     refreshIndicatorUI() {
@@ -2802,7 +3245,8 @@ class ScoreIndicator {
             streamingReasoningContainer.appendChild(streamingReasoningText);
             const answerElement = lastTurnElement.querySelector('.conversation-answer');
             if (answerElement) {
-                lastTurnElement.insertBefore(streamingReasoningContainer, answerElement);
+                const answerRow = answerElement.closest('.conversation-answer-row');
+                lastTurnElement.insertBefore(streamingReasoningContainer, answerRow || answerElement);
             } else {
                 lastTurnElement.appendChild(streamingReasoningContainer);
             }
@@ -2824,36 +3268,10 @@ class ScoreIndicator {
         }
         const lastAnswerElement = lastTurnElement.querySelector('.conversation-answer');
         if (lastAnswerElement) {
-            const formattedStreamingAnswer = streamingText
-                .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
-                .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
-                    const rows = match.trim().split('\n');
-                    const headerRow = rows[0];
-                    const bodyRows = rows.slice(2);
-                    let html = '<table class="markdown-table">';
-                    html += '<thead><tr>';
-                    headerRow.slice(1, -1).split('|').forEach(cell => {
-                        html += `<th>${cell.trim()}</th>`;
-                    });
-                    html += '</tr></thead>';
-                    html += '<tbody>';
-                    bodyRows.forEach(rowStr => {
-                        if (!rowStr.trim()) return;
-                        html += '<tr>';
-                        rowStr.slice(1, -1).split('|').forEach(cell => {
-                            html += `<td>${cell.trim()}</td>`;
-                        });
-                        html += '</tr>';
-                    });
-                    html += '</tbody></table>';
-                    return html;
-                })
-                .replace(/\n/g, '<br>');
+            const streamingResponse = extractStreamingResponse(streamingText);
+            const formattedStreamingAnswer = renderTooltipMarkdown(
+                streamingResponse.text || '*Waiting for response...*'
+            );
             lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
         } else {
              console.warn(`[ScoreIndicator ${this.tweetId}] Could not find answer element in last conversation turn.`);
@@ -2944,6 +3362,7 @@ class ScoreIndicator {
         this.tooltipElement.classList.add('pinned');
         this.pinButton.innerHTML = '📍';
         this.pinButton.title = 'Unpin tooltip';
+        this.pinButton.setAttribute('aria-label', 'Unpin score details');
     }
     /** Unpins the tooltip, allowing it to be hidden automatically. */
     unpin() {
@@ -2952,6 +3371,7 @@ class ScoreIndicator {
         this.tooltipElement.classList.remove('pinned');
         this.pinButton.innerHTML = '📌';
         this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        this.pinButton.setAttribute('aria-label', 'Pin score details');
         setTimeout(() => {
             if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
                 this.indicatorElement && !this.indicatorElement.matches(':hover')) {
@@ -3011,11 +3431,8 @@ class ScoreIndicator {
         if (!this.indicatorElement) return false;
         const currentArticle = this.findCurrentArticleElement();
         if (!currentArticle) return false;
-        if (this.indicatorElement.parentElement !== currentArticle) {
-            const currentPosition = window.getComputedStyle(currentArticle).position;
-            if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
-                currentArticle.style.position = 'relative';
-            }
+        this.tweetArticle = currentArticle;
+        if (!this._attachIndicatorToMetadataRow(currentArticle) && this.indicatorElement.parentElement !== currentArticle) {
             currentArticle.appendChild(this.indicatorElement);
         }
         return true;
@@ -3084,6 +3501,7 @@ class ScoreIndicator {
                 lastTurn.answer = answerText;
             }
         }
+        this._syncConversationHistoryApiIndices();
         this._convertStreamingToDropdown();
         this._updateTooltipUI();
     }
@@ -3117,7 +3535,7 @@ class ScoreIndicator {
             reasoningToggle.appendChild(document.createTextNode(' Show Reasoning Trace'));
             const reasoningContent = document.createElement('div');
             reasoningContent.className = 'reasoning-content';
-            const reasoningTextElement = document.createElement('p');
+            const reasoningTextElement = document.createElement('div');
             reasoningTextElement.className = 'reasoning-text';
             reasoningContent.appendChild(reasoningTextElement);
             reasoningDropdown.appendChild(reasoningToggle);
@@ -3164,8 +3582,12 @@ class ScoreIndicator {
         if (this.qaConversationHistory.length > 0) {
             let currentQuestion = null;
             let currentUploadedImages = [];
-            const hasInitialRating = cachedData.score !== null &&
-                this.qaConversationHistory[2]?.role === 'assistant';
+            const initialAssistantText = this.qaConversationHistory[2]?.role === 'assistant'
+                ? this.qaConversationHistory[2].content?.find(item => item.type === 'text')?.text || ''
+                : '';
+            const hasInitialRating = this.qaConversationHistory[1]?.role === 'user' &&
+                this.qaConversationHistory[2]?.role === 'assistant' &&
+                parseTweetFilterResponse(initialAssistantText).hasScore;
             const startIndex = hasInitialRating ? 3 : 1;
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
                 const message = this.qaConversationHistory[i];
@@ -3180,6 +3602,9 @@ class ScoreIndicator {
                     currentUploadedImages = message.content
                         .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
                         .map(c => c.image_url.url);
+                    currentUploadedImages.push(...message.content
+                        .filter(c => c.type === 'file' && c.file?.file_data?.startsWith('data:application/pdf'))
+                        .map(c => c.file.file_data));
                 } else if (message.role === 'assistant' && currentQuestion) {
                     const assistantTextContent = message.content.find(c => c.type === 'text');
                     const assistantAnswer = assistantTextContent ? assistantTextContent.text : "[Answer not found]";
@@ -3196,11 +3621,14 @@ class ScoreIndicator {
                 }
             }
         }
+        this._syncConversationHistoryApiIndices();
         if (this.isPinned) {
             this.pinButton.innerHTML = '📍';
+            this.pinButton.setAttribute('aria-label', 'Unpin score details');
             this.tooltipElement?.classList.add('pinned');
         } else {
             this.pinButton.innerHTML = '📌';
+            this.pinButton.setAttribute('aria-label', 'Pin score details');
             this.tooltipElement?.classList.remove('pinned');
         }
         this._updateIndicatorUI();
@@ -3376,56 +3804,14 @@ const ScoreIndicatorRegistry = {
     }
 };
 function formatTooltipDescription(description = "", reasoning = "") {
-    let formattedDescription = description === "*Waiting for analysis...*" ? description :
-        (description || "*waiting for content...*")
-            .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-            .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
-                const rows = match.trim().split('\n');
-                const headerRow = rows[0];
-                const bodyRows = rows.slice(2);
-                let html = '<table class="markdown-table">';
-                html += '<thead><tr>';
-                headerRow.slice(1, -1).split('|').forEach(cell => {
-                    html += `<th>${cell.trim()}</th>`;
-                });
-                html += '</tr></thead>';
-                html += '<tbody>';
-                bodyRows.forEach(rowStr => {
-                    if (!rowStr.trim()) return;
-                    html += '<tr>';
-                    rowStr.slice(1, -1).split('|').forEach(cell => {
-                        html += `<td>${cell.trim()}</td>`;
-                    });
-                    html += '</tr>';
-                });
-                html += '</tbody></table>';
-                return html;
-            })
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-    let formattedReasoning = '';
-    if (reasoning && reasoning.trim()) {
-        formattedReasoning = reasoning
-            .replace(/\\n/g, '\n')
-            .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-    }
-    return { description: formattedDescription, reasoning: formattedReasoning };
+    const descriptionText = description || '*waiting for content...*';
+    const reasoningText = reasoning && reasoning.trim()
+        ? reasoning.replace(/\\n/g, '\n')
+        : '';
+    return {
+        description: renderTooltipMarkdown(descriptionText),
+        reasoning: reasoningText ? renderTooltipMarkdown(reasoningText) : ''
+    };
 }
     // ----- ui/ui.js -----
 /**
@@ -6870,7 +7256,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     }
 }
     // ----- twitter-desloppifier.js -----
-const VERSION = '1.7.2';
+const VERSION = '2.0';
 (function () {
     'use strict';
     console.log(`X/Twitter Tweet De-Sloppification Activated (v${VERSION} - Enhanced)`);

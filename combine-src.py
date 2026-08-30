@@ -29,6 +29,7 @@ files_to_combine = [
     "domScraper.js",
     "ui/utils.js",
     "ui/responseParser.js",
+    "ui/markdown.js",
     "ui/InstructionsUI.js",
     "ui/ScoreIndicator.js",
     "ui/ui.js", 

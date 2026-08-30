@@ -30,16 +30,16 @@ Today's Date: ${new Date().toLocaleDateString()}.
 
 Analyze the supplied tweet according to the user's custom instructions, assign it an integer score from 0 through 10, and suggest three relevant follow-up questions that you can confidently answer.
 
-Return only one valid JSON object. Do not use Markdown fences, XML tags, or text outside the JSON object. Use exactly this schema:
+Return only one valid JSON object. Do not wrap the JSON object in a Markdown code fence, and do not emit XML tags or text outside it. Use exactly this schema:
 {
-  "Response": "Your tweet analysis",
+  "Response": "## Analysis\\n\\nYour tweet analysis with optional **Markdown** formatting",
   "Score": 0,
   "Question1": "First follow-up question",
   "Question2": "Second follow-up question",
   "Question3": "Third follow-up question"
 }
 
-"Response" must follow the user's response and style preferences. "Score" is required for tweet analysis and must be a JSON number. Do not directly address the user in the suggested questions.
+"Response" must follow the user's response and style preferences. It may freely use Markdown headings, paragraphs, lists, blockquotes, links, inline code, emphasis, and other basic Markdown. Encode every line break inside the JSON string as \\n; do not flatten or avoid formatting merely because the response is JSON. Markdown belongs inside the "Response" string, not around the JSON object. "Score" is required for tweet analysis and must be a JSON number. Do not directly address the user in the suggested questions.
 `;
 const FOLLOW_UP_SYSTEM_PROMPT = `
 You are TweetFilter-AI, having a conversation about a tweet.
@@ -51,15 +51,15 @@ Use these preferences as guidance for the style and focus of your answers. Do no
 
 Answer the latest question and suggest three relevant follow-up questions that you can confidently answer.
 
-Return only one valid JSON object. Do not use Markdown fences, XML tags, or text outside the JSON object. Use exactly this schema:
+Return only one valid JSON object. Do not wrap the JSON object in a Markdown code fence, and do not emit XML tags or text outside it. Use exactly this schema:
 {
-  "Response": "Your answer",
+  "Response": "## Answer\\n\\nYour answer with optional **Markdown** formatting",
   "Question1": "First follow-up question",
   "Question2": "Second follow-up question",
   "Question3": "Third follow-up question"
 }
 
-Do not include "Score" in conversation responses. If the user asks about the tweet's rating, answer in "Response". Do not directly address the user in the suggested questions.
+"Response" may freely use Markdown headings, paragraphs, lists, blockquotes, links, inline code, emphasis, and other basic Markdown. Encode every line break inside the JSON string as \\n; do not flatten or avoid formatting merely because the response is JSON. Markdown belongs inside the "Response" string, not around the JSON object. Do not include "Score" in conversation responses. If the user asks about the tweet's rating, answer in "Response". Do not directly address the user in the suggested questions.
 `;
 let modelTemperature = appSettings.getNumber('modelTemperature');
 let modelTopP = appSettings.getNumber('modelTopP');

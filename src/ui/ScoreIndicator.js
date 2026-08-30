@@ -63,6 +63,8 @@ class ScoreIndicator {
         this.uploadedImageDataUrls = [];
         this.qaConversationHistory = [];
         this.currentFollowUpSource = null;
+        this.isFollowUpPending = false;
+        this.editingTurnIndex = null;
         this._lastScrollPosition = 0;
 
         this._boundHandlers = {
@@ -70,7 +72,9 @@ class ScoreIndicator {
             handleKeyDown: null,
             handleFollowUpTouchStart: null,
             handleFollowUpTouchEnd: null,
-            handleConversationReasoningToggle: null
+            handleConversationReasoningToggle: null,
+            handleConversationAction: null,
+            handleQuestionPaste: null
         };
         this._boundMethodHandlers = Object.create(null);
         this._listenerTeardowns = [];
@@ -94,15 +98,15 @@ class ScoreIndicator {
      */
     _createElements(initialTweetArticle) {
 
-        this.indicatorElement = document.createElement('div');
+        this.indicatorElement = document.createElement('button');
+        this.indicatorElement.type = 'button';
         this.indicatorElement.className = 'score-indicator';
         this.indicatorElement.dataset.tweetId = this.tweetId;
+        this.indicatorElement.setAttribute('aria-label', 'Open TweetFilter AI score details');
+        this.indicatorElement.title = 'Open TweetFilter AI score details';
 
-        const currentPosition = window.getComputedStyle(initialTweetArticle).position;
-        if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
-            initialTweetArticle.style.position = 'relative';
-        }
         initialTweetArticle.appendChild(this.indicatorElement);
+        this._attachIndicatorToMetadataRow(initialTweetArticle);
 
         this.tooltipElement = document.createElement('div');
         this.tooltipElement.className = 'score-description';
@@ -117,37 +121,52 @@ class ScoreIndicator {
         this.tooltipControls = document.createElement('div');
         this.tooltipControls.className = 'tooltip-controls';
 
+        const tooltipTitle = document.createElement('div');
+        tooltipTitle.className = 'tooltip-title';
+        tooltipTitle.textContent = 'TweetFilter AI';
+        this.tooltipControls.appendChild(tooltipTitle);
+
         this.tooltipCloseButton = document.createElement('button');
         this.tooltipCloseButton.className = 'close-button tooltip-close-button';
         this.tooltipCloseButton.innerHTML = '×';
         this.tooltipCloseButton.title = 'Close tooltip';
+        this.tooltipCloseButton.type = 'button';
+        this.tooltipCloseButton.setAttribute('aria-label', 'Close score details');
 
         this.pinButton = document.createElement('button');
         this.pinButton.className = 'tooltip-pin-button';
         this.pinButton.innerHTML = '📌';
         this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        this.pinButton.type = 'button';
+        this.pinButton.setAttribute('aria-label', 'Pin score details');
 
         this.copyButton = document.createElement('button');
         this.copyButton.className = 'tooltip-copy-button';
         this.copyButton.innerHTML = '📋';
         this.copyButton.title = 'Copy content to clipboard';
+        this.copyButton.type = 'button';
+        this.copyButton.setAttribute('aria-label', 'Copy score details');
 
         this.refreshButton = document.createElement('button');
         this.refreshButton.className = 'tooltip-refresh-button';
         this.refreshButton.innerHTML = '🔄';
         this.refreshButton.title = 'Re-rate this tweet';
+        this.refreshButton.type = 'button';
+        this.refreshButton.setAttribute('aria-label', 'Re-rate this tweet');
 
         this.rateButton = document.createElement('button');
         this.rateButton.className = 'tooltip-rate-button';
         this.rateButton.innerHTML = '⭐';
         this.rateButton.title = 'Rate this tweet';
+        this.rateButton.type = 'button';
+        this.rateButton.setAttribute('aria-label', 'Rate this tweet');
         this.rateButton.style.display = 'none';
 
         this.tooltipControls.appendChild(this.pinButton);
         this.tooltipControls.appendChild(this.copyButton);
-        this.tooltipControls.appendChild(this.tooltipCloseButton);
         this.tooltipControls.appendChild(this.refreshButton);
         this.tooltipControls.appendChild(this.rateButton);
+        this.tooltipControls.appendChild(this.tooltipCloseButton);
 
         this.tooltipElement.appendChild(this.tooltipControls);
 
@@ -175,7 +194,7 @@ class ScoreIndicator {
 
         this.reasoningContent = document.createElement('div');
         this.reasoningContent.className = 'reasoning-content';
-        this.reasoningTextElement = document.createElement('p');
+        this.reasoningTextElement = document.createElement('div');
         this.reasoningTextElement.className = 'reasoning-text';
         this.reasoningContent.appendChild(this.reasoningTextElement);
 
@@ -234,6 +253,8 @@ class ScoreIndicator {
             this.attachImageButton.textContent = '📎';
             this.attachImageButton.className = 'tooltip-attach-image-button';
             this.attachImageButton.title = 'Attach image(s) or PDF(s)';
+            this.attachImageButton.type = 'button';
+            this.attachImageButton.setAttribute('aria-label', 'Attach images or PDFs');
 
             this.followUpImageInput = document.createElement('input');
             this.followUpImageInput.type = 'file';
@@ -246,6 +267,7 @@ class ScoreIndicator {
         this.customQuestionButton = document.createElement('button');
         this.customQuestionButton.textContent = 'Ask';
         this.customQuestionButton.className = 'tooltip-custom-question-button';
+        this.customQuestionButton.type = 'button';
 
         this.customQuestionContainer.appendChild(this.customQuestionInput);
         if (this.attachImageButton) {
@@ -655,6 +677,8 @@ class ScoreIndicator {
             }
         };
         this._registerDomListener(this.customQuestionInput, 'keydown', this._boundHandlers.handleKeyDown);
+        this._boundHandlers.handleQuestionPaste = this._getBoundMethodHandler('_handleQuestionPaste');
+        this._registerDomListener(this.customQuestionInput, 'paste', this._boundHandlers.handleQuestionPaste);
 
         this._registerDomListener(this.metadataToggle, 'click', this._getBoundMethodHandler('_handleMetadataToggleClick'));
 
@@ -668,6 +692,45 @@ class ScoreIndicator {
             this._registerDomListener(this.followUpImageInput, 'change', this._getBoundMethodHandler('_handleFollowUpImageSelect'));
         }
 
+    }
+
+    /**
+     * Finds the tweet metadata row containing the post time and, on detail
+     * pages, the Views link.
+     * @param {Element} article
+     * @returns {Element|null}
+     */
+    _findTweetMetadataRow(article) {
+        if (!article || !this.tweetId) return null;
+
+        const timeLinks = Array.from(article.querySelectorAll(`a[href*="/status/${this.tweetId}"]`))
+            .filter(link => link.querySelector('time'));
+        for (const timeLink of timeLinks) {
+            let candidate = timeLink.parentElement;
+            for (let depth = 0; candidate && candidate !== article && depth < 4; depth += 1) {
+                const hasViewsLink = candidate.querySelector(`a[href*="/status/${this.tweetId}/analytics"]`);
+                const hasTime = candidate.querySelector('time');
+                if (hasTime && hasViewsLink) {
+                    return candidate;
+                }
+                candidate = candidate.parentElement;
+            }
+        }
+
+        const primaryTimeLink = timeLinks[0];
+        return primaryTimeLink?.parentElement?.parentElement || primaryTimeLink?.parentElement || null;
+    }
+
+    /** Places the score in normal document flow next to post time and views. */
+    _attachIndicatorToMetadataRow(article) {
+        if (!this.indicatorElement || !article) return false;
+        const metadataRow = this._findTweetMetadataRow(article);
+        if (!metadataRow) return false;
+
+        if (this.indicatorElement.parentElement !== metadataRow) {
+            metadataRow.appendChild(this.indicatorElement);
+        }
+        return true;
     }
 
     /** Updates the visual appearance of the indicator (icon/text, class). */
@@ -728,7 +791,9 @@ class ScoreIndicator {
         if (indicatorClass) {
             classList.add(indicatorClass);
         }
-        this.indicatorElement.textContent = indicatorText;
+        const readableText = `Score: ${indicatorText}`;
+        this.indicatorElement.textContent = `SCORE: ${indicatorText}`;
+        this.indicatorElement.setAttribute('aria-label', `${readableText}. Open TweetFilter AI score details`);
     }
 
     /**
@@ -738,8 +803,10 @@ class ScoreIndicator {
      */
     _extractDescriptionSections(fullDescription) {
         const parsedResponse = parseTweetFilterResponse(fullDescription);
-        const analysisContent = parsedResponse.response ||
-            (parsedResponse.isValidJson ? "*Waiting for analysis...*" : fullDescription);
+        const streamingResponse = extractStreamingResponse(fullDescription);
+        const looksLikeJsonEnvelope = /^\s*(?:```(?:json)?\s*)?\{/i.test(String(fullDescription || ''));
+        const analysisContent = parsedResponse.response || streamingResponse.text ||
+            ((parsedResponse.isValidJson || looksLikeJsonEnvelope) ? "*Waiting for analysis...*" : fullDescription);
         const scoreContent = parsedResponse.score !== null ? String(parsedResponse.score) : "";
         const questionsContent = parsedResponse.questions.join('\n');
 
@@ -758,21 +825,21 @@ class ScoreIndicator {
 
         if (hasFullMetadata) {
             if (this.metadata.providerName && this.metadata.providerName !== 'N/A') {
-                metadataHTML += `<div class="metadata-line">Provider: ${this.metadata.providerName}</div>`;
+                metadataHTML += `<div class="metadata-line">Provider: ${escapeTooltipHtml(this.metadata.providerName)}</div>`;
             }
-            metadataHTML += `<div class="metadata-line">Model: ${this.metadata.model}</div>`;
-            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${this.metadata.promptTokens} / completion: ${this.metadata.completionTokens}</div>`;
+            metadataHTML += `<div class="metadata-line">Model: ${escapeTooltipHtml(this.metadata.model)}</div>`;
+            metadataHTML += `<div class="metadata-line">Tokens: prompt: ${escapeTooltipHtml(this.metadata.promptTokens)} / completion: ${escapeTooltipHtml(this.metadata.completionTokens)}</div>`;
             if (this.metadata.reasoningTokens > 0) {
-                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${this.metadata.reasoningTokens}</div>`;
+                metadataHTML += `<div class="metadata-line">Reasoning Tokens: ${escapeTooltipHtml(this.metadata.reasoningTokens)}</div>`;
             }
-            metadataHTML += `<div class="metadata-line">Latency: ${this.metadata.latency}</div>`;
+            metadataHTML += `<div class="metadata-line">Latency: ${escapeTooltipHtml(this.metadata.latency)}</div>`;
             if (this.metadata.mediaInputs > 0) {
-                metadataHTML += `<div class="metadata-line">Media: ${this.metadata.mediaInputs}</div>`;
+                metadataHTML += `<div class="metadata-line">Media: ${escapeTooltipHtml(this.metadata.mediaInputs)}</div>`;
             }
-            metadataHTML += `<div class="metadata-line">Price: ${this.metadata.price}</div>`;
+            metadataHTML += `<div class="metadata-line">Price: ${escapeTooltipHtml(this.metadata.price)}</div>`;
             showMetadataDropdown = true;
         } else if (hasOnlyGenId) {
-            metadataHTML += `<div class="metadata-line">Generation ID: ${this.metadata.generationId}</div>`;
+            metadataHTML += `<div class="metadata-line">Generation ID: ${escapeTooltipHtml(this.metadata.generationId)}</div>`;
             showMetadataDropdown = true;
         }
 
@@ -965,15 +1032,17 @@ class ScoreIndicator {
 
         const expandedStates = new Map();
         if (this.conversationContainerElement) {
-            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach((dropdown, index) => {
-                expandedStates.set(index, dropdown.classList.contains('expanded'));
+            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach(dropdown => {
+                expandedStates.set(Number(dropdown.dataset.index), dropdown.classList.contains('expanded'));
             });
         }
 
         let historyHtml = '';
         this.conversationHistory.forEach((turn, index) => {
-            const formattedQuestion = turn.question
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const formattedQuestion = escapeTooltipHtml(turn.question).replace(/\n/g, '<br>');
+            const isEditing = this.editingTurnIndex === index;
+            const actionsDisabled = this.isFollowUpPending ? ' disabled' : '';
+            const canRevise = turn.answer !== 'pending' && Number.isInteger(turn.qaUserIndex);
 
             let uploadedImageHtml = '';
             if (turn.uploadedImages && turn.uploadedImages.length > 0) {
@@ -990,7 +1059,7 @@ class ScoreIndicator {
                                 `;
                             } else {
 
-                                return `<img src="${url}" alt="User uploaded image" class="conversation-uploaded-image">`;
+                                return `<img src="${escapeTooltipHtml(url)}" alt="User uploaded image" class="conversation-uploaded-image">`;
                             }
                         }).join('')}
                     </div>
@@ -1001,40 +1070,7 @@ class ScoreIndicator {
             if (turn.answer === 'pending') {
                 formattedAnswer = '<em class="pending-answer">Answering...</em>';
             } else {
-
-                formattedAnswer = turn.answer
-                    .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-                    .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`([^`]+)`/g, '<code>$1</code>')
-
-                    .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
-                        const rows = match.trim().split('\n');
-                        const headerRow = rows[0];
-
-                        const bodyRows = rows.slice(2);
-                        let html = '<table class="markdown-table">';
-                        html += '<thead><tr>';
-                        headerRow.slice(1, -1).split('|').forEach(cell => {
-                            html += `<th>${cell.trim()}</th>`;
-                        });
-                        html += '</tr></thead>';
-                        html += '<tbody>';
-                        bodyRows.forEach(rowStr => {
-                            if (!rowStr.trim()) return;
-                            html += '<tr>';
-                            rowStr.slice(1, -1).split('|').forEach(cell => {
-                                html += `<td>${cell.trim()}</td>`;
-                            });
-                            html += '</tr>';
-                        });
-                        html += '</tbody></table>';
-                        return html;
-                    })
-                    .replace(/\n/g, '<br>');
+                formattedAnswer = renderTooltipMarkdown(turn.answer);
             }
 
             if (index > 0) {
@@ -1062,12 +1098,35 @@ class ScoreIndicator {
                 `;
             }
 
+            const questionHtml = isEditing
+                ? `
+                    <div class="conversation-edit-form" data-turn-index="${index}">
+                        <label for="conversation-edit-${this.tweetId}-${index}">Edit your message</label>
+                        <textarea id="conversation-edit-${this.tweetId}-${index}" class="conversation-edit-input" rows="3">${escapeTooltipHtml(turn.question)}</textarea>
+                        <div class="conversation-edit-actions">
+                            <button type="button" class="conversation-action-button conversation-save-edit" data-turn-index="${index}">Save & resubmit</button>
+                            <button type="button" class="conversation-action-button conversation-cancel-edit" data-turn-index="${index}">Cancel</button>
+                        </div>
+                    </div>`
+                : `
+                    <div class="conversation-question-row">
+                        <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                        ${canRevise ? `<button type="button" class="conversation-action-button conversation-edit-button" data-turn-index="${index}" aria-label="Edit and resubmit this message" title="Edit and resubmit"${actionsDisabled}>Edit</button>` : ''}
+                    </div>`;
+
+            const rerollButton = canRevise && !isEditing
+                ? `<button type="button" class="conversation-action-button conversation-reroll-button" data-turn-index="${index}" aria-label="Reroll this AI response" title="Reroll response"${actionsDisabled}>Reroll</button>`
+                : '';
+
             historyHtml += `
                 <div class="conversation-turn">
-                    <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
+                    ${questionHtml}
                     ${uploadedImageHtml}
                     ${reasoningHtml}
-                    <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
+                    <div class="conversation-answer-row">
+                        <div class="conversation-answer"><strong>AI:</strong> ${formattedAnswer}</div>
+                        ${rerollButton}
+                    </div>
                 </div>
             `;
         });
@@ -1081,6 +1140,11 @@ class ScoreIndicator {
      */
     _attachConversationReasoningListeners() {
         if (!this.conversationContainerElement) return;
+
+        if (!this._boundHandlers.handleConversationAction) {
+            this._boundHandlers.handleConversationAction = this._getBoundMethodHandler('_handleConversationAction');
+            this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationAction);
+        }
 
         if (this._boundHandlers.handleConversationReasoningToggle) {
             return;
@@ -1119,6 +1183,171 @@ class ScoreIndicator {
         };
 
         this._registerDomListener(this.conversationContainerElement, 'click', this._boundHandlers.handleConversationReasoningToggle);
+    }
+
+    /** Handles edit, save, cancel, and reroll actions for prior turns. */
+    _handleConversationAction(event) {
+        const actionButton = event.target.closest('.conversation-action-button');
+        if (!actionButton) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.isFollowUpPending) return;
+
+        const turnIndex = Number(actionButton.dataset.turnIndex);
+        if (!Number.isInteger(turnIndex) || !this.conversationHistory[turnIndex]) return;
+
+        if (actionButton.classList.contains('conversation-edit-button')) {
+            this.editingTurnIndex = turnIndex;
+            this.autoScroll = false;
+            this.userInitiatedScroll = true;
+            this._updateTooltipUI();
+            requestAnimationFrame(() => {
+                const input = this.conversationContainerElement?.querySelector(`.conversation-edit-input[id$="-${turnIndex}"]`);
+                input?.focus({ preventScroll: true });
+                input?.setSelectionRange(input.value.length, input.value.length);
+            });
+            return;
+        }
+
+        if (actionButton.classList.contains('conversation-cancel-edit')) {
+            this.editingTurnIndex = null;
+            this._updateTooltipUI();
+            return;
+        }
+
+        if (actionButton.classList.contains('conversation-save-edit')) {
+            const input = actionButton.closest('.conversation-edit-form')?.querySelector('.conversation-edit-input');
+            const revisedQuestion = input?.value.trim() || '';
+            const hasFiles = (this.conversationHistory[turnIndex].uploadedImages || []).length > 0;
+            if (!revisedQuestion && !hasFiles) {
+                showStatus('A message cannot be empty.', 'warning');
+                input?.focus();
+                return;
+            }
+            this._resubmitConversationTurn(turnIndex, revisedQuestion || '[file only message]');
+            return;
+        }
+
+        if (actionButton.classList.contains('conversation-reroll-button')) {
+            this._resubmitConversationTurn(turnIndex, this.conversationHistory[turnIndex].question, true);
+        }
+    }
+
+    _cloneConversationMessage(message) {
+        if (!message) return null;
+        if (typeof structuredClone === 'function') {
+            return structuredClone(message);
+        }
+        return JSON.parse(JSON.stringify(message));
+    }
+
+    /** Maps each rendered turn to its user/assistant messages in API history. */
+    _syncConversationHistoryApiIndices() {
+        if (!Array.isArray(this.qaConversationHistory) || !Array.isArray(this.conversationHistory)) return;
+
+        const initialAssistantText = this.qaConversationHistory[2]?.role === 'assistant'
+            ? this.qaConversationHistory[2].content?.find(item => item.type === 'text')?.text || ''
+            : '';
+        const hasInitialRating = this.qaConversationHistory[1]?.role === 'user' &&
+            this.qaConversationHistory[2]?.role === 'assistant' &&
+            parseTweetFilterResponse(initialAssistantText).hasScore;
+        let turnIndex = 0;
+
+        for (let messageIndex = hasInitialRating ? 3 : 1; messageIndex < this.qaConversationHistory.length; messageIndex += 1) {
+            if (this.qaConversationHistory[messageIndex]?.role !== 'user') continue;
+            const assistantIndex = this.qaConversationHistory.findIndex((message, index) =>
+                index > messageIndex && message.role === 'assistant'
+            );
+            if (assistantIndex === -1 || !this.conversationHistory[turnIndex]) break;
+            this.conversationHistory[turnIndex].qaUserIndex = messageIndex;
+            this.conversationHistory[turnIndex].qaAssistantIndex = assistantIndex;
+            turnIndex += 1;
+            messageIndex = assistantIndex;
+        }
+    }
+
+    _replaceQuestionInApiMessage(message, questionText) {
+        const clonedMessage = this._cloneConversationMessage(message);
+        if (!clonedMessage || !Array.isArray(clonedMessage.content)) return clonedMessage;
+
+        const textItem = clonedMessage.content.find(item => item.type === 'text');
+        if (!textItem) {
+            clonedMessage.content.unshift({ type: 'text', text: questionText });
+            return clonedMessage;
+        }
+
+        const questionMarker = '\n\nQuestion:\n';
+        const markerIndex = String(textItem.text || '').lastIndexOf(questionMarker);
+        textItem.text = markerIndex === -1
+            ? questionText
+            : `${String(textItem.text).slice(0, markerIndex + questionMarker.length)}${questionText}`;
+        return clonedMessage;
+    }
+
+    /**
+     * Resubmits an edited user message or rerolls its answer. Later turns are
+     * deliberately discarded; this UI maintains one linear conversation.
+     */
+    _resubmitConversationTurn(turnIndex, questionText, isReroll = false) {
+        if (this.isFollowUpPending) return;
+
+        const apiKey = browserGet('openrouter-api-key', '');
+        if (!apiKey) {
+            showStatus('API key missing. Cannot resubmit this message.', 'error');
+            return;
+        }
+
+        this._syncConversationHistoryApiIndices();
+        const originalTurn = this.conversationHistory[turnIndex];
+        const userMessageIndex = originalTurn?.qaUserIndex;
+        const originalUserMessage = Number.isInteger(userMessageIndex)
+            ? this.qaConversationHistory[userMessageIndex]
+            : null;
+        if (!originalTurn || !originalUserMessage) {
+            showStatus('Could not locate this message in conversation history.', 'error');
+            return;
+        }
+
+        const userApiMessage = isReroll
+            ? this._cloneConversationMessage(originalUserMessage)
+            : this._replaceQuestionInApiMessage(originalUserMessage, questionText);
+        const historyPrefix = this.qaConversationHistory
+            .slice(0, userMessageIndex)
+            .map(message => this._cloneConversationMessage(message));
+
+        this.qaConversationHistory = historyPrefix;
+        this.conversationHistory = this.conversationHistory.slice(0, turnIndex);
+        this.conversationHistory.push({
+            question: questionText,
+            answer: 'pending',
+            uploadedImages: [...(originalTurn.uploadedImages || [])],
+            reasoning: ''
+        });
+        this.questions = [];
+        this.editingTurnIndex = null;
+        this.isFollowUpPending = true;
+        this.currentFollowUpSource = 'revision';
+        this._setFollowUpControlsDisabled(true, isReroll ? 'Rerolling...' : 'Resubmitting...');
+
+        const currentCache = tweetCache.get(this.tweetId) || {};
+        tweetCache.set(this.tweetId, {
+            ...currentCache,
+            qaConversationHistory: historyPrefix,
+            lastAnswer: '',
+            questions: [],
+            timestamp: Date.now()
+        });
+
+        this._updateTooltipUI();
+        const currentArticle = this.findCurrentArticleElement();
+        answerFollowUpQuestion(
+            this.tweetId,
+            [...historyPrefix, userApiMessage],
+            apiKey,
+            currentArticle,
+            this
+        );
     }
 
     _performAutoScroll() {
@@ -1402,27 +1631,29 @@ class ScoreIndicator {
         const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
         const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
 
-        if (!button) return;
+        if (!button) return false;
 
         event.stopPropagation();
 
         const questionText = button.dataset.questionText;
         const apiKey = browserGet('openrouter-api-key', '');
 
+        if (!questionText) {
+            showStatus('Could not identify the follow-up question.', 'error');
+            return false;
+        }
+        if (!apiKey) {
+            showStatus('API key missing. Cannot answer question.', 'error');
+            return false;
+        }
+
         this.currentFollowUpSource = isMockEvent ? 'custom' : 'suggested';
+        this.isFollowUpPending = true;
+        this.editingTurnIndex = null;
+        this._setFollowUpControlsDisabled(true, 'Asking...');
 
         if (!isMockEvent) {
-        button.disabled = true;
-        button.textContent = `🤔 Asking: ${questionText}...`;
-
-        this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        } else {
-
-            if (this.customQuestionInput) this.customQuestionInput.disabled = true;
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = true;
-                this.customQuestionButton.textContent = 'Asking...';
-            }
+            button.textContent = `🤔 Asking: ${questionText}...`;
         }
 
         this.conversationHistory.push({
@@ -1466,40 +1697,6 @@ class ScoreIndicator {
         this.questions = [];
         this._updateTooltipUI();
 
-        if (!apiKey) {
-            showStatus('API key missing. Cannot answer question.', 'error');
-            this._updateConversationHistory(questionText, "Error: API Key missing.", "");
-
-            if (!isMockEvent) {
-                button.disabled = false;
-                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-            }
-            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = false;
-                this.customQuestionButton.textContent = 'Ask';
-            }
-            this._clearFollowUpImage();
-            return;
-        }
-
-        if (!questionText) {
-            console.error("Follow-up question text not found on button.");
-            this._updateConversationHistory(questionText || "Error: Empty Question", "Error: Could not identify question.", "");
-
-             if (!isMockEvent) {
-                button.disabled = false;
-                this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = false);
-            }
-            if (this.customQuestionInput) this.customQuestionInput.disabled = false;
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = false;
-                this.customQuestionButton.textContent = 'Ask';
-            }
-            this._clearFollowUpImage();
-            return;
-        }
-
         const currentArticle = this.findCurrentArticleElement();
 
         try {
@@ -1508,6 +1705,7 @@ class ScoreIndicator {
         } finally {
 
         }
+        return true;
     }
 
     _handleCustomQuestionClick(event) {
@@ -1538,11 +1736,13 @@ class ScoreIndicator {
 
         this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
 
-        this._handleFollowUpQuestionClick({
+        const submitted = this._handleFollowUpQuestionClick({
             target: mockButton,
             stopPropagation: () => {},
             preventDefault: () => {}
         });
+
+        if (!submitted) return;
 
         if (this.customQuestionInput) {
             this.customQuestionInput.value = '';
@@ -1557,8 +1757,31 @@ class ScoreIndicator {
             event.preventDefault();
         }
 
-        const files = event.target.files;
+        const files = event?.target?.files;
         if (!files || files.length === 0) return;
+
+        await this._processFollowUpFiles(Array.from(files));
+        event.target.value = null;
+    }
+
+    async _handleQuestionPaste(event) {
+        const imageFiles = Array.from(event.clipboardData?.items || [])
+            .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+            .map(item => item.getAsFile())
+            .filter(Boolean);
+        if (imageFiles.length === 0) return;
+
+        if (!this.followUpImageContainer || !this.attachImageButton) {
+            showStatus('The selected model does not support pasted images.', 'warning');
+            return;
+        }
+
+        event.preventDefault();
+        await this._processFollowUpFiles(imageFiles);
+    }
+
+    async _processFollowUpFiles(files) {
+        if (!files || files.length === 0 || this.isFollowUpPending) return;
 
         if (this.followUpImageContainer && files.length > 0) {
             this.followUpImageContainer.style.display = 'flex';
@@ -1605,15 +1828,13 @@ class ScoreIndicator {
         });
 
         // Wait for all files to be processed
-        await Promise.all(filePromises);
+        await Promise.allSettled(filePromises);
 
         // Re-enable Ask button
         if (this.customQuestionButton) {
             this.customQuestionButton.disabled = false;
             this.customQuestionButton.textContent = 'Ask';
         }
-
-        event.target.value = null;
     }
 
     _addPreviewToContainer(dataUrl, fileType = 'image', fileName = '') {
@@ -1627,7 +1848,7 @@ class ScoreIndicator {
 
             const pdfIcon = document.createElement('div');
             pdfIcon.className = 'follow-up-pdf-preview';
-            pdfIcon.innerHTML = `<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${fileName || 'PDF'}</span>`;
+            pdfIcon.innerHTML = `<span style="font-size: 24px;">📄</span><br><span style="font-size: 11px; word-break: break-all;">${escapeTooltipHtml(fileName || 'PDF')}</span>`;
             pdfIcon.style.textAlign = 'center';
             pdfIcon.style.padding = '8px';
             pdfIcon.style.width = '60px';
@@ -1685,26 +1906,23 @@ class ScoreIndicator {
         }
     }
 
+    _setFollowUpControlsDisabled(disabled, buttonText = 'Ask') {
+        this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(button => {
+            button.disabled = disabled;
+        });
+        if (this.customQuestionInput) this.customQuestionInput.disabled = disabled;
+        if (this.customQuestionButton) {
+            this.customQuestionButton.disabled = disabled;
+            this.customQuestionButton.textContent = disabled ? buttonText : 'Ask';
+        }
+        if (this.attachImageButton) this.attachImageButton.disabled = disabled;
+    }
+
     _finalizeFollowUpInteraction() {
-
-        if (this.followUpQuestionsElement) {
-            this.followUpQuestionsElement.querySelectorAll('.follow-up-question-button').forEach(btn => {
-                btn.disabled = false;
-
-            });
-        }
-
-        if (this.currentFollowUpSource === 'custom') {
-            if (this.customQuestionInput) {
-                this.customQuestionInput.disabled = false;
-            }
-            if (this.customQuestionButton) {
-                this.customQuestionButton.disabled = false;
-                this.customQuestionButton.textContent = 'Ask';
-            }
-        }
-
+        this.isFollowUpPending = false;
+        this._setFollowUpControlsDisabled(false);
         this.currentFollowUpSource = null;
+        this._updateTooltipUI();
     }
 
     /** Public wrapper for indicator refresh. */
@@ -1814,7 +2032,8 @@ class ScoreIndicator {
 
             const answerElement = lastTurnElement.querySelector('.conversation-answer');
             if (answerElement) {
-                lastTurnElement.insertBefore(streamingReasoningContainer, answerElement);
+                const answerRow = answerElement.closest('.conversation-answer-row');
+                lastTurnElement.insertBefore(streamingReasoningContainer, answerRow || answerElement);
             } else {
                 lastTurnElement.appendChild(streamingReasoningContainer);
             }
@@ -1842,38 +2061,10 @@ class ScoreIndicator {
         const lastAnswerElement = lastTurnElement.querySelector('.conversation-answer');
         if (lastAnswerElement) {
 
-            const formattedStreamingAnswer = streamingText
-                .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
-
-                .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
-                    const rows = match.trim().split('\n');
-                    const headerRow = rows[0];
-
-                    const bodyRows = rows.slice(2);
-                    let html = '<table class="markdown-table">';
-                    html += '<thead><tr>';
-                    headerRow.slice(1, -1).split('|').forEach(cell => {
-                        html += `<th>${cell.trim()}</th>`;
-                    });
-                    html += '</tr></thead>';
-                    html += '<tbody>';
-                    bodyRows.forEach(rowStr => {
-                        if (!rowStr.trim()) return;
-                        html += '<tr>';
-                        rowStr.slice(1, -1).split('|').forEach(cell => {
-                            html += `<td>${cell.trim()}</td>`;
-                        });
-                        html += '</tr>';
-                    });
-                    html += '</tbody></table>';
-                    return html;
-                })
-                .replace(/\n/g, '<br>');
+            const streamingResponse = extractStreamingResponse(streamingText);
+            const formattedStreamingAnswer = renderTooltipMarkdown(
+                streamingResponse.text || '*Waiting for response...*'
+            );
 
             lastAnswerElement.innerHTML = `<strong>AI:</strong> ${formattedStreamingAnswer}<em class="pending-cursor">|</em>`;
         } else {
@@ -1988,6 +2179,7 @@ class ScoreIndicator {
         this.tooltipElement.classList.add('pinned');
         this.pinButton.innerHTML = '📍';
         this.pinButton.title = 'Unpin tooltip';
+        this.pinButton.setAttribute('aria-label', 'Unpin score details');
 
     }
 
@@ -1999,6 +2191,7 @@ class ScoreIndicator {
         this.tooltipElement.classList.remove('pinned');
         this.pinButton.innerHTML = '📌';
         this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
+        this.pinButton.setAttribute('aria-label', 'Pin score details');
 
         setTimeout(() => {
             if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
@@ -2073,12 +2266,8 @@ class ScoreIndicator {
         const currentArticle = this.findCurrentArticleElement();
         if (!currentArticle) return false;
 
-        if (this.indicatorElement.parentElement !== currentArticle) {
-
-            const currentPosition = window.getComputedStyle(currentArticle).position;
-            if (currentPosition !== 'relative' && currentPosition !== 'absolute' && currentPosition !== 'fixed' && currentPosition !== 'sticky') {
-                currentArticle.style.position = 'relative';
-            }
+        this.tweetArticle = currentArticle;
+        if (!this._attachIndicatorToMetadataRow(currentArticle) && this.indicatorElement.parentElement !== currentArticle) {
             currentArticle.appendChild(this.indicatorElement);
         }
         return true;
@@ -2160,6 +2349,8 @@ class ScoreIndicator {
             }
         }
 
+        this._syncConversationHistoryApiIndices();
+
         this._convertStreamingToDropdown();
 
         this._updateTooltipUI();
@@ -2204,7 +2395,7 @@ class ScoreIndicator {
 
             const reasoningContent = document.createElement('div');
             reasoningContent.className = 'reasoning-content';
-            const reasoningTextElement = document.createElement('p');
+            const reasoningTextElement = document.createElement('div');
             reasoningTextElement.className = 'reasoning-text';
             reasoningContent.appendChild(reasoningTextElement);
 
@@ -2260,8 +2451,12 @@ class ScoreIndicator {
             let currentQuestion = null;
             let currentUploadedImages = [];
 
-            const hasInitialRating = cachedData.score !== null &&
-                this.qaConversationHistory[2]?.role === 'assistant';
+            const initialAssistantText = this.qaConversationHistory[2]?.role === 'assistant'
+                ? this.qaConversationHistory[2].content?.find(item => item.type === 'text')?.text || ''
+                : '';
+            const hasInitialRating = this.qaConversationHistory[1]?.role === 'user' &&
+                this.qaConversationHistory[2]?.role === 'assistant' &&
+                parseTweetFilterResponse(initialAssistantText).hasScore;
             const startIndex = hasInitialRating ? 3 : 1;
 
             for (let i = startIndex; i < this.qaConversationHistory.length; i++) {
@@ -2279,6 +2474,9 @@ class ScoreIndicator {
                     currentUploadedImages = message.content
                         .filter(c => c.type === 'image_url' && c.image_url && c.image_url.url.startsWith('data:image'))
                         .map(c => c.image_url.url);
+                    currentUploadedImages.push(...message.content
+                        .filter(c => c.type === 'file' && c.file?.file_data?.startsWith('data:application/pdf'))
+                        .map(c => c.file.file_data));
 
                 } else if (message.role === 'assistant' && currentQuestion) {
                     const assistantTextContent = message.content.find(c => c.type === 'text');
@@ -2299,11 +2497,15 @@ class ScoreIndicator {
             }
         }
 
+        this._syncConversationHistoryApiIndices();
+
         if (this.isPinned) {
             this.pinButton.innerHTML = '📍';
+            this.pinButton.setAttribute('aria-label', 'Unpin score details');
             this.tooltipElement?.classList.add('pinned');
         } else {
             this.pinButton.innerHTML = '📌';
+            this.pinButton.setAttribute('aria-label', 'Pin score details');
             this.tooltipElement?.classList.remove('pinned');
         }
 
@@ -2518,64 +2720,12 @@ const ScoreIndicatorRegistry = {
 };
 
 function formatTooltipDescription(description = "", reasoning = "") {
-
-    let formattedDescription = description === "*Waiting for analysis...*" ? description :
-        (description || "*waiting for content...*")
-
-            .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-            .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-            .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-            .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-            .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-
-            .replace(/^\|(.+)\|\r?\n\|([\s\|\-:]+)\|\r?\n(\|(?:.+)\|\r?\n?)+/gm, (match) => {
-                const rows = match.trim().split('\n');
-                const headerRow = rows[0];
-                const bodyRows = rows.slice(2);
-
-                let html = '<table class="markdown-table">';
-
-                html += '<thead><tr>';
-                headerRow.slice(1, -1).split('|').forEach(cell => {
-                    html += `<th>${cell.trim()}</th>`;
-                });
-                html += '</tr></thead>';
-
-                html += '<tbody>';
-                bodyRows.forEach(rowStr => {
-                    if (!rowStr.trim()) return;
-                    html += '<tr>';
-                    rowStr.slice(1, -1).split('|').forEach(cell => {
-                        html += `<td>${cell.trim()}</td>`;
-                    });
-                    html += '</tr>';
-                });
-                html += '</tbody></table>';
-                return html;
-            })
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-
-    let formattedReasoning = '';
-    if (reasoning && reasoning.trim()) {
-        formattedReasoning = reasoning
-            .replace(/\\n/g, '\n')
-
-            .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`)
-            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="ai-generated-link">$1</a>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
-    }
-
-    return { description: formattedDescription, reasoning: formattedReasoning };
+    const descriptionText = description || '*waiting for content...*';
+    const reasoningText = reasoning && reasoning.trim()
+        ? reasoning.replace(/\\n/g, '\n')
+        : '';
+    return {
+        description: renderTooltipMarkdown(descriptionText),
+        reasoning: reasoningText ? renderTooltipMarkdown(reasoningText) : ''
+    };
 }
