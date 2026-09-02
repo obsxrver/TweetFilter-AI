@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Analyze and discuss tweets with an LLM. Custom AI-Powered analysis for X.com
 // @author       Obsxrver
 // @match        *://twitter.com/*
@@ -18,7 +18,7 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 (function () {
 
     'use strict';
