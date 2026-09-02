@@ -174,13 +174,22 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
         streamComplete = true;
         if (streamTimeout) clearTimeout(streamTimeout);
         removeActiveRequest();
-        onComplete({
-            content: content,
-            reasoning: reasoning,
-            fullResponse: fullResponse,
-            data: responseObj,
-            ...extra
-        });
+        try {
+            onComplete({
+                content: content,
+                reasoning: reasoning,
+                fullResponse: fullResponse,
+                data: responseObj,
+                ...extra
+            });
+        } catch (error) {
+            console.error("Streaming completion handler failed:", error);
+            onError({
+                error: true,
+                message: `Streaming completion handler failed: ${error.message || error.toString()}`,
+                data: responseObj
+            });
+        }
     };
 
     const failStream = (message) => {

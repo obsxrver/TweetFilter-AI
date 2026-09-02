@@ -167,3 +167,86 @@ test('cached ratings expose re-rate while errors expose neither action', () => {
     assert.equal(instance.rateButton.style.display, 'none');
     assert.equal(instance.refreshButton.style.display, 'none');
 });
+
+test('streamed reasoning is finalized before the direct answer row', () => {
+    const context = createContext();
+    const { ScoreIndicatorForTest } = context;
+
+    class FakeElement {
+        constructor(className = '') {
+            this.className = className;
+            this.children = [];
+            this.parentElement = null;
+            this.style = {};
+            this.textContent = '';
+            this.innerHTML = '';
+        }
+
+        appendChild(child) {
+            child.parentElement = this;
+            this.children.push(child);
+            return child;
+        }
+
+        insertBefore(child, reference) {
+            const referenceIndex = this.children.indexOf(reference);
+            if (referenceIndex === -1) {
+                throw new Error('NotFoundError: reference is not a direct child');
+            }
+            child.parentElement = this;
+            this.children.splice(referenceIndex, 0, child);
+            return child;
+        }
+
+        remove() {
+            if (!this.parentElement) return;
+            const index = this.parentElement.children.indexOf(this);
+            if (index !== -1) this.parentElement.children.splice(index, 1);
+            this.parentElement = null;
+        }
+
+        querySelector(selector) {
+            const className = selector.startsWith('.') ? selector.slice(1) : '';
+            for (const child of this.children) {
+                if (String(child.className || '').split(/\s+/).includes(className)) return child;
+                const nestedMatch = child.querySelector?.(selector);
+                if (nestedMatch) return nestedMatch;
+            }
+            return null;
+        }
+
+        addEventListener() {}
+    }
+
+    context.document = {
+        createElement: () => new FakeElement(),
+        createTextNode: text => ({ textContent: text, parentElement: null })
+    };
+    context.formatTooltipDescription = (_description, reasoning) => ({
+        description: '',
+        reasoning: `formatted:${reasoning}`
+    });
+
+    const lastTurn = new FakeElement('conversation-turn');
+    const streamingReasoning = new FakeElement('streaming-reasoning-container');
+    const answerRow = new FakeElement('conversation-answer-row');
+    const answer = new FakeElement('conversation-answer');
+    answerRow.appendChild(answer);
+    lastTurn.appendChild(streamingReasoning);
+    lastTurn.appendChild(answerRow);
+
+    const conversationContainer = {
+        querySelectorAll: selector => selector === '.conversation-turn' ? [lastTurn] : []
+    };
+    const instance = Object.assign(Object.create(ScoreIndicatorForTest.prototype), {
+        conversationContainerElement: conversationContainer,
+        conversationHistory: [{ question: 'Why?', answer: 'Because.', reasoning: 'trace' }]
+    });
+
+    instance._convertStreamingToDropdown();
+
+    assert.equal(lastTurn.children.length, 2);
+    assert.match(lastTurn.children[0].className, /conversation-reasoning/);
+    assert.equal(lastTurn.children[1], answerRow);
+    assert.equal(lastTurn.children[0].querySelector('.reasoning-text').innerHTML, 'formatted:trace');
+});

@@ -2478,9 +2478,9 @@ class ScoreIndicator {
             reasoningDropdown.appendChild(reasoningToggle);
             reasoningDropdown.appendChild(reasoningContent);
 
-            const answerElement = lastTurnElement.querySelector('.conversation-answer');
-            if (answerElement) {
-                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+            const answerRow = lastTurnElement.querySelector('.conversation-answer-row');
+            if (answerRow && answerRow.parentElement === lastTurnElement) {
+                lastTurnElement.insertBefore(reasoningDropdown, answerRow);
             } else {
                 lastTurnElement.appendChild(reasoningDropdown);
             }

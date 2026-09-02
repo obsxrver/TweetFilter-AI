@@ -3701,9 +3701,9 @@ class ScoreIndicator {
             reasoningContent.appendChild(reasoningTextElement);
             reasoningDropdown.appendChild(reasoningToggle);
             reasoningDropdown.appendChild(reasoningContent);
-            const answerElement = lastTurnElement.querySelector('.conversation-answer');
-            if (answerElement) {
-                lastTurnElement.insertBefore(reasoningDropdown, answerElement);
+            const answerRow = lastTurnElement.querySelector('.conversation-answer-row');
+            if (answerRow && answerRow.parentElement === lastTurnElement) {
+                lastTurnElement.insertBefore(reasoningDropdown, answerRow);
             } else {
                 lastTurnElement.appendChild(reasoningDropdown);
             }
@@ -6229,13 +6229,22 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
         streamComplete = true;
         if (streamTimeout) clearTimeout(streamTimeout);
         removeActiveRequest();
-        onComplete({
-            content: content,
-            reasoning: reasoning,
-            fullResponse: fullResponse,
-            data: responseObj,
-            ...extra
-        });
+        try {
+            onComplete({
+                content: content,
+                reasoning: reasoning,
+                fullResponse: fullResponse,
+                data: responseObj,
+                ...extra
+            });
+        } catch (error) {
+            console.error("Streaming completion handler failed:", error);
+            onError({
+                error: true,
+                message: `Streaming completion handler failed: ${error.message || error.toString()}`,
+                data: responseObj
+            });
+        }
     };
     const failStream = (message) => {
         if (streamComplete) return;

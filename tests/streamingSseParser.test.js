@@ -154,3 +154,39 @@ test('buffered mobile fallback reads a Blob response body', async () => {
     assert.equal(result.content, expectedContent);
     assert.equal(result.completedByLoadFallback, true);
 });
+
+test('completion callback failures are reported instead of stranding the stream', async () => {
+    const expectedContent = '{"Response":"Done","Question1":"A","Question2":"B","Question3":"C"}';
+    const bodyBytes = new TextEncoder().encode(makeSseBody([expectedContent]));
+    let requestOptions;
+    const context = createContext(options => {
+        requestOptions = options;
+        return { abort() {} };
+    });
+
+    const completionError = new Promise(resolve => {
+        context.getCompletionStreaming(
+            { model: 'test', messages: [] },
+            'key',
+            () => {},
+            () => {
+                throw new Error('tooltip finalization failed');
+            },
+            resolve
+        );
+    });
+
+    const chunks = [bodyBytes];
+    const reader = {
+        async read() {
+            return chunks.length
+                ? { done: false, value: chunks.shift() }
+                : { done: true, value: undefined };
+        }
+    };
+    requestOptions.onloadstart({ response: { getReader: () => reader } });
+
+    const error = await completionError;
+    assert.equal(error.error, true);
+    assert.match(error.message, /tooltip finalization failed/);
+});
