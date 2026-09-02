@@ -2342,7 +2342,7 @@ input:checked+.toggle-slider:before {
 .tooltip-refresh-button,
 .tooltip-rate-button,
 .tooltip-close-button {
-    display: inline-flex !important;
+    display: inline-flex;
     align-items: center !important;
     justify-content: center !important;
     width: 36px !important;
