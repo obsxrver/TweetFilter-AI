@@ -162,13 +162,17 @@ class TweetCache {
     /**
      * Removes a tweet rating from the cache.
      * @param {string} tweetId - The ID of the tweet to remove.
-     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately. DEPRECATED - Saving is now debounced.
+     * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or use debounced save.
      */
     delete(tweetId, saveImmediately = true) {
         if (this.has(tweetId)) {
             delete this.cache[tweetId];
 
-            this.debouncedSaveToStorage();
+            if (saveImmediately) {
+                this.#saveToStorageInternal();
+            } else {
+                this.debouncedSaveToStorage();
+            }
         }
     }
 
@@ -176,7 +180,7 @@ class TweetCache {
      * Clears all ratings from the cache.
      * @param {boolean} [saveImmediately=true] - Whether to save to storage immediately or debounce.
      */
-    clear(saveImmediately = false) {
+    clear(saveImmediately = true) {
         this.cache = {};
 
         if (saveImmediately) {

@@ -69,6 +69,71 @@ async function getCompletion(request, apiKey, timeout = 30000) {
 }
 
 /**
+ * Incrementally parses Server-Sent Events without assuming that transport
+ * chunks and SSE lines share the same boundaries.
+ *
+ * @param {(data: string) => boolean|void} onData - Called for each completed data event.
+ * @returns {{push: (chunk: string) => boolean, flush: () => boolean}}
+ */
+function createSseEventParser(onData) {
+    let lineBuffer = "";
+    let dataLines = [];
+
+    const dispatchEvent = () => {
+        if (dataLines.length === 0) return false;
+
+        const data = dataLines.join("\n");
+        dataLines = [];
+        return onData(data) === true;
+    };
+
+    const processLine = (rawLine) => {
+        const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+
+        if (line === "") {
+            return dispatchEvent();
+        }
+        if (line.startsWith(":")) {
+            return false;
+        }
+
+        const separatorIndex = line.indexOf(":");
+        const field = separatorIndex === -1 ? line : line.slice(0, separatorIndex);
+        let value = separatorIndex === -1 ? "" : line.slice(separatorIndex + 1);
+        if (value.startsWith(" ")) value = value.slice(1);
+
+        if (field === "data") {
+            dataLines.push(value);
+        }
+        return false;
+    };
+
+    return {
+        push(chunk) {
+            lineBuffer += String(chunk || "");
+
+            let newlineIndex = lineBuffer.indexOf("\n");
+            while (newlineIndex !== -1) {
+                const line = lineBuffer.slice(0, newlineIndex);
+                lineBuffer = lineBuffer.slice(newlineIndex + 1);
+                if (processLine(line)) return true;
+                newlineIndex = lineBuffer.indexOf("\n");
+            }
+            return false;
+        },
+
+        flush() {
+            if (lineBuffer) {
+                const line = lineBuffer;
+                lineBuffer = "";
+                if (processLine(line)) return true;
+            }
+            return dispatchEvent();
+        }
+    };
+}
+
+/**
  * Gets a streaming completion from OpenRouter API
  *
  * @param {CompletionRequest} request - The completion request
@@ -92,7 +157,154 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
     let reasoning = "";
     let responseObj = null;
     let streamComplete = false;
+    let streamTimeout = null;
+    let usingReadableStream = false;
+    let fallbackResponseSnapshot = "";
     console.log(streamingRequest);
+
+    const removeActiveRequest = () => {
+        if (tweetId && window.activeStreamingRequests) {
+            delete window.activeStreamingRequests[tweetId];
+        }
+    };
+
+    const completeStream = (extra = {}) => {
+        if (streamComplete) return;
+
+        streamComplete = true;
+        if (streamTimeout) clearTimeout(streamTimeout);
+        removeActiveRequest();
+        onComplete({
+            content: content,
+            reasoning: reasoning,
+            fullResponse: fullResponse,
+            data: responseObj,
+            ...extra
+        });
+    };
+
+    const failStream = (message) => {
+        if (streamComplete) return;
+
+        streamComplete = true;
+        if (streamTimeout) clearTimeout(streamTimeout);
+        removeActiveRequest();
+        onError({
+            error: true,
+            message: message,
+            data: null
+        });
+    };
+
+    const resetStreamTimeout = () => {
+        if (streamTimeout) clearTimeout(streamTimeout);
+        streamTimeout = setTimeout(() => {
+            console.log("Stream timed out after inactivity");
+            completeStream({ timedOut: true });
+        }, 30000);
+    };
+
+    const handleSseData = (data) => {
+        if (data.trim() === "[DONE]") {
+            return true;
+        }
+
+        try {
+            const parsed = JSON.parse(data);
+            responseObj = parsed;
+
+            if (parsed.choices && parsed.choices[0]) {
+                const delta = parsed.choices[0].delta?.content || "";
+                const reasoningDelta = parsed.choices[0].delta?.reasoning || "";
+                content += delta;
+                reasoning += reasoningDelta;
+
+                onChunk({
+                    chunk: delta,
+                    reasoningChunk: reasoningDelta,
+                    content: content,
+                    reasoning: reasoning,
+                    data: parsed
+                });
+            }
+        } catch (error) {
+            console.error("Error parsing SSE data:", error, data);
+        }
+        return false;
+    };
+
+    const sseParser = createSseEventParser(handleSseData);
+
+    const ingestTransportText = (chunk) => {
+        if (!chunk || streamComplete) return false;
+
+        fullResponse += chunk;
+        resetStreamTimeout();
+        return sseParser.push(chunk);
+    };
+
+    const responseTextFrom = (response) => {
+        if (typeof response?.responseText === "string") return response.responseText;
+        if (typeof response?.response === "string") return response.response;
+        return "";
+    };
+
+    const bufferedResponseTextFrom = async (response) => {
+        const immediateText = responseTextFrom(response);
+        if (immediateText) return immediateText;
+
+        const responseBody = response?.response;
+        if (responseBody && typeof responseBody.text === "function") {
+            return responseBody.text();
+        }
+        if (responseBody instanceof ArrayBuffer || ArrayBuffer.isView(responseBody)) {
+            return new TextDecoder().decode(responseBody);
+        }
+        return "";
+    };
+
+    const ingestFallbackText = (responseText) => {
+        if (!responseText || responseText === fallbackResponseSnapshot) return false;
+
+        let newText = responseText;
+        if (responseText.startsWith(fallbackResponseSnapshot)) {
+            newText = responseText.slice(fallbackResponseSnapshot.length);
+        } else if (responseText.startsWith(fullResponse)) {
+            newText = responseText.slice(fullResponse.length);
+        }
+
+        fallbackResponseSnapshot = responseText;
+        return ingestTransportText(newText);
+    };
+
+    const ingestFallbackResponse = (response) => {
+        return ingestFallbackText(responseTextFrom(response));
+    };
+
+    const readNonStreamingResponse = (responseText) => {
+        if (content || !responseText) return;
+
+        try {
+            const parsed = JSON.parse(responseText);
+            responseObj = parsed;
+            const choice = parsed.choices?.[0];
+            const messageContent = choice?.message?.content;
+            if (typeof messageContent === "string") {
+                content = messageContent;
+                reasoning = choice.message.reasoning || "";
+                onChunk({
+                    chunk: content,
+                    reasoningChunk: reasoning,
+                    content: content,
+                    reasoning: reasoning,
+                    data: parsed
+                });
+            }
+        } catch (error) {
+            // A normal streaming response is SSE rather than a single JSON object.
+        }
+    };
+
     const reqObj = GM_xmlhttpRequest({
         method: "POST",
         url: "https://openrouter.ai/api/v1/chat/completions",
@@ -107,32 +319,25 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
         responseType: "stream",
         onloadstart: function(response) {
 
-            const reader = response.response.getReader();
+            if (!response?.response || typeof response.response.getReader !== "function") {
+                console.warn("ReadableStream is unavailable; waiting for the buffered response fallback.");
+                return;
+            }
 
-            let streamTimeout = null;
-            let firstChunkReceived = false;
-            const resetStreamTimeout = () => {
-                if (streamTimeout) clearTimeout(streamTimeout);
-                streamTimeout = setTimeout(() => {
-                    console.log("Stream timed out after inactivity");
-                    if (!streamComplete) {
-                        streamComplete = true;
-
-                        onComplete({
-                            content: content,
-                            reasoning: reasoning,
-                            fullResponse: fullResponse,
-                            data: responseObj,
-                            timedOut: true
-                        });
-                    }
-                }, 30000);
-            };
+            let reader;
+            try {
+                reader = response.response.getReader();
+                usingReadableStream = true;
+            } catch (error) {
+                console.warn("Could not open ReadableStream; waiting for the buffered response fallback.", error);
+                return;
+            }
+            const decoder = new TextDecoder();
+            resetStreamTimeout();
 
             const processStream = async () => {
                 try {
                     let isDone = false;
-                    let emptyChunksCount = 0;
 
                     while (!isDone && !streamComplete) {
                         const { done, value } = await reader.read();
@@ -142,154 +347,74 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                             break;
                         }
 
-                        if (!firstChunkReceived) {
-                            firstChunkReceived = true;
-                            resetStreamTimeout();
-                        }
-
-                        const chunk = new TextDecoder().decode(value);
-
-                        clearTimeout(streamTimeout);
-
-                        resetStreamTimeout();
-
-                        if (chunk.trim() === '') {
-                            emptyChunksCount++;
-
-                            if (emptyChunksCount >= 3) {
-                                isDone = true;
-                                break;
-                            }
-                            continue;
-                        }
-
-                        emptyChunksCount = 0;
-                        fullResponse += chunk;
-
-                        const lines = chunk.split("\n");
-                        for (const line of lines) {
-                            if (line.startsWith("data: ")) {
-                                const data = line.substring(6);
-
-                                if (data === "[DONE]") {
-                                    isDone = true;
-                                    break;
-                                }
-
-                                try {
-                                    const parsed = JSON.parse(data);
-                                    responseObj = parsed;
-
-                                    if (parsed.choices && parsed.choices[0]) {
-
-                                        if (parsed.choices[0].delta && parsed.choices[0].delta.content !== undefined) {
-                                            const delta = parsed.choices[0].delta.content || "";
-                                            content += delta;
-                                        }
-
-                                        if (parsed.choices[0].delta && parsed.choices[0].delta.reasoning !== undefined) {
-                                            const reasoningDelta = parsed.choices[0].delta.reasoning || "";
-                                            reasoning += reasoningDelta;
-                                        }
-
-                                        onChunk({
-                                            chunk: parsed.choices[0].delta?.content || "",
-                                            reasoningChunk: parsed.choices[0].delta?.reasoning || "",
-                                            content: content,
-                                            reasoning: reasoning,
-                                            data: parsed
-                                        });
-                                    }
-                                } catch (e) {
-                                    console.error("Error parsing SSE data:", e, data);
-                                }
-                            }
-                        }
+                        const chunk = decoder.decode(value, { stream: true });
+                        if (ingestTransportText(chunk)) isDone = true;
                     }
 
-                    if (!streamComplete) {
-                        streamComplete = true;
-                        if (streamTimeout) clearTimeout(streamTimeout);
-
-                        if (tweetId && window.activeStreamingRequests) {
-                            delete window.activeStreamingRequests[tweetId];
-                        }
-
-                        onComplete({
-                            content: content,
-                            reasoning: reasoning,
-                            fullResponse: fullResponse,
-                            data: responseObj
-                        });
-                    }
+                    const finalDecodedText = decoder.decode();
+                    if (finalDecodedText) ingestTransportText(finalDecodedText);
+                    sseParser.flush();
+                    completeStream();
 
                 } catch (error) {
                     console.error("Stream processing error:", error);
-
-                    if (streamTimeout) clearTimeout(streamTimeout);
-                    if (!streamComplete) {
-                        streamComplete = true;
-
-                        if (tweetId && window.activeStreamingRequests) {
-                            delete window.activeStreamingRequests[tweetId];
-                        }
-
-                        onError({
-                            error: true,
-                            message: `Stream processing error: ${error.toString()}`,
-                            data: null
-                        });
-                    }
+                    failStream(`Stream processing error: ${error.toString()}`);
                 }
             };
 
             processStream().catch(error => {
                 console.error("Unhandled stream error:", error);
-                if (streamTimeout) clearTimeout(streamTimeout);
-                if (!streamComplete) {
-                    streamComplete = true;
-
-                    if (tweetId && window.activeStreamingRequests) {
-                        delete window.activeStreamingRequests[tweetId];
-                    }
-
-                    onError({
-                        error: true,
-                        message: `Unhandled stream error: ${error.toString()}`,
-                        data: null
-                    });
-                }
+                failStream(`Unhandled stream error: ${error.toString()}`);
             });
+        },
+        onprogress: function(response) {
+            if (!usingReadableStream && !streamComplete) {
+                const receivedDoneEvent = ingestFallbackResponse(response);
+                if (receivedDoneEvent) {
+                    sseParser.flush();
+                    completeStream();
+                }
+            }
+        },
+        onload: async function(response) {
+            if (streamComplete) return;
+
+            if (usingReadableStream) {
+                // Some mobile engines fire load but never resolve the reader's
+                // final read. Give queued reads a turn, then finish exactly once.
+                setTimeout(() => {
+                    if (!streamComplete) {
+                        sseParser.flush();
+                        completeStream({ completedByLoadFallback: true });
+                    }
+                }, 250);
+                return;
+            }
+
+            try {
+                const responseText = await bufferedResponseTextFrom(response);
+                if (streamComplete) return;
+
+                ingestFallbackText(responseText);
+                sseParser.flush();
+                readNonStreamingResponse(responseText);
+                completeStream({ completedByLoadFallback: true });
+            } catch (error) {
+                failStream(`Could not read the buffered response: ${error.toString()}`);
+            }
         },
         onerror: function(error) {
-
-            if (tweetId && window.activeStreamingRequests) {
-                delete window.activeStreamingRequests[tweetId];
-            }
-
-            onError({
-                error: true,
-                message: `Request error: ${error.toString()}`,
-                data: null
-            });
+            failStream(`Request error: ${error.toString()}`);
         },
         ontimeout: function() {
-
-            if (tweetId && window.activeStreamingRequests) {
-                delete window.activeStreamingRequests[tweetId];
-            }
-
-            onError({
-                error: true,
-                message: `Request timed out after ${timeout}ms`,
-                data: null
-            });
+            failStream(`Request timed out after ${timeout}ms`);
         }
     });
 
     const streamingRequestObj = {
         abort: function() {
             streamComplete = true;
+            if (streamTimeout) clearTimeout(streamTimeout);
             tweetProcessingState.decrementPending();
             try {
                 reqObj.abort();
@@ -297,9 +422,7 @@ function getCompletionStreaming(request, apiKey, onChunk, onComplete, onError, t
                 console.error("Error aborting request:", e);
             }
 
-            if (tweetId && window.activeStreamingRequests) {
-                delete window.activeStreamingRequests[tweetId];
-            }
+            removeActiveRequest();
 
             if (tweetId && tweetCache.has(tweetId)) {
                 const entry = tweetCache.get(tweetId);

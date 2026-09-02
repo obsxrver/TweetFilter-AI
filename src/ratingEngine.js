@@ -3,7 +3,7 @@
  * Also updates the rating indicator.
  * @param {Element} tweetArticle - The tweet element.
  */
-function filterSingleTweet(tweetArticle) {
+function filterSingleTweet(tweetArticle, saveCacheImmediately = true) {
     const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
 
     if (!cell) {
@@ -23,7 +23,7 @@ function filterSingleTweet(tweetArticle) {
         individualMediaUrls: mediaUrls,
         timestamp: Date.now()
     };
-    tweetCache.set(tid, cacheUpdateData, false);
+    tweetCache.set(tid, cacheUpdateData, saveCacheImmediately);
 
     if (authorHandle && adAuthorCache.has(authorHandle)) {
         const tweetId = getTweetID(tweetArticle);
@@ -162,6 +162,27 @@ function isUserBlacklisted(handle) {
 
 const getFullContextPromises = new Map();
 
+/**
+ * Formats website cards as a stable, model-readable context section.
+ * @param {Array<{url: string, site: string, title: string, description: string, imageUrl: string}>} previews
+ * @param {string} sectionName
+ * @returns {string}
+ */
+function formatWebsiteLinkPreviews(previews, sectionName = 'LINK_PREVIEWS') {
+    if (!Array.isArray(previews) || previews.length === 0) return '';
+
+    const lines = [`[${sectionName}]:`];
+    previews.forEach((preview, index) => {
+        lines.push(`[LINK ${index + 1}]:`);
+        if (preview.url) lines.push(` URL: ${preview.url}`);
+        if (preview.site) lines.push(` Site: ${preview.site}`);
+        if (preview.title) lines.push(` Title: ${preview.title}`);
+        if (preview.description) lines.push(` Description: ${preview.description}`);
+        if (preview.imageUrl) lines.push(` Preview image URL: ${preview.imageUrl}`);
+    });
+    return lines.join('\n');
+}
+
 function isValidFinalState(status) {
     return isFinalTweetStatus(status);
 }
@@ -170,7 +191,7 @@ function isValidInterimState(status) {
     return isActiveTweetStatus(status);
 }
 
-async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
+async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCacheImmediately = true) {
     let processingSuccessful = false;
     try {
         const apiKey = browserGet('openrouter-api-key', '');
@@ -190,7 +211,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     tweetCache.delete(tweetId);
                 }
 
-                const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey);
+                const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey, saveCacheImmediately);
                 if (!fullContextWithImageDescription) {
                     throw new Error("Failed to get tweet context");
                 }
@@ -201,7 +222,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                     if (replyInfo && replyInfo.replyTo) {
 
                         if (!tweetCache.has(tweetId)) {
-                            tweetCache.set(tweetId, {});
+                            tweetCache.set(tweetId, {}, saveCacheImmediately);
                         }
 
                         if (!tweetCache.get(tweetId).threadContext) {
@@ -302,7 +323,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                                 metadata: currentCache.metadata || null,
                                 mediaUrls: mediaUrls
                             });
-                            filterSingleTweet(tweetArticle);
+                            filterSingleTweet(tweetArticle, saveCacheImmediately);
                             tweetProcessingState.resetRetries(tweetId);
                             return;
                         }
@@ -312,7 +333,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                             .replace(/\n?\[THREAD_MEDIA_URLS\]:\s*\n[^\n]*(?=\n|$)/g, '')
                             .replace(/\n{3,}/g, '\n\n');
 
-                        const rating = await rateTweetWithOpenRouter(contextForApi, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle);
+                        const rating = await rateTweetWithOpenRouter(contextForApi, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle, saveCacheImmediately);
                         score = rating.score;
                         description = rating.content;
                         reasoning = rating.reasoning || '';
@@ -347,7 +368,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
 
                         processingSuccessful = !rating.error;
 
-                        filterSingleTweet(tweetArticle);
+                        filterSingleTweet(tweetArticle, saveCacheImmediately);
                         if (processingSuccessful) {
                             tweetProcessingState.resetRetries(tweetId);
                         }
@@ -382,13 +403,13 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
 
                             timestamp: Date.now()
                         };
-                        tweetCache.set(tweetId, errorUpdate, true);
+                        tweetCache.set(tweetId, errorUpdate, saveCacheImmediately);
 
-                        filterSingleTweet(tweetArticle);
+                        filterSingleTweet(tweetArticle, saveCacheImmediately);
                         return;
                     }
                 }
-                filterSingleTweet(tweetArticle);
+                filterSingleTweet(tweetArticle, saveCacheImmediately);
 
             } catch (error) {
                 console.error(`Generic error processing tweet ${tweetId}: ${error}`, error.stack);
@@ -427,7 +448,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
             tweetProcessingState.resetRetries(tweetId);
         }
 
-        filterSingleTweet(tweetArticle);
+        filterSingleTweet(tweetArticle, saveCacheImmediately);
         return;
     } catch (error) {
         console.error(`Error processing tweet ${tweetId}:`, error);
@@ -441,7 +462,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 lastAnswer: ""
             });
         }
-        filterSingleTweet(tweetArticle);
+        filterSingleTweet(tweetArticle, saveCacheImmediately);
         processingSuccessful = false;
     } finally {
 
@@ -453,7 +474,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle) {
                 console.log(`Tweet ${tweetId} processing failed, will retry later`);
                 setTimeout(() => {
                     if (!isValidFinalState(ScoreIndicatorRegistry.get(tweetId)?.status)) {
-                        scheduleTweetProcessing(tweetArticle);
+                        scheduleTweetProcessing(tweetArticle, saveCacheImmediately);
                     }
                 }, PROCESSING_DELAY_MS * 2);
             }
@@ -545,7 +566,7 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
             console.error("Error parsing thread mapping:", e);
         }
     }
-    if (tweetCache.has(tweetId)) {
+    if (!rateAnyway && tweetCache.has(tweetId)) {
         const cachedEntry = tweetCache.get(tweetId);
         const isIncompleteStreaming = cachedEntry.streaming === true && cachedEntry.score === null;
         if (!isIncompleteStreaming && applyTweetCachedRating(tweetArticle)) {
@@ -606,7 +627,8 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
                 return;
             }
 
-            delayedProcessTweet(tweetArticle, tweetId, authorHandle);
+            const saveCacheImmediately = shouldSaveRatingCacheImmediately(rateAnyway);
+            delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCacheImmediately);
         } catch (e) {
             console.error(`Error in delayed processing of tweet ${tweetId}:`, e);
             tweetProcessingState.clear(tweetId);
@@ -734,17 +756,21 @@ function getStoredReplyInfo(tweetId) {
  * [the text of the tweet]
  * [MEDIA_DESCRIPTION]:
  * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ * [LINK_PREVIEWS]:
+ * [LINK 1]: URL, site, title, description, and preview image URL
  * [QUOTED_TWEET]:
  * [the text of the quoted tweet]
  * [QUOTED_TWEET_MEDIA_DESCRIPTION]:
  * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
+ * [QUOTED_TWEET_LINK_PREVIEWS]:
+ * [LINK 1]: URL, site, title, description, and preview image URL
  *
  * @param {Element} tweetArticle - The tweet article element.
  * @param {string} tweetId - The tweet's ID.
  * @param {string} apiKey - API key used for getting image descriptions.
  * @returns {Promise<string>} - The full context string.
  */
-async function getFullContext(tweetArticle, tweetId, apiKey) {
+async function getFullContext(tweetArticle, tweetId, apiKey, saveCacheImmediately = true) {
     if (getFullContextPromises.has(tweetId)) {
 
         return getFullContextPromises.get(tweetId);
@@ -764,9 +790,11 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
             let quotedText = "";
             let quotedMediaLinks = [];
+            let quotedLinkPreviews = [];
             let quotedTweetId = null;
 
-            const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+            const quoteContainer = getQuotedTweetContainer(tweetArticle);
+            const mainLinkPreviews = extractWebsiteLinkPreviews(tweetArticle, quoteContainer);
             if (quoteContainer) {
                 const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
                 if (quotedLink) {
@@ -779,6 +807,7 @@ async function getFullContext(tweetArticle, tweetId, apiKey) {
 
                 quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
                 quotedMediaLinks = extractMediaLinks(quoteContainer);
+                quotedLinkPreviews = extractWebsiteLinkPreviews(quoteContainer);
             }
 
             let allAvailableMediaLinks = [...(allMediaLinks || [])];
@@ -823,13 +852,19 @@ ${mainMediaLinksDescription}`;
 ${mainImageUrls.join(", ")}`;
             }
 
+            const mainLinkPreviewContext = formatWebsiteLinkPreviews(mainLinkPreviews);
+            if (mainLinkPreviewContext) {
+                fullContextWithImageDescription += `
+${mainLinkPreviewContext}`;
+            }
+
             if (engagementStats) {
                 fullContextWithImageDescription += `
 [ENGAGEMENT_STATS]:
 ${engagementStats}`;
             }
 
-            if (quotedText || quotedMediaLinks.length > 0) {
+            if (quotedText || quotedMediaLinks.length > 0 || quotedLinkPreviews.length > 0) {
                 fullContextWithImageDescription += `
 [QUOTED_TWEET${quotedTweetId ? ' ' + quotedTweetId : ''}]:
  Author:@${quotedHandle}:
@@ -864,6 +899,15 @@ ${quotedMediaLinksDescription}`;
 [QUOTED_TWEET_MEDIA_URLS]:
 ${quotedImageUrls.join(", ")}`;
                     }
+                }
+
+                const quotedLinkPreviewContext = formatWebsiteLinkPreviews(
+                    quotedLinkPreviews,
+                    'QUOTED_TWEET_LINK_PREVIEWS'
+                );
+                if (quotedLinkPreviewContext) {
+                    fullContextWithImageDescription += `
+${quotedLinkPreviewContext}`;
                 }
             }
 
@@ -903,7 +947,7 @@ ${quotedImageUrls.join(", ")}`;
                                 const originalParentRelationship = threadRelationships[parentId];
                                 delete threadRelationships[parentId];
                                 try {
-                                    currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey);
+                                    currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey, saveCacheImmediately);
                                 } finally {
                                     if (originalParentRelationship) {
                                         threadRelationships[parentId] = originalParentRelationship;
@@ -974,7 +1018,7 @@ ${quotedImageUrls.join(", ")}`;
 
                 updatedCacheEntry.score = undefined;
             }
-            tweetCache.set(tweetId, updatedCacheEntry, false);
+            tweetCache.set(tweetId, updatedCacheEntry, saveCacheImmediately);
 
             return fullContextWithImageDescription;
 
@@ -993,7 +1037,7 @@ ${quotedImageUrls.join(", ")}`;
 function applyFilteringToAll() {
     if (!observedTargetNode) return;
     const tweets = observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR);
-    tweets.forEach(filterSingleTweet);
+    tweets.forEach(tweet => filterSingleTweet(tweet));
 }
 
 function ensureAllTweetsRated() {
@@ -1135,7 +1179,7 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                     username = handles.length > 0 ? handles[0] : null;
                     text = getTweetText(article).replace(/\n+/g, ' ⏎ ');
                     mediaLinks = extractMediaLinks(article);
-                    const quoteContainer = article.querySelector(QUOTE_CONTAINER_SELECTOR);
+                    const quoteContainer = getQuotedTweetContainer(article);
                     if (quoteContainer) {
                         quotedMediaLinks = extractMediaLinks(quoteContainer);
                     }

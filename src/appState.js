@@ -1,7 +1,7 @@
 const DEFAULT_INSTRUCTIONS = 'Rate the tweet on a scale from 1 to 10 based on its clarity, insight, creativity, and overall quality.';
 
 const DEFAULT_SETTINGS = Object.freeze({
-    selectedModel: 'openai/gpt-4.1-nano',
+    selectedModel: 'anthropic/claude-opus-4.6',
     selectedImageModel: 'google/gemini-2.5-flash',
     showFreeModels: true,
     modelFamilyFilter: '',
@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     enableImageDescriptions: false,
     enableStreaming: true,
     enableWebSearch: false,
-    enableAutoRating: true,
+    enableAutoRating: false,
     reasoningEffort: 'none',
     modelTemperature: 0.5,
     modelTopP: 0.9,
@@ -179,3 +179,7 @@ function isCompleteCachedRating(entry) {
 
 const appSettings = new AppSettingsStore();
 const tweetProcessingState = new TweetProcessingState();
+
+function shouldSaveRatingCacheImmediately(rateAnyway = false) {
+    return rateAnyway || !appSettings.getBoolean('enableAutoRating');
+}

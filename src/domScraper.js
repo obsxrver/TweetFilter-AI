@@ -47,6 +47,34 @@ function getElementText(elements) {
     }
     return '';
 }
+
+/**
+ * Finds the interactive card that represents a quoted tweet.
+ *
+ * X uses the same generic role/tabindex attributes for unrelated controls,
+ * including verified-account popovers. Starting from quote-only content keeps
+ * those controls from being mistaken for the quoted tweet.
+ *
+ * @param {Element} tweetArticle - The tweet article element.
+ * @returns {Element|null} The quoted-tweet card, when present.
+ */
+function getQuotedTweetContainer(tweetArticle) {
+    if (!tweetArticle) return null;
+
+    const quoteSignals = tweetArticle.querySelectorAll(
+        `div[data-testid="User-Name"], ${TWEET_TEXT_SELECTOR}`
+    );
+
+    for (const signal of quoteSignals) {
+        const quoteContainer = signal.closest?.(QUOTE_CONTAINER_SELECTOR);
+        if (quoteContainer && quoteContainer !== tweetArticle && tweetArticle.contains(quoteContainer)) {
+            return quoteContainer;
+        }
+    }
+
+    return null;
+}
+
 /**
  * Extracts the text of a tweet, excluding any text from quoted tweets.
  * @param {Element} tweetArticle - The tweet article element.
@@ -54,7 +82,7 @@ function getElementText(elements) {
  */
 function getTweetText(tweetArticle) {
     const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
-    const quoteContainer = tweetArticle.querySelector(QUOTE_CONTAINER_SELECTOR);
+    const quoteContainer = getQuotedTweetContainer(tweetArticle);
 
     for (const textElement of allTextElements) {
 
@@ -107,32 +135,37 @@ function getUserHandles(tweetArticle) {
     }
 
     if (handles.length > 0) {
-        const quoteContainer = tweetArticle.querySelector('div[role="link"][tabindex="0"]');
+        const quoteContainer = getQuotedTweetContainer(tweetArticle);
         if (quoteContainer) {
-
             const userAvatarDiv = quoteContainer.querySelector('div[data-testid^="UserAvatar-Container-"]');
+            let quotedHandle = '';
+
             if (userAvatarDiv) {
                 const testId = userAvatarDiv.getAttribute('data-testid');
-
-                const lastDashIndex = testId.lastIndexOf('-');
-                if (lastDashIndex >= 0 && lastDashIndex < testId.length - 1) {
-                    const quotedHandle = testId.substring(lastDashIndex + 1);
-
-                    if (quotedHandle && quotedHandle !== handles[0]) {
-                        handles.push(quotedHandle);
-                    }
+                const avatarPrefix = 'UserAvatar-Container-';
+                if (testId?.startsWith(avatarPrefix)) {
+                    quotedHandle = testId.slice(avatarPrefix.length);
                 }
+            }
 
+            if (!quotedHandle) {
                 const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
                 if (quotedLink) {
                     const href = quotedLink.getAttribute('href');
-
                     const match = href.match(/^\/([^/]+)\/status\/\d+/);
-                    if (match && match[1] && match[1] !== handles[0]) {
-                        handles.push(match[1]);
-                    }
+                    quotedHandle = match?.[1] || '';
                 }
             }
+
+            if (!quotedHandle) {
+                const quotedUserName = quoteContainer.querySelector('div[data-testid="User-Name"]');
+                const handleText = Array.from(quotedUserName?.querySelectorAll('span') || [])
+                    .map(span => span.textContent?.trim() || '')
+                    .find(text => /^@[A-Za-z0-9_]{1,15}$/.test(text));
+                quotedHandle = handleText ? handleText.slice(1) : '';
+            }
+
+            handles.push(quotedHandle);
         }
     }
 
@@ -159,14 +192,82 @@ function extractMediaLinks(scopeElement) {
     }
     mediaElements.forEach(mediaEl => {
         if (mediaEl.tagName === 'VIDEO') {
-            mediaLinks.add(mediaEl.poster);
+            if (mediaEl.poster) mediaLinks.add(mediaEl.poster);
         } else if (mediaEl.tagName === 'IMG') {
             const sourceUrl = mediaEl.src;
             if(!sourceUrl) return;
+            const isAvatar = sourceUrl.includes('/profile_images/') ||
+                Boolean(mediaEl.closest?.('[data-testid^="UserAvatar-Container-"], [data-testid="Tweet-User-Avatar"]'));
+            if (isAvatar) return;
             mediaLinks.add(sourceUrl);          
         }
     });
     return Array.from(mediaLinks);
+}
+
+/**
+ * Extracts website-card metadata rendered inside a tweet.
+ *
+ * The URL is normally X's t.co redirect. If X exposes an expanded URL on the
+ * link, that value is preferred. The optional excluded container is used to
+ * keep quoted-tweet cards out of the main tweet's preview list.
+ *
+ * @param {Element} scopeElement - The tweet article or quoted-tweet container.
+ * @param {Element|null} [excludedContainer=null] - A nested container to skip.
+ * @returns {Array<{url: string, site: string, title: string, description: string, imageUrl: string}>}
+ */
+function extractWebsiteLinkPreviews(scopeElement, excludedContainer = null) {
+    if (!scopeElement) return [];
+
+    const cardElements = scopeElement.matches?.(WEBSITE_CARD_SELECTOR)
+        ? [scopeElement]
+        : Array.from(scopeElement.querySelectorAll(WEBSITE_CARD_SELECTOR));
+    const previews = [];
+    const seenPreviews = new Set();
+
+    for (const cardElement of cardElements) {
+        if (excludedContainer?.contains(cardElement)) continue;
+
+        const cardLinks = Array.from(cardElement.querySelectorAll('a[href]'));
+        const cardLink = cardLinks.find(link => {
+            const href = link.getAttribute?.('href') || link.href || '';
+            return /^https?:\/\//i.test(href);
+        });
+        const shortUrl = cardLink?.getAttribute?.('href') || cardLink?.href || '';
+        const expandedUrlCandidates = [
+            cardLink?.getAttribute?.('data-expanded-url'),
+            cardLink?.getAttribute?.('title')
+        ];
+        const url = expandedUrlCandidates.find(value => /^https?:\/\//i.test(value || '')) || shortUrl;
+
+        const detailElement = cardElement.querySelector(
+            '[data-testid^="card.layout"][data-testid$=".detail"]'
+        );
+        const detailRows = Array.from(detailElement?.querySelectorAll('div[dir="auto"]') || [])
+            .map(row => extractVisibleTextWithEmoji(row).replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+
+        const imageElement = cardElement.querySelector(
+            'img[src*="pbs.twimg.com/card_img/"], [data-testid$=".media"] img[src], img[src]'
+        );
+        const imageUrl = imageElement?.getAttribute?.('src') || imageElement?.src || '';
+        const preview = {
+            url,
+            site: detailRows[0] || '',
+            title: detailRows[1] || '',
+            description: detailRows.slice(2).join(' '),
+            imageUrl
+        };
+
+        if (!Object.values(preview).some(Boolean)) continue;
+
+        const previewKey = JSON.stringify(preview);
+        if (seenPreviews.has(previewKey)) continue;
+        seenPreviews.add(previewKey);
+        previews.push(preview);
+    }
+
+    return previews;
 }
 
 function isOriginalTweet(tweetArticle) {

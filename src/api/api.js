@@ -160,7 +160,7 @@ function appendRatingMediaContent(content, mediaUrls) {
  * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
  */
-async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="") {
+async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="", saveCacheImmediately = true) {
     console.log("given tweettext\n", tweetText);
     const cleanupRequest = () => {
         tweetProcessingState.decrementPending();
@@ -268,7 +268,7 @@ ${currentInstructions}`}]
         timestamp: Date.now(),
         tweetContent: tweetText,
         mediaUrls: mediaUrls
-    });
+    }, saveCacheImmediately);
 
     let attempt = 0;
     while (attempt < maxRetries) {
@@ -287,9 +287,9 @@ ${currentInstructions}`}]
         try {
             let result;
             if (useStreaming) {
-                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle);
+                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle, saveCacheImmediately);
             } else {
-                result = await rateTweet(requestBody, apiKey, tweetId, tweetText);
+                result = await rateTweet(requestBody, apiKey, tweetId, tweetText, saveCacheImmediately);
             }
             cleanupRequest();
 
@@ -320,7 +320,7 @@ ${currentInstructions}`}]
                     timestamp: Date.now(),
                     metadata: result.metadata || null,
                     qaConversationHistory: finalQaHistory
-                });
+                }, saveCacheImmediately);
 
                 return {
                     score: finalScore,
@@ -378,7 +378,7 @@ ${currentInstructions}`}]
                     streaming: false,
                     timestamp: Date.now(),
                     qaConversationHistory: indicatorInstance.qaConversationHistory
-                });
+                }, saveCacheImmediately);
                 return {
                     score: 5,
                     content: errorContent,
@@ -428,7 +428,7 @@ ${currentInstructions}`}]
  * @param {string} apiKey - API key for authentication
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
-async function rateTweet(request, apiKey, tweetId, tweetText) {
+async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediately = true) {
     const existingScore = tweetCache.get(tweetId)?.score;
 
     const result = await getCompletion(request, apiKey);
@@ -455,7 +455,7 @@ async function rateTweet(request, apiKey, tweetId, tweetText) {
             tweetContent: tweetText,
             streaming: false,
             metadata: extractCompletionMetadata(result.data)
-        });
+        }, saveCacheImmediately);
 
         return {
             content,
@@ -483,7 +483,7 @@ async function rateTweet(request, apiKey, tweetId, tweetText) {
  * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
  */
-async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle) {
+async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle, saveCacheImmediately = true) {
 
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
         console.log(`Aborting existing streaming request for tweet ${tweetId}`);
@@ -502,7 +502,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
             questions: [],
             lastAnswer: "",
             score: null
-        });
+        }, saveCacheImmediately);
     }
 
     return new Promise((resolve, reject) => {
@@ -591,7 +591,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     error: finalStatus === TweetRatingStatus.ERROR ? "Invalid tweet-analysis JSON response" : undefined,
                     metadata: completionMetadata
                 };
-                tweetCache.set(tweetId, finalCacheData);
+                tweetCache.set(tweetId, finalCacheData, saveCacheImmediately);
 
                 indicatorInstance.update({
                     status: finalStatus,
@@ -604,7 +604,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 });
 
                 if (tweetArticle) {
-                    filterSingleTweet(tweetArticle);
+                    filterSingleTweet(tweetArticle, saveCacheImmediately);
                 }
 
                 resolve({

@@ -69,6 +69,7 @@ const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"], img[src*="pbs.twimg.com/amplify_video_thumb"]';
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
+const WEBSITE_CARD_SELECTOR = '[data-testid="card.wrapper"]';
 
 function getModelIdentifierCandidates(model) {
   return [

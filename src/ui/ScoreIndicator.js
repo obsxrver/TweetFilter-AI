@@ -153,6 +153,7 @@ class ScoreIndicator {
         this.refreshButton.title = 'Re-rate this tweet';
         this.refreshButton.type = 'button';
         this.refreshButton.setAttribute('aria-label', 'Re-rate this tweet');
+        this.refreshButton.style.display = 'none';
 
         this.rateButton = document.createElement('button');
         this.rateButton.className = 'tooltip-rate-button';
@@ -245,7 +246,7 @@ class ScoreIndicator {
 
         });
 
-        const currentSelectedModel = browserGet('selectedModel', 'openai/gpt-4.1-nano');
+        const currentSelectedModel = browserGet('selectedModel', DEFAULT_SETTINGS.selectedModel);
         const supportsImages = typeof modelSupportsImages === 'function' && modelSupportsImages(currentSelectedModel);
 
         if (supportsImages) {
@@ -995,15 +996,7 @@ class ScoreIndicator {
              contentChanged = true;
         }
 
-        if (this.rateButton) {
-            const showRateButton = this.status === TweetRatingStatus.MANUAL;
-            const currentDisplay = this.rateButton.style.display;
-            const newDisplay = showRateButton ? 'inline-block' : 'none';
-            if (currentDisplay !== newDisplay) {
-                this.rateButton.style.display = newDisplay;
-                contentChanged = true;
-            }
-        }
+        contentChanged = this._updateRatingActionVisibility() || contentChanged;
 
         if (contentChanged) {
             requestAnimationFrame(() => {
@@ -1935,6 +1928,36 @@ class ScoreIndicator {
         this._updateTooltipUI();
     }
 
+    /** Shows only the rating action that is valid for the current state. */
+    _updateRatingActionVisibility() {
+        let changed = false;
+        const hasScore = this.score !== null && this.score !== undefined;
+        const hasGeneratedRating = (
+            this.status === TweetRatingStatus.RATED ||
+            this.status === TweetRatingStatus.CACHED ||
+            this.status === TweetRatingStatus.BLACKLISTED
+        ) && hasScore;
+        const showRateButton = this.status === TweetRatingStatus.MANUAL && !hasScore;
+
+        if (this.rateButton) {
+            const newDisplay = showRateButton ? 'inline-block' : 'none';
+            if (this.rateButton.style.display !== newDisplay) {
+                this.rateButton.style.display = newDisplay;
+                changed = true;
+            }
+        }
+
+        if (this.refreshButton) {
+            const newDisplay = hasGeneratedRating ? 'inline-block' : 'none';
+            if (this.refreshButton.style.display !== newDisplay) {
+                this.refreshButton.style.display = newDisplay;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
     /**
      * Updates blacklist UI state without exposing internal rendering methods.
      * @param {boolean} isBlacklisted
@@ -1949,6 +1972,59 @@ class ScoreIndicator {
      */
     setFollowUpQuestions(questions) {
         this.questions = Array.isArray(questions) ? questions : [];
+    }
+
+    /**
+     * Clears rating-specific state while preserving this indicator and tooltip instance.
+     * Visibility and pin state are intentionally retained so an open tooltip stays open
+     * while its replacement rating is generated.
+     */
+    clearForRating() {
+        this.status = TweetRatingStatus.PENDING;
+        this.score = null;
+        this.description = '';
+        this.reasoning = '';
+        this.metadata = null;
+        this.conversationHistory = [];
+        this.questions = [];
+        this.qaConversationHistory = [];
+        this.currentFollowUpSource = null;
+        this.isFollowUpPending = false;
+        this.editingTurnIndex = null;
+        this.autoScroll = true;
+        this.autoScrollConversation = true;
+        this.userInitiatedScroll = false;
+        this._lastScrollPosition = 0;
+
+        if (this.customQuestionInput) {
+            this.customQuestionInput.value = '';
+            this.customQuestionInput.style.height = 'auto';
+            this.customQuestionInput.rows = 1;
+        }
+        this._clearFollowUpImage();
+        this._setFollowUpControlsDisabled(false);
+
+        this.reasoningDropdown?.classList.remove('expanded');
+        if (this.reasoningArrow) this.reasoningArrow.textContent = '▶';
+        if (this.reasoningContent) {
+            this.reasoningContent.style.maxHeight = '0';
+            this.reasoningContent.style.padding = '0 10px';
+        }
+        this.metadataDropdown?.classList.remove('expanded');
+        if (this.metadataArrow) this.metadataArrow.textContent = '▶';
+        if (this.metadataContent) {
+            this.metadataContent.style.maxHeight = '0';
+            this.metadataContent.style.padding = '0 10px';
+        }
+        if (this.tooltipElement) {
+            this.tooltipElement.dataset.autoScroll = 'true';
+        }
+        if (this.tooltipScrollableContentElement) {
+            this.tooltipScrollableContentElement.scrollTop = 0;
+        }
+
+        this._updateIndicatorUI();
+        this._updateTooltipUI();
     }
 
     /**
@@ -2556,12 +2632,13 @@ class ScoreIndicator {
         }
 
         tweetProcessingState.clear(this.tweetId);
+        tweetProcessingState.resetRetries(this.tweetId);
 
         const currentArticle = this.findCurrentArticleElement();
-        this.destroy();
+        this.clearForRating();
 
         if (currentArticle && typeof scheduleTweetProcessing === 'function') {
-            scheduleTweetProcessing(currentArticle);
+            scheduleTweetProcessing(currentArticle, true);
         }
     }
 
@@ -2570,13 +2647,7 @@ class ScoreIndicator {
 
         if (!this.tweetId) return;
 
-        this.update({
-            status: TweetRatingStatus.PENDING,
-            score: null,
-            description: 'Rating tweet...',
-            reasoning: '',
-            questions: []
-        });
+        this.clearForRating();
 
         const currentArticle = this.findCurrentArticleElement();
         if (currentArticle && typeof scheduleTweetProcessing === 'function') {
