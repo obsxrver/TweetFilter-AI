@@ -226,11 +226,11 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCach
                         }
 
                         if (!tweetCache.get(tweetId).threadContext) {
-                            tweetCache.get(tweetId).threadContext = {
+                            tweetCache.set(tweetId, { threadContext: {
                                 replyTo: replyInfo.to,
                                 replyToId: replyInfo.replyTo,
                                 isRoot: false
-                            };
+                            } });
                         }
                     }
                 }
@@ -1384,11 +1384,11 @@ async function mapThreadStructure(conversation, localRootTweetId) {
                 const batch = replyDocs.slice(i, i + batchSize);
                 batch.forEach(doc => {
                     if (doc.tweetId && tweetCache.has(doc.tweetId)) {
-                        tweetCache.get(doc.tweetId).threadContext = {
+                        tweetCache.set(doc.tweetId, { threadContext: {
                             replyTo: doc.to,
                             replyToId: doc.toId,
                             isRoot: doc.isRoot
-                        };
+                        } });
 
                         if (doc.tweetId && tweetProcessingState.isScheduled(doc.tweetId)) {
 

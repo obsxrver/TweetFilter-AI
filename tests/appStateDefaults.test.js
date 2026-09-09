@@ -25,7 +25,7 @@ test('rating defaults use Opus 4.6 with auto-rating disabled', () => {
     assert.equal(context.defaultsForTest.enableAutoRating, false);
 });
 
-test('cache writes are debounced only for automatic ratings while auto-rate is enabled', () => {
+test('manual and automatic ratings both use cache-owned write scheduling', () => {
     let autoRatingEnabled = true;
     const context = vm.createContext({
         browserGet(key, fallback) {
@@ -41,8 +41,8 @@ test('cache writes are debounced only for automatic ratings while auto-rate is e
     `, context);
 
     assert.equal(context.shouldSaveImmediatelyForTest(false), false);
-    assert.equal(context.shouldSaveImmediatelyForTest(true), true);
+    assert.equal(context.shouldSaveImmediatelyForTest(true), false);
 
     autoRatingEnabled = false;
-    assert.equal(context.shouldSaveImmediatelyForTest(false), true);
+    assert.equal(context.shouldSaveImmediatelyForTest(false), false);
 });

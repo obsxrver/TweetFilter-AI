@@ -25,8 +25,10 @@ function browserGet(key, defaultValue = null) {
 function browserSet(key, value) {
     try {
         GM_setValue(key, value);
+        return true;
     } catch (error) {
         console.error('Error writing to browser storage:', error);
+        return false;
     }
 }
 

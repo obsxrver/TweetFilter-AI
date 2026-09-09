@@ -61,3 +61,25 @@ Analyze and discuss tweets with an LLM. Custom AI-Powered analysis for X.com
 ---
 
 Made with ❤️ for a better social media experience
+
+
+## Cache behavior
+
+Ratings use a bounded, disposable cache: up to 256 entries and 1 MiB of serialized
+entry data, with entries expiring after 30 days. Least recently used entries are
+evicted first. Entries larger than 32 KiB (including long conversations or embedded
+uploads) are not cached; their older cached version is removed to avoid stale results.
+
+Updates are batched every 1.5 seconds into 16 storage buckets. Only changed buckets
+are written. Hiding or leaving the page flushes pending changes; clearing the cache
+flushes immediately. A browser process killed before a flush can lose recent updates.
+Storage failures disable persistence for the current page while the bounded memory
+cache remains available. Reloading retries persistence; Clear Rating Cache also retries.
+
+Valid legacy ratings migrate automatically within these limits. Legacy payloads over
+4 MiB, corrupt records, expired entries, and interrupted streams are discarded.
+Cache reads return independent snapshots; use `tweetCache.set(id, patch)` for changes.
+The old immediate-save argument is accepted for compatibility but writes are batched.
+
+Run regression tests with `node --test tests/*.test.js` and rebuild the userscript
+with `python combine-src.py`.

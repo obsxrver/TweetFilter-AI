@@ -512,8 +512,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
              console.error(`[API Stream] Could not get/create ScoreIndicator for ${tweetId}. Aborting stream setup.`);
 
              if (tweetCache.has(tweetId)) {
-                 tweetCache.get(tweetId).streaming = false;
-                 tweetCache.get(tweetId).error = "Indicator initialization failed";
+                 tweetCache.set(tweetId, { streaming: false, error: "Indicator initialization failed" });
              }
              return reject(new Error(`ScoreIndicator instance could not be initialized for tweet ${tweetId}`));
         }
@@ -546,11 +545,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 });
 
                 if (tweetCache.has(tweetId)) {
-                    const entry = tweetCache.get(tweetId);
-                    entry.description = aggregatedContent;
-                    entry.reasoning = aggregatedReasoning;
-                    entry.score = score;
-                    entry.streaming = true;
+                    tweetCache.set(tweetId, { description: aggregatedContent, reasoning: aggregatedReasoning, score, streaming: true });
                 }
             },
 
@@ -631,11 +626,7 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 });
 
                 if (tweetCache.has(tweetId)) {
-                     const entry = tweetCache.get(tweetId);
-                     entry.streaming = false;
-                     entry.error = errorData.message;
-                     entry.score = 5;
-                     entry.description = `Stream Error: ${errorData.message}`;
+                     tweetCache.set(tweetId, { streaming: false, error: errorData.message, score: 5, description: `Stream Error: ${errorData.message}` });
                 }
 
                 reject(new Error(errorData.message));

@@ -180,6 +180,7 @@ function isCompleteCachedRating(entry) {
 const appSettings = new AppSettingsStore();
 const tweetProcessingState = new TweetProcessingState();
 
-function shouldSaveRatingCacheImmediately(rateAnyway = false) {
-    return rateAnyway || !appSettings.getBoolean('enableAutoRating');
+// Retained for existing rating call signatures; TweetCache owns write scheduling.
+function shouldSaveRatingCacheImmediately() {
+    return false;
 }

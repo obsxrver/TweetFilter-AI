@@ -58,6 +58,9 @@ class ScoreIndicator {
         this.questions = [];
         this.isPinned = false;
         this.isVisible = false;
+        this._indicatorHovered = false;
+        this._tooltipHovered = false;
+        this._hideTimer = null;
         this.autoScroll = true;
         this.userInitiatedScroll = false;
         this.uploadedImageDataUrls = [];
@@ -611,12 +614,12 @@ class ScoreIndicator {
     _addEventListeners() {
         if (!this.indicatorElement || !this.tooltipElement) return;
 
-        this._registerDomListener(this.indicatorElement, 'mouseenter', this._getBoundMethodHandler('_handleMouseEnter'));
-        this._registerDomListener(this.indicatorElement, 'mouseleave', this._getBoundMethodHandler('_handleMouseLeave'));
+        this._registerDomListener(this.indicatorElement, 'pointerenter', this._getBoundMethodHandler('_handleMouseEnter'));
+        this._registerDomListener(this.indicatorElement, 'pointerleave', this._getBoundMethodHandler('_handleMouseLeave'));
         this._registerDomListener(this.indicatorElement, 'click', this._getBoundMethodHandler('_handleIndicatorClick'));
 
-        this._registerDomListener(this.tooltipElement, 'mouseenter', this._getBoundMethodHandler('_handleTooltipMouseEnter'));
-        this._registerDomListener(this.tooltipElement, 'mouseleave', this._getBoundMethodHandler('_handleTooltipMouseLeave'));
+        this._registerDomListener(this.tooltipElement, 'pointerenter', this._getBoundMethodHandler('_handleTooltipMouseEnter'));
+        this._registerDomListener(this.tooltipElement, 'pointerleave', this._getBoundMethodHandler('_handleTooltipMouseLeave'));
 
         this._registerDomListener(this.tooltipScrollableContentElement, 'scroll', this._getBoundMethodHandler('_handleTooltipScroll'));
 
@@ -1478,20 +1481,16 @@ class ScoreIndicator {
     }
 
     _handleMouseEnter(event) {
-        if (isMobileDevice()) return;
+        if (event?.pointerType === 'touch') return;
+        this._indicatorHovered = true;
+        this._cancelScheduledHide();
         this.show();
     }
 
     _handleMouseLeave(event) {
-        if (isMobileDevice()) return;
-
-        setTimeout(() => {
-
-            if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
-                this.indicatorElement && !this.indicatorElement.matches(':hover')) {
-                this.hide();
-            }
-        }, 100);
+        if (event?.pointerType === 'touch') return;
+        this._indicatorHovered = false;
+        this._scheduleHide();
     }
 
     _handleIndicatorClick(event) {
@@ -1500,17 +1499,29 @@ class ScoreIndicator {
         this.toggle();
     }
 
-    _handleTooltipMouseEnter() {
-
-        if (!this.isPinned) {
-            this.show();
-        }
+    _handleTooltipMouseEnter(event) {
+        if (event?.pointerType === 'touch') return;
+        this._tooltipHovered = true;
+        this._cancelScheduledHide();
     }
 
-    _handleTooltipMouseLeave() {
+    _handleTooltipMouseLeave(event) {
+        if (event?.pointerType === 'touch') return;
+        this._tooltipHovered = false;
+        this._scheduleHide();
+    }
 
-        setTimeout(() => {
-            if (!this.isPinned && !(this.indicatorElement.matches(':hover') || this.tooltipElement.matches(':hover'))) {
+    _cancelScheduledHide() {
+        clearTimeout(this._hideTimer);
+        this._hideTimer = null;
+    }
+
+    _scheduleHide() {
+        this._cancelScheduledHide();
+        // Allow the pointer to cross the gap between the score and its tooltip.
+        this._hideTimer = setTimeout(() => {
+            this._hideTimer = null;
+            if (!this._indicatorHovered && !this._tooltipHovered) {
                 this.hide();
             }
         }, 100);
@@ -2230,9 +2241,11 @@ class ScoreIndicator {
 
     /** Hides the tooltip unless it's pinned. */
     hide() {
+        this._cancelScheduledHide();
         if (!this.isPinned && this.tooltipElement) {
 
             this.isVisible = false;
+            this._tooltipHovered = false;
             this.tooltipElement.style.display = 'none';
         }
     }
@@ -2269,12 +2282,7 @@ class ScoreIndicator {
         this.pinButton.title = 'Pin tooltip (prevents auto-closing)';
         this.pinButton.setAttribute('aria-label', 'Pin score details');
 
-        setTimeout(() => {
-            if (this.tooltipElement && !this.tooltipElement.matches(':hover') &&
-                this.indicatorElement && !this.indicatorElement.matches(':hover')) {
-                this.hide();
-            }
-        }, 0);
+        this._scheduleHide();
     }
 
     _handleCloseClick(e) {
@@ -2286,6 +2294,7 @@ class ScoreIndicator {
 
     /** Removes the indicator, tooltip, and listeners from the DOM and registry. */
     destroy() {
+        this._cancelScheduledHide();
 
         if (window.activeStreamingRequests && window.activeStreamingRequests[this.tweetId]) {
             console.log(`Cleaning up active streaming request for tweet ${this.tweetId}`);
