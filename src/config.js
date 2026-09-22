@@ -26,7 +26,7 @@ let reasoningEffort = appSettings.get('reasoningEffort');
 
 const REVIEW_SYSTEM_PROMPT = `
 Analyze the supplied tweet according to the user's custom instructions, assign it an integer score from 0 through 10, and suggest three relevant follow-up questions that you can confidently answer.
-Your response content should be a json object that follows this schema. 
+Your response content should be a json object that follows this schema.
 {
   "Response": "Your tweet analysis",
   "Score": 0,
@@ -95,18 +95,38 @@ function modelHasImageInput(model) {
   return modalities.includes('image');
 }
 
-function getCachedImageCapableModelIds() {
-  const cachedIds = browserGet('imageCapableModelIds', []);
-  if (Array.isArray(cachedIds)) {
-    return cachedIds;
+function rememberSelectedModelImageSupport() {
+  const support = {};
+  const previous = browserGet('selectedImageSupport', {});
+  for (const modelId of [selectedModel, selectedImageModel]) {
+    const model = availableModels.find(candidate => getModelIdentifierCandidates(candidate)
+      .filter(Boolean).some(value => value.toLowerCase() === modelId?.toLowerCase()));
+    if (model) support[modelId] = modelHasImageInput(model);
+    else if (previous?.[modelId] === true) support[modelId] = true;
   }
-  try {
-    const parsedIds = JSON.parse(cachedIds);
-    return Array.isArray(parsedIds) ? parsedIds : [];
-  } catch (error) {
-    return [];
-  }
+  browserSet('selectedImageSupport', support);
 }
+
+function migrateImageSupportCache() {
+  const oldIds = browserGet('imageCapableModelIds', null);
+  if (oldIds === null) return;
+  if (browserGet('selectedImageSupport', null) === null) {
+    let ids = oldIds;
+    if (typeof ids === 'string') {
+      try { ids = JSON.parse(ids); } catch (_) { ids = []; }
+    }
+    if (Array.isArray(ids)) {
+      const support = {};
+      for (const id of [selectedModel, selectedImageModel]) {
+        support[id] = ids.some(value => typeof value === 'string' && value.toLowerCase() === id?.toLowerCase());
+      }
+      browserSet('selectedImageSupport', support);
+    }
+  }
+  browserDelete('imageCapableModelIds');
+}
+
+migrateImageSupportCache();
 
 /**
  * Helper function to check if a model supports images based on its architecture
@@ -129,7 +149,5 @@ function modelSupportsImages(modelId) {
     return modelHasImageInput(model);
   }
 
-  return getCachedImageCapableModelIds()
-    .filter(Boolean)
-    .some(value => value.toLowerCase() === normalizedModelId);
+  return browserGet('selectedImageSupport', {})?.[modelId] === true;
 }

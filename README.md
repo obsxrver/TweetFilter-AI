@@ -65,21 +65,20 @@ Made with ❤️ for a better social media experience
 
 ## Cache behavior
 
-Ratings use a bounded, disposable cache: up to 256 entries and 1 MiB of serialized
-entry data, with entries expiring after 30 days. Least recently used entries are
-evicted first. Entries larger than 32 KiB (including long conversations or embedded
-uploads) are not cached; their older cached version is removed to avoid stale results.
+Ratings and follow-up conversations are stored under independent tweet keys with a
+small index. There is no application entry-count, age, or per-conversation size cutoff.
+Completed ratings and conversations are saved immediately. Intermediate streaming
+updates are batched for 1.5 seconds; hiding or leaving the page flushes them.
+If one storage write fails, other ratings can still save and the failed entry is
+retried on the next update or page hide. The browser's storage quota still applies.
 
-Updates are batched every 1.5 seconds into 16 storage buckets. Only changed buckets
-are written. Hiding or leaving the page flushes pending changes; clearing the cache
-flushes immediately. A browser process killed before a flush can lose recent updates.
-Storage failures disable persistence for the current page while the bounded memory
-cache remains available. Reloading retries persistence; Clear Rating Cache also retries.
-
-Valid legacy ratings migrate automatically within these limits. Legacy payloads over
-4 MiB, corrupt records, expired entries, and interrupted streams are discarded.
+Legacy `tweetRatings` data and numbered `tweetRatings.v2.*` buckets are imported
+and removed only after their replacement entries and index are saved. Interrupted
+streams are discarded. Image-capable model metadata is kept only for the two
+selected models instead of storing the full list of model IDs.
 Cache reads return independent snapshots; use `tweetCache.set(id, patch)` for changes.
-The old immediate-save argument is accepted for compatibility but writes are batched.
+The old immediate-save argument is accepted for compatibility; completed results save
+immediately regardless of that flag.
 
 Run regression tests with `node --test tests/*.test.js` and rebuild the userscript
 with `python combine-src.py`.

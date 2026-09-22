@@ -757,6 +757,7 @@ function refreshModelsUI() {
             (newValue) => {
                 selectedModel = newValue;
                 browserSet('selectedModel', selectedModel);
+                rememberSelectedModelImageSupport();
                 showStatus('Rating model updated');
             },
             'Search rating models...'
@@ -779,6 +780,7 @@ function refreshModelsUI() {
             (newValue) => {
                 selectedImageModel = newValue;
                 browserSet('selectedImageModel', selectedImageModel);
+                rememberSelectedModelImageSupport();
                 showStatus('Image model updated');
             },
             'Search vision models...'

@@ -41,23 +41,21 @@ function normalizeTweetCacheEntry(entry = {}) {
     return result;
 }
 
-/** Bounded, disposable storage. Reads return snapshots; all updates go through set(). */
+/** Each rating has an independent storage key. Reads return snapshots. */
 class TweetCache {
-    static BUCKETS = 16;
-    static MAX_ENTRIES = 256;
-    static MAX_BYTES = 1024 * 1024;
-    static MAX_ENTRY_BYTES = 32 * 1024;
-    static MAX_AGE = 30 * 24 * 60 * 60 * 1000;
     static SAVE_DELAY = 1500;
-    static PREFIX = 'tweetRatings.v2.';
+    static INDEX_KEY = 'tweetRating.index';
+    static ENTRY_PREFIX = 'tweetRating.entry.';
+    static OLD_PREFIX = 'tweetRatings.v2.';
+    static OLD_BUCKETS = 16;
 
     constructor() {
         this.entries = new Map();
-        this.bytes = 0;
         this.dirty = new Set();
+        this.persistedIds = new Set();
+        this.legacyKeys = new Set();
+        this.indexDirty = false;
         this.timer = null;
-        this.storageDisabled = false;
-        this.migrating = false;
         this.loadFromStorage();
         if (typeof document !== 'undefined') {
             document.addEventListener('visibilitychange', () => {
@@ -67,91 +65,91 @@ class TweetCache {
         if (typeof window !== 'undefined') window.addEventListener('pagehide', () => this.flush());
     }
 
-    bucket(id) {
+    oldBucket(id) {
         let hash = 0;
         for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-        return (hash >>> 0) % TweetCache.BUCKETS;
+        return (hash >>> 0) % TweetCache.OLD_BUCKETS;
     }
 
+    entryKey(id) { return TweetCache.ENTRY_PREFIX + encodeURIComponent(id); }
+
     loadFromStorage() {
-        let found = false;
-        for (let bucket = 0; bucket < TweetCache.BUCKETS; bucket++) {
+        const rawIndex = browserGet(TweetCache.INDEX_KEY, '[]');
+        let ids = [];
+        try {
+            const parsed = JSON.parse(rawIndex);
+            if (Array.isArray(parsed)) ids = parsed.filter(id => typeof id === 'string');
+            else this.indexDirty = true;
+        } catch (_) { this.indexDirty = true; }
+        for (const id of ids) {
+            this.persistedIds.add(id);
+            const raw = browserGet(this.entryKey(id), null);
             try {
-                const raw = browserGet(TweetCache.PREFIX + bucket, null);
+                if (typeof raw === 'string' && this.restore(id, JSON.parse(raw))) {
+                    this.dirty.delete(id);
+                } else {
+                    this.persistedIds.delete(id);
+                    this.dirty.add(id);
+                    this.indexDirty = true;
+                }
+            } catch (_) {
+                this.persistedIds.delete(id);
+                this.dirty.add(id);
+                this.indexDirty = true;
+            }
+        }
+        for (let bucket = 0; bucket < TweetCache.OLD_BUCKETS; bucket++) {
+            const key = TweetCache.OLD_PREFIX + bucket;
+            try {
+                const raw = browserGet(key, null);
                 if (raw === null) continue;
-                found = true;
-                if (typeof raw !== 'string' || raw.length * 2 > TweetCache.MAX_BYTES + 65536) continue;
+                this.legacyKeys.add(key);
                 const data = JSON.parse(raw);
                 if (data.version !== 2 || !Array.isArray(data.entries)) continue;
-                for (const pair of data.entries.slice(-TweetCache.MAX_ENTRIES)) {
-                    if (Array.isArray(pair) && typeof pair[0] === 'string' && this.bucket(pair[0]) === bucket) {
+                for (const pair of data.entries) {
+                    if (Array.isArray(pair) && typeof pair[0] === 'string' &&
+                        this.oldBucket(pair[0]) === bucket && !this.entries.has(pair[0])) {
                         this.restore(pair[0], pair[1]);
                     }
                 }
             } catch (_) { /* A corrupt bucket must not prevent startup. */ }
         }
-        if (!found) {
-            try {
-                const raw = browserGet('tweetRatings', '{}');
-                // Do not parse arbitrarily large legacy payloads on memory-constrained devices.
-                if (typeof raw === 'string' && raw.length * 2 <= 4 * TweetCache.MAX_BYTES) {
-                    const legacy = JSON.parse(raw);
-                    if (legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
-                        for (const id of Object.keys(legacy).slice(-TweetCache.MAX_ENTRIES)) this.restore(id, legacy[id]);
+        try {
+            const raw = browserGet('tweetRatings', null);
+            if (raw !== null) {
+                this.legacyKeys.add('tweetRatings');
+                const legacy = JSON.parse(raw);
+                if (legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
+                    for (const [id, entry] of Object.entries(legacy)) {
+                        if (!this.entries.has(id)) this.restore(id, entry);
                     }
                 }
-            } catch (_) { /* Cache data is optional. */ }
-            this.migrating = true;
-            for (let i = 0; i < TweetCache.BUCKETS; i++) this.dirty.add(i);
-        }
+            }
+        } catch (_) { /* A corrupt legacy cache must not prevent startup. */ }
         this.scheduleSave();
     }
 
     restore(id, entry) {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
-            !Number.isFinite(entry.timestamp) || Date.now() - entry.timestamp > TweetCache.MAX_AGE) return;
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
         // An interrupted request cannot resume after navigation.
-        if (entry.streaming || ['pending', 'streaming', 'processing'].includes(entry.status)) return;
-        this.put(id, { ...entry, streaming: false, fromStorage: true });
+        if (entry.streaming || ['pending', 'streaming', 'processing'].includes(entry.status)) return false;
+        return this.put(id, { ...entry, streaming: false, fromStorage: true });
     }
 
     put(id, value) {
         if (typeof id !== 'string' || !id || id.length > 128) return false;
         let json;
         try { json = JSON.stringify(normalizeTweetCacheEntry(value)); } catch (_) { return false; }
-        const bytes = (json.length + id.length) * 2;
-        // An oversized result is not cached. Remove older state so an interrupted
-        // streaming entry or obsolete conversation cannot be mistaken for the result.
-        if (bytes > TweetCache.MAX_ENTRY_BYTES) {
-            this.remove(id);
-            return true;
-        }
-        const previous = this.entries.get(id);
-        if (previous?.json === json) return false;
-        if (previous) this.bytes -= previous.bytes;
-        this.entries.delete(id);
-        this.entries.set(id, { json, bytes });
-        this.bytes += bytes;
-        this.dirty.add(this.bucket(id));
-        while (this.entries.size > TweetCache.MAX_ENTRIES || this.bytes > TweetCache.MAX_BYTES) {
-            this.remove(this.entries.keys().next().value);
-        }
+        if (this.entries.get(id) === json) return false;
+        this.entries.set(id, json);
+        this.dirty.add(id);
         return true;
     }
 
     get(id) {
         id = String(id);
-        const record = this.entries.get(id);
-        if (!record) return null;
-        const entry = JSON.parse(record.json);
-        if (Date.now() - entry.timestamp > TweetCache.MAX_AGE) {
-            this.delete(id);
-            return null;
-        }
-        // Map insertion order tracks recent use without requiring a storage write.
-        this.entries.delete(id);
-        this.entries.set(id, record);
-        return entry;
+        const json = this.entries.get(id);
+        return json ? JSON.parse(json) : null;
     }
 
     set(id, rating, _saveImmediately) {
@@ -163,20 +161,20 @@ class TweetCache {
             timestamp: rating.timestamp ?? Date.now() };
         if (previous.individualTweetText?.length > next.individualTweetText?.length) next.individualTweetText = previous.individualTweetText;
         if (previous.individualMediaUrls?.length > next.individualMediaUrls?.length) next.individualMediaUrls = previous.individualMediaUrls;
-        if (this.put(id, next)) this.scheduleSave();
+        if (this.put(id, next)) {
+            if ((rating.streaming === false && next.score != null) ||
+                (Array.isArray(rating.qaConversationHistory) && next.streaming !== true)) this.flush();
+            else this.scheduleSave();
+        }
     }
 
     has(id) { return this.get(id) !== null; }
     hasCompleteRating(id) { return isCompleteCachedRating(this.get(id)); }
     get size() { return this.entries.size; }
-    get cache() { return Object.fromEntries([...this.entries].map(([id, record]) => [id, JSON.parse(record.json)])); }
+    get cache() { return Object.fromEntries([...this.entries].map(([id, json]) => [id, JSON.parse(json)])); }
 
     remove(id) {
-        const record = this.entries.get(id);
-        if (!record) return;
-        this.bytes -= record.bytes;
-        this.entries.delete(id);
-        this.dirty.add(this.bucket(id));
+        if (this.entries.delete(id) || this.persistedIds.has(id)) this.dirty.add(id);
     }
 
     delete(id) {
@@ -185,17 +183,15 @@ class TweetCache {
     }
 
     clear() {
+        for (const id of this.entries.keys()) this.dirty.add(id);
+        for (const id of this.persistedIds) this.dirty.add(id);
         this.entries.clear();
-        this.bytes = 0;
-        // Clear every bucket, including corrupt or skipped data, and cancel pending saves.
-        for (let i = 0; i < TweetCache.BUCKETS; i++) this.dirty.add(i);
-        this.storageDisabled = false;
-        this.migrating = true;
+        this.indexDirty = true;
         this.flush();
     }
 
     scheduleSave() {
-        if (this.timer !== null || this.storageDisabled || !this.dirty.size) return;
+        if (this.timer !== null || (!this.dirty.size && !this.indexDirty && !this.legacyKeys.size)) return;
         // Fixed deadline: continuous streaming cannot postpone persistence indefinitely.
         this.timer = setTimeout(() => { this.timer = null; this.flush(); }, TweetCache.SAVE_DELAY);
     }
@@ -203,25 +199,26 @@ class TweetCache {
     flush() {
         if (this.timer !== null) clearTimeout(this.timer);
         this.timer = null;
-        if (this.storageDisabled || !this.dirty.size) return;
-        try {
-            for (const bucket of this.dirty) {
-                const entries = [];
-                for (const [id, record] of this.entries) {
-                    if (this.bucket(id) === bucket) entries.push([id, JSON.parse(record.json)]);
-                }
-                const result = browserSet(TweetCache.PREFIX + bucket, JSON.stringify({ version: 2, entries }));
-                if (result === false) throw new Error('Cache storage unavailable');
+        let failed = false;
+        for (const id of [...this.dirty]) {
+            const json = this.entries.get(id);
+            const saved = json === undefined ? browserDelete(this.entryKey(id)) : browserSet(this.entryKey(id), json);
+            if (saved === false) { failed = true; continue; }
+            if (json === undefined) this.persistedIds.delete(id);
+            else this.persistedIds.add(id);
+            this.dirty.delete(id);
+            this.indexDirty = true;
+        }
+        if (this.indexDirty && browserSet(TweetCache.INDEX_KEY, JSON.stringify([...this.persistedIds])) !== false) {
+            this.indexDirty = false;
+        } else if (this.indexDirty) failed = true;
+        if (!failed && !this.dirty.size && !this.indexDirty) {
+            for (const key of [...this.legacyKeys]) {
+                if (browserDelete(key) !== false) this.legacyKeys.delete(key);
             }
-            if (this.migrating) {
-                if (browserSet('tweetRatings', '{}') === false) throw new Error('Legacy cache cleanup failed');
-                this.migrating = false;
-            }
-            this.dirty.clear();
-        } catch (error) {
-            // Keep serving the bounded memory cache, without repeatedly hammering full storage.
-            this.storageDisabled = true;
-            console.warn('Tweet cache persistence disabled for this page:', error);
+        }
+        if (failed) {
+            console.warn('Some tweet ratings could not be saved; the next update will retry.');
         }
         if (typeof updateCacheStatsUI === 'function') {
             try { updateCacheStatsUI(); } catch (_) { /* UI may not be initialized yet. */ }

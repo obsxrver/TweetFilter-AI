@@ -6,14 +6,20 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../src/backends/TweetCache.js'), 'utf8');
 
 function createCache(storage = new Map(), fail = () => false) {
-    const writes = [], timers = new Map(), events = {};
+    const writes = [], deletes = [], timers = new Map(), events = {};
     let nextTimer = 0;
     const context = vm.createContext({
         browserGet: (key, fallback) => storage.has(key) ? storage.get(key) : fallback,
         browserSet(key, value) {
             writes.push([key, value]);
-            if (fail()) return false;
+            if (fail(key, value)) return false;
             storage.set(key, value);
+            return true;
+        },
+        browserDelete(key) {
+            deletes.push(key);
+            if (fail(key)) return false;
+            storage.delete(key);
             return true;
         },
         updateCacheStatsUI() {},
@@ -25,11 +31,11 @@ function createCache(storage = new Map(), fail = () => false) {
         console: { warn() {} }
     });
     vm.runInContext(`${source}\nglobalThis.cache = tweetCache; globalThis.Cache = TweetCache;`, context);
-    return { cache: context.cache, Cache: context.Cache, storage, writes, timers, events,
+    return { cache: context.cache, Cache: context.Cache, storage, writes, deletes, timers, events,
         tick() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(fn => fn()); } };
 }
 
-test('batches manual and automatic writes on a fixed deadline, writing only changed buckets', () => {
+test('batches intermediate writes and saves finished ratings immediately', () => {
     const h = createCache();
     h.tick(); h.writes.length = 0;
     h.cache.set('1', { score: 8 }, true);
@@ -38,8 +44,11 @@ test('batches manual and automatic writes on a fixed deadline, writing only chan
     assert.equal(h.writes.length, 0);
     assert.deepEqual([...h.timers.keys()], [timer]);
     h.tick();
-    assert.equal(h.writes.length, 1);
+    assert.equal(h.writes.length, 2);
+    assert.equal(h.writes[0][0], h.Cache.ENTRY_PREFIX + '1');
     assert.equal(createCache(h.storage).cache.get('1').reasoning, '99');
+    h.cache.set('1', { streaming: false, score: 8 });
+    assert.equal(createCache(h.storage).cache.get('1').score, 8);
 });
 
 test('clear cancels queued updates and persists an empty cache across reloads', () => {
@@ -58,30 +67,30 @@ test('delete survives reload and lifecycle events flush queued writes', () => {
     assert.equal(createCache(h.storage).cache.get('1'), null);
 });
 
-test('quota failures retain memory results and stop repeated writes', () => {
-    let fail = false;
-    const h = createCache(new Map(), () => fail);
-    h.tick(); fail = true;
-    h.cache.set('1', { score: 8 }); h.tick();
-    const count = h.writes.length;
-    h.cache.set('2', { score: 9 }); h.tick(); h.events.pagehide();
-    assert.equal(h.writes.length, count);
-    assert.equal(h.cache.get('2').score, 9);
-    fail = false; h.cache.clear();
-    assert.equal(createCache(h.storage).cache.size, 0);
+test('one failed entry does not stop other entries and retries later', () => {
+    let fail = true;
+    const h = createCache(new Map(), key => fail && key === 'tweetRating.entry.1');
+    h.cache.set('1', { score: 8, streaming: false });
+    h.cache.set('2', { score: 9, streaming: false });
+    assert.equal(createCache(h.storage).cache.get('1'), null);
+    assert.equal(createCache(h.storage).cache.get('2').score, 9);
+    fail = false;
+    h.events.pagehide();
+    assert.equal(createCache(h.storage).cache.get('1').score, 8);
 });
 
-test('bounded LRU evicts older entries and enforces a total byte budget', () => {
+test('more than 256 ratings and long conversations survive reload', () => {
     const h = createCache();
-    for (let i = 0; i < 256; i++) h.cache.set(String(i), { score: 7 });
-    h.cache.get('0'); h.cache.set('256', { score: 8 });
-    assert.equal(h.cache.get('1'), null);
-    assert.equal(h.cache.get('0').score, 7);
-    for (let i = 300; i < 600; i++) h.cache.set(String(i), { fullContext: 'x'.repeat(10000) });
-    assert.ok(h.cache.bytes <= h.Cache.MAX_BYTES);
-    assert.ok(h.cache.size <= h.Cache.MAX_ENTRIES);
+    for (let i = 0; i < 300; i++) h.cache.set(String(i), { score: 7 });
+    h.cache.set('0', { streaming: false, qaConversationHistory: [
+        { role: 'user', content: [{ type: 'text', text: 'x'.repeat(40000) }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
+    ] });
     h.tick();
-    assert.ok(createCache(h.storage).cache.bytes <= h.Cache.MAX_BYTES);
+    const restored = createCache(h.storage).cache;
+    assert.equal(restored.size, 300);
+    assert.equal(restored.get('0').qaConversationHistory[0].content[0].text.length, 40000);
+    assert.equal(restored.get('299').score, 7);
 });
 
 test('snapshot reads and caller-owned objects cannot mutate cached state', () => {
@@ -96,14 +105,14 @@ test('snapshot reads and caller-owned objects cannot mutate cached state', () =>
     assert.equal(h.cache.has('toString'), false);
 });
 
-test('invalid updates are isolated and oversized updates discard obsolete state', () => {
+test('invalid updates are isolated without dropping large valid entries', () => {
     const h = createCache();
     h.cache.set('1', { score: 8 });
     const circular = {}; circular.self = circular;
     h.cache.set('1', { metadata: circular });
     h.cache.set('large', { streaming: true });
-    h.cache.set('large', { description: 'x'.repeat(h.Cache.MAX_ENTRY_BYTES), streaming: false });
-    assert.equal(h.cache.get('large'), null);
+    h.cache.set('large', { description: 'x'.repeat(40000), streaming: false });
+    assert.equal(h.cache.get('large').description.length, 40000);
     h.cache.set('1', null);
     assert.equal(h.cache.get('1').score, 8);
     h.cache.set('2', { score: {}, questions: [null, 3, 'ok'], fullContext: {} });
@@ -111,7 +120,7 @@ test('invalid updates are isolated and oversized updates discard obsolete state'
     assert.equal(h.cache.get('2').questions.length, 1);
 });
 
-test('migrates valid legacy entries and discards stale or interrupted ratings', () => {
+test('migrates legacy entries and discards interrupted ratings', () => {
     const now = Date.now();
     const storage = new Map([['tweetRatings', JSON.stringify({
         good: { score: 8, timestamp: now },
@@ -120,20 +129,23 @@ test('migrates valid legacy entries and discards stale or interrupted ratings', 
         invalid: null
     })]]);
     const h = createCache(storage);
-    assert.equal(h.cache.size, 1);
+    assert.equal(h.cache.size, 2);
     assert.equal(h.cache.get('good').fromStorage, true);
     h.tick();
-    assert.equal(storage.get('tweetRatings'), '{}');
+    assert.equal(storage.has('tweetRatings'), false);
     assert.equal(createCache(storage).cache.get('good').score, 8);
 });
 
-test('corrupt bucket does not prevent other buckets loading', () => {
-    const h = createCache();
-    h.cache.set('1', { score: 8 }); h.cache.set('2', { score: 9 }); h.tick();
-    h.storage.set(h.Cache.PREFIX + h.cache.bucket('1'), '{broken');
-    const restored = createCache(h.storage);
-    assert.equal(restored.cache.get('1'), null);
-    assert.equal(restored.cache.get('2').score, 9);
+test('migrates numbered buckets and removes them after successful writes', () => {
+    const initial = createCache();
+    const storage = new Map();
+    for (const id of ['1', '2']) storage.set(initial.Cache.OLD_PREFIX + initial.cache.oldBucket(id),
+        JSON.stringify({ version: 2, entries: [[id, { score: Number(id), timestamp: Date.now() }]] }));
+    const h = createCache(storage);
+    assert.equal(h.cache.size, 2);
+    h.tick();
+    assert.equal([...storage.keys()].some(key => key.startsWith(h.Cache.OLD_PREFIX)), false);
+    assert.equal(createCache(storage).cache.get('2').score, 2);
 });
 
 test('streaming scores are never restored as completed ratings', () => {
@@ -160,4 +172,13 @@ test('multimodal conversations round-trip and malformed parts cannot crash rehyd
     assert.equal(history[0].content[0].text, 'instructions');
     assert.equal(history[1].content.length, 2);
     assert.equal(history[2].content[0].text, 'answer');
+});
+
+test('a follow-up conversation saves immediately without an initial rating', () => {
+    const h = createCache();
+    h.cache.set('question-only', { qaConversationHistory: [
+        { role: 'user', content: [{ type: 'text', text: 'What happened?' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'An answer.' }] }
+    ] });
+    assert.equal(createCache(h.storage).cache.get('question-only').qaConversationHistory.length, 2);
 });

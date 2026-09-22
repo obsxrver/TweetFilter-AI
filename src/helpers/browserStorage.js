@@ -32,3 +32,13 @@ function browserSet(key, value) {
     }
 }
 
+function browserDelete(key) {
+    try {
+        GM_deleteValue(key);
+        return true;
+    } catch (error) {
+        console.error('Error deleting from browser storage:', error);
+        return false;
+    }
+}
+
