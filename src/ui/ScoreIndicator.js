@@ -81,6 +81,9 @@ class ScoreIndicator {
         };
         this._boundMethodHandlers = Object.create(null);
         this._listenerTeardowns = [];
+        this.questionTexts = new WeakMap();
+        this.filePreviews = new Map();
+        this.expandedReasoningTurns = new Set();
 
         try {
             this._createElements(tweetArticle);
@@ -104,7 +107,6 @@ class ScoreIndicator {
         this.indicatorElement = document.createElement('button');
         this.indicatorElement.type = 'button';
         this.indicatorElement.className = 'score-indicator';
-        this.indicatorElement.dataset.tweetId = this.tweetId;
         this.indicatorElement.setAttribute('aria-label', 'Open TweetFilter AI score details');
         this.indicatorElement.title = 'Open TweetFilter AI score details';
 
@@ -114,8 +116,6 @@ class ScoreIndicator {
         this.tooltipElement = document.createElement('div');
         this.tooltipElement.className = 'score-description';
         this.tooltipElement.style.display = 'none';
-        this.tooltipElement.dataset.tweetId = this.tweetId;
-        this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
 
         if (isMobileDevice()) {
             this.tooltipElement.style.touchAction = 'pan-x pan-y pinch-zoom';
@@ -634,25 +634,25 @@ class ScoreIndicator {
         this._registerDomListener(this.followUpQuestionsElement, 'click', this._getBoundMethodHandler('_handleFollowUpQuestionClick'));
 
         if (isMobileDevice() && this.followUpQuestionsElement) {
+            let touchStart = null;
             this._boundHandlers.handleFollowUpTouchStart = (e) => {
                 const button = e.target.closest('.follow-up-question-button');
                 if (button) {
                     e.preventDefault();
 
-                    button.dataset.touchStartX = e.touches[0].clientX;
-                    button.dataset.touchStartY = e.touches[0].clientY;
+                    touchStart = { button, x: e.touches[0].clientX, y: e.touches[0].clientY };
                 }
             };
 
             this._boundHandlers.handleFollowUpTouchEnd = (e) => {
                 const button = e.target.closest('.follow-up-question-button');
-                if (button && button.dataset.touchStartX) {
+                if (button && touchStart?.button === button) {
                     e.preventDefault();
 
                     const touchEndX = e.changedTouches[0].clientX;
                     const touchEndY = e.changedTouches[0].clientY;
-                    const deltaX = Math.abs(touchEndX - parseFloat(button.dataset.touchStartX));
-                    const deltaY = Math.abs(touchEndY - parseFloat(button.dataset.touchStartY));
+                    const deltaX = Math.abs(touchEndX - touchStart.x);
+                    const deltaY = Math.abs(touchEndY - touchStart.y);
 
                     if (deltaX < 10 && deltaY < 10) {
 
@@ -663,8 +663,7 @@ class ScoreIndicator {
                         });
                     }
 
-                    delete button.dataset.touchStartX;
-                    delete button.dataset.touchStartY;
+                    touchStart = null;
                 }
             };
 
@@ -930,7 +929,7 @@ class ScoreIndicator {
 
             this.questions?.forEach((q, i) => {
                 const button = this.followUpQuestionsElement.children[i];
-                if (!button || button.dataset.questionText !== q) {
+                if (!button || this.questionTexts.get(button) !== q) {
                     questionsButtonsChanged = true;
                 }
             });
@@ -943,8 +942,7 @@ class ScoreIndicator {
                     const questionButton = document.createElement('button');
                     questionButton.className = 'follow-up-question-button';
                     questionButton.textContent = `🤔 ${question}`;
-                    questionButton.dataset.questionIndex = index;
-                    questionButton.dataset.questionText = question;
+                    this.questionTexts.set(questionButton, question);
 
                     if (isMobileDevice()) {
 
@@ -1026,13 +1024,6 @@ class ScoreIndicator {
             return '';
         }
 
-        const expandedStates = new Map();
-        if (this.conversationContainerElement) {
-            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach(dropdown => {
-                expandedStates.set(Number(dropdown.dataset.index), dropdown.classList.contains('expanded'));
-            });
-        }
-
         let historyHtml = '';
         this.conversationHistory.forEach((turn, index) => {
             const formattedQuestion = escapeTooltipHtml(turn.question).replace(/\n/g, '<br>');
@@ -1077,13 +1068,13 @@ class ScoreIndicator {
             if (turn.reasoning && turn.reasoning.trim() !== '' && turn.answer !== 'pending') {
                 const formattedReasoning = formatTooltipDescription("", turn.reasoning).reasoning;
 
-                const wasExpanded = expandedStates.get(index);
+                const wasExpanded = this.expandedReasoningTurns.has(index);
                 const expandedClass = wasExpanded ? ' expanded' : '';
                 const arrowChar = wasExpanded ? '▼' : '▶';
                 const contentStyle = wasExpanded ? 'style="max-height: 200px; padding: 8px;"' : 'style="max-height: 0; padding: 0 8px;"';
 
                 reasoningHtml = `
-                    <div class="reasoning-dropdown conversation-reasoning${expandedClass}" data-index="${index}">
+                    <div class="reasoning-dropdown conversation-reasoning${expandedClass}">
                         <div class="reasoning-toggle" role="button" tabindex="0" aria-expanded="${wasExpanded ? 'true' : 'false'}">
                             <span class="reasoning-arrow">${arrowChar}</span> Show Reasoning Trace
                         </div>
@@ -1096,22 +1087,22 @@ class ScoreIndicator {
 
             const questionHtml = isEditing
                 ? `
-                    <div class="conversation-edit-form" data-turn-index="${index}">
+                    <div class="conversation-edit-form">
                         <label for="conversation-edit-${this.tweetId}-${index}">Edit your message</label>
                         <textarea id="conversation-edit-${this.tweetId}-${index}" class="conversation-edit-input" rows="3">${escapeTooltipHtml(turn.question)}</textarea>
                         <div class="conversation-edit-actions">
-                            <button type="button" class="conversation-action-button conversation-save-edit" data-turn-index="${index}">Save & resubmit</button>
-                            <button type="button" class="conversation-action-button conversation-cancel-edit" data-turn-index="${index}">Cancel</button>
+                            <button type="button" class="conversation-action-button conversation-save-edit">Save & resubmit</button>
+                            <button type="button" class="conversation-action-button conversation-cancel-edit">Cancel</button>
                         </div>
                     </div>`
                 : `
                     <div class="conversation-question-row">
                         <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
-                        ${canRevise ? `<button type="button" class="conversation-action-button conversation-edit-button" data-turn-index="${index}" aria-label="Edit and resubmit this message" title="Edit and resubmit"${actionsDisabled}>Edit</button>` : ''}
+                        ${canRevise ? `<button type="button" class="conversation-action-button conversation-edit-button" aria-label="Edit and resubmit this message" title="Edit and resubmit"${actionsDisabled}>Edit</button>` : ''}
                     </div>`;
 
             const rerollButton = canRevise && !isEditing
-                ? `<button type="button" class="conversation-action-button conversation-reroll-button" data-turn-index="${index}" aria-label="Reroll this AI response" title="Reroll response"${actionsDisabled}>Reroll</button>`
+                ? `<button type="button" class="conversation-action-button conversation-reroll-button" aria-label="Reroll this AI response" title="Reroll response"${actionsDisabled}>Reroll</button>`
                 : '';
 
             historyHtml += `
@@ -1163,7 +1154,12 @@ class ScoreIndicator {
 
             const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
 
-            const isExpanded = dropdown.classList.toggle('expanded');
+            const turnIndex = Array.from(this.conversationContainerElement.querySelectorAll('.conversation-turn'))
+                .indexOf(dropdown.closest('.conversation-turn'));
+            const isExpanded = !this.expandedReasoningTurns.has(turnIndex);
+            if (isExpanded) this.expandedReasoningTurns.add(turnIndex);
+            else this.expandedReasoningTurns.delete(turnIndex);
+            dropdown.classList.toggle('expanded', isExpanded);
             arrow.textContent = isExpanded ? '▼' : '▶';
             toggleButton.setAttribute('aria-expanded', isExpanded);
             content.style.maxHeight = isExpanded ? '200px' : '0';
@@ -1190,7 +1186,7 @@ class ScoreIndicator {
         event.stopPropagation();
         if (this.isFollowUpPending) return;
 
-        const turnIndex = Number(actionButton.dataset.turnIndex);
+        const turnIndex = Array.from(this.conversationContainerElement.querySelectorAll('.conversation-turn')).indexOf(actionButton.closest('.conversation-turn'));
         if (!Number.isInteger(turnIndex) || !this.conversationHistory[turnIndex]) return;
 
         if (actionButton.classList.contains('conversation-edit-button')) {
@@ -1535,14 +1531,12 @@ class ScoreIndicator {
         if (!isNearBottom) {
             if (this.autoScroll) {
                 this.autoScroll = false;
-                this.tooltipElement.dataset.autoScroll = 'false';
                 this.userInitiatedScroll = true;
             }
         } else {
 
             if (this.userInitiatedScroll) {
                 this.autoScroll = true;
-                this.tooltipElement.dataset.autoScroll = 'true';
                 this.userInitiatedScroll = false;
             }
         }
@@ -1621,25 +1615,22 @@ class ScoreIndicator {
         if (!this.tooltipScrollableContentElement) return;
 
         this.autoScroll = true;
-        this.tooltipElement.dataset.autoScroll = 'true';
         this._performAutoScroll();
         this._updateScrollButtonVisibility();
     }
 
-    _handleFollowUpQuestionClick(event) {
+    _handleFollowUpQuestionClick(event, customQuestion = null) {
 
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
 
-        const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
-        const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
-
-        if (!button) return false;
-
+        const isCustom = customQuestion !== null;
+        const button = event.target?.closest('.follow-up-question-button');
+        if (!isCustom && !button) return false;
+        if (this.isFollowUpPending) return false;
         event.stopPropagation();
-
-        const questionText = button.dataset.questionText;
+        const questionText = isCustom ? customQuestion : this.questionTexts.get(button);
         const apiKey = browserGet('openrouter-api-key', '');
 
         if (!questionText) {
@@ -1651,12 +1642,12 @@ class ScoreIndicator {
             return false;
         }
 
-        this.currentFollowUpSource = isMockEvent ? 'custom' : 'suggested';
+        this.currentFollowUpSource = isCustom ? 'custom' : 'suggested';
         this.isFollowUpPending = true;
         this.editingTurnIndex = null;
         this._setFollowUpControlsDisabled(true, 'Asking...');
 
-        if (!isMockEvent) {
+        if (!isCustom) {
             button.textContent = `🤔 Asking: ${questionText}...`;
         }
 
@@ -1672,7 +1663,7 @@ class ScoreIndicator {
             this.uploadedImageDataUrls.forEach(url => {
                 if (url.startsWith('data:application/pdf')) {
 
-                    const previewItem = this.followUpImageContainer?.querySelector(`[data-image-data-url="${CSS.escape(url)}"]`);
+                    const previewItem = this.filePreviews.get(url);
                     const fileName = previewItem?.querySelector('.follow-up-pdf-preview span:last-child')?.textContent || 'document.pdf';
 
                     userMessageContentForHistory.push({
@@ -1732,19 +1723,7 @@ class ScoreIndicator {
 
         const submissionText = questionText || (hasImages ? "[file only message]" : "");
 
-        const mockButton = {
-            dataset: { questionText: submissionText },
-            disabled: false,
-            textContent: ''
-        };
-
-        this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-
-        const submitted = this._handleFollowUpQuestionClick({
-            target: mockButton,
-            stopPropagation: () => {},
-            preventDefault: () => {}
-        });
+        const submitted = this._handleFollowUpQuestionClick(event, submissionText);
 
         if (!submitted) return;
 
@@ -1799,7 +1778,7 @@ class ScoreIndicator {
 
         const filePromises = Array.from(files).map(file => {
             if (file && file.type.startsWith('image/')) {
-                return resizeImage(file, 1024)
+                return resizeImage(file)
                     .then(resizedDataUrl => {
                         this.uploadedImageDataUrls.push(resizedDataUrl);
                         this._addPreviewToContainer(resizedDataUrl, 'image');
@@ -1846,7 +1825,7 @@ class ScoreIndicator {
 
         const previewItem = document.createElement('div');
         previewItem.className = 'follow-up-image-preview-item';
-        previewItem.dataset.imageDataUrl = dataUrl;
+        this.filePreviews.set(dataUrl, previewItem);
 
         if (fileType === 'pdf') {
 
@@ -1888,9 +1867,10 @@ class ScoreIndicator {
         this.uploadedImageDataUrls = this.uploadedImageDataUrls.filter(url => url !== imageDataUrl);
 
         if (this.followUpImageContainer) {
-            const previewItemToRemove = this.followUpImageContainer.querySelector(`div.follow-up-image-preview-item[data-image-data-url="${CSS.escape(imageDataUrl)}"]`);
+            const previewItemToRemove = this.filePreviews.get(imageDataUrl);
             if (previewItemToRemove) {
                 previewItemToRemove.remove();
+                this.filePreviews.delete(imageDataUrl);
                 }
 
             if (this.uploadedImageDataUrls.length === 0) {
@@ -1900,6 +1880,7 @@ class ScoreIndicator {
     }
 
     _clearFollowUpImage() {
+        this.filePreviews.clear();
         this.uploadedImageDataUrls = [];
         if (this.followUpImageContainer) {
             this.followUpImageContainer.innerHTML = '';
@@ -2028,7 +2009,6 @@ class ScoreIndicator {
             this.metadataContent.style.padding = '0 10px';
         }
         if (this.tooltipElement) {
-            this.tooltipElement.dataset.autoScroll = 'true';
         }
         if (this.tooltipScrollableContentElement) {
             this.tooltipScrollableContentElement.scrollTop = 0;
@@ -2207,7 +2187,6 @@ class ScoreIndicator {
                 this.autoScroll = shouldAutoScroll;
 
                 if (this.tooltipElement) {
-                    this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
                 }
             }
         }
@@ -2309,11 +2288,7 @@ class ScoreIndicator {
 
         ScoreIndicatorRegistry.remove(this.tweetId);
 
-        const currentArticle = this.findCurrentArticleElement();
-        if (currentArticle) {
-            delete currentArticle.dataset.hasScoreIndicator;
-
-        }
+        this.filePreviews.clear();
 
         this.tweetArticle = null;
         this.indicatorElement = null;
@@ -2377,7 +2352,7 @@ class ScoreIndicator {
     /**
      * Updates the indicator's state after an initial review and builds the conversation history.
      * @param {object} params
-     * @param {string} params.fullContext - The full text context of the tweet.
+     * @param {object} params.fullContext - Parsed tweet and ancestor context.
      * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
      * @param {string} params.apiResponseContent - The raw content from the API response.
      * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
@@ -2392,7 +2367,7 @@ class ScoreIndicator {
         this.questions = parsedResponse.questions;
         this.status = this.score !== null ? 'rated' : 'error';
 
-        const userMessageContent = [{ type: "text", text: fullContext }];
+        const userMessageContent = [{ type: "text", text: JSON.stringify(fullContext) }];
         if (typeof collectRatingImageUrls === 'function' && typeof appendRatingMediaContent === 'function' && modelSupportsImages(selectedModel)) {
             appendRatingMediaContent(userMessageContent, collectRatingImageUrls(mediaUrls, fullContext));
         }
@@ -2720,15 +2695,7 @@ const ScoreIndicatorRegistry = {
         } else if (tweetArticle) {
             try {
 
-                const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
-                const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
-
-                if (existingIndicator || existingTooltip) {
-                    console.warn(`[Registry] Found existing indicator/tooltip elements for tweet ${tweetId} outside registry. Removing them before creating new manager.`);
-                    existingIndicator?.remove();
-                    existingTooltip?.remove();
-                }
-
+                tweetArticle.querySelector('.score-indicator')?.remove();
                 return new ScoreIndicator(tweetArticle);
             } catch (e) {
                 console.error(`[Registry] Error creating ScoreIndicator for ${tweetId}:`, e);

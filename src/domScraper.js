@@ -38,16 +38,6 @@ function extractVisibleTextWithEmoji(element) {
     return textParts.join('').replace(/\u00A0/g, ' ').trim();
 }
 
-function getElementText(elements) {
-    if (!elements) return '';
-    const elementList = elements instanceof NodeList ? Array.from(elements) : [elements];
-    for (const element of elementList) {
-        const text = extractVisibleTextWithEmoji(element);
-        if (text) return text;
-    }
-    return '';
-}
-
 /**
  * Finds the interactive card that represents a quoted tweet.
  *
@@ -75,47 +65,24 @@ function getQuotedTweetContainer(tweetArticle) {
     return null;
 }
 
-/**
- * Extracts the text of a tweet, excluding any text from quoted tweets.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {string} The text of the main tweet.
- */
-function getTweetText(tweetArticle) {
-    const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
-    const quoteContainer = getQuotedTweetContainer(tweetArticle);
+const generatedTweetIds = new WeakMap();
+const cellTweets = new WeakMap();
+const filteredCells = new WeakSet();
+const conversationStates = new WeakMap();
 
-    for (const textElement of allTextElements) {
-
-        if (!quoteContainer || !quoteContainer.contains(textElement)) {
-            const tweetText = extractVisibleTextWithEmoji(textElement);
-            if (tweetText) return tweetText;
-        }
-    }
-
-    return '';
-}
-/**
- * Extracts the tweet ID from a tweet article element.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {string} The tweet ID.
- */
 function getTweetID(tweetArticle) {
     if (!tweetArticle) return '';
 
-    const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
-    let tweetId = timeEl?.parentElement?.href;
-    if (tweetId && tweetId.includes('/status/')) {
-        const match = tweetId.match(/\/status\/(\d+)/);
-        if (match && match[1]) {
-            return match[1];
-        }
-        return tweetId.substring(tweetId.indexOf('/status/') + 1);
-    }
+    const quote = getQuotedTweetContainer(tweetArticle);
+    const time = Array.from(tweetArticle.querySelectorAll(PERMALINK_SELECTOR))
+        .find(element => !quote?.contains(element));
+    const tweetId = time?.closest('a')?.getAttribute('href')?.match(/\/status\/(\d+)/)?.[1];
+    if (tweetId) return tweetId;
 
-    if (!tweetArticle.dataset.tweetFilterGeneratedId) {
-        tweetArticle.dataset.tweetFilterGeneratedId = `generated-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
+    if (!generatedTweetIds.has(tweetArticle)) {
+        generatedTweetIds.set(tweetArticle, `generated-${crypto.randomUUID()}`);
     }
-    return tweetArticle.dataset.tweetFilterGeneratedId;
+    return generatedTweetIds.get(tweetArticle);
 }
 
 /**
@@ -170,39 +137,6 @@ function getUserHandles(tweetArticle) {
     }
 
     return handles.length > 0 ? handles : [''];
-}
-
-/**
- * Synchronous version of extractMediaLinks without retry logic.
- * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
- */
-function extractMediaLinks(scopeElement) {
-    if (!scopeElement) return [];
-
-    const mediaLinks = new Set();
-
-    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
-    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, [poster*="pbs.twimg.com"], video`;
-    const combinedSelector = `${imgSelector}, ${videoSelector}`;
-
-    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
-        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
-    }
-    mediaElements.forEach(mediaEl => {
-        if (mediaEl.tagName === 'VIDEO') {
-            if (mediaEl.poster) mediaLinks.add(mediaEl.poster);
-        } else if (mediaEl.tagName === 'IMG') {
-            const sourceUrl = mediaEl.src;
-            if(!sourceUrl) return;
-            const isAvatar = sourceUrl.includes('/profile_images/') ||
-                Boolean(mediaEl.closest?.('[data-testid^="UserAvatar-Container-"], [data-testid="Tweet-User-Avatar"]'));
-            if (isAvatar) return;
-            mediaLinks.add(sourceUrl);          
-        }
-    });
-    return Array.from(mediaLinks);
 }
 
 /**
@@ -270,15 +204,62 @@ function extractWebsiteLinkPreviews(scopeElement, excludedContainer = null) {
     return previews;
 }
 
-function isOriginalTweet(tweetArticle) {
-    let sibling = tweetArticle.nextElementSibling;
-    while (sibling) {
-        if (sibling.matches && sibling.matches('div[data-testid="inline_reply_offscreen"]')) {
-            return true;
+/**
+ * @typedef {Object} ParsedTweet
+ * @property {string|null} id
+ * @property {{handle: string, name: string}} author
+ * @property {string} text
+ * @property {string|null} createdAt
+ * @property {string|null} url
+ * @property {Array<{type: string, url: string, alt: string, description?: string}>} media
+ * @property {Array<{url: string, site: string, title: string, description: string, imageUrl: string}>} linkPreviews
+ * @property {Object<string, number>} engagement
+ * @property {ParsedTweet|null} quotedTweet
+ * @property {{id: string, handle: string}|null} replyTo
+ */
+/** @returns {ParsedTweet} Plain content, without DOM references or rating state. */
+function parseTweet(tweetArticle) {
+    const quote = getQuotedTweetContainer(tweetArticle);
+    const handles = getUserHandles(tweetArticle);
+    const parseContent = (scope, handle, excluded = null) => {
+        const own = selector => Array.from(scope.querySelectorAll(selector))
+            .filter(element => !excluded?.contains(element));
+        const time = own(PERMALINK_SELECTOR)[0];
+        const link = time?.closest('a') || own('a[href*="/status/"]')[0];
+        const media = own(`${MEDIA_IMG_SELECTOR}, ${MEDIA_VIDEO_SELECTOR}`)
+            .filter(element => !element.src?.includes('/profile_images/'))
+            .map(element => ({
+                type: element.tagName === 'VIDEO' || element.closest('[data-testid="videoPlayer"]') ||
+                    /video_thumb/.test(element.src || '') ? 'video' : 'image',
+                url: element.tagName === 'VIDEO' ? element.poster : element.src,
+                alt: element.getAttribute('alt') || ''
+            })).filter(item => item.url);
+        const engagement = {};
+        const label = own('[role="group"][aria-label]')[0]?.getAttribute('aria-label') || '';
+        for (const match of label.matchAll(/([\d,.]+[KM]?)\s+(repl(?:y|ies)|reposts?|likes?|bookmarks?|views?)/gi)) {
+            const count = match[1].replace(/,/g, '');
+            const key = match[2].startsWith('repl') ? 'replies' : match[2].replace(/s?$/, 's');
+            engagement[key] = Math.round(parseFloat(count) * (/M$/i.test(count) ? 1e6 : /K$/i.test(count) ? 1e3 : 1));
         }
-        sibling = sibling.nextElementSibling;
-    }
-    return false;
+        return {
+            id: link?.getAttribute('href')?.match(/\/status\/(\d+)/)?.[1] || null,
+            author: { handle, name: extractVisibleTextWithEmoji(own('[data-testid="User-Name"] [dir="ltr"] span')[0]) },
+            text: extractVisibleTextWithEmoji(own(TWEET_TEXT_SELECTOR)[0]),
+            createdAt: time?.getAttribute('datetime') || null,
+            url: link?.href || null,
+            media: media.filter((item, index) => media.findIndex(other => other.url === item.url) === index),
+            linkPreviews: extractWebsiteLinkPreviews(scope, excluded),
+            engagement,
+            quotedTweet: null,
+            replyTo: null
+        };
+    };
+    const tweet = parseContent(tweetArticle, handles[0], quote);
+    tweet.id = getTweetID(tweetArticle);
+    if (quote) tweet.quotedTweet = parseContent(quote, handles[1] || '');
+    const cell = tweetArticle.closest('[data-testid="cellInnerDiv"]');
+    if (cell) cellTweets.set(cell, tweet);
+    return tweet;
 }
 
 /**
@@ -294,25 +275,6 @@ function handleMutations(mutationsList) {
         if (window.location.pathname.includes('/compose/')) return true;
 
         if (!element) return true;
-
-        if (element.dataset?.filtered === 'true' || element.dataset?.isAd === 'true') {
-            return true;
-        }
-
-        const cell = element.closest('div[data-testid="cellInnerDiv"]');
-        if (cell?.dataset?.filtered === 'true' || cell?.dataset?.isAd === 'true') {
-            return true;
-        }
-
-        if (isAd(element)) {
-
-            if (cell) {
-                cell.dataset.isAd = 'true';
-                cell.classList.add('tweet-filtered');
-            }
-            element.dataset.isAd = 'true';
-            return true;
-        }
 
         const tweetId = getTweetID(element);
         if (tweetProcessingState.isScheduled(tweetId)) {
@@ -368,7 +330,7 @@ function handleMutations(mutationsList) {
                 mutation.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
 
-                        if (node.dataset?.filtered === 'true' || node.dataset?.isAd === 'true') {
+                        if (filteredCells.has(node)) {
                             return;
                         }
 
@@ -383,7 +345,7 @@ function handleMutations(mutationsList) {
                         else if (node.querySelectorAll) {
                             const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
                             removedTweets.forEach(tweet => {
-                                if (tweet.dataset?.filtered === 'true' || tweet.dataset?.isAd === 'true') {
+                                if (filteredCells.has(tweet.closest('[data-testid="cellInnerDiv"]'))) {
                                     return;
                                 }
                                 const tweetId = getTweetID(tweet);

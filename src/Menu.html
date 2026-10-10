@@ -2,7 +2,7 @@
     <button id="filter-toggle" class="toggle-button" style="display: none;">Filter</button>
 
     <div id="tweet-filter-container">
-        <button class="close-button" data-action="close-filter">x</button>
+        <button class="close-button" name="close-filter">x</button>
         <label for="tweet-filter-slider">Minimum score</label>
         <div class="filter-controls">
             <input type="range" id="tweet-filter-slider" min="0" max="10" step="1">
@@ -10,19 +10,19 @@
         </div>
     </div>
 
-    <button id="settings-toggle" class="toggle-button" data-action="toggle-settings">Settings</button>
+    <button id="settings-toggle" class="toggle-button" name="toggle-settings">Settings</button>
 
     <div id="settings-container" class="hidden">
         <div class="settings-header">
             <div class="settings-title">TweetFilter AI</div>
-            <button class="close-button" data-action="toggle-settings">x</button>
+            <button class="close-button" name="toggle-settings">x</button>
         </div>
 
         <div class="settings-content">
             <div class="tab-navigation">
-                <button class="tab-button active" data-tab="general">General</button>
-                <button class="tab-button" data-tab="models">Models</button>
-                <button class="tab-button" data-tab="instructions">Instructions</button>
+                <button class="tab-button active" name="tab" aria-controls="general-tab">General</button>
+                <button class="tab-button" name="tab" aria-controls="models-tab">Models</button>
+                <button class="tab-button" name="tab" aria-controls="instructions-tab">Instructions</button>
             </div>
 
             <div id="general-tab" class="tab-content active">
@@ -31,7 +31,7 @@
                     <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Get one</a>
                 </div>
                 <input id="openrouter-api-key" placeholder="Enter your OpenRouter API key">
-                <button class="settings-button" data-action="save-api-key">Save API Key</button>
+                <button class="settings-button" name="save-api-key">Save API Key</button>
 
                 <div class="section-title" style="margin-top: 20px;">Cache</div>
                 <div class="stats-container">
@@ -44,12 +44,12 @@
                         <div class="stats-value" id="whitelisted-handles-count">0</div>
                     </div>
                 </div>
-                <button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button>
+                <button id="clear-cache" class="settings-button danger" name="clear-cache">Clear Rating Cache</button>
 
                 <div class="section-title" style="margin-top: 20px;">Backup</div>
                 <div class="section-description">Export cached ratings as JSON.</div>
-                <button class="settings-button" data-action="export-cache">Export Cache</button>
-                <button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset Settings</button>
+                <button class="settings-button" name="export-cache">Export Cache</button>
+                <button class="settings-button danger" style="margin-top: 15px;" name="reset-settings">Reset Settings</button>
 
                 <div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">TweetFilter AI</div>
             </div>
@@ -60,14 +60,14 @@
                 <div class="select-container" id="model-select-container"></div>
 
                 <div class="advanced-options">
-                    <div class="advanced-toggle" data-toggle="model-options-content">
+                    <div class="advanced-toggle" aria-controls="model-options-content">
                         <div class="advanced-toggle-title">Options</div>
                         <div class="advanced-toggle-icon">v</div>
                     </div>
                     <div class="advanced-content" id="model-options-content">
                         <div class="sort-container">
                             <label for="model-family-filter">Provider</label>
-                            <select id="model-family-filter" data-setting="modelFamilyFilter">
+                            <select id="model-family-filter" name="modelFamilyFilter">
                                 <option value="">All Providers</option>
                                 <option value="openai">OpenAI</option>
                                 <option value="anthropic">Anthropic</option>
@@ -78,7 +78,7 @@
 
                         <div class="sort-container">
                             <label for="provider-sort">Endpoint Priority</label>
-                            <select id="provider-sort" data-setting="providerSort">
+                            <select id="provider-sort" name="providerSort">
                                 <option value="">Default</option>
                                 <option value="throughput">Throughput</option>
                                 <option value="latency">Latency</option>
@@ -88,14 +88,14 @@
 
                         <div class="sort-container">
                             <label>
-                                <input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>
+                                <input type="checkbox" id="show-free-models" name="showFreeModels" checked>
                                 Show free models
                             </label>
                         </div>
 
                         <div class="sort-container">
                             <label for="reasoning-effort">Reasoning Effort</label>
-                            <select id="reasoning-effort" data-setting="reasoningEffort">
+                            <select id="reasoning-effort" name="reasoningEffort">
                                 <option value="none">None</option>
                                 <option value="minimal">Minimal</option>
                                 <option value="low">Low</option>
@@ -105,7 +105,7 @@
                             </select>
                         </div>
 
-                        <div class="parameter-row" data-param-name="modelTemperature">
+                        <div class="parameter-row" id="parameter-modelTemperature">
                             <div class="parameter-label" title="How random model responses should be.">Temperature</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="2" step="0.05">
@@ -113,7 +113,7 @@
                             </div>
                         </div>
 
-                        <div class="parameter-row" data-param-name="modelTopP">
+                        <div class="parameter-row" id="parameter-modelTopP">
                             <div class="parameter-label" title="Nucleus sampling value.">Top-p</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="1" step="0.01">
@@ -121,7 +121,7 @@
                             </div>
                         </div>
 
-                        <div class="parameter-row" data-param-name="maxTokens">
+                        <div class="parameter-row" id="parameter-maxTokens">
                             <div class="parameter-label" title="Maximum response tokens. Use 0 for provider default.">Max Tokens</div>
                             <div class="parameter-control">
                                 <input type="range" class="parameter-slider" min="0" max="2000" step="100">
@@ -132,7 +132,7 @@
                         <div class="toggle-row">
                             <div class="toggle-label" title="Show API responses as they stream in.">Live Streaming</div>
                             <label class="toggle-switch">
-                                <input type="checkbox" data-setting="enableStreaming">
+                                <input type="checkbox" name="enableStreaming">
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
@@ -140,7 +140,7 @@
                         <div class="toggle-row">
                             <div class="toggle-label" title="Allow OpenRouter web search for rating requests.">Web Search</div>
                             <label class="toggle-switch">
-                                <input type="checkbox" data-setting="enableWebSearch">
+                                <input type="checkbox" name="enableWebSearch">
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
@@ -148,7 +148,7 @@
                         <div class="toggle-row">
                             <div class="toggle-label" title="When disabled, tweets show a manual Rate button.">Auto-Rate Tweets</div>
                             <label class="toggle-switch">
-                                <input type="checkbox" data-setting="enableAutoRating">
+                                <input type="checkbox" name="enableAutoRating">
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
@@ -161,7 +161,7 @@
                 <div class="toggle-row">
                     <div class="toggle-label">Describe Images First</div>
                     <label class="toggle-switch">
-                        <input type="checkbox" data-setting="enableImageDescriptions">
+                        <input type="checkbox" name="enableImageDescriptions">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -169,12 +169,12 @@
                 <div id="image-model-container" style="display: none;">
                     <div class="select-container" id="image-model-select-container"></div>
                     <div class="advanced-options" id="image-advanced-options">
-                        <div class="advanced-toggle" data-toggle="image-advanced-content">
+                        <div class="advanced-toggle" aria-controls="image-advanced-content">
                             <div class="advanced-toggle-title">Options</div>
                             <div class="advanced-toggle-icon">v</div>
                         </div>
                         <div class="advanced-content" id="image-advanced-content">
-                            <div class="parameter-row" data-param-name="imageModelTemperature">
+                            <div class="parameter-row" id="parameter-imageModelTemperature">
                                 <div class="parameter-label" title="Randomness for image descriptions.">Temperature</div>
                                 <div class="parameter-control">
                                     <input type="range" class="parameter-slider" min="0" max="2" step="0.1">
@@ -182,7 +182,7 @@
                                 </div>
                             </div>
 
-                            <div class="parameter-row" data-param-name="imageModelTopP">
+                            <div class="parameter-row" id="parameter-imageModelTopP">
                                 <div class="parameter-label" title="Nucleus sampling for image descriptions.">Top-p</div>
                                 <div class="parameter-control">
                                     <input type="range" class="parameter-slider" min="0" max="1" step="0.1">
@@ -200,17 +200,17 @@
                 <textarea id="user-instructions" placeholder="Examples:
 - Reward original reporting and useful technical detail.
 - Penalize engagement bait and vague outrage.
-- Prefer concise, evidence-backed posts." data-setting="userDefinedInstructions"></textarea>
-                <button class="settings-button" data-action="save-instructions">Save Instructions</button>
+- Prefer concise, evidence-backed posts." name="userDefinedInstructions"></textarea>
+                <button class="settings-button" name="save-instructions">Save Instructions</button>
 
                 <div class="advanced-options" id="instructions-history">
-                    <div class="advanced-toggle" data-toggle="instructions-history-content">
+                    <div class="advanced-toggle" aria-controls="instructions-history-content">
                         <div class="advanced-toggle-title">Instruction History</div>
                         <div class="advanced-toggle-icon">v</div>
                     </div>
                     <div class="advanced-content" id="instructions-history-content">
                         <div class="instructions-list" id="instructions-list"></div>
-                        <button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear History</button>
+                        <button class="settings-button danger" style="margin-top: 10px;" name="clear-instructions-history">Clear History</button>
                     </div>
                 </div>
 
@@ -218,7 +218,7 @@
                 <div class="section-description">Tweets from these handles stay visible regardless of score.</div>
                 <div class="handle-input-container">
                     <input id="handle-input" type="text" placeholder="Handle without @">
-                    <button class="add-handle-btn" data-action="add-handle">Add</button>
+                    <button class="add-handle-btn" name="add-handle">Add</button>
                 </div>
                 <div class="handle-list" id="handle-list"></div>
             </div>

@@ -26,6 +26,7 @@ let reasoningEffort = appSettings.get('reasoningEffort');
 
 const REVIEW_SYSTEM_PROMPT = `
 Analyze the supplied tweet according to the user's custom instructions, assign it an integer score from 0 through 10, and suggest three relevant follow-up questions that you can confidently answer.
+The input is JSON: rate "tweet"; "ancestors" supplies reply context in oldest-first order. Each tweet has its own author, media, linkPreviews and optional quotedTweet. Attribute quoted content to its author.
 Your response content should be a json object that follows this schema.
 {
   "Response": "Your tweet analysis",
@@ -66,7 +67,7 @@ const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
-const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"], img[src*="pbs.twimg.com/amplify_video_thumb"]';
+const MEDIA_IMG_SELECTOR = '[data-testid="tweetPhoto"] img, [data-testid="videoPlayer"] img, img[src*="pbs.twimg.com/media"], img[src*="video_thumb"]';
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 const WEBSITE_CARD_SELECTOR = '[data-testid="card.wrapper"]';

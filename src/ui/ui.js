@@ -114,12 +114,10 @@ function initializeEventListeners(uiContainer) {
 
     uiContainer.addEventListener('click', (event) => {
         const target = event.target;
-        const actionElement = target.closest('[data-action]');
-        const action = actionElement?.dataset.action;
-        const setting = target.dataset.setting;
-        const paramName = target.closest('.parameter-row')?.dataset.paramName;
-        const tab = target.dataset.tab;
-        const toggleTargetId = target.closest('[data-toggle]')?.dataset.toggle;
+        const actionElement = target.closest('button[name]');
+        const action = actionElement?.name;
+        const tab = target.closest('.tab-button')?.getAttribute('aria-controls')?.replace(/-tab$/, '');
+        const toggleTargetId = target.closest('.advanced-toggle')?.getAttribute('aria-controls');
 
         if (action) {
             switch (action) {
@@ -174,8 +172,8 @@ function initializeEventListeners(uiContainer) {
 
     uiContainer.addEventListener('input', (event) => {
         const target = event.target;
-        const setting = target.dataset.setting;
-        const paramName = target.closest('.parameter-row')?.dataset.paramName;
+        const setting = (Object.hasOwn(DEFAULT_SETTINGS, target.name) ? target.name : null);
+        const paramName = target.closest('.parameter-row')?.id.replace('parameter-', '');
 
         if (setting) {
             handleSettingChange(target, setting);
@@ -195,7 +193,7 @@ function initializeEventListeners(uiContainer) {
 
     uiContainer.addEventListener('change', (event) => {
         const target = event.target;
-        const setting = target.dataset.setting;
+        const setting = (Object.hasOwn(DEFAULT_SETTINGS, target.name) ? target.name : null);
 
         if (setting === 'enableImageDescriptions') {
             handleSettingChange(target, setting);
@@ -310,21 +308,18 @@ function clearTweetRatingsAndRefreshUI() {
 
         tweetProcessingState.resetPending();
 
-        if (window.threadRelationships) {
-            window.threadRelationships = {};
-            browserSet('threadRelationships', '{}');
-            console.log('Cleared thread relationships cache');
-        }
+        threadRelationships = {};
+        pendingThreadTweets.clear();
+        browserSet('threadRelationships', '{}');
+        document.querySelectorAll('div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
+            conversationStates.delete(conversation);
+        });
 
         showStatus('All cached ratings and thread relationships cleared!');
         console.log('Cleared all tweet ratings and thread relationships');
 
         if (observedTargetNode) {
             observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
-                tweet.removeAttribute('data-slop-score');
-                tweet.removeAttribute('data-rating-status');
-                tweet.removeAttribute('data-rating-description');
-                tweet.removeAttribute('data-cached-rating');
                 const indicator = tweet.querySelector('.score-indicator');
                 if (indicator) {
                     indicator.remove();
@@ -343,13 +338,6 @@ function clearTweetRatingsAndRefreshUI() {
             });
         }
 
-        document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
-            delete conversation.dataset.threadMapping;
-            delete conversation.dataset.threadMappedAt;
-            delete conversation.dataset.threadMappingInProgress;
-            delete conversation.dataset.threadHist;
-            delete conversation.dataset.threadMediaUrls;
-        });
 
     }
 }
@@ -367,7 +355,7 @@ function addHandleFromInput() {
 /**
  * Handles changes to general setting inputs/toggles.
  * @param {HTMLElement} target - The input/toggle element that changed.
- * @param {string} settingName - The name of the setting (from data-setting).
+ * @param {string} settingName - The name of the setting (from the input name).
  */
 function handleSettingChange(target, settingName) {
     let value;
@@ -434,7 +422,7 @@ function handleSettingChange(target, settingName) {
 /**
  * Handles changes to parameter control sliders/number inputs.
  * @param {HTMLElement} target - The slider or number input element.
- * @param {string} paramName - The name of the parameter (from data-param-name).
+ * @param {string} paramName - The name of the parameter (from the parameter row ID).
  */
 function handleParameterChange(target, paramName) {
     const row = target.closest('.parameter-row');
@@ -528,7 +516,7 @@ function handleFilterValueInput(input) {
 
 /**
  * Switches the active tab in the settings panel.
- * @param {string} tabName - The name of the tab to activate (from data-tab).
+ * @param {string} tabName - The name of the tab to activate (from aria-controls).
  */
 function switchTab(tabName) {
     const settingsContent = document.querySelector('#settings-container .settings-content');
@@ -541,7 +529,7 @@ function switchTab(tabName) {
     buttons.forEach(btn => btn.classList.remove('active'));
 
     const tabToShow = settingsContent.querySelector(`#${tabName}-tab`);
-    const buttonToActivate = settingsContent.querySelector(`.tab-navigation .tab-button[data-tab="${tabName}"]`);
+    const buttonToActivate = settingsContent.querySelector(`.tab-navigation .tab-button[aria-controls="${tabName}-tab"]`);
 
     if (tabToShow) tabToShow.classList.add('active');
     if (buttonToActivate) buttonToActivate.classList.add('active');
@@ -553,7 +541,7 @@ function switchTab(tabName) {
  */
 function toggleAdvancedOptions(contentId) {
     const content = document.getElementById(contentId);
-    const toggle = document.querySelector(`[data-toggle="${contentId}"]`);
+    const toggle = document.querySelector(`.advanced-toggle[aria-controls="${contentId}"]`);
     if (!content || !toggle) return;
 
     const icon = toggle.querySelector('.advanced-toggle-icon');
@@ -575,8 +563,8 @@ function toggleAdvancedOptions(contentId) {
  */
 function refreshSettingsUI() {
 
-    document.querySelectorAll('[data-setting]').forEach(input => {
-        const settingName = input.dataset.setting;
+    document.querySelectorAll('#tweetfilter-root-container input[name], #tweetfilter-root-container select[name], #tweetfilter-root-container textarea[name]').forEach(input => {
+        const settingName = input.name;
         const value = browserGet(settingName, DEFAULT_SETTINGS[settingName]);
         if (input.type === 'checkbox') {
             input.checked = coerceBoolean(value, DEFAULT_SETTINGS[settingName]);
@@ -585,8 +573,8 @@ function refreshSettingsUI() {
         }
     });
 
-    document.querySelectorAll('.parameter-row[data-param-name]').forEach(row => {
-        const paramName = row.dataset.paramName;
+    document.querySelectorAll('.parameter-row').forEach(row => {
+        const paramName = row.id.replace('parameter-', '');
         const slider = row.querySelector('.parameter-slider');
         const valueInput = row.querySelector('.parameter-value');
         const value = browserGet(paramName, window[paramName]);
@@ -875,7 +863,6 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         filteredOptions.forEach(option => {
             const optionDiv = document.createElement('div');
             optionDiv.textContent = option.label;
-            optionDiv.dataset.value = option.value;
             if (option.value === currentSelectedValue) {
                 optionDiv.classList.add('same-as-selected');
             }
@@ -887,9 +874,8 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
                 selectItems.style.display = 'none';
                 selectSelected.classList.remove('select-arrow-active');
 
-                selectItems.querySelectorAll('div[data-value]').forEach(div => {
-                    div.classList.toggle('same-as-selected', div.dataset.value === currentSelectedValue);
-                });
+                selectItems.querySelectorAll('.same-as-selected').forEach(div => div.classList.remove('same-as-selected'));
+                optionDiv.classList.add('same-as-selected');
 
                 onChange(currentSelectedValue);
             });

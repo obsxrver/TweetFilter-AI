@@ -10,8 +10,8 @@ function updateCacheStatsUI() {
 
     const statsBadge = document.getElementById("tweet-filter-stats-badge");
     if (statsBadge) statsBadge.innerHTML = `
-            <span data-cached-count>${cachedCount} rated</span>
-            <span data-pending-count> | ${pendingRequests} pending</span>
+            <span>${cachedCount} rated</span>
+            <span> | ${pendingRequests} pending</span>
             ${keepCount > 0 ? `<span style="margin-left: 5px;"> | ${keepCount} kept</span>` : ''}
         `;
 }

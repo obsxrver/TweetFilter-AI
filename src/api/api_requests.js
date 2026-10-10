@@ -578,7 +578,7 @@ function inferImageMimeType(url) {
 
 /**
  * Downloads an image and returns a Base64 data URL suitable for model input.
- * Existing data URLs pass through unchanged.
+ * Remote images and existing data URLs share the model's pixel limit.
  * @param {string} url
  * @returns {Promise<string>}
  */
@@ -587,7 +587,7 @@ async function encodeImageUrlAsDataUrl(url) {
         throw new Error('Image URL must be a string.');
     }
     if (/^data:image\//i.test(url)) {
-        return url;
+        return resizeImage(url);
     }
     if (!/^https?:\/\//i.test(url)) {
         throw new Error('Only HTTP(S) image URLs can be encoded.');
@@ -621,7 +621,7 @@ async function encodeImageUrlAsDataUrl(url) {
                     ? response.response
                     : new Blob([response.response], { type: mimeType });
                 const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
+                reader.onload = () => resizeImage(reader.result).then(resolve, reject);
                 reader.onerror = () => reject(new Error('Failed to encode the downloaded image.'));
                 reader.readAsDataURL(imageBlob);
             },
@@ -632,7 +632,7 @@ async function encodeImageUrlAsDataUrl(url) {
 }
 
 /**
- * Encodes remote image URLs while preserving data URLs and input order.
+ * Encodes and resizes images while preserving input order.
  * Images that cannot be downloaded are omitted instead of leaking their links
  * into model requests.
  * @param {string[]} urls
@@ -654,7 +654,7 @@ async function encodeImageUrlsAsDataUrls(urls) {
 }
 
 /**
- * Clones message content and Base64-encodes every remote image before an API call.
+ * Clones message content and caps every image, including cached/uploaded data URLs.
  * @param {object[]} messages
  * @returns {Promise<object[]>}
  */
@@ -666,7 +666,7 @@ async function encodeMessageImagesAsDataUrls(messages) {
 
         const content = await Promise.all(message.content.map(async (item) => {
             const imageUrl = item?.type === 'image_url' ? item.image_url?.url : null;
-            if (!imageUrl || /^data:image\//i.test(imageUrl)) {
+            if (!imageUrl) {
                 return item;
             }
             try {
@@ -687,14 +687,12 @@ async function encodeMessageImagesAsDataUrls(messages) {
  *
  * @param {string[]} urls - Array of image URLs to get descriptions for
  * @param {string} apiKey - The API key for authentication
- * @param {string} tweetId - The unique tweet ID
- * @param {string} userHandle - The Twitter user handle
- * @returns {Promise<string>} Combined image descriptions
+ * @returns {Promise<string[]>} Descriptions in the same order as the supplied URLs
  */
-async function getImageDescription(urls, apiKey, tweetId, userHandle) {
+async function getImageDescriptions(urls, apiKey) {
     const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
     if (!urls?.length || !imageDescriptionsEnabled) {
-        return !imageDescriptionsEnabled ? '[Image descriptions disabled]' : '';
+        return [];
     }
 
     let descriptions = [];
@@ -745,6 +743,6 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
         }
     }
 
-    return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
+    return descriptions;
 }
 

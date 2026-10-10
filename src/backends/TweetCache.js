@@ -12,8 +12,8 @@ function normalizeScore(score) {
 
 function normalizeTweetCacheEntry(entry = {}) {
     const result = {};
-    for (const key of ['fullContext', 'description', 'reasoning', 'lastAnswer',
-        'tweetContent', 'authorHandle', 'individualTweetText']) {
+    for (const key of ['description', 'reasoning', 'lastAnswer',
+        'authorHandle', 'individualTweetText']) {
         result[key] = typeof entry[key] === 'string' ? entry[key] : '';
     }
     for (const key of ['questions', 'mediaUrls', 'individualMediaUrls']) {
@@ -28,6 +28,9 @@ function normalizeTweetCacheEntry(entry = {}) {
                     (part.type === 'image_url' && typeof part.image_url?.url === 'string') ||
                     (part.type === 'file' && typeof part.file?.file_data === 'string')
                 )) : []) })) : [];
+    result.tweet = entry.tweet && typeof entry.tweet === 'object' ? entry.tweet : null;
+    result.fullContext = entry.fullContext?.tweet && Array.isArray(entry.fullContext.ancestors)
+        ? entry.fullContext : null;
     result.score = normalizeScore(entry.score);
     result.status = typeof entry.status === 'string' ? entry.status : null;
     result.metadata = entry.metadata && typeof entry.metadata === 'object'

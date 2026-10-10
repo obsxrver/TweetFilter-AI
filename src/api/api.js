@@ -56,75 +56,14 @@ function extractCompletionMetadata(responseData) {
         : null;
 }
 
-/**
- * Orders media URLs by their first appearance in the provided thread text.
- * URLs not found in the text keep their original relative order and are placed last.
- * @param {string[]} mediaUrls
- * @param {string} threadText
- * @returns {string[]}
- */
-function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
-    if (!Array.isArray(mediaUrls) || mediaUrls.length <= 1 || !threadText) {
-        return mediaUrls;
-    }
-
-    return mediaUrls
-        .map((url, originalIndex) => ({
-            url,
-            originalIndex,
-            firstIndex: typeof url === 'string' ? threadText.indexOf(url) : -1
-        }))
-        .sort((a, b) => {
-            const aMissing = a.firstIndex === -1;
-            const bMissing = b.firstIndex === -1;
-
-            if (aMissing && bMissing) {
-                return a.originalIndex - b.originalIndex;
-            }
-            if (aMissing) {
-                return 1;
-            }
-            if (bMissing) {
-                return -1;
-            }
-            if (a.firstIndex !== b.firstIndex) {
-                return a.firstIndex - b.firstIndex;
-            }
-            return a.originalIndex - b.originalIndex;
-        })
-        .map(item => item.url);
-}
-
-function collectRatingImageUrls(mediaUrls, tweetText) {
-    const imageUrls = [];
-    const seenUrls = new Set();
-
-    const addUrl = (url) => {
-        const trimmedUrl = typeof url === 'string' ? url.trim() : '';
-        if (!trimmedUrl || trimmedUrl.startsWith('[VIDEO_DESCRIPTION]:') || seenUrls.has(trimmedUrl)) {
-            return;
-        }
-        seenUrls.add(trimmedUrl);
-        imageUrls.push(trimmedUrl);
-    };
-
-    if (Array.isArray(mediaUrls)) {
-        mediaUrls.forEach(addUrl);
-    }
-
-    if (tweetText) {
-        const urlPattern = /https?:\/\/[^\s,\])>]+/g;
-        const contextUrls = tweetText.match(urlPattern) || [];
-        contextUrls.forEach(url => {
-            if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
-                if(!url.includes("profile_image")){
-                addUrl(url);
-                }
-            }
-        });
-    }
-
-    return orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+/** Media comes from parsed content, in ancestor/target/quote order. */
+function collectRatingImageUrls(mediaUrls = [], context = null) {
+    const tweets = context?.tweet ? [...(context.ancestors || []), context.tweet] : [];
+    const urls = tweets.flatMap(tweet => [tweet, tweet.quotedTweet].filter(Boolean)
+        .flatMap(item => [...(item.media || []).map(media => media.url),
+            ...(item.linkPreviews || []).map(preview => preview.imageUrl)]));
+    return [...new Set([...urls, ...mediaUrls].filter(url => typeof url === 'string' &&
+        /^(https?:\/\/|data:image\/|data:application\/pdf)/.test(url)))];
 }
 
 function appendRatingMediaContent(content, mediaUrls) {
@@ -152,7 +91,7 @@ function appendRatingMediaContent(content, mediaUrls) {
 /**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
  *
- * @param {string} tweetText - The text content of the tweet
+ * @param {{tweet: object, ancestors: object[]}} tweetContext - Parsed target and its reply ancestry
  * @param {string} tweetId - The unique tweet ID
  * @param {string} apiKey - The API key for authentication
  * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
@@ -160,8 +99,7 @@ function appendRatingMediaContent(content, mediaUrls) {
  * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
  */
-async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="", saveCacheImmediately = true) {
-    console.log("given tweettext\n", tweetText);
+async function rateTweetWithOpenRouter(tweetContext, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="", saveCacheImmediately = true) {
     const cleanupRequest = () => {
         tweetProcessingState.decrementPending();
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
@@ -197,7 +135,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
         });
 
         indicatorInstance.updateInitialReviewAndBuildHistory({
-            fullContext: tweetText,
+            fullContext: tweetContext,
             mediaUrls: [],
             apiResponseContent: adResponseContent,
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
@@ -232,7 +170,7 @@ ${currentInstructions}`}]
                 content: [
                     {
                         type: "text",
-                        text: `Tweet ID: ${tweetId}\n\nTweet context:\n${tweetText}`
+                        text: JSON.stringify(tweetContext)
                     }
                 ]
             }
@@ -251,7 +189,7 @@ ${currentInstructions}`}]
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
-    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetContext);
     let ratingMediaForModel = [];
     if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
         ratingMediaForModel = await encodeImageUrlsAsDataUrls(ratingImageUrls);
@@ -266,7 +204,6 @@ ${currentInstructions}`}]
     tweetCache.set(tweetId, {
         streaming: true,
         timestamp: Date.now(),
-        tweetContent: tweetText,
         mediaUrls: mediaUrls
     }, saveCacheImmediately);
 
@@ -287,15 +224,15 @@ ${currentInstructions}`}]
         try {
             let result;
             if (useStreaming) {
-                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle, saveCacheImmediately);
+                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetArticle, saveCacheImmediately);
             } else {
-                result = await rateTweet(requestBody, apiKey, tweetId, tweetText, saveCacheImmediately);
+                result = await rateTweet(requestBody, apiKey, tweetId, saveCacheImmediately);
             }
             cleanupRequest();
 
             if (!result.error && result.content) {
                 indicatorInstance.updateInitialReviewAndBuildHistory({
-                    fullContext: tweetText,
+                    fullContext: tweetContext,
                     mediaUrls: mediaUrls,
                     apiResponseContent: result.content,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
@@ -314,7 +251,6 @@ ${currentInstructions}`}]
                     reasoning: result.reasoning || "",
                     questions: finalQuestions,
                     lastAnswer: "",
-                    tweetContent: tweetText,
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
@@ -353,7 +289,7 @@ ${currentInstructions}`}]
 
                 const errorContent = `Failed to get valid rating after multiple attempts: ${error.message}`;
                 indicatorInstance.updateInitialReviewAndBuildHistory({
-                    fullContext: tweetText,
+                    fullContext: tweetContext,
                     mediaUrls: mediaUrls,
                     apiResponseContent: JSON.stringify({
                         Response: errorContent,
@@ -373,7 +309,6 @@ ${currentInstructions}`}]
                     questions: [],
                     lastAnswer: "",
                     error: true,
-                    tweetContent: tweetText,
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
@@ -396,7 +331,7 @@ ${currentInstructions}`}]
     cleanupRequest();
     const fallbackError = "Unexpected failure in rating process.";
     indicatorInstance.updateInitialReviewAndBuildHistory({
-        fullContext: tweetText,
+        fullContext: tweetContext,
         mediaUrls: mediaUrls,
         apiResponseContent: JSON.stringify({
             Response: fallbackError,
@@ -428,7 +363,7 @@ ${currentInstructions}`}]
  * @param {string} apiKey - API key for authentication
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
-async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediately = true) {
+async function rateTweet(request, apiKey, tweetId, saveCacheImmediately = true) {
     const existingScore = tweetCache.get(tweetId)?.score;
 
     const result = await getCompletion(request, apiKey);
@@ -452,7 +387,6 @@ async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediate
         tweetCache.set(tweetId, {
             score: score,
             description: content,
-            tweetContent: tweetText,
             streaming: false,
             metadata: extractCompletionMetadata(result.data)
         }, saveCacheImmediately);
@@ -479,11 +413,10 @@ async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediate
  * @param {Object} request - The formatted request body
  * @param {string} apiKey - API key for authentication
  * @param {string} tweetId - The tweet ID
- * @param {string} tweetText - The text content of the tweet
  * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
  */
-async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle, saveCacheImmediately = true) {
+async function rateTweetStreaming(request, apiKey, tweetId, tweetArticle, saveCacheImmediately = true) {
 
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
         console.log(`Aborting existing streaming request for tweet ${tweetId}`);
@@ -496,7 +429,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         tweetCache.set(tweetId, {
             streaming: true,
             timestamp: Date.now(),
-            tweetContent: tweetText,
             description: "",
             reasoning: "",
             questions: [],
@@ -577,7 +509,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                 }
 
                 const finalCacheData = {
-                    tweetContent: tweetText,
                     score: score,
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning,
@@ -648,32 +579,20 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
  */
 async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle) {
     const cachedEntry = tweetCache.get(tweetId);
-    let fullContext = cachedEntry?.fullContext || tweetArticle?.dataset?.fullContext || '';
-
-    if (!fullContext && tweetArticle) {
-        fullContext = await getFullContext(tweetArticle, tweetId, apiKey);
-    }
-
-    if (!fullContext && cachedEntry?.individualTweetText) {
-        fullContext = `[TWEET ${tweetId}]\n Author:@${cachedEntry.authorHandle || ''}:\n${cachedEntry.individualTweetText}`;
-    }
-
-    if (!fullContext) {
-        throw new Error('Could not collect tweet context for this conversation.');
-    }
+    const fullContext = tweetArticle ? await getFullContext(tweetArticle, tweetId, apiKey)
+        : cachedEntry?.fullContext?.tweet ? cachedEntry.fullContext
+        : cachedEntry?.tweet ? { tweet: cachedEntry.tweet, ancestors: [] } : null;
+    if (!fullContext) throw new Error('Could not collect tweet context for this conversation.');
 
     const currentInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
     const conversationSystemPrompt = FOLLOW_UP_SYSTEM_PROMPT.replace(
         '{USER_INSTRUCTIONS_PLACEHOLDER}',
         currentInstructions
     );
-    const tweetContextContent = [{ type: 'text', text: fullContext }];
+    const tweetContextContent = [{ type: 'text', text: JSON.stringify(fullContext) }];
 
     if (modelSupportsImages(selectedModel)) {
-        const mediaUrls = tweetArticle
-            ? extractMediaLinks(tweetArticle)
-            : (cachedEntry?.mediaUrls?.length ? cachedEntry.mediaUrls : cachedEntry?.individualMediaUrls || []);
-        appendRatingMediaContent(tweetContextContent, collectRatingImageUrls(mediaUrls, fullContext));
+        appendRatingMediaContent(tweetContextContent, collectRatingImageUrls([], fullContext));
     }
 
     return {

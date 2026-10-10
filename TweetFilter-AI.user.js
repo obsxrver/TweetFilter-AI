@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      0.2.1
+// @version      3.0.0
 // @description  Analyze and discuss tweets with an LLM. Custom AI-Powered analysis for X.com
 // @author       Obsxrver
 // @match        *://twitter.com/*
@@ -21,7 +21,7 @@
     'use strict';
     console.log("X/Twitter Tweet De-Sloppification Activated (Combined Version)");
     // Embedded Menu.html
-    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter</button><div id="tweet-filter-container"><button class="close-button" data-action="close-filter">x</button><label for="tweet-filter-slider">Minimum score</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" data-action="toggle-settings">Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">TweetFilter AI</div><button class="close-button" data-action="toggle-settings">x</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" data-tab="general">General</button><button class="tab-button" data-tab="models">Models</button><button class="tab-button" data-tab="instructions">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title">OpenRouter API Key<a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Get one</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" data-action="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;">Cache</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Rated Tweets</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Always-Keep Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" data-action="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;">Backup</div><div class="section-description">Export cached ratings as JSON.</div><button class="settings-button" data-action="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" data-action="reset-settings">Reset Settings</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">TweetFilter AI</div></div><div id="models-tab" class="tab-content"><div class="section-title">Tweet Rating Model</div><div class="section-description">Choose the model that scores tweets. Image-capable models can inspect tweet images directly.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" data-toggle="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Provider</label><select id="model-family-filter" data-setting="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">Endpoint Priority</label><select id="provider-sort" data-setting="providerSort"><option value="">Default</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" data-setting="showFreeModels" checked>Show free models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select id="reasoning-effort" data-setting="reasoningEffort"><option value="none">None</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra High</option></select></div><div class="parameter-row" data-param-name="modelTemperature"><div class="parameter-label" title="How random model responses should be.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="modelTopP"><div class="parameter-label" title="Nucleus sampling value.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="maxTokens"><div class="parameter-label" title="Maximum response tokens. Use 0 for provider default.">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Show API responses as they stream in.">Live Streaming</div><label class="toggle-switch"><input type="checkbox" data-setting="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Allow OpenRouter web search for rating requests.">Web Search</div><label class="toggle-switch"><input type="checkbox" data-setting="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="When disabled, tweets show a manual Rate button.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" data-setting="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;">Image Description Model</div><div class="section-description">Use this only when your rating model cannot read images directly.</div><div class="toggle-row"><div class="toggle-label">Describe Images First</div><label class="toggle-switch"><input type="checkbox" data-setting="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" data-toggle="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" data-param-name="imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" data-param-name="imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image descriptions.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Scoring Instructions</div><div class="section-description">Describe what a high-quality tweet means to you.</div><textarea id="user-instructions" placeholder="Examples:- Reward original reporting and useful technical detail.- Penalize engagement bait and vague outrage.- Prefer concise, evidence-backed posts." data-setting="userDefinedInstructions"></textarea><button class="settings-button" data-action="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" data-toggle="instructions-history-content"><div class="advanced-toggle-title">Instruction History</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"></div><button class="settings-button danger" style="margin-top: 10px;" data-action="clear-instructions-history">Clear History</button></div></div><div class="section-title" style="margin-top: 20px;">Always Keep Handles</div><div class="section-description">Tweets from these handles stay visible regardless of score.</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Handle without @"><button class="add-handle-btn" data-action="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
+    const MENU = `<div id="tweetfilter-root-container"><button id="filter-toggle" class="toggle-button" style="display: none;">Filter</button><div id="tweet-filter-container"><button class="close-button" name="close-filter">x</button><label for="tweet-filter-slider">Minimum score</label><div class="filter-controls"><input type="range" id="tweet-filter-slider" min="0" max="10" step="1"><input type="number" id="tweet-filter-value" min="0" max="10" step="1" value="5"></div></div><button id="settings-toggle" class="toggle-button" name="toggle-settings">Settings</button><div id="settings-container" class="hidden"><div class="settings-header"><div class="settings-title">TweetFilter AI</div><button class="close-button" name="toggle-settings">x</button></div><div class="settings-content"><div class="tab-navigation"><button class="tab-button active" name="tab" aria-controls="general-tab">General</button><button class="tab-button" name="tab" aria-controls="models-tab">Models</button><button class="tab-button" name="tab" aria-controls="instructions-tab">Instructions</button></div><div id="general-tab" class="tab-content active"><div class="section-title">OpenRouter API Key<a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener noreferrer">Get one</a></div><input id="openrouter-api-key" placeholder="Enter your OpenRouter API key"><button class="settings-button" name="save-api-key">Save API Key</button><div class="section-title" style="margin-top: 20px;">Cache</div><div class="stats-container"><div class="stats-row"><div class="stats-label">Rated Tweets</div><div class="stats-value" id="cached-ratings-count">0</div></div><div class="stats-row"><div class="stats-label">Always-Keep Handles</div><div class="stats-value" id="whitelisted-handles-count">0</div></div></div><button id="clear-cache" class="settings-button danger" name="clear-cache">Clear Rating Cache</button><div class="section-title" style="margin-top: 20px;">Backup</div><div class="section-description">Export cached ratings as JSON.</div><button class="settings-button" name="export-cache">Export Cache</button><button class="settings-button danger" style="margin-top: 15px;" name="reset-settings">Reset Settings</button><div id="version-info" style="margin-top: 20px; font-size: 11px; opacity: 0.6; text-align: center;">TweetFilter AI</div></div><div id="models-tab" class="tab-content"><div class="section-title">Tweet Rating Model</div><div class="section-description">Choose the model that scores tweets. Image-capable models can inspect tweet images directly.</div><div class="select-container" id="model-select-container"></div><div class="advanced-options"><div class="advanced-toggle" aria-controls="model-options-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="model-options-content"><div class="sort-container"><label for="model-family-filter">Provider</label><select id="model-family-filter" name="modelFamilyFilter"><option value="">All Providers</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="google">Google</option><option value="qwen">Qwen</option></select></div><div class="sort-container"><label for="provider-sort">Endpoint Priority</label><select id="provider-sort" name="providerSort"><option value="">Default</option><option value="throughput">Throughput</option><option value="latency">Latency</option><option value="price">Price</option></select></div><div class="sort-container"><label><input type="checkbox" id="show-free-models" name="showFreeModels" checked>Show free models</label></div><div class="sort-container"><label for="reasoning-effort">Reasoning Effort</label><select id="reasoning-effort" name="reasoningEffort"><option value="none">None</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra High</option></select></div><div class="parameter-row" id="parameter-modelTemperature"><div class="parameter-label" title="How random model responses should be.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.05"><input type="number" class="parameter-value" min="0" max="2" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" id="parameter-modelTopP"><div class="parameter-label" title="Nucleus sampling value.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.01"><input type="number" class="parameter-value" min="0" max="1" step="0.01" style="width: 60px;"></div></div><div class="parameter-row" id="parameter-maxTokens"><div class="parameter-label" title="Maximum response tokens. Use 0 for provider default.">Max Tokens</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2000" step="100"><input type="number" class="parameter-value" min="0" max="2000" step="100" style="width: 60px;"></div></div><div class="toggle-row"><div class="toggle-label" title="Show API responses as they stream in.">Live Streaming</div><label class="toggle-switch"><input type="checkbox" name="enableStreaming"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="Allow OpenRouter web search for rating requests.">Web Search</div><label class="toggle-switch"><input type="checkbox" name="enableWebSearch"><span class="toggle-slider"></span></label></div><div class="toggle-row"><div class="toggle-label" title="When disabled, tweets show a manual Rate button.">Auto-Rate Tweets</div><label class="toggle-switch"><input type="checkbox" name="enableAutoRating"><span class="toggle-slider"></span></label></div></div></div><div class="section-title" style="margin-top: 25px;">Image Description Model</div><div class="section-description">Use this only when your rating model cannot read images directly.</div><div class="toggle-row"><div class="toggle-label">Describe Images First</div><label class="toggle-switch"><input type="checkbox" name="enableImageDescriptions"><span class="toggle-slider"></span></label></div><div id="image-model-container" style="display: none;"><div class="select-container" id="image-model-select-container"></div><div class="advanced-options" id="image-advanced-options"><div class="advanced-toggle" aria-controls="image-advanced-content"><div class="advanced-toggle-title">Options</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="image-advanced-content"><div class="parameter-row" id="parameter-imageModelTemperature"><div class="parameter-label" title="Randomness for image descriptions.">Temperature</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="2" step="0.1"><input type="number" class="parameter-value" min="0" max="2" step="0.1" style="width: 60px;"></div></div><div class="parameter-row" id="parameter-imageModelTopP"><div class="parameter-label" title="Nucleus sampling for image descriptions.">Top-p</div><div class="parameter-control"><input type="range" class="parameter-slider" min="0" max="1" step="0.1"><input type="number" class="parameter-value" min="0" max="1" step="0.1" style="width: 60px;"></div></div></div></div></div></div><div id="instructions-tab" class="tab-content"><div class="section-title">Scoring Instructions</div><div class="section-description">Describe what a high-quality tweet means to you.</div><textarea id="user-instructions" placeholder="Examples:- Reward original reporting and useful technical detail.- Penalize engagement bait and vague outrage.- Prefer concise, evidence-backed posts." name="userDefinedInstructions"></textarea><button class="settings-button" name="save-instructions">Save Instructions</button><div class="advanced-options" id="instructions-history"><div class="advanced-toggle" aria-controls="instructions-history-content"><div class="advanced-toggle-title">Instruction History</div><div class="advanced-toggle-icon">v</div></div><div class="advanced-content" id="instructions-history-content"><div class="instructions-list" id="instructions-list"></div><button class="settings-button danger" style="margin-top: 10px;" name="clear-instructions-history">Clear History</button></div></div><div class="section-title" style="margin-top: 20px;">Always Keep Handles</div><div class="section-description">Tweets from these handles stay visible regardless of score.</div><div class="handle-input-container"><input id="handle-input" type="text" placeholder="Handle without @"><button class="add-handle-btn" name="add-handle">Add</button></div><div class="handle-list" id="handle-list"></div></div></div><div id="status-indicator" class=""></div></div><div id="tweet-filter-stats-badge" class="tweet-filter-stats-badge"></div></div>`;
     // Embedded style.css
     const STYLE = `.refreshing {animation: spin 1s infinite linear;}@keyframes spin {0% {transform: rotate(0deg);}100% {transform: rotate(360deg);}}.score-highlight {display: inline-block;background-color: #1d9bf0;color: white;padding: 3px 10px;border-radius: 9999px;margin: 8px 0;font-weight: bold;font-size: 0.9em;}.mobile-tooltip {max-width: 90vw;}.score-description.streaming-tooltip {scroll-behavior: smooth;border-left: 3px solid #1d9bf0;background-color: rgba(25, 30, 35, 0.98);}.score-description.streaming-tooltip::before {content: 'Live';position: absolute;top: 10px;right: 10px;background-color: #1d9bf0;color: white;font-size: 11px;padding: 2px 6px;border-radius: 10px;font-weight: bold;}.score-description::-webkit-scrollbar {width: 8px;}.score-description::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.score-description::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.score-description::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.streaming-tooltip p::after {content: '|';display: inline-block;color: #1d9bf0;animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;}@keyframes blink {0%,100% {opacity: 0;}50% {opacity: 1;}}.streaming-rating {background-color: rgba(33, 150, 243, 0.9) !important;color: white !important;animation: pulse 1.5s infinite alternate;position: relative;}.streaming-rating::after {content: '';position: absolute;top: -2px;right: -2px;width: 6px;height: 6px;background-color: #1d9bf0;border-radius: 50%;animation: blink 0.7s infinite;box-shadow: 0 0 4px #1d9bf0;}.cached-rating {background-color: rgba(76, 175, 80, 0.9) !important;color: white !important;}.rated-rating {background-color: rgba(33, 33, 33, 0.9) !important;color: white !important;}.blacklisted-rating {background-color: rgba(255, 193, 7, 0.9) !important;color: black !important;}.pending-rating {background-color: rgba(255, 152, 0, 0.9) !important;color: white !important;}.manual-rating {background-color: rgba(33, 150, 243, 0.7) !important;color: white !important;border: 2px dashed rgba(33, 150, 243, 0.8) !important;}.blacklisted-author-indicator {background-color: purple !important; color: white !important;}@keyframes pulse {0% {opacity: 0.8;}100% {opacity: 1;}}.error-rating {background-color: rgba(244, 67, 54, 0.9) !important;color: white !important;}#status-indicator {position: fixed;bottom: 20px;right: 20px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 15px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;z-index: 9999;display: none;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);transform: translateY(100px);transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}#status-indicator.active {display: block;transform: translateY(0);}.toggle-switch {position: relative;display: inline-block;width: 36px;height: 20px;}.toggle-switch input {opacity: 0;width: 0;height: 0;}.toggle-slider {position: absolute;cursor: pointer;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(255, 255, 255, 0.2);transition: .3s;border-radius: 34px;}.toggle-slider:before {position: absolute;content: "";height: 16px;width: 16px;left: 2px;bottom: 2px;background-color: white;transition: .3s;border-radius: 50%;}input:checked+.toggle-slider {background-color: #1d9bf0;}input:checked+.toggle-slider:before {transform: translateX(16px);}.toggle-row {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;margin-bottom: 12px;background-color: rgba(255, 255, 255, 0.05);border-radius: 8px;transition: background-color 0.2s;}.toggle-row:hover {background-color: rgba(255, 255, 255, 0.08);}.toggle-label {font-size: 13px;color: #e7e9ea;}#tweet-filter-container {position: fixed;top: 70px;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 10px 12px;border-radius: 12px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);display: flex;align-items: center;gap: 10px;border: 1px solid rgba(255, 255, 255, 0.1);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55), opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#tweet-filter-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.close-button {background: none;border: none;color: #e7e9ea;font-size: 16px;cursor: pointer;padding: 0;width: 28px;height: 28px;display: flex;align-items: center;justify-content: center;opacity: 0.8;transition: opacity 0.2s;border-radius: 50%;min-width: 28px;min-height: 28px;-webkit-tap-highlight-color: transparent;touch-action: manipulation;user-select: none;z-index: 30;}.close-button:hover {opacity: 1;background-color: rgba(255, 255, 255, 0.1);}.hidden {display: none !important;}#tweet-filter-container.hidden,#settings-container.hidden {display: flex !important;}.toggle-button {position: fixed;right: 15px;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 8px 12px;border-radius: 8px;cursor: pointer;font-size: 12px;z-index: 9999;border: 1px solid rgba(255, 255, 255, 0.1);box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;display: flex;align-items: center;gap: 6px;transition: all 0.2s ease;}.toggle-button:hover {background-color: rgba(29, 155, 240, 0.2);}#filter-toggle {top: 70px;}#settings-toggle {top: 120px;}#tweet-filter-container label {margin: 0;font-weight: bold;}.tweet-filter-stats-badge {position: fixed;bottom: 50px;right: 20px;background-color: rgba(29, 155, 240, 0.9);color: white;padding: 5px 10px;border-radius: 15px;font-size: 12px;z-index: 9999;box-shadow: 0 2px 5px rgba(0,0,0,0.2);transition: opacity 0.3s;cursor: pointer;display: flex;align-items: center;}#tweet-filter-slider {cursor: pointer;width: 120px;vertical-align: middle;-webkit-appearance: none;appearance: none;height: 6px;border-radius: 3px;background: linear-gradient(to right,#FF0000 0%,#FF8800 calc(var(--slider-percent, 50%) * 0.166),#FFFF00 calc(var(--slider-percent, 50%) * 0.333),#00FF00 calc(var(--slider-percent, 50%) * 0.5),#00FFFF calc(var(--slider-percent, 50%) * 0.666),#0000FF calc(var(--slider-percent, 50%) * 0.833),#800080 var(--slider-percent, 50%),#DEE2E6 var(--slider-percent, 50%),#DEE2E6 100%);}#tweet-filter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}#tweet-filter-slider::-moz-range-thumb {width: 16px;height: 16px;border-radius: 50%;background: #1d9bf0;cursor: pointer;border: 2px solid white;box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);transition: transform 0.1s;}#tweet-filter-slider::-moz-range-thumb:hover {transform: scale(1.2);}#tweet-filter-value {min-width: 20px;text-align: center;font-weight: bold;background-color: rgba(255, 255, 255, 0.1);padding: 2px 5px;border-radius: 4px;}#settings-container {position: fixed;top: 70px;right: 15px;background: linear-gradient(180deg, rgba(22, 26, 31, 0.97), rgba(16, 18, 22, 0.97));color: #e7e9ea;padding: 0;border-radius: 18px;z-index: 9999;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);display: flex;flex-direction: column;width: min(92vw, 420px);max-width: 420px;max-height: 88vh;overflow: hidden;border: 1px solid rgba(130, 178, 219, 0.24);line-height: 1.3;backdrop-filter: blur(12px);transform-origin: top right;transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55),opacity 0.5s ease-in-out;opacity: 1;transform: scale(1) translateX(0);visibility: visible;}#settings-container.hidden {opacity: 0;transform: scale(0.8) translateX(50px);visibility: hidden;}.settings-header {padding: 14px 16px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);display: flex;justify-content: space-between;align-items: center;position: sticky;top: 0;background: linear-gradient(180deg, rgba(28, 34, 40, 0.98), rgba(23, 27, 33, 0.96));z-index: 20;border-radius: 18px 18px 0 0;}.settings-title {font-weight: 700;font-size: 16px;letter-spacing: 0.2px;color: #f1f5f9;}.settings-content {overflow-y: auto;max-height: calc(88vh - 118px);padding: 0 0 14px;}.settings-content::-webkit-scrollbar {width: 6px;}.settings-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.settings-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tab-navigation {display: flex;border-bottom: 1px solid rgba(120, 167, 210, 0.18);position: sticky;top: 0;background: rgba(20, 24, 29, 0.95);z-index: 10;padding: 12px 14px 10px;gap: 10px;}.tab-button {padding: 8px 12px;background: rgba(255, 255, 255, 0.04);border: 1px solid transparent;color: #d7e2ec;font-weight: 600;cursor: pointer;border-radius: 10px;transition: all 0.2s ease;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;flex: 1;text-align: center;}.tab-button:hover {background-color: rgba(85, 157, 218, 0.14);border-color: rgba(85, 157, 218, 0.3);}.tab-button.active {color: #79c1ff;background-color: rgba(45, 152, 237, 0.2);border-color: rgba(82, 178, 255, 0.5);box-shadow: inset 0 0 0 1px rgba(37, 131, 204, 0.25);}.tab-content {display: none;animation: fadeIn 0.3s ease;padding: 16px 16px 8px;}@keyframes fadeIn {from {opacity: 0;}to {opacity: 1;}}.tab-content.active {display: block;}.select-container {position: relative;margin-bottom: 12px;}.select-container .search-field {position: sticky;top: 0;background-color: rgba(24, 29, 35, 0.98);padding: 8px;border-bottom: 1px solid rgba(120, 167, 210, 0.2);z-index: 1;}.select-container .search-input {width: 100%;padding: 9px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(33, 39, 46, 0.92);color: #e7e9ea;font-size: 12.5px;transition: border-color 0.2s;}.select-container .search-input:focus {border-color: #1d9bf0;outline: none;}.custom-select {position: relative;display: inline-block;width: 100%;}.select-selected {background: linear-gradient(180deg, rgba(40, 47, 56, 0.95), rgba(32, 38, 45, 0.95));color: #e7e9ea;padding: 10px 12px;min-height: 40px;border: 1px solid rgba(137, 178, 214, 0.35);border-radius: 10px;cursor: pointer;user-select: none;display: flex;justify-content: space-between;align-items: center;font-size: 13px;transition: border-color 0.2s;}.select-selected:hover {border-color: rgba(255, 255, 255, 0.4);}.select-selected:after {content: "";width: 8px;height: 8px;border: 2px solid #e7e9ea;border-width: 0 2px 2px 0;display: inline-block;transform: rotate(45deg);margin-left: 10px;transition: transform 0.2s;}.select-selected.select-arrow-active:after {transform: rotate(-135deg);}.select-items {position: absolute;background-color: rgba(28, 34, 41, 0.99);top: 100%;left: 0;right: 0;z-index: 99;max-height: 300px;overflow-y: auto;border: 1px solid rgba(120, 167, 210, 0.28);border-radius: 10px;margin-top: 6px;box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);display: none;}.select-items div {color: #e7e9ea;padding: 10px 12px;cursor: pointer;user-select: none;transition: background-color 0.2s;border-bottom: 1px solid rgba(120, 167, 210, 0.09);font-size: 12.5px;}.select-items div:hover {background-color: rgba(29, 155, 240, 0.1);}.select-items div.same-as-selected {background-color: rgba(29, 155, 240, 0.2);}.select-items::-webkit-scrollbar {width: 6px;}.select-items::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);}.select-items::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.select-items::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}#openrouter-api-key,#user-instructions {width: 100%;padding: 10px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);margin-bottom: 12px;background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 13px;transition: border-color 0.2s;}#openrouter-api-key:focus,#user-instructions:focus {border-color: #1d9bf0;outline: none;}#user-instructions {height: 120px;resize: vertical;}.parameter-row {display: flex;align-items: center;margin-bottom: 12px;gap: 8px;padding: 6px;border-radius: 8px;transition: background-color 0.2s;}.parameter-row:hover {background-color: rgba(255, 255, 255, 0.05);}.parameter-label {flex: 1;font-size: 13px;color: #e7e9ea;}.parameter-control {flex: 1.5;display: flex;align-items: center;gap: 8px;}.parameter-value {min-width: 28px;text-align: center;background-color: rgba(255, 255, 255, 0.1);padding: 3px 5px;border-radius: 4px;font-size: 12px;}.parameter-slider {flex: 1;-webkit-appearance: none;height: 4px;border-radius: 4px;background: rgba(255, 255, 255, 0.2);outline: none;cursor: pointer;}.parameter-slider::-webkit-slider-thumb {-webkit-appearance: none;appearance: none;width: 14px;height: 14px;border-radius: 50%;background: #1d9bf0;cursor: pointer;transition: transform 0.1s;}.parameter-slider::-webkit-slider-thumb:hover {transform: scale(1.2);}.section-title {font-weight: 700;margin-top: 18px;margin-bottom: 8px;color: #f3f6fa;display: flex;align-items: center;gap: 6px;font-size: 14px;}.section-title:first-child {margin-top: 0;}.section-description {font-size: 12.5px;margin-bottom: 10px;color: rgba(225, 233, 241, 0.82);line-height: 1.45;}.section-title a {color: #1d9bf0;text-decoration: none;background-color: rgba(255, 255, 255, 0.1);padding: 3px 6px;border-radius: 6px;transition: all 0.2s ease;}.section-title a:hover {background-color: rgba(29, 155, 240, 0.2);text-decoration: underline;}.advanced-options {margin-top: 8px;margin-bottom: 15px;border: 1px solid rgba(120, 167, 210, 0.2);border-radius: 12px;padding: 12px 12px 10px;background: rgba(255, 255, 255, 0.04);overflow: hidden;}.advanced-toggle {display: flex;justify-content: space-between;align-items: center;cursor: pointer;margin-bottom: 5px;}.advanced-toggle-title {font-weight: 700;font-size: 13px;color: #dce7f2;}.advanced-toggle-icon {transition: transform 0.3s;}.advanced-toggle-icon.expanded {transform: rotate(180deg);}.advanced-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-in-out;}.advanced-content.expanded {max-height: none;}#instructions-history-content.expanded {max-height: none !important;}#instructions-history .instructions-list {max-height: 400px;overflow-y: auto;margin-bottom: 10px;}.handle-list {margin-top: 10px;max-height: 120px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.handle-item {display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.handle-item:hover {background-color: rgba(255, 255, 255, 0.05);}.handle-item:last-child {border-bottom: none;}.handle-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;}.remove-handle {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;}.remove-handle:hover {opacity: 1;}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 7px 10px;cursor: pointer;font-weight: bold;font-size: 12px;margin-left: 5px;transition: background-color 0.2s;}.add-handle-btn:hover {background-color: #1a8cd8;}.settings-button {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 10px 14px;cursor: pointer;font-weight: bold;transition: background-color 0.2s;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;margin-top: 8px;width: 100%;font-size: 13px;}.settings-button:hover {background-color: #1a8cd8;}.settings-button.secondary {background-color: rgba(255, 255, 255, 0.1);}.settings-button.secondary:hover {background-color: rgba(255, 255, 255, 0.15);}.settings-button.danger {background-color: #ff5c5c;}.settings-button.danger:hover {background-color: #e53935;}.button-row {display: flex;gap: 8px;margin-top: 10px;}.button-row .settings-button {margin-top: 0;}.stats-container {background-color: rgba(255, 255, 255, 0.05);padding: 10px;border-radius: 8px;margin-bottom: 15px;}.stats-row {display: flex;justify-content: space-between;padding: 5px 0;border-bottom: 1px solid rgba(255, 255, 255, 0.1);}.stats-row:last-child {border-bottom: none;}.stats-label {font-size: 12px;opacity: 0.8;}.stats-value {font-weight: bold;}.score-indicator {position: absolute;top: 10px;right: 10.5%;background-color: rgba(22, 24, 28, 0.9);color: #e7e9ea;padding: 4px 10px;border-radius: 8px;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;font-weight: bold;z-index: 100;cursor: pointer;border: 1px solid rgba(255, 255, 255, 0.1);min-width: 20px;text-align: center;box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);transition: transform 0.15s ease;}.score-indicator:hover {transform: scale(1.05);}.score-indicator.mobile-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {display: flex;flex-direction: column;background-color: rgba(22, 24, 28, 0.95);color: #e7e9ea;padding: 0;border-radius: 12px;box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 16px;line-height: 1.5;z-index: 99999999;position: absolute;width: 600px !important;max-width: 85vw !important;max-height: 70vh;border: 1px solid rgba(255, 255, 255, 0.1);word-wrap: break-word;box-sizing: border-box !important;}.tooltip-scrollable-content {flex-grow: 1;overflow-y: auto;min-height: 0;padding: 10px 20px;padding-right: 25px;padding-bottom: 120px;line-height: 1.55;}.tooltip-scrollable-content::-webkit-scrollbar {width: 8px;}.tooltip-scrollable-content::-webkit-scrollbar-track {background: rgba(22, 24, 28, 0.1);border-radius: 4px;}.tooltip-scrollable-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.3);border-radius: 4px;border: 1px solid rgba(22, 24, 28, 0.2);}.tooltip-scrollable-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.5);}.score-description.pinned {border: 2px solid #1d9bf0 !important;}.tooltip-controls {display: flex !important;justify-content: flex-end !important;position: relative !important;margin: 0 !important;top: 0 !important;background-color: rgba(39, 44, 48, 0.95) !important;padding: 12px 15px !important;z-index: 2 !important;border-top-left-radius: 12px !important;border-top-right-radius: 12px !important;border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;backdrop-filter: blur(5px) !important;flex-shrink: 0;}.tooltip-pin-button,.tooltip-copy-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-pin-button:hover,.tooltip-copy-button:hover {background-color: rgba(29, 155, 240, 0.1) !important;color: #1d9bf0 !important;}.tooltip-pin-button:active,.tooltip-copy-button:active {transform: scale(0.95) !important;}.tooltip-rate-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-rate-button:hover {background-color: rgba(255, 193, 7, 0.1) !important;color: #ffc107 !important;}.tooltip-rate-button:active {transform: scale(0.95) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}.scroll-to-bottom-button {position: absolute;bottom: 100px;left: 0;right: 0;width: 100%;background-color: rgba(29, 155, 240, 0.9);color: white;text-align: center;padding: 8px 0;cursor: pointer;font-weight: bold;border-top: 1px solid rgba(255, 255, 255, 0.2);z-index: 100;transition: background-color 0.2s;flex-shrink: 0;}.scroll-to-bottom-button:hover {background-color: rgba(29, 155, 240, 1);}.tooltip-bottom-spacer {height: 10px;}.reasoning-dropdown {margin-top: 15px !important;border-top: 1px solid rgba(255, 255, 255, 0.1) !important;padding-top: 10px !important;}.reasoning-toggle {display: flex !important;align-items: center !important;color: #1d9bf0 !important;cursor: pointer !important;font-weight: bold !important;padding: 5px !important;user-select: none !important;}.reasoning-toggle:hover {background-color: rgba(29, 155, 240, 0.1) !important;border-radius: 4px !important;}.reasoning-arrow {display: inline-block !important;margin-right: 5px !important;transition: transform 0.2s ease !important;}.reasoning-content {max-height: 0 !important;overflow: hidden !important;transition: max-height 0.3s ease-out, padding 0.3s ease-out !important;background-color: rgba(0, 0, 0, 0.15) !important;border-radius: 5px !important;margin-top: 5px !important;padding: 0 !important;}.reasoning-dropdown.expanded .reasoning-content {max-height: 350px !important;overflow-y: auto !important;padding: 10px !important;}.reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg) !important;}.reasoning-text {font-size: 14px !important;line-height: 1.4 !important;color: #ccc !important;margin: 0 !important;padding: 5px !important;}@media (max-width: 600px) {.score-indicator {position: absolute !important;bottom: 3% !important;right: 10px !important;top: auto !important;}.score-description {position: fixed !important;width: 100% !important;max-width: 100% !important;top: 5vh !important;bottom: 5vh !important;left: 0 !important;right: 0 !important;margin: 0 !important;padding: 0 !important;box-sizing: border-box !important;overflow: hidden !important;overflow-x: hidden !important;-webkit-overflow-scrolling: touch !important;overscroll-behavior: contain !important;transform: translateZ(0) !important;border-radius: 16px 16px 0 0 !important;}.tooltip-scrollable-content {padding: 10px 15px;padding-bottom: 140px;}.tooltip-custom-question-container {position: relative;width: 100%;box-sizing: border-box;}.reasoning-dropdown.expanded .reasoning-content {max-height: 200px !important;}.close-button {width: 32px;height: 32px;min-width: 32px;min-height: 32px;font-size: 18px;padding: 8px;margin: -4px;}.settings-header .close-button {position: relative;right: 0;}.tooltip-close-button {font-size: 22px !important;width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important;}#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.sort-container {margin: 10px 0;padding: 10px;display: flex;flex-direction: column;align-items: stretch;gap: 8px;border: 1px solid rgba(120, 167, 210, 0.16);border-radius: 10px;background: rgba(255, 255, 255, 0.03);}.sort-container label {font-size: 12px;color: #cfd9e3;font-weight: 600;white-space: normal;display: flex;align-items: center;gap: 8px;}.sort-container .controls-group {display: grid;grid-template-columns: minmax(0, 1fr) auto;gap: 8px;align-items: center;}.sort-container select {width: 100%;min-height: 34px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.28);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12.5px;cursor: pointer;}.sort-container select:hover {border-color: #1d9bf0;}.sort-container select:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}.sort-toggle {min-height: 34px;min-width: 94px;padding: 6px 10px;border-radius: 8px;border: 1px solid rgba(137, 178, 214, 0.32);background-color: rgba(36, 42, 50, 0.95);color: #e7e9ea;font-size: 12px;font-weight: 600;cursor: pointer;transition: all 0.2s ease;}.sort-toggle:hover {border-color: #1d9bf0;background-color: rgba(29, 155, 240, 0.1);}.sort-toggle.active {background-color: rgba(29, 155, 240, 0.2);border-color: #1d9bf0;}.sort-container select option {background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;}.sort-container label input[type="checkbox"] {width: 14px;height: 14px;margin: 0;accent-color: #1d9bf0;}@media (min-width: 601px) {#settings-container {width: min(430px, 90vw);max-width: 430px;}}#handle-input {flex: 1;padding: 8px 12px;border-radius: 8px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.95);color: #e7e9ea;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 14px;transition: border-color 0.2s;min-width: 200px;}#handle-input:focus {outline: none;border-color: #1d9bf0;box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.2);}#handle-input::placeholder {color: rgba(231, 233, 234, 0.5);}.handle-input-container {display: flex;gap: 8px;align-items: center;margin-bottom: 10px;padding: 5px;border-radius: 8px;background-color: rgba(255, 255, 255, 0.03);}.add-handle-btn {background-color: #1d9bf0;color: white;border: none;border-radius: 8px;padding: 8px 16px;cursor: pointer;font-weight: bold;font-size: 14px;transition: background-color 0.2s;white-space: nowrap;}.add-handle-btn:hover {background-color: #1a8cd8;}.instructions-list {margin-top: 10px;max-height: 200px;overflow-y: auto;border: 1px solid rgba(255, 255, 255, 0.1);border-radius: 8px;padding: 5px;}.instruction-item {display: flex;align-items: center;justify-content: space-between;padding: 8px 10px;border-bottom: 1px solid rgba(255, 255, 255, 0.05);border-radius: 4px;transition: background-color 0.2s;}.instruction-item:hover {background-color: rgba(255, 255, 255, 0.05);}.instruction-item:last-child {border-bottom: none;}.instruction-text {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;font-size: 12px;flex: 1;margin-right: 10px;}.instruction-buttons {display: flex;gap: 5px;}.use-instruction {background: none;border: none;color: #1d9bf0;cursor: pointer;font-size: 12px;padding: 3px 8px;border-radius: 4px;transition: all 0.2s;}.use-instruction:hover {background-color: rgba(29, 155, 240, 0.1);}.remove-instruction {background: none;border: none;color: #ff5c5c;cursor: pointer;font-size: 14px;padding: 0 3px;opacity: 0.7;transition: opacity 0.2s;border-radius: 4px;}.remove-instruction:hover {opacity: 1;background-color: rgba(255, 92, 92, 0.1);}.tweet-filtered {display: none !important;visibility: hidden !important;opacity: 0 !important;pointer-events: none !important;position: absolute !important;z-index: -9999 !important;height: 0 !important;width: 0 !important;margin: 0 !important;padding: 0 !important;overflow: hidden !important;}.filter-controls {display: flex;align-items: center;gap: 10px;margin: 5px 0;}.filter-controls input[type="range"] {flex: 1;min-width: 100px;}.filter-controls input[type="number"] {width: 50px;padding: 2px 5px;border: 1px solid #ccc;border-radius: 4px;text-align: center;}.filter-controls input[type="number"]::-webkit-inner-spin-button,.filter-controls input[type="number"]::-webkit-outer-spin-button {-webkit-appearance: none;margin: 0;}.filter-controls input[type="number"] {-moz-appearance: textfield;}.tooltip-metadata {font-size: 0.8em;opacity: 0.7;margin-top: 8px;padding-top: 8px;border-top: 1px solid rgba(255, 255, 255, 0.2);display: block;line-height: 1.5;}.score-description > .reasoning-dropdown:last-of-type {background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);margin-top: 0;padding: 0;position: relative;z-index: 10;flex-shrink: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-toggle {padding: 10px 15px;margin: 0;}.score-description > .reasoning-dropdown:last-of-type .reasoning-content {background-color: rgba(39, 44, 48, 0.95);border-radius: 0;margin: 0;}.metadata-line {white-space: nowrap;overflow: hidden;text-overflow: ellipsis;margin-bottom: 2px;}.metadata-separator {display: none;}.score-indicator.pending-rating {}.score-description {max-width: 500px;padding-bottom: 35px; }.score-description.streaming-tooltip {border-color: #ffa500; }.reasoning-dropdown {}.reasoning-toggle {}.reasoning-arrow {}.reasoning-content {}.reasoning-text {}.description-text {}.tooltip-last-answer {margin-top: 10px;padding: 10px;background-color: rgba(255, 255, 255, 0.05); border-radius: 4px;font-size: 0.9em;line-height: 1.4;}.answer-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 10px 0;}.tooltip-follow-up-questions {margin-top: 10px;display: flex;flex-direction: column;gap: 8px; }.follow-up-question-button {background-color: rgba(60, 160, 240, 0.2); border: 1px solid rgba(60, 160, 240, 0.5);color: #e1e8ed; padding: 8px 12px;border-radius: 15px; cursor: pointer;font-size: 0.85em;text-align: left;transition: background-color 0.2s ease, border-color 0.2s ease;white-space: normal; line-height: 1.3;touch-action: manipulation;-webkit-tap-highlight-color: transparent;user-select: none;outline: none;}.follow-up-question-button:hover {background-color: rgba(60, 160, 240, 0.35);border-color: rgba(60, 160, 240, 0.8);}.follow-up-question-button:active {background-color: rgba(60, 160, 240, 0.5);}.follow-up-question-button:disabled {opacity: 0.5;cursor: not-allowed;}.tooltip-metadata {margin-top: 12px;padding-top: 8px;font-size: 0.8em;color: #8899a6; border-top: 1px solid rgba(255, 255, 255, 0.1);}.metadata-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.2);margin: 8px 0;}.metadata-line {margin-bottom: 4px;}.metadata-line:last-child {margin-bottom: 0;}.score-highlight {}.scroll-to-bottom-button {}.tooltip-bottom-spacer {}.tooltip-custom-question-container {display: flex;gap: 8px;padding: 10px 15px;background-color: rgba(22, 24, 28, 0.98);border-top: 1px solid rgba(255, 255, 255, 0.1);position: relative;z-index: 10;flex-shrink: 0;}.tooltip-custom-question-input {flex-grow: 1;padding: 8px 10px;border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);background-color: rgba(39, 44, 48, 0.9);color: #e7e9ea;font-size: 0.9em;font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;line-height: 1.4;resize: none;overflow-y: hidden;min-height: calc(0.9em * 1.4 + 16px + 2px);box-sizing: border-box;}.tooltip-custom-question-input:focus {border-color: #1d9bf0;outline: none;}.tooltip-custom-question-button {background-color: #1d9bf0;color: white;border: none;border-radius: 6px;padding: 8px 12px;cursor: pointer;font-weight: bold;font-size: 0.9em;transition: background-color 0.2s;}.tooltip-custom-question-button:hover {background-color: #1a8cd8;}.tooltip-custom-question-button:disabled,.tooltip-custom-question-input:disabled {opacity: 0.6;cursor: not-allowed;}.tooltip-conversation-history {margin-top: 15px;padding-top: 10px;border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex;flex-direction: column;gap: 12px; }.conversation-turn {background-color: rgba(255, 255, 255, 0.04);padding: 10px;border-radius: 6px;line-height: 1.4;}.conversation-question {font-size: 0.9em;color: #b0bec5; margin-bottom: 6px;}.conversation-question strong {color: #cfd8dc; }.conversation-answer {font-size: 0.95em;color: #e1e8ed; }.conversation-answer strong {color: #1d9bf0; }.conversation-separator {border: none;border-top: 1px dashed rgba(255, 255, 255, 0.15);margin: 0; }.pending-answer {color: #ffa726; font-style: italic;}.pending-cursor {display: inline-block;color: #1d9bf0; animation: blink 0.7s infinite;font-weight: bold;margin-left: 2px;font-style: normal; }@keyframes blink {0%, 100% { opacity: 0; }50% { opacity: 1; }}.ai-generated-link {color: #1d9bf0; text-decoration: underline;transition: color 0.2s ease;}.ai-generated-link:hover {color: #1a8cd8; text-decoration: underline;}.score-description pre,.tooltip-scrollable-content pre {background-color: rgba(255, 255, 255, 0.07);padding: 8px;border-radius: 6px;overflow-x: auto;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;white-space: pre-wrap;}.score-description code,.tooltip-scrollable-content code {background-color: rgba(255, 255, 255, 0.12);padding: 2px 4px;border-radius: 4px;font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;}.tooltip-close-button {background: none !important;border: none !important;color: #8899a6 !important; cursor: pointer !important;font-size: 20px !important; line-height: 1 !important;padding: 4px 8px !important;margin-left: 8px !important; border-radius: 50% !important; width: 28px !important; height: 28px !important; display: flex !important;align-items: center !important;justify-content: center !important;transition: all 0.2s !important;order: 3; }.tooltip-close-button:hover {background-color: rgba(255, 92, 92, 0.1) !important; color: #ff5c5c !important; }.tooltip-close-button:active {transform: scale(0.95) !important;}@media (max-width: 600px) {.tooltip-close-button {font-size: 22px !important; width: 32px !important;height: 32px !important;}.tooltip-controls {padding-right: 40px !important; }}.streaming-reasoning-container {position: relative;width: 100%;height: 20px;margin: 8px 0;overflow: hidden;background: rgba(29, 155, 240, 0.05); border-radius: 4px;display: none; }.streaming-reasoning-text {display: block;width: 100%;white-space: nowrap;color: #1d9bf0; font-style: italic;font-size: 0.85em;line-height: 20px;padding: 0 10px;opacity: 0.8;text-align: right;direction: ltr;overflow: hidden;text-overflow: clip;}.streaming-reasoning-container.active {box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.2);border: 1px solid rgba(29, 155, 240, 0.3);}.conversation-turn .reasoning-dropdown {margin-top: 8px; margin-bottom: 8px; border-radius: 4px;background-color: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08);}.conversation-turn .reasoning-toggle {display: flex;align-items: center;color: #b0bec5; cursor: pointer;font-weight: normal; font-size: 0.85em;padding: 6px 8px;user-select: none;transition: background-color 0.2s;}.conversation-turn .reasoning-toggle:hover {background-color: rgba(255, 255, 255, 0.05);}.conversation-turn .reasoning-arrow {display: inline-block;margin-right: 4px;font-size: 0.9em;transition: transform 0.2s ease;}.conversation-turn .reasoning-content {max-height: 0;overflow: hidden;transition: max-height 0.3s ease-out, padding 0.3s ease-out;background-color: rgba(0, 0, 0, 0.1);border-radius: 0 0 4px 4px;padding: 0 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-content {max-height: 200px; overflow-y: auto;padding: 8px; }.conversation-turn .reasoning-dropdown.expanded .reasoning-arrow {transform: rotate(90deg);}.conversation-turn .reasoning-text {font-size: 0.85em; line-height: 1.4;color: #ccc; margin: 0;padding: 0; }.conversation-turn .reasoning-content::-webkit-scrollbar {width: 5px;}.conversation-turn .reasoning-content::-webkit-scrollbar-track {background: rgba(255, 255, 255, 0.05);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb {background: rgba(255, 255, 255, 0.2);border-radius: 3px;}.conversation-turn .reasoning-content::-webkit-scrollbar-thumb:hover {background: rgba(255, 255, 255, 0.3);}.tooltip-attach-image-button {background: none;border: none;color: #8899a6; font-size: 1.2em; cursor: pointer;padding: 6px 8px; margin: 0 4px; border-radius: 4px;transition: all 0.2s ease;align-self: center; }.tooltip-attach-image-button:hover {background-color: rgba(29, 155, 240, 0.1);color: #1d9bf0;}.tooltip-follow-up-image-preview-container {padding: 10px 15px;padding-bottom: 0; background-color: rgba(22, 24, 28, 0.98); border-top: 1px solid rgba(255, 255, 255, 0.1);display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start;position: relative;z-index: 10;flex-shrink: 0; }.follow-up-image-preview-item {position: relative; display: flex;flex-direction: column;align-items: center;border: 1px solid rgba(255, 255, 255, 0.2);border-radius: 6px;padding: 5px;background-color: rgba(255, 255, 255, 0.05);}.follow-up-image-preview-thumbnail {max-width: 80px; max-height: 80px;border-radius: 4px;object-fit: cover; margin-bottom: 5px; }.follow-up-image-remove-btn {position: absolute;top: -5px;right: -5px;background-color: rgba(40, 40, 40, 0.8);color: white;border: 1px solid rgba(255,255,255,0.3);border-radius: 50%; width: 20px;height: 20px;font-size: 12px;font-weight: bold;line-height: 18px; text-align: center;cursor: pointer;padding: 0;transition: background-color 0.2s ease, transform 0.2s ease;}.follow-up-image-remove-btn:hover {background-color: rgba(255, 92, 92, 0.9);transform: scale(1.1);}.tooltip-custom-question-container {display: flex; align-items: center; }.tooltip-custom-question-input {margin-right: 0; }.conversation-image-container {margin-top: 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; }.conversation-uploaded-image {max-width: 80%; max-height: 120px; border-radius: 6px;border: 1px solid rgba(255, 255, 255, 0.2);object-fit: contain; display: block; cursor: pointer; transition: transform 0.2s ease;}.conversation-uploaded-image:hover {transform: scale(1.02); }@media (max-width: 600px) {#filter-toggle {opacity: 0.3;}#settings-toggle {opacity: 0.3;}}.markdown-table {border-collapse: collapse;margin: 1em 0;width: 100%; font-size: 0.9em;color: #e7e9ea; }.markdown-table th,.markdown-table td {border: 1px solid #555; padding: 8px;text-align: left;}.markdown-table th {background-color: #333; font-weight: bold;}.markdown-table tbody tr:nth-child(odd) {background-color: #222; }.tooltip-refresh-button {background: none !important;border: none !important;color: #8899a6 !important;cursor: pointer !important;font-size: 16px !important;padding: 4px 8px !important;margin-left: 8px !important;border-radius: 4px !important;transition: all 0.2s !important;}.tooltip-refresh-button:hover {background-color: rgba(76, 175, 80, 0.1) !important;color: #4caf50 !important;}.tooltip-refresh-button:active {transform: scale(0.95) !important;}/* Inline tweet score ----------------------------------------------------- */.score-indicator,.score-indicator.mobile-indicator {position: relative !important;inset: auto !important;display: inline-flex !important;align-items: center !important;justify-content: center !important;flex: 0 0 auto !important;min-width: 0 !important;min-height: 20px !important;margin: 0 0 0 8px !important;padding: 1px 8px !important;border: 0 !important;border-radius: 9999px !important;box-shadow: none !important;font-size: 11px !important;line-height: 18px !important;white-space: nowrap !important;vertical-align: middle !important;z-index: auto !important;}.score-indicator.rated-rating {background: #1d9bf0 !important;}.score-indicator:hover,.score-indicator:focus-visible {filter: brightness(1.12);transform: none !important;outline: 2px solid rgba(29, 155, 240, 0.35) !important;outline-offset: 2px !important;}/* Tooltip usability ----------------------------------------------------- */.score-description {width: min(620px, calc(100vw - 32px)) !important;max-width: calc(100vw - 32px) !important;max-height: min(760px, calc(100dvh - 32px)) !important;padding: 0 !important;overflow: hidden !important;background: rgba(22, 24, 28, 0.985) !important;}.tooltip-controls {align-items: center !important;gap: 4px !important;min-height: 48px !important;padding: 6px 8px 6px 14px !important;}.tooltip-title {min-width: 0;margin-right: auto;overflow: hidden;color: #e7e9ea;font-size: 14px;font-weight: 700;text-overflow: ellipsis;white-space: nowrap;}.tooltip-pin-button,.tooltip-copy-button,.tooltip-refresh-button,.tooltip-rate-button,.tooltip-close-button {display: inline-flex;align-items: center !important;justify-content: center !important;width: 36px !important;height: 36px !important;min-width: 36px !important;margin: 0 !important;padding: 0 !important;border-radius: 9999px !important;}.tooltip-scrollable-content {padding: 14px 18px 20px !important;overflow-x: hidden !important;scrollbar-gutter: stable;}.tooltip-custom-question-container {gap: 8px !important;padding: 10px 12px !important;}.tooltip-custom-question-input {min-width: 0;max-height: 120px;overflow-y: auto;}.tooltip-custom-question-button,.tooltip-attach-image-button {min-width: 44px;min-height: 40px;margin: 0;touch-action: manipulation;}.tooltip-follow-up-image-preview-container {max-height: 126px;padding: 10px 12px !important;overflow-y: auto;}/* Markdown responses ---------------------------------------------------- */.description-text > :first-child,.conversation-answer > :first-child,.reasoning-text > :first-child {margin-top: 0;}.score-description.streaming-tooltip p::after {content: none;}.score-description.streaming-tooltip .description-text > :last-child::after {content: '|';display: inline-block;margin-left: 2px;color: #1d9bf0;font-weight: bold;animation: blink 0.7s infinite;}.description-text > :last-child,.conversation-answer > :last-child,.reasoning-text > :last-child {margin-bottom: 0;}.description-text p,.conversation-answer p,.reasoning-text p {margin: 0 0 0.75em;}.description-text h1,.description-text h2,.description-text h3,.description-text h4,.description-text h5,.description-text h6,.conversation-answer h1,.conversation-answer h2,.conversation-answer h3,.conversation-answer h4,.conversation-answer h5,.conversation-answer h6,.reasoning-text h1,.reasoning-text h2,.reasoning-text h3,.reasoning-text h4,.reasoning-text h5,.reasoning-text h6 {margin: 1em 0 0.45em;color: #f2f4f5;line-height: 1.25;}.description-text h1,.conversation-answer h1 { font-size: 1.35em; }.description-text h2,.conversation-answer h2 { font-size: 1.2em; }.description-text h3,.conversation-answer h3 { font-size: 1.08em; }.description-text h4,.description-text h5,.description-text h6,.conversation-answer h4,.conversation-answer h5,.conversation-answer h6 { font-size: 1em; }.description-text ul,.description-text ol,.conversation-answer ul,.conversation-answer ol,.reasoning-text ul,.reasoning-text ol {margin: 0.6em 0 0.85em;padding-left: 1.5em;}.description-text li,.conversation-answer li,.reasoning-text li {margin: 0.25em 0;}.markdown-task-item {list-style: none;margin-left: -1.25em !important;}.markdown-task-item input {margin: 0 0.4em 0 0;accent-color: #1d9bf0;}.description-text blockquote,.conversation-answer blockquote,.reasoning-text blockquote {margin: 0.75em 0;padding: 0.2em 0 0.2em 0.85em;border-left: 3px solid #1d9bf0;color: #b9c2c9;}.description-text hr,.conversation-answer hr,.reasoning-text hr {margin: 1em 0;border: 0;border-top: 1px solid rgba(255, 255, 255, 0.16);}.markdown-table-wrapper {width: 100%;margin: 0.85em 0;overflow-x: auto;}.markdown-table-wrapper .markdown-table {width: max-content;min-width: 100%;margin: 0;}.description-text del,.conversation-answer del,.reasoning-text del {color: #8b98a5;}/* Linear conversation editing and reroll controls ---------------------- */.conversation-question-row,.conversation-answer-row {display: flex;align-items: flex-start;gap: 8px;}.conversation-question,.conversation-answer {min-width: 0;flex: 1 1 auto;}.conversation-action-button {flex: 0 0 auto;min-height: 30px;padding: 4px 8px;border: 1px solid rgba(139, 152, 165, 0.35);border-radius: 9999px;background: transparent;color: #8b98a5;cursor: pointer;font: inherit;font-size: 12px;font-weight: 600;touch-action: manipulation;}.conversation-action-button:hover,.conversation-action-button:focus-visible {border-color: #1d9bf0;background: rgba(29, 155, 240, 0.12);color: #1d9bf0;outline: none;}.conversation-action-button:disabled {cursor: not-allowed;opacity: 0.45;}.conversation-edit-form {display: grid;gap: 8px;margin-bottom: 10px;}.conversation-edit-form label {color: #cfd8dc;font-size: 12px;font-weight: 700;}.conversation-edit-input {width: 100%;min-height: 76px;max-height: 180px;box-sizing: border-box;padding: 9px 10px;resize: vertical;border: 1px solid rgba(255, 255, 255, 0.22);border-radius: 8px;outline: none;background: #202327;color: #e7e9ea;font: inherit;line-height: 1.4;}.conversation-edit-input:focus {border-color: #1d9bf0;box-shadow: 0 0 0 1px #1d9bf0;}.conversation-edit-actions {display: flex;justify-content: flex-end;gap: 8px;}@media (max-width: 600px) {.score-indicator,.score-indicator.mobile-indicator {position: relative !important;inset: auto !important;margin-left: 6px !important;}.score-description,.score-description.mobile-tooltip {top: auto !important;right: 0 !important;bottom: 0 !important;left: 0 !important;width: 100% !important;max-width: 100% !important;height: min(88dvh, 760px) !important;max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px) !important;border-radius: 18px 18px 0 0 !important;}.tooltip-controls {min-height: 52px !important;padding: 6px 8px 6px 16px !important;}.tooltip-pin-button,.tooltip-copy-button,.tooltip-refresh-button,.tooltip-rate-button,.tooltip-close-button {width: 44px !important;height: 44px !important;min-width: 44px !important;}.tooltip-scrollable-content {padding: 12px 14px 20px !important;}.tooltip-custom-question-container {padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;}.follow-up-question-button,.conversation-action-button {min-height: 44px;}.conversation-question-row,.conversation-answer-row {flex-wrap: wrap;}.conversation-edit-actions .conversation-action-button {flex: 1 1 0;}}`;
     // Apply CSS
@@ -236,8 +236,8 @@ function updateCacheStatsUI() {
     if (whitelistedCountEl) whitelistedCountEl.textContent = keepCount;
     const statsBadge = document.getElementById("tweet-filter-stats-badge");
     if (statsBadge) statsBadge.innerHTML = `
-            <span data-cached-count>${cachedCount} rated</span>
-            <span data-pending-count> | ${pendingRequests} pending</span>
+            <span>${cachedCount} rated</span>
+            <span> | ${pendingRequests} pending</span>
             ${keepCount > 0 ? `<span style="margin-left: 5px;"> | ${keepCount} kept</span>` : ''}
         `;
 }
@@ -254,8 +254,8 @@ function normalizeScore(score) {
 }
 function normalizeTweetCacheEntry(entry = {}) {
     const result = {};
-    for (const key of ['fullContext', 'description', 'reasoning', 'lastAnswer',
-        'tweetContent', 'authorHandle', 'individualTweetText']) {
+    for (const key of ['description', 'reasoning', 'lastAnswer',
+        'authorHandle', 'individualTweetText']) {
         result[key] = typeof entry[key] === 'string' ? entry[key] : '';
     }
     for (const key of ['questions', 'mediaUrls', 'individualMediaUrls']) {
@@ -270,6 +270,9 @@ function normalizeTweetCacheEntry(entry = {}) {
                     (part.type === 'image_url' && typeof part.image_url?.url === 'string') ||
                     (part.type === 'file' && typeof part.file?.file_data === 'string')
                 )) : []) })) : [];
+    result.tweet = entry.tweet && typeof entry.tweet === 'object' ? entry.tweet : null;
+    result.fullContext = entry.fullContext?.tweet && Array.isArray(entry.fullContext.ancestors)
+        ? entry.fullContext : null;
     result.score = normalizeScore(entry.score);
     result.status = typeof entry.status === 'string' ? entry.status : null;
     result.metadata = entry.metadata && typeof entry.metadata === 'object'
@@ -715,6 +718,7 @@ let enableAutoRating = appSettings.getBoolean('enableAutoRating');
 let reasoningEffort = appSettings.get('reasoningEffort');
 const REVIEW_SYSTEM_PROMPT = `
 Analyze the supplied tweet according to the user's custom instructions, assign it an integer score from 0 through 10, and suggest three relevant follow-up questions that you can confidently answer.
+The input is JSON: rate "tweet"; "ancestors" supplies reply context in oldest-first order. Each tweet has its own author, media, linkPreviews and optional quotedTweet. Attribute quoted content to its author.
 Your response content should be a json object that follows this schema.
 {
   "Response": "Your tweet analysis",
@@ -749,7 +753,7 @@ const TWEET_ARTICLE_SELECTOR = 'article[data-testid="tweet"]';
 const QUOTE_CONTAINER_SELECTOR = 'div[role="link"][tabindex="0"]';
 const USER_HANDLE_SELECTOR = 'div[data-testid="User-Name"] a[role="link"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
-const MEDIA_IMG_SELECTOR = 'div[data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"], img[src*="pbs.twimg.com/amplify_video_thumb"]';
+const MEDIA_IMG_SELECTOR = '[data-testid="tweetPhoto"] img, [data-testid="videoPlayer"] img, img[src*="pbs.twimg.com/media"], img[src*="video_thumb"]';
 const MEDIA_VIDEO_SELECTOR = 'video[poster*="pbs.twimg.com"], video';
 const PERMALINK_SELECTOR = 'a[href*="/status/"] time';
 const WEBSITE_CARD_SELECTOR = '[data-testid="card.wrapper"]';
@@ -856,15 +860,6 @@ function extractVisibleTextWithEmoji(element) {
     walk(element);
     return textParts.join('').replace(/\u00A0/g, ' ').trim();
 }
-function getElementText(elements) {
-    if (!elements) return '';
-    const elementList = elements instanceof NodeList ? Array.from(elements) : [elements];
-    for (const element of elementList) {
-        const text = extractVisibleTextWithEmoji(element);
-        if (text) return text;
-    }
-    return '';
-}
 /**
  * Finds the interactive card that represents a quoted tweet.
  *
@@ -888,42 +883,21 @@ function getQuotedTweetContainer(tweetArticle) {
     }
     return null;
 }
-/**
- * Extracts the text of a tweet, excluding any text from quoted tweets.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {string} The text of the main tweet.
- */
-function getTweetText(tweetArticle) {
-    const allTextElements = tweetArticle.querySelectorAll(TWEET_TEXT_SELECTOR);
-    const quoteContainer = getQuotedTweetContainer(tweetArticle);
-    for (const textElement of allTextElements) {
-        if (!quoteContainer || !quoteContainer.contains(textElement)) {
-            const tweetText = extractVisibleTextWithEmoji(textElement);
-            if (tweetText) return tweetText;
-        }
-    }
-    return '';
-}
-/**
- * Extracts the tweet ID from a tweet article element.
- * @param {Element} tweetArticle - The tweet article element.
- * @returns {string} The tweet ID.
- */
+const generatedTweetIds = new WeakMap();
+const cellTweets = new WeakMap();
+const filteredCells = new WeakSet();
+const conversationStates = new WeakMap();
 function getTweetID(tweetArticle) {
     if (!tweetArticle) return '';
-    const timeEl = tweetArticle.querySelector(PERMALINK_SELECTOR);
-    let tweetId = timeEl?.parentElement?.href;
-    if (tweetId && tweetId.includes('/status/')) {
-        const match = tweetId.match(/\/status\/(\d+)/);
-        if (match && match[1]) {
-            return match[1];
-        }
-        return tweetId.substring(tweetId.indexOf('/status/') + 1);
+    const quote = getQuotedTweetContainer(tweetArticle);
+    const time = Array.from(tweetArticle.querySelectorAll(PERMALINK_SELECTOR))
+        .find(element => !quote?.contains(element));
+    const tweetId = time?.closest('a')?.getAttribute('href')?.match(/\/status\/(\d+)/)?.[1];
+    if (tweetId) return tweetId;
+    if (!generatedTweetIds.has(tweetArticle)) {
+        generatedTweetIds.set(tweetArticle, `generated-${crypto.randomUUID()}`);
     }
-    if (!tweetArticle.dataset.tweetFilterGeneratedId) {
-        tweetArticle.dataset.tweetFilterGeneratedId = `generated-${Math.random().toString(36).substring(2, 15)}-${Date.now()}`;
-    }
-    return tweetArticle.dataset.tweetFilterGeneratedId;
+    return generatedTweetIds.get(tweetArticle);
 }
 /**
  * Extracts the Twitter handle from a tweet article element.
@@ -970,35 +944,6 @@ function getUserHandles(tweetArticle) {
         }
     }
     return handles.length > 0 ? handles : [''];
-}
-/**
- * Synchronous version of extractMediaLinks without retry logic.
- * @param {Element} scopeElement - The tweet element.
- * @returns {string[]} An array of media URLs (for images) and video descriptions (for videos).
- */
-function extractMediaLinks(scopeElement) {
-    if (!scopeElement) return [];
-    const mediaLinks = new Set();
-    const imgSelector = `${MEDIA_IMG_SELECTOR}, [data-testid="tweetPhoto"] img, img[src*="pbs.twimg.com/media"]`;
-    const videoSelector = `${MEDIA_VIDEO_SELECTOR}, [poster*="pbs.twimg.com"], video`;
-    const combinedSelector = `${imgSelector}, ${videoSelector}`;
-    let mediaElements = scopeElement.querySelectorAll(combinedSelector);
-    if (mediaElements.length === 0 && scopeElement.matches(QUOTE_CONTAINER_SELECTOR)) {
-        mediaElements = scopeElement.querySelectorAll('img[src*="pbs.twimg.com"], video[poster*="pbs.twimg.com"]');
-    }
-    mediaElements.forEach(mediaEl => {
-        if (mediaEl.tagName === 'VIDEO') {
-            if (mediaEl.poster) mediaLinks.add(mediaEl.poster);
-        } else if (mediaEl.tagName === 'IMG') {
-            const sourceUrl = mediaEl.src;
-            if(!sourceUrl) return;
-            const isAvatar = sourceUrl.includes('/profile_images/') ||
-                Boolean(mediaEl.closest?.('[data-testid^="UserAvatar-Container-"], [data-testid="Tweet-User-Avatar"]'));
-            if (isAvatar) return;
-            mediaLinks.add(sourceUrl);          
-        }
-    });
-    return Array.from(mediaLinks);
 }
 /**
  * Extracts website-card metadata rendered inside a tweet.
@@ -1056,15 +1001,62 @@ function extractWebsiteLinkPreviews(scopeElement, excludedContainer = null) {
     }
     return previews;
 }
-function isOriginalTweet(tweetArticle) {
-    let sibling = tweetArticle.nextElementSibling;
-    while (sibling) {
-        if (sibling.matches && sibling.matches('div[data-testid="inline_reply_offscreen"]')) {
-            return true;
+/**
+ * @typedef {Object} ParsedTweet
+ * @property {string|null} id
+ * @property {{handle: string, name: string}} author
+ * @property {string} text
+ * @property {string|null} createdAt
+ * @property {string|null} url
+ * @property {Array<{type: string, url: string, alt: string, description?: string}>} media
+ * @property {Array<{url: string, site: string, title: string, description: string, imageUrl: string}>} linkPreviews
+ * @property {Object<string, number>} engagement
+ * @property {ParsedTweet|null} quotedTweet
+ * @property {{id: string, handle: string}|null} replyTo
+ */
+/** @returns {ParsedTweet} Plain content, without DOM references or rating state. */
+function parseTweet(tweetArticle) {
+    const quote = getQuotedTweetContainer(tweetArticle);
+    const handles = getUserHandles(tweetArticle);
+    const parseContent = (scope, handle, excluded = null) => {
+        const own = selector => Array.from(scope.querySelectorAll(selector))
+            .filter(element => !excluded?.contains(element));
+        const time = own(PERMALINK_SELECTOR)[0];
+        const link = time?.closest('a') || own('a[href*="/status/"]')[0];
+        const media = own(`${MEDIA_IMG_SELECTOR}, ${MEDIA_VIDEO_SELECTOR}`)
+            .filter(element => !element.src?.includes('/profile_images/'))
+            .map(element => ({
+                type: element.tagName === 'VIDEO' || element.closest('[data-testid="videoPlayer"]') ||
+                    /video_thumb/.test(element.src || '') ? 'video' : 'image',
+                url: element.tagName === 'VIDEO' ? element.poster : element.src,
+                alt: element.getAttribute('alt') || ''
+            })).filter(item => item.url);
+        const engagement = {};
+        const label = own('[role="group"][aria-label]')[0]?.getAttribute('aria-label') || '';
+        for (const match of label.matchAll(/([\d,.]+[KM]?)\s+(repl(?:y|ies)|reposts?|likes?|bookmarks?|views?)/gi)) {
+            const count = match[1].replace(/,/g, '');
+            const key = match[2].startsWith('repl') ? 'replies' : match[2].replace(/s?$/, 's');
+            engagement[key] = Math.round(parseFloat(count) * (/M$/i.test(count) ? 1e6 : /K$/i.test(count) ? 1e3 : 1));
         }
-        sibling = sibling.nextElementSibling;
-    }
-    return false;
+        return {
+            id: link?.getAttribute('href')?.match(/\/status\/(\d+)/)?.[1] || null,
+            author: { handle, name: extractVisibleTextWithEmoji(own('[data-testid="User-Name"] [dir="ltr"] span')[0]) },
+            text: extractVisibleTextWithEmoji(own(TWEET_TEXT_SELECTOR)[0]),
+            createdAt: time?.getAttribute('datetime') || null,
+            url: link?.href || null,
+            media: media.filter((item, index) => media.findIndex(other => other.url === item.url) === index),
+            linkPreviews: extractWebsiteLinkPreviews(scope, excluded),
+            engagement,
+            quotedTweet: null,
+            replyTo: null
+        };
+    };
+    const tweet = parseContent(tweetArticle, handles[0], quote);
+    tweet.id = getTweetID(tweetArticle);
+    if (quote) tweet.quotedTweet = parseContent(quote, handles[1] || '');
+    const cell = tweetArticle.closest('[data-testid="cellInnerDiv"]');
+    if (cell) cellTweets.set(cell, tweet);
+    return tweet;
 }
 /**
  * Handles DOM mutations to detect new tweets added to the timeline.
@@ -1076,21 +1068,6 @@ function handleMutations(mutationsList) {
     const shouldSkipProcessing = (element) => {
         if (window.location.pathname.includes('/compose/')) return true;
         if (!element) return true;
-        if (element.dataset?.filtered === 'true' || element.dataset?.isAd === 'true') {
-            return true;
-        }
-        const cell = element.closest('div[data-testid="cellInnerDiv"]');
-        if (cell?.dataset?.filtered === 'true' || cell?.dataset?.isAd === 'true') {
-            return true;
-        }
-        if (isAd(element)) {
-            if (cell) {
-                cell.dataset.isAd = 'true';
-                cell.classList.add('tweet-filtered');
-            }
-            element.dataset.isAd = 'true';
-            return true;
-        }
         const tweetId = getTweetID(element);
         if (tweetProcessingState.isScheduled(tweetId)) {
             const indicator = ScoreIndicatorRegistry.get(tweetId);
@@ -1136,7 +1113,7 @@ function handleMutations(mutationsList) {
             if (mutation.removedNodes.length > 0) {
                 mutation.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        if (node.dataset?.filtered === 'true' || node.dataset?.isAd === 'true') {
+                        if (filteredCells.has(node)) {
                             return;
                         }
                         if (node.matches && node.matches(TWEET_ARTICLE_SELECTOR)) {
@@ -1149,7 +1126,7 @@ function handleMutations(mutationsList) {
                         else if (node.querySelectorAll) {
                             const removedTweets = node.querySelectorAll(TWEET_ARTICLE_SELECTOR);
                             removedTweets.forEach(tweet => {
-                                if (tweet.dataset?.filtered === 'true' || tweet.dataset?.isAd === 'true') {
+                                if (filteredCells.has(tweet.closest('[data-testid="cellInnerDiv"]'))) {
                                     return;
                                 }
                                 const tweetId = getTweetID(tweet);
@@ -1211,56 +1188,34 @@ function showStatus(message, type = 'info') {
     indicator.className = 'active ' + type;
     setTimeout(() => { indicator.classList.remove('active', type); }, 3000);
 }
-/**
- * Resizes an image file to a maximum dimension.
- * @param {File} file - The image file to resize.
- * @param {number} maxDimPx - The maximum dimension (width or height) in pixels.
- * @returns {Promise<string>} A promise that resolves with the data URL of the resized image (JPEG format).
- */
-function resizeImage(file, maxDimPx) {
-    return new Promise((resolve, reject) => {
+const MAX_MODEL_IMAGE_PIXELS = 700_000;
+/** Caps image area without upscaling; accepts an uploaded file or a data URL. */
+async function resizeImage(input, maxPixels = MAX_MODEL_IMAGE_PIXELS) {
+    const dataUrl = typeof input === 'string' ? input : await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                let { width, height } = img;
-                let newWidth, newHeight;
-                if (width > height) {
-                    if (width > maxDimPx) {
-                        newWidth = maxDimPx;
-                        newHeight = height * (maxDimPx / width);
-                    } else {
-                        newWidth = width;
-                        newHeight = height;
-                    }
-                } else {
-                    if (height > maxDimPx) {
-                        newHeight = maxDimPx;
-                        newWidth = width * (maxDimPx / height);
-                    } else {
-                        newWidth = width;
-                        newHeight = height;
-                    }
-                }
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.readAsDataURL(input);
+    });
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('Could not decode image.'));
+        image.onload = () => {
+            try {
+                const { naturalWidth: width, naturalHeight: height } = image;
+                if (!width || !height) throw new Error('Image has no dimensions.');
+                if (width * height <= maxPixels) return resolve(dataUrl);
+                const scale = Math.sqrt(maxPixels / (width * height));
                 const canvas = document.createElement('canvas');
-                canvas.width = newWidth;
-                canvas.height = newHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, newWidth, newHeight);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-                resolve(dataUrl);
-            };
-            img.onerror = (error) => {
-                console.error("Error loading image for resizing:", error);
-                reject(new Error("Could not load image for resizing."));
-            };
-            img.src = event.target.result;
+                canvas.width = Math.min(maxPixels, Math.max(1, Math.floor(width * scale)));
+                canvas.height = Math.max(1, Math.min(Math.floor(height * scale), Math.floor(maxPixels / canvas.width)));
+                const context = canvas.getContext('2d');
+                context.imageSmoothingQuality = 'high';
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL(dataUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png', 0.9));
+            } catch (error) { reject(error); }
         };
-        reader.onerror = (error) => {
-            console.error("FileReader error:", error);
-            reject(new Error("Could not read file."));
-        };
-        reader.readAsDataURL(file);
+        image.src = dataUrl;
     });
 }
     // ----- ui/responseParser.js -----
@@ -1658,7 +1613,6 @@ function refreshInstructionsHistory() {
 function createHistoryItem(entry, index) {
     const item = document.createElement('div');
     item.className = 'instruction-item';
-    item.dataset.index = index;
     const text = document.createElement('div');
     text.className = 'instruction-text';
     text.textContent = entry.summary;
@@ -1790,6 +1744,9 @@ class ScoreIndicator {
         };
         this._boundMethodHandlers = Object.create(null);
         this._listenerTeardowns = [];
+        this.questionTexts = new WeakMap();
+        this.filePreviews = new Map();
+        this.expandedReasoningTurns = new Set();
         try {
             this._createElements(tweetArticle);
             this._addEventListeners();
@@ -1808,7 +1765,6 @@ class ScoreIndicator {
         this.indicatorElement = document.createElement('button');
         this.indicatorElement.type = 'button';
         this.indicatorElement.className = 'score-indicator';
-        this.indicatorElement.dataset.tweetId = this.tweetId;
         this.indicatorElement.setAttribute('aria-label', 'Open TweetFilter AI score details');
         this.indicatorElement.title = 'Open TweetFilter AI score details';
         initialTweetArticle.appendChild(this.indicatorElement);
@@ -1816,8 +1772,6 @@ class ScoreIndicator {
         this.tooltipElement = document.createElement('div');
         this.tooltipElement.className = 'score-description';
         this.tooltipElement.style.display = 'none';
-        this.tooltipElement.dataset.tweetId = this.tweetId;
-        this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
         if (isMobileDevice()) {
             this.tooltipElement.style.touchAction = 'pan-x pan-y pinch-zoom';
         }
@@ -2240,22 +2194,22 @@ class ScoreIndicator {
         this._registerDomListener(this.rateButton, 'click', this._getBoundMethodHandler('_handleRateClick'));
         this._registerDomListener(this.followUpQuestionsElement, 'click', this._getBoundMethodHandler('_handleFollowUpQuestionClick'));
         if (isMobileDevice() && this.followUpQuestionsElement) {
+            let touchStart = null;
             this._boundHandlers.handleFollowUpTouchStart = (e) => {
                 const button = e.target.closest('.follow-up-question-button');
                 if (button) {
                     e.preventDefault();
-                    button.dataset.touchStartX = e.touches[0].clientX;
-                    button.dataset.touchStartY = e.touches[0].clientY;
+                    touchStart = { button, x: e.touches[0].clientX, y: e.touches[0].clientY };
                 }
             };
             this._boundHandlers.handleFollowUpTouchEnd = (e) => {
                 const button = e.target.closest('.follow-up-question-button');
-                if (button && button.dataset.touchStartX) {
+                if (button && touchStart?.button === button) {
                     e.preventDefault();
                     const touchEndX = e.changedTouches[0].clientX;
                     const touchEndY = e.changedTouches[0].clientY;
-                    const deltaX = Math.abs(touchEndX - parseFloat(button.dataset.touchStartX));
-                    const deltaY = Math.abs(touchEndY - parseFloat(button.dataset.touchStartY));
+                    const deltaX = Math.abs(touchEndX - touchStart.x);
+                    const deltaY = Math.abs(touchEndY - touchStart.y);
                     if (deltaX < 10 && deltaY < 10) {
                         this._handleFollowUpQuestionClick({
                             target: button,
@@ -2263,8 +2217,7 @@ class ScoreIndicator {
                             stopPropagation: () => {}
                         });
                     }
-                    delete button.dataset.touchStartX;
-                    delete button.dataset.touchStartY;
+                    touchStart = null;
                 }
             };
             this._registerDomListener(this.followUpQuestionsElement, 'touchstart', this._boundHandlers.handleFollowUpTouchStart, { passive: false });
@@ -2493,7 +2446,7 @@ class ScoreIndicator {
         } else {
             this.questions?.forEach((q, i) => {
                 const button = this.followUpQuestionsElement.children[i];
-                if (!button || button.dataset.questionText !== q) {
+                if (!button || this.questionTexts.get(button) !== q) {
                     questionsButtonsChanged = true;
                 }
             });
@@ -2505,8 +2458,7 @@ class ScoreIndicator {
                     const questionButton = document.createElement('button');
                     questionButton.className = 'follow-up-question-button';
                     questionButton.textContent = `🤔 ${question}`;
-                    questionButton.dataset.questionIndex = index;
-                    questionButton.dataset.questionText = question;
+                    this.questionTexts.set(questionButton, question);
                     if (isMobileDevice()) {
                         let hasBeenTapped = false;
                         questionButton.addEventListener('touchstart', (e) => {
@@ -2571,12 +2523,6 @@ class ScoreIndicator {
         if (!this.conversationHistory || this.conversationHistory.length === 0) {
             return '';
         }
-        const expandedStates = new Map();
-        if (this.conversationContainerElement) {
-            this.conversationContainerElement.querySelectorAll('.conversation-reasoning').forEach(dropdown => {
-                expandedStates.set(Number(dropdown.dataset.index), dropdown.classList.contains('expanded'));
-            });
-        }
         let historyHtml = '';
         this.conversationHistory.forEach((turn, index) => {
             const formattedQuestion = escapeTooltipHtml(turn.question).replace(/\n/g, '<br>');
@@ -2614,12 +2560,12 @@ class ScoreIndicator {
             let reasoningHtml = '';
             if (turn.reasoning && turn.reasoning.trim() !== '' && turn.answer !== 'pending') {
                 const formattedReasoning = formatTooltipDescription("", turn.reasoning).reasoning;
-                const wasExpanded = expandedStates.get(index);
+                const wasExpanded = this.expandedReasoningTurns.has(index);
                 const expandedClass = wasExpanded ? ' expanded' : '';
                 const arrowChar = wasExpanded ? '▼' : '▶';
                 const contentStyle = wasExpanded ? 'style="max-height: 200px; padding: 8px;"' : 'style="max-height: 0; padding: 0 8px;"';
                 reasoningHtml = `
-                    <div class="reasoning-dropdown conversation-reasoning${expandedClass}" data-index="${index}">
+                    <div class="reasoning-dropdown conversation-reasoning${expandedClass}">
                         <div class="reasoning-toggle" role="button" tabindex="0" aria-expanded="${wasExpanded ? 'true' : 'false'}">
                             <span class="reasoning-arrow">${arrowChar}</span> Show Reasoning Trace
                         </div>
@@ -2631,21 +2577,21 @@ class ScoreIndicator {
             }
             const questionHtml = isEditing
                 ? `
-                    <div class="conversation-edit-form" data-turn-index="${index}">
+                    <div class="conversation-edit-form">
                         <label for="conversation-edit-${this.tweetId}-${index}">Edit your message</label>
                         <textarea id="conversation-edit-${this.tweetId}-${index}" class="conversation-edit-input" rows="3">${escapeTooltipHtml(turn.question)}</textarea>
                         <div class="conversation-edit-actions">
-                            <button type="button" class="conversation-action-button conversation-save-edit" data-turn-index="${index}">Save & resubmit</button>
-                            <button type="button" class="conversation-action-button conversation-cancel-edit" data-turn-index="${index}">Cancel</button>
+                            <button type="button" class="conversation-action-button conversation-save-edit">Save & resubmit</button>
+                            <button type="button" class="conversation-action-button conversation-cancel-edit">Cancel</button>
                         </div>
                     </div>`
                 : `
                     <div class="conversation-question-row">
                         <div class="conversation-question"><strong>You:</strong> ${formattedQuestion}</div>
-                        ${canRevise ? `<button type="button" class="conversation-action-button conversation-edit-button" data-turn-index="${index}" aria-label="Edit and resubmit this message" title="Edit and resubmit"${actionsDisabled}>Edit</button>` : ''}
+                        ${canRevise ? `<button type="button" class="conversation-action-button conversation-edit-button" aria-label="Edit and resubmit this message" title="Edit and resubmit"${actionsDisabled}>Edit</button>` : ''}
                     </div>`;
             const rerollButton = canRevise && !isEditing
-                ? `<button type="button" class="conversation-action-button conversation-reroll-button" data-turn-index="${index}" aria-label="Reroll this AI response" title="Reroll response"${actionsDisabled}>Reroll</button>`
+                ? `<button type="button" class="conversation-action-button conversation-reroll-button" aria-label="Reroll this AI response" title="Reroll response"${actionsDisabled}>Reroll</button>`
                 : '';
             historyHtml += `
                 <div class="conversation-turn">
@@ -2685,7 +2631,12 @@ class ScoreIndicator {
             const arrow = dropdown?.querySelector('.reasoning-arrow');
             if (!dropdown || !content || !arrow) return;
             const scrollTop = this.tooltipScrollableContentElement?.scrollTop || 0;
-            const isExpanded = dropdown.classList.toggle('expanded');
+            const turnIndex = Array.from(this.conversationContainerElement.querySelectorAll('.conversation-turn'))
+                .indexOf(dropdown.closest('.conversation-turn'));
+            const isExpanded = !this.expandedReasoningTurns.has(turnIndex);
+            if (isExpanded) this.expandedReasoningTurns.add(turnIndex);
+            else this.expandedReasoningTurns.delete(turnIndex);
+            dropdown.classList.toggle('expanded', isExpanded);
             arrow.textContent = isExpanded ? '▼' : '▶';
             toggleButton.setAttribute('aria-expanded', isExpanded);
             content.style.maxHeight = isExpanded ? '200px' : '0';
@@ -2707,7 +2658,7 @@ class ScoreIndicator {
         event.preventDefault();
         event.stopPropagation();
         if (this.isFollowUpPending) return;
-        const turnIndex = Number(actionButton.dataset.turnIndex);
+        const turnIndex = Array.from(this.conversationContainerElement.querySelectorAll('.conversation-turn')).indexOf(actionButton.closest('.conversation-turn'));
         if (!Number.isInteger(turnIndex) || !this.conversationHistory[turnIndex]) return;
         if (actionButton.classList.contains('conversation-edit-button')) {
             this.editingTurnIndex = turnIndex;
@@ -2993,13 +2944,11 @@ class ScoreIndicator {
         if (!isNearBottom) {
             if (this.autoScroll) {
                 this.autoScroll = false;
-                this.tooltipElement.dataset.autoScroll = 'false';
                 this.userInitiatedScroll = true;
             }
         } else {
             if (this.userInitiatedScroll) {
                 this.autoScroll = true;
-                this.tooltipElement.dataset.autoScroll = 'true';
                 this.userInitiatedScroll = false;
             }
         }
@@ -3066,19 +3015,19 @@ class ScoreIndicator {
         }
         if (!this.tooltipScrollableContentElement) return;
         this.autoScroll = true;
-        this.tooltipElement.dataset.autoScroll = 'true';
         this._performAutoScroll();
         this._updateScrollButtonVisibility();
     }
-    _handleFollowUpQuestionClick(event) {
+    _handleFollowUpQuestionClick(event, customQuestion = null) {
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
-        const isMockEvent = event.target && event.target.dataset && event.target.dataset.questionText && typeof event.target.closest !== 'function';
-        const button = isMockEvent ? event.target : event.target.closest('.follow-up-question-button');
-        if (!button) return false;
+        const isCustom = customQuestion !== null;
+        const button = event.target?.closest('.follow-up-question-button');
+        if (!isCustom && !button) return false;
+        if (this.isFollowUpPending) return false;
         event.stopPropagation();
-        const questionText = button.dataset.questionText;
+        const questionText = isCustom ? customQuestion : this.questionTexts.get(button);
         const apiKey = browserGet('openrouter-api-key', '');
         if (!questionText) {
             showStatus('Could not identify the follow-up question.', 'error');
@@ -3088,11 +3037,11 @@ class ScoreIndicator {
             showStatus('API key missing. Cannot answer question.', 'error');
             return false;
         }
-        this.currentFollowUpSource = isMockEvent ? 'custom' : 'suggested';
+        this.currentFollowUpSource = isCustom ? 'custom' : 'suggested';
         this.isFollowUpPending = true;
         this.editingTurnIndex = null;
         this._setFollowUpControlsDisabled(true, 'Asking...');
-        if (!isMockEvent) {
+        if (!isCustom) {
             button.textContent = `🤔 Asking: ${questionText}...`;
         }
         this.conversationHistory.push({
@@ -3105,7 +3054,7 @@ class ScoreIndicator {
         if (this.uploadedImageDataUrls && this.uploadedImageDataUrls.length > 0) {
             this.uploadedImageDataUrls.forEach(url => {
                 if (url.startsWith('data:application/pdf')) {
-                    const previewItem = this.followUpImageContainer?.querySelector(`[data-image-data-url="${CSS.escape(url)}"]`);
+                    const previewItem = this.filePreviews.get(url);
                     const fileName = previewItem?.querySelector('.follow-up-pdf-preview span:last-child')?.textContent || 'document.pdf';
                     userMessageContentForHistory.push({
                         type: "file",
@@ -3150,17 +3099,7 @@ class ScoreIndicator {
             return;
         }
         const submissionText = questionText || (hasImages ? "[file only message]" : "");
-        const mockButton = {
-            dataset: { questionText: submissionText },
-            disabled: false,
-            textContent: ''
-        };
-        this.followUpQuestionsElement?.querySelectorAll('.follow-up-question-button').forEach(btn => btn.disabled = true);
-        const submitted = this._handleFollowUpQuestionClick({
-            target: mockButton,
-            stopPropagation: () => {},
-            preventDefault: () => {}
-        });
+        const submitted = this._handleFollowUpQuestionClick(event, submissionText);
         if (!submitted) return;
         if (this.customQuestionInput) {
             this.customQuestionInput.value = '';
@@ -3202,7 +3141,7 @@ class ScoreIndicator {
         }
         const filePromises = Array.from(files).map(file => {
             if (file && file.type.startsWith('image/')) {
-                return resizeImage(file, 1024)
+                return resizeImage(file)
                     .then(resizedDataUrl => {
                         this.uploadedImageDataUrls.push(resizedDataUrl);
                         this._addPreviewToContainer(resizedDataUrl, 'image');
@@ -3245,7 +3184,7 @@ class ScoreIndicator {
         if (!this.followUpImageContainer) return;
         const previewItem = document.createElement('div');
         previewItem.className = 'follow-up-image-preview-item';
-        previewItem.dataset.imageDataUrl = dataUrl;
+        this.filePreviews.set(dataUrl, previewItem);
         if (fileType === 'pdf') {
             const pdfIcon = document.createElement('div');
             pdfIcon.className = 'follow-up-pdf-preview';
@@ -3280,9 +3219,10 @@ class ScoreIndicator {
     _removeSpecificUploadedImage(imageDataUrl) {
         this.uploadedImageDataUrls = this.uploadedImageDataUrls.filter(url => url !== imageDataUrl);
         if (this.followUpImageContainer) {
-            const previewItemToRemove = this.followUpImageContainer.querySelector(`div.follow-up-image-preview-item[data-image-data-url="${CSS.escape(imageDataUrl)}"]`);
+            const previewItemToRemove = this.filePreviews.get(imageDataUrl);
             if (previewItemToRemove) {
                 previewItemToRemove.remove();
+                this.filePreviews.delete(imageDataUrl);
                 }
             if (this.uploadedImageDataUrls.length === 0) {
                 this.followUpImageContainer.style.display = 'none';
@@ -3290,6 +3230,7 @@ class ScoreIndicator {
         }
     }
     _clearFollowUpImage() {
+        this.filePreviews.clear();
         this.uploadedImageDataUrls = [];
         if (this.followUpImageContainer) {
             this.followUpImageContainer.innerHTML = '';
@@ -3405,7 +3346,6 @@ class ScoreIndicator {
             this.metadataContent.style.padding = '0 10px';
         }
         if (this.tooltipElement) {
-            this.tooltipElement.dataset.autoScroll = 'true';
         }
         if (this.tooltipScrollableContentElement) {
             this.tooltipScrollableContentElement.scrollTop = 0;
@@ -3552,7 +3492,6 @@ class ScoreIndicator {
             if (this.autoScroll !== shouldAutoScroll) {
                 this.autoScroll = shouldAutoScroll;
                 if (this.tooltipElement) {
-                    this.tooltipElement.dataset.autoScroll = this.autoScroll ? 'true' : 'false';
                 }
             }
         }
@@ -3630,10 +3569,7 @@ class ScoreIndicator {
         this.indicatorElement?.remove();
         this.tooltipElement?.remove();
         ScoreIndicatorRegistry.remove(this.tweetId);
-        const currentArticle = this.findCurrentArticleElement();
-        if (currentArticle) {
-            delete currentArticle.dataset.hasScoreIndicator;
-        }
+        this.filePreviews.clear();
         this.tweetArticle = null;
         this.indicatorElement = null;
         this.tooltipElement = null;
@@ -3689,7 +3625,7 @@ class ScoreIndicator {
     /**
      * Updates the indicator's state after an initial review and builds the conversation history.
      * @param {object} params
-     * @param {string} params.fullContext - The full text context of the tweet.
+     * @param {object} params.fullContext - Parsed tweet and ancestor context.
      * @param {string[]} params.mediaUrls - Array of media URLs from the tweet.
      * @param {string} params.apiResponseContent - The raw content from the API response.
      * @param {string} params.reviewSystemPrompt - The system prompt used for the initial review.
@@ -3702,7 +3638,7 @@ class ScoreIndicator {
         this.description = parsedResponse.response || apiResponseContent;
         this.questions = parsedResponse.questions;
         this.status = this.score !== null ? 'rated' : 'error';
-        const userMessageContent = [{ type: "text", text: fullContext }];
+        const userMessageContent = [{ type: "text", text: JSON.stringify(fullContext) }];
         if (typeof collectRatingImageUrls === 'function' && typeof appendRatingMediaContent === 'function' && modelSupportsImages(selectedModel)) {
             appendRatingMediaContent(userMessageContent, collectRatingImageUrls(mediaUrls, fullContext));
         }
@@ -3967,13 +3903,7 @@ const ScoreIndicatorRegistry = {
             return existingManager;
         } else if (tweetArticle) {
             try {
-                const existingIndicator = tweetArticle.querySelector(`.score-indicator[data-tweet-id="${tweetId}"]`);
-                const existingTooltip = document.querySelector(`.score-description[data-tweet-id="${tweetId}"]`);
-                if (existingIndicator || existingTooltip) {
-                    console.warn(`[Registry] Found existing indicator/tooltip elements for tweet ${tweetId} outside registry. Removing them before creating new manager.`);
-                    existingIndicator?.remove();
-                    existingTooltip?.remove();
-                }
+                tweetArticle.querySelector('.score-indicator')?.remove();
                 return new ScoreIndicator(tweetArticle);
             } catch (e) {
                 console.error(`[Registry] Error creating ScoreIndicator for ${tweetId}:`, e);
@@ -4138,12 +4068,10 @@ function initializeEventListeners(uiContainer) {
     const filterToggleBtn = uiContainer.querySelector('#filter-toggle');
     uiContainer.addEventListener('click', (event) => {
         const target = event.target;
-        const actionElement = target.closest('[data-action]');
-        const action = actionElement?.dataset.action;
-        const setting = target.dataset.setting;
-        const paramName = target.closest('.parameter-row')?.dataset.paramName;
-        const tab = target.dataset.tab;
-        const toggleTargetId = target.closest('[data-toggle]')?.dataset.toggle;
+        const actionElement = target.closest('button[name]');
+        const action = actionElement?.name;
+        const tab = target.closest('.tab-button')?.getAttribute('aria-controls')?.replace(/-tab$/, '');
+        const toggleTargetId = target.closest('.advanced-toggle')?.getAttribute('aria-controls');
         if (action) {
             switch (action) {
                 case 'close-filter':
@@ -4193,8 +4121,8 @@ function initializeEventListeners(uiContainer) {
     });
     uiContainer.addEventListener('input', (event) => {
         const target = event.target;
-        const setting = target.dataset.setting;
-        const paramName = target.closest('.parameter-row')?.dataset.paramName;
+        const setting = (Object.hasOwn(DEFAULT_SETTINGS, target.name) ? target.name : null);
+        const paramName = target.closest('.parameter-row')?.id.replace('parameter-', '');
         if (setting) {
             handleSettingChange(target, setting);
         }
@@ -4210,7 +4138,7 @@ function initializeEventListeners(uiContainer) {
     });
     uiContainer.addEventListener('change', (event) => {
         const target = event.target;
-        const setting = target.dataset.setting;
+        const setting = (Object.hasOwn(DEFAULT_SETTINGS, target.name) ? target.name : null);
         if (setting === 'enableImageDescriptions') {
             handleSettingChange(target, setting);
         }
@@ -4305,19 +4233,16 @@ function clearTweetRatingsAndRefreshUI() {
     if (isMobileDevice() || confirm('Are you sure you want to clear all cached tweet ratings?')) {
         tweetCache.clear(true);
         tweetProcessingState.resetPending();
-        if (window.threadRelationships) {
-            window.threadRelationships = {};
-            browserSet('threadRelationships', '{}');
-            console.log('Cleared thread relationships cache');
-        }
+        threadRelationships = {};
+        pendingThreadTweets.clear();
+        browserSet('threadRelationships', '{}');
+        document.querySelectorAll('div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
+            conversationStates.delete(conversation);
+        });
         showStatus('All cached ratings and thread relationships cleared!');
         console.log('Cleared all tweet ratings and thread relationships');
         if (observedTargetNode) {
             observedTargetNode.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
-                tweet.removeAttribute('data-slop-score');
-                tweet.removeAttribute('data-rating-status');
-                tweet.removeAttribute('data-rating-description');
-                tweet.removeAttribute('data-cached-rating');
                 const indicator = tweet.querySelector('.score-indicator');
                 if (indicator) {
                     indicator.remove();
@@ -4333,13 +4258,6 @@ function clearTweetRatingsAndRefreshUI() {
                 }
             });
         }
-        document.querySelectorAll('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]').forEach(conversation => {
-            delete conversation.dataset.threadMapping;
-            delete conversation.dataset.threadMappedAt;
-            delete conversation.dataset.threadMappingInProgress;
-            delete conversation.dataset.threadHist;
-            delete conversation.dataset.threadMediaUrls;
-        });
     }
 }
 /** Adds a handle from the input field to the blacklist. */
@@ -4354,7 +4272,7 @@ function addHandleFromInput() {
 /**
  * Handles changes to general setting inputs/toggles.
  * @param {HTMLElement} target - The input/toggle element that changed.
- * @param {string} settingName - The name of the setting (from data-setting).
+ * @param {string} settingName - The name of the setting (from the input name).
  */
 function handleSettingChange(target, settingName) {
     let value;
@@ -4416,7 +4334,7 @@ function handleSettingChange(target, settingName) {
 /**
  * Handles changes to parameter control sliders/number inputs.
  * @param {HTMLElement} target - The slider or number input element.
- * @param {string} paramName - The name of the parameter (from data-param-name).
+ * @param {string} paramName - The name of the parameter (from the parameter row ID).
  */
 function handleParameterChange(target, paramName) {
     const row = target.closest('.parameter-row');
@@ -4495,7 +4413,7 @@ function handleFilterValueInput(input) {
 }
 /**
  * Switches the active tab in the settings panel.
- * @param {string} tabName - The name of the tab to activate (from data-tab).
+ * @param {string} tabName - The name of the tab to activate (from aria-controls).
  */
 function switchTab(tabName) {
     const settingsContent = document.querySelector('#settings-container .settings-content');
@@ -4505,7 +4423,7 @@ function switchTab(tabName) {
     tabs.forEach(tab => tab.classList.remove('active'));
     buttons.forEach(btn => btn.classList.remove('active'));
     const tabToShow = settingsContent.querySelector(`#${tabName}-tab`);
-    const buttonToActivate = settingsContent.querySelector(`.tab-navigation .tab-button[data-tab="${tabName}"]`);
+    const buttonToActivate = settingsContent.querySelector(`.tab-navigation .tab-button[aria-controls="${tabName}-tab"]`);
     if (tabToShow) tabToShow.classList.add('active');
     if (buttonToActivate) buttonToActivate.classList.add('active');
 }
@@ -4515,7 +4433,7 @@ function switchTab(tabName) {
  */
 function toggleAdvancedOptions(contentId) {
     const content = document.getElementById(contentId);
-    const toggle = document.querySelector(`[data-toggle="${contentId}"]`);
+    const toggle = document.querySelector(`.advanced-toggle[aria-controls="${contentId}"]`);
     if (!content || !toggle) return;
     const icon = toggle.querySelector('.advanced-toggle-icon');
     const isExpanded = content.classList.toggle('expanded');
@@ -4532,8 +4450,8 @@ function toggleAdvancedOptions(contentId) {
  * Refreshes the entire settings UI to reflect current settings.
  */
 function refreshSettingsUI() {
-    document.querySelectorAll('[data-setting]').forEach(input => {
-        const settingName = input.dataset.setting;
+    document.querySelectorAll('#tweetfilter-root-container input[name], #tweetfilter-root-container select[name], #tweetfilter-root-container textarea[name]').forEach(input => {
+        const settingName = input.name;
         const value = browserGet(settingName, DEFAULT_SETTINGS[settingName]);
         if (input.type === 'checkbox') {
             input.checked = coerceBoolean(value, DEFAULT_SETTINGS[settingName]);
@@ -4541,8 +4459,8 @@ function refreshSettingsUI() {
             input.value = value;
         }
     });
-    document.querySelectorAll('.parameter-row[data-param-name]').forEach(row => {
-        const paramName = row.dataset.paramName;
+    document.querySelectorAll('.parameter-row').forEach(row => {
+        const paramName = row.id.replace('parameter-', '');
         const slider = row.querySelector('.parameter-slider');
         const valueInput = row.querySelector('.parameter-value');
         const value = browserGet(paramName, window[paramName]);
@@ -4776,7 +4694,6 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
         filteredOptions.forEach(option => {
             const optionDiv = document.createElement('div');
             optionDiv.textContent = option.label;
-            optionDiv.dataset.value = option.value;
             if (option.value === currentSelectedValue) {
                 optionDiv.classList.add('same-as-selected');
             }
@@ -4786,9 +4703,8 @@ function createCustomSelect(container, id, options, initialSelectedValue, onChan
                 selectSelected.textContent = option.label;
                 selectItems.style.display = 'none';
                 selectSelected.classList.remove('select-arrow-active');
-                selectItems.querySelectorAll('div[data-value]').forEach(div => {
-                    div.classList.toggle('same-as-selected', div.dataset.value === currentSelectedValue);
-                });
+                selectItems.querySelectorAll('.same-as-selected').forEach(div => div.classList.remove('same-as-selected'));
+                optionDiv.classList.add('same-as-selected');
                 onChange(currentSelectedValue);
             });
             selectItems.appendChild(optionDiv);
@@ -4928,76 +4844,37 @@ function initializeFloatingCacheStats() {
     updateCacheStatsUI();
 }
     // ----- ratingEngine.js -----
-/**
- * Applies filtering to a single tweet by replacing its contents with a minimal placeholder.
- * Also updates the rating indicator.
- * @param {Element} tweetArticle - The tweet element.
- */
+/** Captures content before removing filtered cells; ratings live in the registry/cache. */
 function filterSingleTweet(tweetArticle, saveCacheImmediately = true) {
-    const cell = tweetArticle.closest('div[data-testid="cellInnerDiv"]');
-    if (!cell) {
-        console.warn("Couldn't find cellInnerDiv for tweet");
+    const cell = tweetArticle.closest('[data-testid="cellInnerDiv"]');
+    if (!cell) return;
+    const tweet = parseTweet(tweetArticle);
+    const authorHandle = tweet.author.handle;
+    tweetCache.set(tweet.id, {
+        tweet,
+        authorHandle,
+        individualTweetText: tweet.text,
+        individualMediaUrls: collectRatingImageUrls([], { tweet, ancestors: [] })
+    }, saveCacheImmediately);
+    if (adAuthorCache.has(authorHandle) || isAd(tweetArticle)) {
+        ScoreIndicatorRegistry.get(tweet.id)?.destroy();
+        filteredCells.add(cell);
+        cell.replaceChildren();
         return;
     }
-    const handles = getUserHandles(tweetArticle);
-    const authorHandle = handles.length > 0 ? handles[0] : '';
-    const tweetText = getTweetText(tweetArticle) || '';
-    const mediaUrls = extractMediaLinks(tweetArticle);
-    const tid = getTweetID(tweetArticle);
-    const cacheUpdateData = {
-        authorHandle: authorHandle,
-        individualTweetText: tweetText,
-        individualMediaUrls: mediaUrls,
-        timestamp: Date.now()
-    };
-    tweetCache.set(tid, cacheUpdateData, saveCacheImmediately);
-    if (authorHandle && adAuthorCache.has(authorHandle)) {
-        const tweetId = getTweetID(tweetArticle);
-        if (tweetId) {
-            ScoreIndicatorRegistry.get(tweetId)?.destroy();
-        }
-        cell.innerHTML = '';
-        cell.dataset.filtered = 'true';
-        cell.dataset.isAd = 'true';
-        return;
-    }
-    cell.dataset.tweetText = tweetText;
-    cell.dataset.authorHandle = authorHandle;
-    cell.dataset.mediaUrls = JSON.stringify(mediaUrls);
-    cell.dataset.tweetId = tid;
-    const score = parseInt(tweetArticle.dataset.slopScore || '9', 10);
-    const tweetId = getTweetID(tweetArticle);
-    const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
-    indicatorInstance?.ensureIndicatorAttached();
-    const currentFilterThreshold = appSettings.getInteger('filterThreshold');
-    const ratingStatus = tweetArticle.dataset.ratingStatus;
-    const isAuthorCurrentlyBlacklisted = isUserBlacklisted(authorHandle);
-    if (indicatorInstance) {
-        indicatorInstance.setAuthorBlacklistState(isAuthorCurrentlyBlacklisted);
-    }
-    if (isAuthorCurrentlyBlacklisted) {
-        delete cell.dataset.filtered;
-        cell.dataset.authorBlacklisted = 'true';
-        if (indicatorInstance) {
-            indicatorInstance.refreshIndicatorUI();
-        }
+    const indicator = ScoreIndicatorRegistry.get(tweet.id, tweetArticle);
+    const keep = isUserBlacklisted(authorHandle);
+    indicator?.setAuthorBlacklistState(keep);
+    const score = indicator?.score ?? tweetCache.get(tweet.id)?.score;
+    if (!keep && score != null && !isActiveTweetStatus(indicator?.status) &&
+        score < appSettings.getInteger('filterThreshold')) {
+        indicator?.destroy();
+        filteredCells.add(cell);
+        cell.replaceChildren();
     } else {
-        delete cell.dataset.authorBlacklisted;
-        if (isActiveTweetStatus(ratingStatus)) {
-            delete cell.dataset.filtered;
-        } else if (isNaN(score) || score < currentFilterThreshold) {
-            const existingInstanceToDestroy = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
-            if (existingInstanceToDestroy) {
-                existingInstanceToDestroy.destroy();
-            }
-            cell.innerHTML = '';
-            cell.dataset.filtered = 'true';
-        } else {
-            delete cell.dataset.filtered;
-            if (indicatorInstance) {
-                indicatorInstance.refreshIndicatorUI();
-            }
-        }
+        filteredCells.delete(cell);
+        indicator?.ensureIndicatorAttached();
+        indicator?.refreshIndicatorUI();
     }
 }
 /**
@@ -5016,7 +4893,6 @@ function applyTweetCachedRating(tweetArticle) {
             cachedRating.streaming !== true &&
             hasCachedConversation &&
             !appSettings.getBoolean('enableAutoRating')) {
-            tweetArticle.dataset.ratingStatus = TweetRatingStatus.MANUAL;
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (!indicatorInstance) {
                 return false;
@@ -5035,10 +4911,6 @@ function applyTweetCachedRating(tweetArticle) {
             return false;
         }
         if (cachedRating.score !== undefined && cachedRating.score !== null) {
-            tweetArticle.dataset.slopScore = cachedRating.score.toString();
-            tweetArticle.dataset.ratingStatus = cachedRating.fromStorage ? TweetRatingStatus.CACHED : TweetRatingStatus.RATED;
-            tweetArticle.dataset.ratingDescription = cachedRating.description || "not available";
-            tweetArticle.dataset.ratingReasoning = cachedRating.reasoning || '';
             const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
             if (indicatorInstance) {
                 indicatorInstance.rehydrateFromCache(cachedRating);
@@ -5049,10 +4921,6 @@ function applyTweetCachedRating(tweetArticle) {
             filterSingleTweet(tweetArticle);
             tweetProcessingState.resetRetries(tweetId);
             return true;
-        } else if (!cachedRating.streaming) {
-            //cached object with score undefined or null, and not pending rating.
-            tweetCache.delete(tweetId);
-            return false;
         }
     }
     return false;
@@ -5068,25 +4936,6 @@ function isUserBlacklisted(handle) {
     return blacklistedHandles.some(h => h.toLowerCase().trim() === handle);
 }
 const getFullContextPromises = new Map();
-/**
- * Formats website cards as a stable, model-readable context section.
- * @param {Array<{url: string, site: string, title: string, description: string, imageUrl: string}>} previews
- * @param {string} sectionName
- * @returns {string}
- */
-function formatWebsiteLinkPreviews(previews, sectionName = 'LINK_PREVIEWS') {
-    if (!Array.isArray(previews) || previews.length === 0) return '';
-    const lines = [`[${sectionName}]:`];
-    previews.forEach((preview, index) => {
-        lines.push(`[LINK ${index + 1}]:`);
-        if (preview.url) lines.push(` URL: ${preview.url}`);
-        if (preview.site) lines.push(` Site: ${preview.site}`);
-        if (preview.title) lines.push(` Title: ${preview.title}`);
-        if (preview.description) lines.push(` Description: ${preview.description}`);
-        if (preview.imageUrl) lines.push(` Preview image URL: ${preview.imageUrl}`);
-    });
-    return lines.join('\n');
-}
 function isValidFinalState(status) {
     return isFinalTweetStatus(status);
 }
@@ -5104,85 +4953,17 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCach
             let questions = [];
             let lastAnswer = "";
             try {
-                const cachedRating = tweetCache.get(tweetId);
-                if (cachedRating && !isCompleteCachedRating(cachedRating) && !cachedRating.streaming) {
-                    console.warn(`Invalid cache entry for tweet ${tweetId}, removing from cache`, cachedRating);
-                    tweetCache.delete(tweetId);
-                }
-                const fullContextWithImageDescription = await getFullContext(tweetArticle, tweetId, apiKey, saveCacheImmediately);
-                if (!fullContextWithImageDescription) {
+                const context = await getFullContext(tweetArticle, tweetId, apiKey, saveCacheImmediately);
+                if (!context) {
                     throw new Error("Failed to get tweet context");
                 }
-                let mediaURLs = [];
-                if (document.querySelector('div[aria-label="Timeline: Conversation"]')) {
-                    const replyInfo = getTweetReplyInfo(tweetId);
-                    if (replyInfo && replyInfo.replyTo) {
-                        if (!tweetCache.has(tweetId)) {
-                            tweetCache.set(tweetId, {}, saveCacheImmediately);
-                        }
-                        if (!tweetCache.get(tweetId).threadContext) {
-                            tweetCache.set(tweetId, { threadContext: {
-                                replyTo: replyInfo.to,
-                                replyToId: replyInfo.replyTo,
-                                isRoot: false
-                            } });
-                        }
-                    }
-                }
-                const contextLines = fullContextWithImageDescription.split('\n');
-                const mediaSectionHeaders = new Set(['[MEDIA_URLS]:', '[QUOTED_TWEET_MEDIA_URLS]:']);
-                const videoSectionHeaders = new Set(['[VIDEO_DESCRIPTIONS]:', '[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:']);
-                const videoLinePattern = /^\[VIDEO \d+\]:\s*/;
-                for (let i = 0; i < contextLines.length; i++) {
-                    const trimmedLine = contextLines[i].trim();
-                    if (mediaSectionHeaders.has(trimmedLine)) {
-                        let cursor = i + 1;
-                        while (cursor < contextLines.length) {
-                            const mediaLine = contextLines[cursor].trim();
-                            if (!mediaLine) {
-                                cursor++;
-                                continue;
-                            }
-                            if (mediaLine.startsWith('[')) {
-                                break;
-                            }
-                            mediaURLs.push(...mediaLine.split(',').map(url => url.trim()).filter(Boolean));
-                            cursor++;
-                        }
-                        i = cursor - 1;
-                        continue;
-                    }
-                    if (videoSectionHeaders.has(trimmedLine)) {
-                        let cursor = i + 1;
-                        while (cursor < contextLines.length) {
-                            const videoLine = contextLines[cursor].trim();
-                            if (!videoLine) {
-                                cursor++;
-                                continue;
-                            }
-                            if (videoLinePattern.test(videoLine)) {
-                                const desc = videoLine.replace(videoLinePattern, '').trim();
-                                if (desc) {
-                                    mediaURLs.push(`[VIDEO_DESCRIPTION]: ${desc}`);
-                                }
-                                cursor++;
-                                continue;
-                            }
-                            if (videoLine.startsWith('[')) {
-                                break;
-                            }
-                            cursor++;
-                        }
-                        i = cursor - 1;
-                    }
-                }
-                mediaURLs = [...new Set(mediaURLs.filter(item => item.trim()))];
+                const mediaURLs = collectRatingImageUrls([], context);
                 const hasPotentialImageContainers = tweetArticle.querySelector('div[data-testid="tweetPhoto"], div[data-testid="videoPlayer"]');
                 const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
                 if (hasPotentialImageContainers && mediaURLs.length === 0 && (imageDescriptionsEnabled || modelSupportsImages(selectedModel))) {
                     console.warn(`Tweet ${tweetId}: Potential media containers found in DOM, but no media content (URLs or video descriptions) was extracted by getFullContext.`);
                 }
-                if (fullContextWithImageDescription) {
+                if (context) {
                     try {
                         const currentCache = tweetCache.get(tweetId);
                         const isCached = currentCache &&
@@ -5212,11 +4993,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCach
                             tweetProcessingState.resetRetries(tweetId);
                             return;
                         }
-                        const filteredMediaURLs = mediaURLs.filter(item => !item.startsWith('[VIDEO_DESCRIPTION]:'));
-                        const contextForApi = fullContextWithImageDescription
-                            .replace(/\n?\[THREAD_MEDIA_URLS\]:\s*\n[^\n]*(?=\n|$)/g, '')
-                            .replace(/\n{3,}/g, '\n\n');
-                        const rating = await rateTweetWithOpenRouter(contextForApi, tweetId, apiKey, filteredMediaURLs, 3, tweetArticle, authorHandle, saveCacheImmediately);
+                        const rating = await rateTweetWithOpenRouter(context, tweetId, apiKey, mediaURLs, 3, tweetArticle, authorHandle, saveCacheImmediately);
                         score = rating.score;
                         description = rating.content;
                         reasoning = rating.reasoning || '';
@@ -5231,10 +5008,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCach
                                 finalStatus = TweetRatingStatus.CACHED;
                             }
                         }
-                        tweetArticle.dataset.ratingStatus = finalStatus;
-                        tweetArticle.dataset.ratingDescription = description || "not available";
-                        tweetArticle.dataset.slopScore = score?.toString() || '';
-                        tweetArticle.dataset.ratingReasoning = reasoning;
                         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                             status: finalStatus,
                             score: score,
@@ -5305,8 +5078,6 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCach
                 }
             }
         } else {
-            tweetArticle.dataset.ratingStatus = TweetRatingStatus.ERROR;
-            tweetArticle.dataset.ratingDescription = "No API key";
             ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
                 status: TweetRatingStatus.ERROR,
                 score: 9,
@@ -5348,7 +5119,7 @@ async function delayedProcessTweet(tweetArticle, tweetId, authorHandle, saveCach
         }
     }
 }
-const MAPPING_INCOMPLETE_TWEETS = new Set();
+const pendingThreadTweets = new Map();
 async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     const tweetId = getTweetID(tweetArticle);
     if (!tweetId) {
@@ -5362,9 +5133,6 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     const authorHandle = handles.length > 0 ? handles[0] : '';
     if ((authorHandle && adAuthorCache.has(authorHandle)) || isAd(tweetArticle)) {
         if (authorHandle && !adAuthorCache.has(authorHandle)) adAuthorCache.add(authorHandle);
-        tweetArticle.dataset.ratingStatus = TweetRatingStatus.AD;
-        tweetArticle.dataset.ratingDescription = "Advertisement";
-        tweetArticle.dataset.slopScore = '0';
         ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
             status: TweetRatingStatus.AD,
             score: 0,
@@ -5386,43 +5154,19 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     }
     const conversation = document.querySelector('div[aria-label="Timeline: Conversation"]') ||
         document.querySelector('div[aria-label^="Timeline: Conversation"]');
-    if (conversation) {
-        if (!conversation.dataset.threadMapping) {
-            console.log(`[scheduleTweetProcessing] Tweet ${tweetId} waiting for thread mapping`);
-            MAPPING_INCOMPLETE_TWEETS.add(tweetId);
-            const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
-            if (indicatorInstance) {
-                indicatorInstance.update({
-                    status: TweetRatingStatus.PENDING,
-                    score: null,
-                    description: 'Waiting for thread context...',
-                    questions: [],
-                    lastAnswer: ""
-                });
-            }
-            return;
-        }
-        try {
-            const mapping = JSON.parse(conversation.dataset.threadMapping);
-            const tweetMapping = mapping.find(m => m.tweetId === tweetId);
-            if (!tweetMapping) {
-                console.log(`[scheduleTweetProcessing] Tweet ${tweetId} not found in thread mapping, waiting`);
-                MAPPING_INCOMPLETE_TWEETS.add(tweetId);
-                const indicatorInstance = ScoreIndicatorRegistry.get(tweetId, tweetArticle);
-                if (indicatorInstance) {
-                    indicatorInstance.update({
-                    status: TweetRatingStatus.PENDING,
-                        score: null,
-                        description: 'Waiting for thread context...',
-                        questions: [],
-                        lastAnswer: ""
-                    });
-                }
-                return;
-            }
-        } catch (e) {
-            console.error("Error parsing thread mapping:", e);
-        }
+    const thread = conversation && conversationStates.get(conversation);
+    const pageId = location.pathname.match(/status\/(\d+)/)?.[1];
+    if (conversation && (thread?.pageId !== pageId || !thread?.tweets.has(tweetId))) {
+        pendingThreadTweets.set(tweetId, rateAnyway);
+        ScoreIndicatorRegistry.get(tweetId, tweetArticle)?.update({
+            status: TweetRatingStatus.PENDING,
+            score: null,
+            description: 'Waiting for thread context...',
+            questions: [],
+            lastAnswer: ''
+        });
+        handleThreads();
+        return;
     }
     if (!rateAnyway && tweetCache.has(tweetId)) {
         const cachedEntry = tweetCache.get(tweetId);
@@ -5486,10 +5230,6 @@ async function scheduleTweetProcessing(tweetArticle, rateAnyway = false) {
     }, PROCESSING_DELAY_MS);
 }
 let threadRelationships = {};
-const THREAD_CHECK_INTERVAL = 1500;
-const SWEEP_INTERVAL = 2500;
-const THREAD_MAPPING_TIMEOUT = 1000;
-let threadMappingInProgress = false;
 function loadThreadRelationships() {
     try {
         const savedRelationships = browserGet('threadRelationships', '{}');
@@ -5528,7 +5268,7 @@ async function buildReplyChain(tweetId, maxDepth = Infinity) {
         }
         visited.add(currentId);
         const replyInfo = getStoredReplyInfo(currentId);
-        if (!replyInfo || !replyInfo.replyTo) break;
+        if (!replyInfo?.replyTo || visited.has(replyInfo.replyTo)) break;
         chain.push({
             fromId: currentId,
             toId: replyInfo.replyTo,
@@ -5575,241 +5315,53 @@ function getStoredReplyInfo(tweetId) {
     }
     return null;
 }
-/**
- * Extracts the full context of a tweet article and returns a formatted string.
- *
- * Schema:
- * [TWEET]:
- * @[the author of the tweet]
- * [the text of the tweet]
- * [MEDIA_DESCRIPTION]:
- * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
- * [LINK_PREVIEWS]:
- * [LINK 1]: URL, site, title, description, and preview image URL
- * [QUOTED_TWEET]:
- * [the text of the quoted tweet]
- * [QUOTED_TWEET_MEDIA_DESCRIPTION]:
- * [IMAGE 1]: [description], [IMAGE 2]: [description], etc.
- * [QUOTED_TWEET_LINK_PREVIEWS]:
- * [LINK 1]: URL, site, title, description, and preview image URL
- *
- * @param {Element} tweetArticle - The tweet article element.
- * @param {string} tweetId - The tweet's ID.
- * @param {string} apiKey - API key used for getting image descriptions.
- * @returns {Promise<string>} - The full context string.
- */
+/** Returns a defined rating context; serialize only at the API boundary. */
 async function getFullContext(tweetArticle, tweetId, apiKey, saveCacheImmediately = true) {
-    if (getFullContextPromises.has(tweetId)) {
-        return getFullContextPromises.get(tweetId);
-    }
-    const contextPromise = (async () => {
-        try {
-            const handles = getUserHandles(tweetArticle);
-            const userHandle = handles.length > 0 ? handles[0] : '';
-            const quotedHandle = handles.length > 1 ? handles[1] : '';
-            const mainText = getTweetText(tweetArticle);
-            let allMediaLinks = extractMediaLinks(tweetArticle);
-            let quotedText = "";
-            let quotedMediaLinks = [];
-            let quotedLinkPreviews = [];
-            let quotedTweetId = null;
-            const quoteContainer = getQuotedTweetContainer(tweetArticle);
-            const mainLinkPreviews = extractWebsiteLinkPreviews(tweetArticle, quoteContainer);
-            if (quoteContainer) {
-                const quotedLink = quoteContainer.querySelector('a[href*="/status/"]');
-                if (quotedLink) {
-                    const href = quotedLink.getAttribute('href');
-                    const match = href.match(/\/status\/(\d+)/);
-                    if (match && match[1]) {
-                        quotedTweetId = match[1];
-                    }
-                }
-                quotedText = getElementText(quoteContainer.querySelector(TWEET_TEXT_SELECTOR)) || "";
-                quotedMediaLinks = extractMediaLinks(quoteContainer);
-                quotedLinkPreviews = extractWebsiteLinkPreviews(quoteContainer);
-            }
-            let allAvailableMediaLinks = [...(allMediaLinks || [])];
-            let mainMediaLinks = allAvailableMediaLinks.filter(link => !quotedMediaLinks.includes(link));
-            const mainImageUrls = [];
-            const mainVideoDescriptions = [];
-            mainMediaLinks.forEach(item => {
-                if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
-                    mainVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
-                } else {
-                    mainImageUrls.push(item);
-                }
+    if (getFullContextPromises.has(tweetId)) return getFullContextPromises.get(tweetId);
+    const promise = (async () => {
+        const tweet = parseTweet(tweetArticle);
+        const replyInfo = getStoredReplyInfo(tweetId);
+        tweet.replyTo = replyInfo?.replyTo ? { id: replyInfo.replyTo, handle: replyInfo.to || '' } : null;
+        const ancestors = [];
+        const chain = await buildReplyChain(tweetId);
+        for (const link of chain.reverse()) {
+            const cached = tweetCache.get(link.toId);
+            const article = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
+                .find(element => getTweetID(element) === link.toId);
+            const parent = article ? parseTweet(article) : cached?.tweet || cached?.fullContext?.tweet;
+            ancestors.push(parent || {
+                id: link.toId,
+                author: { handle: link.to || '', name: '' },
+                text: cached?.individualTweetText || '',
+                createdAt: null,
+                url: null,
+                media: (cached?.individualMediaUrls || []).map(url => ({ type: 'image', url, alt: '' })),
+                linkPreviews: [],
+                engagement: {},
+                quotedTweet: null,
+                replyTo: null,
+                unavailable: !cached?.individualTweetText
             });
-            let engagementStats = "";
-            const engagementDiv = tweetArticle.querySelector('div[role="group"][aria-label$=" views"]');
-            if (engagementDiv) {
-                engagementStats = engagementDiv.getAttribute('aria-label')?.trim() || "";
-            }
-            let fullContextWithImageDescription = `[TWEET ${tweetId}]
- Author:@${userHandle}:
-` + mainText;
-            if (mainVideoDescriptions.length > 0) {
-                fullContextWithImageDescription += `
-[VIDEO_DESCRIPTIONS]:
-${mainVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
-            }
-            if (mainImageUrls.length > 0) {
-                if (browserGet('enableImageDescriptions', false)) {
-                    let mainMediaLinksDescription = await getImageDescription(mainImageUrls, apiKey, tweetId, userHandle);
-                    fullContextWithImageDescription += `
-[MEDIA_DESCRIPTION]:
-${mainMediaLinksDescription}`;
-                }
-                fullContextWithImageDescription += `
-[MEDIA_URLS]:
-${mainImageUrls.join(", ")}`;
-            }
-            const mainLinkPreviewContext = formatWebsiteLinkPreviews(mainLinkPreviews);
-            if (mainLinkPreviewContext) {
-                fullContextWithImageDescription += `
-${mainLinkPreviewContext}`;
-            }
-            if (engagementStats) {
-                fullContextWithImageDescription += `
-[ENGAGEMENT_STATS]:
-${engagementStats}`;
-            }
-            if (quotedText || quotedMediaLinks.length > 0 || quotedLinkPreviews.length > 0) {
-                fullContextWithImageDescription += `
-[QUOTED_TWEET${quotedTweetId ? ' ' + quotedTweetId : ''}]:
- Author:@${quotedHandle}:
-${quotedText}`;
-                if (quotedMediaLinks.length > 0) {
-                    const quotedImageUrls = [];
-                    const quotedVideoDescriptions = [];
-                    quotedMediaLinks.forEach(item => {
-                        if (item.startsWith('[VIDEO_DESCRIPTION]:')) {
-                            quotedVideoDescriptions.push(item.replace('[VIDEO_DESCRIPTION]: ', ''));
-                        } else {
-                            quotedImageUrls.push(item);
-                        }
-                    });
-                    if (quotedVideoDescriptions.length > 0) {
-                        fullContextWithImageDescription += `
-[QUOTED_TWEET_VIDEO_DESCRIPTIONS]:
-${quotedVideoDescriptions.map((desc, i) => `[VIDEO ${i + 1}]: ${desc}`).join('\n')}`;
-                    }
-                    if (quotedImageUrls.length > 0) {
-                        if (browserGet('enableImageDescriptions', false)) {
-                            let quotedMediaLinksDescription = await getImageDescription(quotedImageUrls, apiKey, tweetId, userHandle);
-                            fullContextWithImageDescription += `
-[QUOTED_TWEET_MEDIA_DESCRIPTION]:
-${quotedMediaLinksDescription}`;
-                        }
-                        fullContextWithImageDescription += `
-[QUOTED_TWEET_MEDIA_URLS]:
-${quotedImageUrls.join(", ")}`;
-                    }
-                }
-                const quotedLinkPreviewContext = formatWebsiteLinkPreviews(
-                    quotedLinkPreviews,
-                    'QUOTED_TWEET_LINK_PREVIEWS'
-                );
-                if (quotedLinkPreviewContext) {
-                    fullContextWithImageDescription += `
-${quotedLinkPreviewContext}`;
-                }
-            }
-            const conversationElement = document.querySelector('div[aria-label="Timeline: Conversation"], div[aria-label^="Timeline: Conversation"]');
-            if (conversationElement) {
-                const replyChain = await buildReplyChain(tweetId);
-                let threadHistoryIncluded = false;
-                if (conversationElement.dataset.threadHist) {
-                    if (!isOriginalTweet(tweetArticle)) {
-                        fullContextWithImageDescription = conversationElement.dataset.threadHist + `\n[REPLY]\n` + fullContextWithImageDescription;
-                        threadHistoryIncluded = true;
-                    }
-                }
-                if (replyChain.length > 0 && !threadHistoryIncluded) {
-                    let parentContextsString = "";
-                    let previousParentAuthor = null;
-                    for (let i = replyChain.length - 1; i >= 0; i--) {
-                        const link = replyChain[i];
-                        const parentId = link.toId;
-                        const parentUser = link.to || 'unknown';
-                        let currentParentContent = null;
-                        const parentCacheEntry = tweetCache.get(parentId);
-                        if (parentCacheEntry && parentCacheEntry.fullContext) {
-                            currentParentContent = parentCacheEntry.fullContext;
-                        } else {
-                            const parentArticleElement = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR))
-                                .find(el => getTweetID(el) === parentId);
-                            if (parentArticleElement) {
-                                const originalParentRelationship = threadRelationships[parentId];
-                                delete threadRelationships[parentId];
-                                try {
-                                    currentParentContent = await getFullContext(parentArticleElement, parentId, apiKey, saveCacheImmediately);
-                                } finally {
-                                    if (originalParentRelationship) {
-                                        threadRelationships[parentId] = originalParentRelationship;
-                                    }
-                                }
-                            } else if (parentCacheEntry && parentCacheEntry.individualTweetText) {
-                                currentParentContent = `[TWEET ${parentId}]\n Author:@${parentCacheEntry.authorHandle || parentUser}:\n${parentCacheEntry.individualTweetText}`;
-                                if (parentCacheEntry.individualMediaUrls && parentCacheEntry.individualMediaUrls.length > 0) {
-                                    try {
-                                        if (browserGet('enableImageDescriptions', false)) {
-                                            const parentMediaDesc = await getImageDescription(
-                                                parentCacheEntry.individualMediaUrls,
-                                                apiKey,
-                                                parentId,
-                                                parentCacheEntry.authorHandle || parentUser
-                                            );
-                                            currentParentContent += `\n[MEDIA_DESCRIPTION]:\n${parentMediaDesc}`;
-                                        }
-                                    } catch (e) {
-                                        console.warn(`[getFullContext] Failed to fetch parent media descriptions for ${parentId}:`, e);
-                                    }
-                                    currentParentContent += `\n[MEDIA_URLS]:\n${parentCacheEntry.individualMediaUrls.join(", ")}`;
-                                }
-                            }
-                        }
-                        if (previousParentAuthor) {
-                            parentContextsString += `\n[REPLY TO @${previousParentAuthor}]\n`;
-                        }
-                        if (currentParentContent) {
-                            const lastTweetMarker = currentParentContent.lastIndexOf('[TWEET ');
-                            if (lastTweetMarker > 0) {
-                                currentParentContent = currentParentContent.substring(lastTweetMarker);
-                            }
-                            parentContextsString += currentParentContent;
-                        } else {
-                            parentContextsString += `[CONTEXT UNAVAILABLE FOR TWEET ${parentId} @${parentUser}]`;
-                        }
-                        previousParentAuthor = parentUser;
-                    }
-                    if (previousParentAuthor) {
-                        parentContextsString += `\n[REPLY TO @${previousParentAuthor}]\n`;
-                    }
-                    fullContextWithImageDescription = parentContextsString + fullContextWithImageDescription;
-                }
-                const replyInfo = getTweetReplyInfo(tweetId);
-                if (replyInfo && replyInfo.to && !threadHistoryIncluded && replyChain.length === 0) {
-                    fullContextWithImageDescription = `[REPLY TO @${replyInfo.to}]\n` + fullContextWithImageDescription;
-                }
-            }
-            tweetArticle.dataset.fullContext = fullContextWithImageDescription;
-            const existingCacheEntryForCurrentTweet = tweetCache.get(tweetId) || {};
-            const updatedCacheEntry = {
-                ...existingCacheEntryForCurrentTweet,
-                fullContext: fullContextWithImageDescription,
-                timestamp: existingCacheEntryForCurrentTweet.timestamp || Date.now()
-            };
-            if (existingCacheEntryForCurrentTweet.score === undefined && updatedCacheEntry.score === null) {
-                updatedCacheEntry.score = undefined;
-            }
-            tweetCache.set(tweetId, updatedCacheEntry, saveCacheImmediately);
-            return fullContextWithImageDescription;
-        } finally {
-            getFullContextPromises.delete(tweetId);
+            const parentReply = getStoredReplyInfo(link.toId);
+            ancestors[ancestors.length - 1].replyTo = parentReply?.replyTo
+                ? { id: parentReply.replyTo, handle: parentReply.to || '' } : null;
         }
+        const context = { tweet, ancestors };
+        if (appSettings.getBoolean('enableImageDescriptions')) {
+            for (const item of [...ancestors, tweet].flatMap(item => [item, item.quotedTweet]).filter(Boolean)) {
+                const media = item.media.filter(media => !media.description);
+                if (media.length) {
+                    const descriptions = await getImageDescriptions(media.map(media => media.url), apiKey);
+                    media.forEach((media, index) => { media.description = descriptions[index] || ''; });
+                }
+            }
+        }
+        tweetCache.set(tweetId, { tweet, fullContext: context }, saveCacheImmediately);
+        return context;
     })();
-    getFullContextPromises.set(tweetId, contextPromise);
-    return contextPromise;
+    getFullContextPromises.set(tweetId, promise);
+    try { return await promise; }
+    finally { getFullContextPromises.delete(tweetId); }
 }
 /**
  * Applies filtering to all tweets currently in the observed container.
@@ -5849,300 +5401,60 @@ function ensureAllTweetsRated() {
     }
 }
 async function handleThreads() {
-    try {
-        let conversation = document.querySelector('div[aria-label="Timeline: Conversation"]');
-        if (!conversation) {
-            conversation = document.querySelector('div[aria-label^="Timeline: Conversation"]');
-        }
-        if (!conversation) return;
-        if (threadMappingInProgress || conversation.dataset.threadMappingInProgress === "true") {
-            return;
-        }
-        const lastMappedTimestamp = parseInt(conversation.dataset.threadMappedAt || '0', 10);
-        const MAPPING_COOLDOWN_MS = 1000;
-        if (Date.now() - lastMappedTimestamp < MAPPING_COOLDOWN_MS) {
-            return;
-        }
-        const match = location.pathname.match(/status\/(\d+)/);
-        const pageTweetId = match ? match[1] : null;
-        if (!pageTweetId) return;
-        let rootTweetId = pageTweetId;
-        const visited = new Set();
-        while (rootTweetId) {
-            if (visited.has(rootTweetId)) {
-                console.warn(`[handleThreads] Detected reply chain cycle at ${rootTweetId}`);
-                break;
-            }
-            visited.add(rootTweetId);
-            const replyInfo = getStoredReplyInfo(rootTweetId);
-            if (!replyInfo || !replyInfo.replyTo) {
-                break;
-            }
-            rootTweetId = replyInfo.replyTo;
-        }
-        await mapThreadStructure(conversation, rootTweetId);
-    } catch (error) {
-        console.error("Error in handleThreads:", error);
-        threadMappingInProgress = false;
-    }
+    const conversation = document.querySelector('div[aria-label^="Timeline: Conversation"]');
+    const pageId = location.pathname.match(/status\/(\d+)/)?.[1];
+    if (!conversation || !pageId) return;
+    await mapThreadStructure(conversation, pageId);
 }
-async function mapThreadStructure(conversation, localRootTweetId) {
-    if (threadMappingInProgress || conversation.dataset.threadMappingInProgress) {
-        return;
-    }
-    conversation.dataset.threadMappingInProgress = "true";
-    threadMappingInProgress = true;
-    try {
-        const timeout = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Thread mapping timed out')), THREAD_MAPPING_TIMEOUT)
-        );
-        const mapping = async () => {
-            const urlMatch = location.pathname.match(/status\/(\d+)/);
-            const urlTweetId = urlMatch ? urlMatch[1] : null;
-            let cellDivs = Array.from(conversation.querySelectorAll('div[data-testid="cellInnerDiv"]'));
-            if (!cellDivs.length) {
-                console.log("No cell divs found, thread mapping aborted");
-                delete conversation.dataset.threadMappingInProgress;
-                threadMappingInProgress = false;
-                return;
-            }
-            cellDivs.sort((a, b) => {
-                const aY = parseInt(a.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
-                const bY = parseInt(b.style.transform.match(/translateY\((\d+)/)?.[1] || '0');
-                return aY - bY;
-            });
-            let tweetCells = [];
-            let processedCount = 0;
-            let urlTweetCellIndex = -1;
-            for (let idx = 0; idx < cellDivs.length; idx++) {
-                const cell = cellDivs[idx];
-                let tweetId, username, text, mediaLinks = [], quotedMediaLinks = [];
-                let article = cell.querySelector('article[data-testid="tweet"]');
-                if (article) {
-                    tweetId = getTweetID(article);
-                    if (!tweetId) {
-                        let tweetLink = article.querySelector('a[href*="/status/"]');
-                        if (tweetLink) {
-                            let match = tweetLink.href.match(/status\/(\d+)/);
-                            if (match) tweetId = match[1];
-                        }
-                    }
-                    const handles = getUserHandles(article);
-                    username = handles.length > 0 ? handles[0] : null;
-                    text = getTweetText(article).replace(/\n+/g, ' ⏎ ');
-                    mediaLinks = extractMediaLinks(article);
-                    const quoteContainer = getQuotedTweetContainer(article);
-                    if (quoteContainer) {
-                        quotedMediaLinks = extractMediaLinks(quoteContainer);
-                    }
-                }
-                tweetId = (tweetId || cell.dataset.tweetId) || '';
-                username = (username || cell.dataset.authorHandle) || '';
-                text = (text || cell.dataset.tweetText) || '';
-                mediaLinks = (mediaLinks || JSON.parse(cell.dataset.mediaUrls)) || [];
-                if (tweetId && username) {
-                    const currentCellItem = {
-                        type: 'tweet',
-                        tweetNode: article,
-                        username,
-                        tweetId,
-                        text,
-                        mediaLinks,
-                        quotedMediaLinks,
-                        cellIndex: idx,
-                        cellDiv: cell,
-                        index: processedCount
-                    };
-                    tweetCells.push(currentCellItem);
-                    if (tweetId === urlTweetId) {
-                        urlTweetCellIndex = tweetCells.length - 1;
-                    }
-                    processedCount++;
-                    if (article && !tweetProcessingState.isScheduled(tweetId)) {
-                        scheduleTweetProcessing(article);
-                    }
-                } else {
-                    tweetCells.push({
-                        type: 'separator',
-                        cellDiv: cell,
-                        cellIndex: idx,
-                    });
-                }
-            }
-            const urlTweetObject = urlTweetCellIndex !== -1 ? tweetCells[urlTweetCellIndex] : null;
-            let effectiveUrlTweetInfo = null;
-            if (urlTweetObject) {
-                effectiveUrlTweetInfo = {
-                    tweetId: urlTweetObject.tweetId,
-                    username: urlTweetObject.username
-                };
-            } else if (urlTweetId) {
-                const cachedUrlTweet = tweetCache.get(urlTweetId);
-                if (cachedUrlTweet && cachedUrlTweet.authorHandle) {
-                    effectiveUrlTweetInfo = {
-                        tweetId: urlTweetId,
-                        username: cachedUrlTweet.authorHandle
-                    };
-                } else {
-                }
-            } else {
-            }
-            const actualTweets = tweetCells.filter(tc => tc.type === 'tweet');
-            if (actualTweets.length === 0) {
-                console.log("No valid tweets found, thread mapping aborted");
-                delete conversation.dataset.threadMappingInProgress;
-                threadMappingInProgress = false;
-                return;
-            }
-            const applyStoredParentInfo = (currentItem) => {
-                const storedReplyInfo = getStoredReplyInfo(currentItem.tweetId);
-                if (!storedReplyInfo) {
-                    return false;
-                }
-                if (storedReplyInfo.replyTo && currentItem.tweetId !== localRootTweetId) {
-                    currentItem.replyTo = storedReplyInfo.to || tweetCache.get(storedReplyInfo.replyTo)?.authorHandle || null;
-                    currentItem.replyToId = storedReplyInfo.replyTo;
-                    currentItem.isRoot = false;
-                    return true;
-                }
-                if (storedReplyInfo.isRoot || currentItem.tweetId === localRootTweetId) {
-                    currentItem.replyTo = null;
-                    currentItem.replyToId = null;
-                    currentItem.isRoot = true;
-                    return true;
-                }
-                return false;
-            };
-            for (let i = 0; i < tweetCells.length; ++i) {
-                let currentItem = tweetCells[i];
-                if (currentItem.type === 'separator') {
-                    continue;
-                }
-                if (i === 0) {
-                    if (!applyStoredParentInfo(currentItem)) {
-                        currentItem.replyTo = null;
-                        currentItem.replyToId = null;
-                        currentItem.isRoot = true;
-                    }
-                } else {
-                    const previousItem = tweetCells[i - 1];
-                    if (previousItem.type === 'separator') {
-                        if (effectiveUrlTweetInfo && currentItem.tweetId !== effectiveUrlTweetInfo.tweetId) {
-                            currentItem.replyTo = effectiveUrlTweetInfo.username;
-                            currentItem.replyToId = effectiveUrlTweetInfo.tweetId;
-                            currentItem.isRoot = false;
-                        } else if (effectiveUrlTweetInfo && currentItem.tweetId === effectiveUrlTweetInfo.tweetId) {
-                            if (!applyStoredParentInfo(currentItem)) {
-                                currentItem.replyTo = null;
-                                currentItem.replyToId = null;
-                                currentItem.isRoot = true;
-                            }
-                        } else {
-                            if (!applyStoredParentInfo(currentItem)) {
-                                currentItem.replyTo = null;
-                                currentItem.replyToId = null;
-                                currentItem.isRoot = true;
-                            }
-                        }
-                    } else if (previousItem.type === 'tweet') {
-                        currentItem.replyTo = previousItem.username;
-                        currentItem.replyToId = previousItem.tweetId;
-                        currentItem.isRoot = false;
-                    } else {
-                        if (!applyStoredParentInfo(currentItem)) {
-                            currentItem.replyTo = null;
-                            currentItem.replyToId = null;
-                            currentItem.isRoot = true;
-                        }
-                    }
-                }
-            }
-            const replyDocs = tweetCells
-                .filter(tc => tc.type === 'tweet')
-                .map(tw => ({
-                    from: tw.username,
-                    tweetId: tw.tweetId,
-                    to: tw.replyTo,
-                    toId: tw.replyToId,
-                    isRoot: tw.isRoot === true,
-                    text: tw.text
-                }));
-            conversation.dataset.threadMapping = JSON.stringify(replyDocs);
-            for (const waitingTweetId of MAPPING_INCOMPLETE_TWEETS) {
-                const mappedTweet = replyDocs.find(doc => doc.tweetId === waitingTweetId);
-                if (mappedTweet) {
-                    const tweetArticle = tweetCells.find(tc => tc.tweetId === waitingTweetId)?.tweetNode;
-                    if (tweetArticle) {
-                        tweetProcessingState.clear(waitingTweetId);
-                        scheduleTweetProcessing(tweetArticle);
-                    }
-                }
-            }
-            MAPPING_INCOMPLETE_TWEETS.clear();
-            const timestamp = Date.now();
-            replyDocs.forEach(doc => {
-                if (doc.tweetId && doc.toId) {
-                    threadRelationships[doc.tweetId] = {
-                        replyTo: doc.toId,
-                        from: doc.from,
-                        to: doc.to,
-                        isRoot: false,
-                        timestamp
-                    };
-                } else if (doc.tweetId && doc.isRoot) {
-                    threadRelationships[doc.tweetId] = {
-                        replyTo: null,
-                        from: doc.from,
-                        isRoot: true,
-                        timestamp
-                    };
-                }
-            });
-            saveThreadRelationships();
-            const batchSize = 10;
-            for (let i = 0; i < replyDocs.length; i += batchSize) {
-                const batch = replyDocs.slice(i, i + batchSize);
-                batch.forEach(doc => {
-                    if (doc.tweetId && tweetCache.has(doc.tweetId)) {
-                        tweetCache.set(doc.tweetId, { threadContext: {
-                            replyTo: doc.to,
-                            replyToId: doc.toId,
-                            isRoot: doc.isRoot
-                        } });
-                        if (doc.tweetId && tweetProcessingState.isScheduled(doc.tweetId)) {
-                            const tweetCell = tweetCells.find(tc => tc.tweetId === doc.tweetId);
-                            if (tweetCell && tweetCell.tweetNode) {
-                                const isStreaming = tweetCell.tweetNode.dataset.ratingStatus === TweetRatingStatus.STREAMING ||
-                                    (tweetCache.has(doc.tweetId) && tweetCache.get(doc.tweetId).streaming === true);
-                                if (!isStreaming) {
-                                    tweetProcessingState.clear(doc.tweetId);
-                                    scheduleTweetProcessing(tweetCell.tweetNode);
-                                }
-                            }
-                        }
-                    }
-                });
-                if (i + batchSize < replyDocs.length) {
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
-            }
-            delete conversation.dataset.threadMappingInProgress;
-            threadMappingInProgress = false;
-            conversation.dataset.threadMappedAt = Date.now().toString();
+/** Separator cells start a new branch under the page tweet; adjacent tweets form a chain. */
+async function mapThreadStructure(conversation, pageId) {
+    const cells = Array.from(conversation.querySelectorAll('[data-testid="cellInnerDiv"]'));
+    const position = cell => parseFloat(cell.style.transform.match(/translateY\((-?[\d.]+)/)?.[1] || '0');
+    cells.sort((a, b) => position(a) - position(b));
+    const pageIndex = cells.findIndex(cell => {
+        const article = cell.querySelector(TWEET_ARTICLE_SELECTOR);
+        return (article ? getTweetID(article) : cellTweets.get(cell)?.id) === pageId;
+    });
+    const tweets = new Map();
+    const articles = new Map();
+    let previous = null;
+    const timestamp = Date.now();
+    for (const [index, cell] of cells.entries()) {
+        const article = cell.querySelector(TWEET_ARTICLE_SELECTOR);
+        const tweet = article ? parseTweet(article) : cellTweets.get(cell);
+        if (!tweet || !tweet.author.handle || (article && isAd(article))) {
+            previous = null;
+            continue;
+        }
+        const stored = getStoredReplyInfo(tweet.id);
+        const parentId = previous?.id || stored?.replyTo ||
+            (index > pageIndex && tweet.id !== pageId && !stored?.isRoot ? pageId : null);
+        const parentHandle = previous?.author.handle || tweets.get(parentId)?.author.handle ||
+            tweetCache.get(parentId)?.authorHandle || stored?.to || '';
+        // Keep known ancestry for the page tweet when its ancestors have scrolled out of view.
+        const replyToId = parentId === tweet.id ? null : parentId || null;
+        tweet.replyTo = replyToId ? { id: replyToId, handle: parentHandle } : null;
+        threadRelationships[tweet.id] = {
+            replyTo: replyToId, from: tweet.author.handle, to: parentHandle || null,
+            isRoot: !replyToId, timestamp
         };
-        await Promise.race([mapping(), timeout]);
-    } catch (error) {
-        console.error("Error in mapThreadStructure:", error);
-        delete conversation.dataset.threadMappingInProgress;
-        threadMappingInProgress = false;
+        tweetCache.set(tweet.id, {
+            tweet, authorHandle: tweet.author.handle, individualTweetText: tweet.text,
+            individualMediaUrls: collectRatingImageUrls([], { tweet, ancestors: [] }),
+            threadContext: { replyTo: parentHandle || null, replyToId, isRoot: !replyToId }
+        });
+        tweets.set(tweet.id, tweet);
+        if (article) articles.set(tweet.id, article);
+        previous = tweet;
+    }
+    conversationStates.set(conversation, { pageId, tweets });
+    saveThreadRelationships();
+    for (const [tweetId, article] of articles) {
+        const rateAnyway = pendingThreadTweets.get(tweetId) || false;
+        if (pendingThreadTweets.delete(tweetId)) tweetProcessingState.clear(tweetId);
+        scheduleTweetProcessing(article, rateAnyway);
     }
 }
-function getTweetReplyInfo(tweetId) {
-    return getStoredReplyInfo(tweetId);
-}
-setInterval(handleThreads, THREAD_CHECK_INTERVAL);
-setInterval(ensureAllTweetsRated, SWEEP_INTERVAL);
-//setInterval(applyFilteringToAll, SWEEP_INTERVAL);
     // ----- api/api_requests.js -----
 /**
  * Gets a completion from OpenRouter API
@@ -6660,7 +5972,7 @@ function inferImageMimeType(url) {
 }
 /**
  * Downloads an image and returns a Base64 data URL suitable for model input.
- * Existing data URLs pass through unchanged.
+ * Remote images and existing data URLs share the model's pixel limit.
  * @param {string} url
  * @returns {Promise<string>}
  */
@@ -6669,7 +5981,7 @@ async function encodeImageUrlAsDataUrl(url) {
         throw new Error('Image URL must be a string.');
     }
     if (/^data:image\//i.test(url)) {
-        return url;
+        return resizeImage(url);
     }
     if (!/^https?:\/\//i.test(url)) {
         throw new Error('Only HTTP(S) image URLs can be encoded.');
@@ -6700,7 +6012,7 @@ async function encodeImageUrlAsDataUrl(url) {
                     ? response.response
                     : new Blob([response.response], { type: mimeType });
                 const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
+                reader.onload = () => resizeImage(reader.result).then(resolve, reject);
                 reader.onerror = () => reject(new Error('Failed to encode the downloaded image.'));
                 reader.readAsDataURL(imageBlob);
             },
@@ -6710,7 +6022,7 @@ async function encodeImageUrlAsDataUrl(url) {
     });
 }
 /**
- * Encodes remote image URLs while preserving data URLs and input order.
+ * Encodes and resizes images while preserving input order.
  * Images that cannot be downloaded are omitted instead of leaking their links
  * into model requests.
  * @param {string[]} urls
@@ -6731,7 +6043,7 @@ async function encodeImageUrlsAsDataUrls(urls) {
     return encodedUrls.filter(Boolean);
 }
 /**
- * Clones message content and Base64-encodes every remote image before an API call.
+ * Clones message content and caps every image, including cached/uploaded data URLs.
  * @param {object[]} messages
  * @returns {Promise<object[]>}
  */
@@ -6742,7 +6054,7 @@ async function encodeMessageImagesAsDataUrls(messages) {
         }
         const content = await Promise.all(message.content.map(async (item) => {
             const imageUrl = item?.type === 'image_url' ? item.image_url?.url : null;
-            if (!imageUrl || /^data:image\//i.test(imageUrl)) {
+            if (!imageUrl) {
                 return item;
             }
             try {
@@ -6761,14 +6073,12 @@ async function encodeMessageImagesAsDataUrls(messages) {
  *
  * @param {string[]} urls - Array of image URLs to get descriptions for
  * @param {string} apiKey - The API key for authentication
- * @param {string} tweetId - The unique tweet ID
- * @param {string} userHandle - The Twitter user handle
- * @returns {Promise<string>} Combined image descriptions
+ * @returns {Promise<string[]>} Descriptions in the same order as the supplied URLs
  */
-async function getImageDescription(urls, apiKey, tweetId, userHandle) {
+async function getImageDescriptions(urls, apiKey) {
     const imageDescriptionsEnabled = browserGet('enableImageDescriptions', false);
     if (!urls?.length || !imageDescriptionsEnabled) {
-        return !imageDescriptionsEnabled ? '[Image descriptions disabled]' : '';
+        return [];
     }
     let descriptions = [];
     for (const url of urls) {
@@ -6817,7 +6127,7 @@ async function getImageDescription(urls, apiKey, tweetId, userHandle) {
             descriptions.push('[Error getting image description]');
         }
     }
-    return descriptions.map((desc, i) => `[IMAGE ${i + 1}]: ${desc}`).join('\n');
+    return descriptions;
 }
     // ----- api/api.js -----
 /**
@@ -6873,68 +6183,14 @@ function extractCompletionMetadata(responseData) {
         ? metadata
         : null;
 }
-/**
- * Orders media URLs by their first appearance in the provided thread text.
- * URLs not found in the text keep their original relative order and are placed last.
- * @param {string[]} mediaUrls
- * @param {string} threadText
- * @returns {string[]}
- */
-function orderMediaUrlsByThreadAppearance(mediaUrls, threadText) {
-    if (!Array.isArray(mediaUrls) || mediaUrls.length <= 1 || !threadText) {
-        return mediaUrls;
-    }
-    return mediaUrls
-        .map((url, originalIndex) => ({
-            url,
-            originalIndex,
-            firstIndex: typeof url === 'string' ? threadText.indexOf(url) : -1
-        }))
-        .sort((a, b) => {
-            const aMissing = a.firstIndex === -1;
-            const bMissing = b.firstIndex === -1;
-            if (aMissing && bMissing) {
-                return a.originalIndex - b.originalIndex;
-            }
-            if (aMissing) {
-                return 1;
-            }
-            if (bMissing) {
-                return -1;
-            }
-            if (a.firstIndex !== b.firstIndex) {
-                return a.firstIndex - b.firstIndex;
-            }
-            return a.originalIndex - b.originalIndex;
-        })
-        .map(item => item.url);
-}
-function collectRatingImageUrls(mediaUrls, tweetText) {
-    const imageUrls = [];
-    const seenUrls = new Set();
-    const addUrl = (url) => {
-        const trimmedUrl = typeof url === 'string' ? url.trim() : '';
-        if (!trimmedUrl || trimmedUrl.startsWith('[VIDEO_DESCRIPTION]:') || seenUrls.has(trimmedUrl)) {
-            return;
-        }
-        seenUrls.add(trimmedUrl);
-        imageUrls.push(trimmedUrl);
-    };
-    if (Array.isArray(mediaUrls)) {
-        mediaUrls.forEach(addUrl);
-    }
-    if (tweetText) {
-        const urlPattern = /https?:\/\/[^\s,\])>]+/g;
-        const contextUrls = tweetText.match(urlPattern) || [];
-        contextUrls.forEach(url => {
-            if (/\/\/pbs\.twimg\.com\//.test(url) || /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
-                if(!url.includes("profile_image")){
-                addUrl(url);
-                }
-            }
-        });
-    }
-    return orderMediaUrlsByThreadAppearance(imageUrls, tweetText);
+/** Media comes from parsed content, in ancestor/target/quote order. */
+function collectRatingImageUrls(mediaUrls = [], context = null) {
+    const tweets = context?.tweet ? [...(context.ancestors || []), context.tweet] : [];
+    const urls = tweets.flatMap(tweet => [tweet, tweet.quotedTweet].filter(Boolean)
+        .flatMap(item => [...(item.media || []).map(media => media.url),
+            ...(item.linkPreviews || []).map(preview => preview.imageUrl)]));
+    return [...new Set([...urls, ...mediaUrls].filter(url => typeof url === 'string' &&
+        /^(https?:\/\/|data:image\/|data:application\/pdf)/.test(url)))];
 }
 function appendRatingMediaContent(content, mediaUrls) {
     mediaUrls.forEach(url => {
@@ -6960,7 +6216,7 @@ function appendRatingMediaContent(content, mediaUrls) {
 /**
  * Rates a tweet using the OpenRouter API with automatic retry functionality.
  *
- * @param {string} tweetText - The text content of the tweet
+ * @param {{tweet: object, ancestors: object[]}} tweetContext - Parsed target and its reply ancestry
  * @param {string} tweetId - The unique tweet ID
  * @param {string} apiKey - The API key for authentication
  * @param {string[]} mediaUrls - Array of media URLs associated with the tweet
@@ -6968,8 +6224,7 @@ function appendRatingMediaContent(content, mediaUrls) {
  * @param {Element} [tweetArticle=null] - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{score: number, content: string, error: boolean, cached?: boolean, data?: any, questions?: string[]}>} The rating result
  */
-async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="", saveCacheImmediately = true) {
-    console.log("given tweettext\n", tweetText);
+async function rateTweetWithOpenRouter(tweetContext, tweetId, apiKey, mediaUrls, maxRetries = 3, tweetArticle = null, authorHandle="", saveCacheImmediately = true) {
     const cleanupRequest = () => {
         tweetProcessingState.decrementPending();
         showStatus(`Rating tweet... (${pendingRequests} pending)`);
@@ -6999,7 +6254,7 @@ async function rateTweetWithOpenRouter(tweetText, tweetId, apiKey, mediaUrls, ma
             Question3: 'N/A'
         });
         indicatorInstance.updateInitialReviewAndBuildHistory({
-            fullContext: tweetText,
+            fullContext: tweetContext,
             mediaUrls: [],
             apiResponseContent: adResponseContent,
             reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
@@ -7031,7 +6286,7 @@ ${currentInstructions}`}]
                 content: [
                     {
                         type: "text",
-                        text: `Tweet ID: ${tweetId}\n\nTweet context:\n${tweetText}`
+                        text: JSON.stringify(tweetContext)
                     }
                 ]
             }
@@ -7049,7 +6304,7 @@ ${currentInstructions}`}]
     if (selectedModel.includes('gemini')) {
         requestBody.config = { safetySettings: safetySettings };
     }
-    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetText);
+    const ratingImageUrls = collectRatingImageUrls(mediaUrls, tweetContext);
     let ratingMediaForModel = [];
     if (ratingImageUrls.length > 0 && modelSupportsImages(selectedModel)) {
         ratingMediaForModel = await encodeImageUrlsAsDataUrls(ratingImageUrls);
@@ -7062,7 +6317,6 @@ ${currentInstructions}`}]
     tweetCache.set(tweetId, {
         streaming: true,
         timestamp: Date.now(),
-        tweetContent: tweetText,
         mediaUrls: mediaUrls
     }, saveCacheImmediately);
     let attempt = 0;
@@ -7079,14 +6333,14 @@ ${currentInstructions}`}]
         try {
             let result;
             if (useStreaming) {
-                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetText, tweetArticle, saveCacheImmediately);
+                result = await rateTweetStreaming(requestBody, apiKey, tweetId, tweetArticle, saveCacheImmediately);
             } else {
-                result = await rateTweet(requestBody, apiKey, tweetId, tweetText, saveCacheImmediately);
+                result = await rateTweet(requestBody, apiKey, tweetId, saveCacheImmediately);
             }
             cleanupRequest();
             if (!result.error && result.content) {
                 indicatorInstance.updateInitialReviewAndBuildHistory({
-                    fullContext: tweetText,
+                    fullContext: tweetContext,
                     mediaUrls: mediaUrls,
                     apiResponseContent: result.content,
                     reviewSystemPrompt: REVIEW_SYSTEM_PROMPT,
@@ -7103,7 +6357,6 @@ ${currentInstructions}`}]
                     reasoning: result.reasoning || "",
                     questions: finalQuestions,
                     lastAnswer: "",
-                    tweetContent: tweetText,
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
@@ -7137,7 +6390,7 @@ ${currentInstructions}`}]
             } else {
                 const errorContent = `Failed to get valid rating after multiple attempts: ${error.message}`;
                 indicatorInstance.updateInitialReviewAndBuildHistory({
-                    fullContext: tweetText,
+                    fullContext: tweetContext,
                     mediaUrls: mediaUrls,
                     apiResponseContent: JSON.stringify({
                         Response: errorContent,
@@ -7157,7 +6410,6 @@ ${currentInstructions}`}]
                     questions: [],
                     lastAnswer: "",
                     error: true,
-                    tweetContent: tweetText,
                     mediaUrls: mediaUrls,
                     streaming: false,
                     timestamp: Date.now(),
@@ -7179,7 +6431,7 @@ ${currentInstructions}`}]
     cleanupRequest();
     const fallbackError = "Unexpected failure in rating process.";
     indicatorInstance.updateInitialReviewAndBuildHistory({
-        fullContext: tweetText,
+        fullContext: tweetContext,
         mediaUrls: mediaUrls,
         apiResponseContent: JSON.stringify({
             Response: fallbackError,
@@ -7210,7 +6462,7 @@ ${currentInstructions}`}]
  * @param {string} apiKey - API key for authentication
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result
  */
-async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediately = true) {
+async function rateTweet(request, apiKey, tweetId, saveCacheImmediately = true) {
     const existingScore = tweetCache.get(tweetId)?.score;
     const result = await getCompletion(request, apiKey);
     if (!result.error && result.data?.choices?.[0]?.message) {
@@ -7229,7 +6481,6 @@ async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediate
         tweetCache.set(tweetId, {
             score: score,
             description: content,
-            tweetContent: tweetText,
             streaming: false,
             metadata: extractCompletionMetadata(result.data)
         }, saveCacheImmediately);
@@ -7253,11 +6504,10 @@ async function rateTweet(request, apiKey, tweetId, tweetText, saveCacheImmediate
  * @param {Object} request - The formatted request body
  * @param {string} apiKey - API key for authentication
  * @param {string} tweetId - The tweet ID
- * @param {string} tweetText - The text content of the tweet
  * @param {Element} tweetArticle - Optional: The tweet article DOM element (for streaming updates)
  * @returns {Promise<{content: string, reasoning: string, error: boolean, data: any}>} The rating result including final content and reasoning
  */
-async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArticle, saveCacheImmediately = true) {
+async function rateTweetStreaming(request, apiKey, tweetId, tweetArticle, saveCacheImmediately = true) {
     if (window.activeStreamingRequests && window.activeStreamingRequests[tweetId]) {
         console.log(`Aborting existing streaming request for tweet ${tweetId}`);
         window.activeStreamingRequests[tweetId].abort();
@@ -7268,7 +6518,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
         tweetCache.set(tweetId, {
             streaming: true,
             timestamp: Date.now(),
-            tweetContent: tweetText,
             description: "",
             reasoning: "",
             questions: [],
@@ -7335,7 +6584,6 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
                     });
                 }
                 const finalCacheData = {
-                    tweetContent: tweetText,
                     score: score,
                     description: aggregatedContent,
                     reasoning: aggregatedReasoning,
@@ -7398,27 +6646,18 @@ async function rateTweetStreaming(request, apiKey, tweetId, tweetText, tweetArti
  */
 async function buildUnratedTweetConversationHistory(tweetId, apiKey, tweetArticle) {
     const cachedEntry = tweetCache.get(tweetId);
-    let fullContext = cachedEntry?.fullContext || tweetArticle?.dataset?.fullContext || '';
-    if (!fullContext && tweetArticle) {
-        fullContext = await getFullContext(tweetArticle, tweetId, apiKey);
-    }
-    if (!fullContext && cachedEntry?.individualTweetText) {
-        fullContext = `[TWEET ${tweetId}]\n Author:@${cachedEntry.authorHandle || ''}:\n${cachedEntry.individualTweetText}`;
-    }
-    if (!fullContext) {
-        throw new Error('Could not collect tweet context for this conversation.');
-    }
+    const fullContext = tweetArticle ? await getFullContext(tweetArticle, tweetId, apiKey)
+        : cachedEntry?.fullContext?.tweet ? cachedEntry.fullContext
+        : cachedEntry?.tweet ? { tweet: cachedEntry.tweet, ancestors: [] } : null;
+    if (!fullContext) throw new Error('Could not collect tweet context for this conversation.');
     const currentInstructions = instructionsManager.getCurrentInstructions() || DEFAULT_INSTRUCTIONS;
     const conversationSystemPrompt = FOLLOW_UP_SYSTEM_PROMPT.replace(
         '{USER_INSTRUCTIONS_PLACEHOLDER}',
         currentInstructions
     );
-    const tweetContextContent = [{ type: 'text', text: fullContext }];
+    const tweetContextContent = [{ type: 'text', text: JSON.stringify(fullContext) }];
     if (modelSupportsImages(selectedModel)) {
-        const mediaUrls = tweetArticle
-            ? extractMediaLinks(tweetArticle)
-            : (cachedEntry?.mediaUrls?.length ? cachedEntry.mediaUrls : cachedEntry?.individualMediaUrls || []);
-        appendRatingMediaContent(tweetContextContent, collectRatingImageUrls(mediaUrls, fullContext));
+        appendRatingMediaContent(tweetContextContent, collectRatingImageUrls([], fullContext));
     }
     return {
         systemMessage: { role: 'system', content: [{ type: 'text', text: conversationSystemPrompt }] },
@@ -7635,7 +6874,7 @@ async function answerFollowUpQuestion(tweetId, qaHistoryForApiCall, apiKey, twee
     }
 }
     // ----- twitter-desloppifier.js -----
-const VERSION = '0.2.1';
+const VERSION = '3.0.0';
 (function () {
     'use strict';
     console.log(`X/Twitter Tweet De-Sloppification Activated (v${VERSION} - Enhanced)`);
@@ -7668,7 +6907,7 @@ const VERSION = '0.2.1';
             if(document.querySelector('[aria-label="Timeline: Conversation"]')){
                 handleThreads();
             }else{
-                observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+                observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(tweet => scheduleTweetProcessing(tweet));
             }
             const observer = new MutationObserver(handleMutations);
             observer.observe(observedTargetNode, { childList: true, subtree: true });

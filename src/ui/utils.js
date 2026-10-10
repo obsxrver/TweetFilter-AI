@@ -22,58 +22,34 @@ function showStatus(message, type = 'info') {
     setTimeout(() => { indicator.classList.remove('active', type); }, 3000);
 }
 
-/**
- * Resizes an image file to a maximum dimension.
- * @param {File} file - The image file to resize.
- * @param {number} maxDimPx - The maximum dimension (width or height) in pixels.
- * @returns {Promise<string>} A promise that resolves with the data URL of the resized image (JPEG format).
- */
-function resizeImage(file, maxDimPx) {
-    return new Promise((resolve, reject) => {
+const MAX_MODEL_IMAGE_PIXELS = 700_000;
+
+/** Caps image area without upscaling; accepts an uploaded file or a data URL. */
+async function resizeImage(input, maxPixels = MAX_MODEL_IMAGE_PIXELS) {
+    const dataUrl = typeof input === 'string' ? input : await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                let { width, height } = img;
-                let newWidth, newHeight;
-
-                if (width > height) {
-                    if (width > maxDimPx) {
-                        newWidth = maxDimPx;
-                        newHeight = height * (maxDimPx / width);
-                    } else {
-                        newWidth = width;
-                        newHeight = height;
-                    }
-                } else {
-                    if (height > maxDimPx) {
-                        newHeight = maxDimPx;
-                        newWidth = width * (maxDimPx / height);
-                    } else {
-                        newWidth = width;
-                        newHeight = height;
-                    }
-                }
-
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.readAsDataURL(input);
+    });
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('Could not decode image.'));
+        image.onload = () => {
+            try {
+                const { naturalWidth: width, naturalHeight: height } = image;
+                if (!width || !height) throw new Error('Image has no dimensions.');
+                if (width * height <= maxPixels) return resolve(dataUrl);
+                const scale = Math.sqrt(maxPixels / (width * height));
                 const canvas = document.createElement('canvas');
-                canvas.width = newWidth;
-                canvas.height = newHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, newWidth, newHeight);
-
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-                resolve(dataUrl);
-            };
-            img.onerror = (error) => {
-                console.error("Error loading image for resizing:", error);
-                reject(new Error("Could not load image for resizing."));
-            };
-            img.src = event.target.result;
+                canvas.width = Math.min(maxPixels, Math.max(1, Math.floor(width * scale)));
+                canvas.height = Math.max(1, Math.min(Math.floor(height * scale), Math.floor(maxPixels / canvas.width)));
+                const context = canvas.getContext('2d');
+                context.imageSmoothingQuality = 'high';
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL(dataUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png', 0.9));
+            } catch (error) { reject(error); }
         };
-        reader.onerror = (error) => {
-            console.error("FileReader error:", error);
-            reject(new Error("Could not read file."));
-        };
-        reader.readAsDataURL(file);
+        image.src = dataUrl;
     });
 }

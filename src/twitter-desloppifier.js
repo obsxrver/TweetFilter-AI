@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TweetFilter AI
 // @namespace    http://tampermonkey.net/
-// @version      0.2.1
+// @version      3.0.0
 // @description  Analyze and discuss tweets with an LLM. Custom AI-Powered analysis for X.com
 // @author       Obsxrver
 // @match        *://twitter.com/*
@@ -19,7 +19,7 @@
 // @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
-const VERSION = '0.2.1';
+const VERSION = '3.0.0';
 (function () {
 
     'use strict';
@@ -57,7 +57,7 @@ const VERSION = '0.2.1';
             if(document.querySelector('[aria-label="Timeline: Conversation"]')){
                 handleThreads();
             }else{
-                observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(scheduleTweetProcessing);
+                observedTargetNode.querySelectorAll(TWEET_ARTICLE_SELECTOR).forEach(tweet => scheduleTweetProcessing(tweet));
             }
 
             const observer = new MutationObserver(handleMutations);

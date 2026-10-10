@@ -51,7 +51,6 @@ function refreshInstructionsHistory() {
 function createHistoryItem(entry, index) {
     const item = document.createElement('div');
     item.className = 'instruction-item';
-    item.dataset.index = index;
 
     const text = document.createElement('div');
     text.className = 'instruction-text';
