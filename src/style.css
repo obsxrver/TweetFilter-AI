@@ -1129,7 +1129,8 @@ input:checked+.toggle-slider:before {
 }
 
 .tooltip-pin-button,
-.tooltip-copy-button {
+.tooltip-copy-button,
+.tooltip-export-button {
     background: none !important;
     border: none !important;
     color: #8899a6 !important;
@@ -1142,13 +1143,15 @@ input:checked+.toggle-slider:before {
 }
 
 .tooltip-pin-button:hover,
-.tooltip-copy-button:hover {
+.tooltip-copy-button:hover,
+.tooltip-export-button:hover {
     background-color: rgba(29, 155, 240, 0.1) !important;
     color: #1d9bf0 !important;
 }
 
 .tooltip-pin-button:active,
-.tooltip-copy-button:active {
+.tooltip-copy-button:active,
+.tooltip-export-button:active {
     transform: scale(0.95) !important;
 }
 
@@ -2339,6 +2342,7 @@ input:checked+.toggle-slider:before {
 
 .tooltip-pin-button,
 .tooltip-copy-button,
+.tooltip-export-button,
 .tooltip-refresh-button,
 .tooltip-rate-button,
 .tooltip-close-button {
@@ -2622,6 +2626,7 @@ input:checked+.toggle-slider:before {
 
     .tooltip-pin-button,
     .tooltip-copy-button,
+    .tooltip-export-button,
     .tooltip-refresh-button,
     .tooltip-rate-button,
     .tooltip-close-button {

@@ -31,6 +31,7 @@ files_to_combine = [
     "ui/responseParser.js",
     "ui/markdown.js",
     "ui/InstructionsUI.js",
+    "ui/openrouterExport.js",
     "ui/ScoreIndicator.js",
     "ui/ui.js", 
     "ratingEngine.js",

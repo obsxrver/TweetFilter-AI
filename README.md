@@ -12,6 +12,7 @@ Analyze and discuss tweets with an LLM. Custom AI-Powered analysis for X.com
 - 🧠 **AI-Powered Rating**: Rates tweets from 1-10 based on quality
 - 🎯 **Smart Filtering**: Hides low-quality content based on your threshold
 - 💬 **Conversations**: Chat with AI about any tweet to learn more 
+- ↗ **OpenRouter export**: Export a rating and its conversation from the score tooltip. The button downloads an OpenRouter-compatible JSON file and opens [OpenRouter Chat](https://openrouter.ai/chat). Start a new chat there, choose **Import**, and select the downloaded file. The export includes saved prompts, tweet context, completed replies, reasoning, and image/PDF attachments.
 - 📝 **Custom Instructions**: Define your own rating criteria
 - 🧵 **Thread Context**: Understands full conversation context
 

@@ -20,6 +20,7 @@ class ScoreIndicator {
         this.tooltipControls = null;
         this.pinButton = null;
         this.copyButton = null;
+        this.exportButton = null;
         this.tooltipCloseButton = null;
         this.reasoningDropdown = null;
         this.reasoningToggle = null;
@@ -150,6 +151,14 @@ class ScoreIndicator {
         this.copyButton.type = 'button';
         this.copyButton.setAttribute('aria-label', 'Copy score details');
 
+        this.exportButton = document.createElement('button');
+        this.exportButton.className = 'tooltip-export-button';
+        this.exportButton.textContent = '↗';
+        this.exportButton.title = 'Export rating and conversation to OpenRouter Chat';
+        this.exportButton.type = 'button';
+        this.exportButton.setAttribute('aria-label', this.exportButton.title);
+        this.exportButton.style.display = 'none';
+
         this.refreshButton = document.createElement('button');
         this.refreshButton.className = 'tooltip-refresh-button';
         this.refreshButton.innerHTML = '🔄';
@@ -168,6 +177,7 @@ class ScoreIndicator {
 
         this.tooltipControls.appendChild(this.pinButton);
         this.tooltipControls.appendChild(this.copyButton);
+        this.tooltipControls.appendChild(this.exportButton);
         this.tooltipControls.appendChild(this.refreshButton);
         this.tooltipControls.appendChild(this.rateButton);
         this.tooltipControls.appendChild(this.tooltipCloseButton);
@@ -420,6 +430,7 @@ class ScoreIndicator {
             this.metadataToggle,
             this.pinButton,
             this.copyButton,
+            this.exportButton,
             this.tooltipCloseButton,
             this.refreshButton,
             this.rateButton,
@@ -625,6 +636,7 @@ class ScoreIndicator {
 
         this._registerDomListener(this.pinButton, 'click', this._getBoundMethodHandler('_handlePinClick'));
         this._registerDomListener(this.copyButton, 'click', this._getBoundMethodHandler('_handleCopyClick'));
+        this._registerDomListener(this.exportButton, 'click', this._getBoundMethodHandler('_handleExportClick'));
         this._registerDomListener(this.tooltipCloseButton, 'click', this._getBoundMethodHandler('_handleCloseClick'));
         this._registerDomListener(this.reasoningToggle, 'click', this._getBoundMethodHandler('_handleReasoningToggleClick'));
         this._registerDomListener(this.scrollButton, 'click', this._getBoundMethodHandler('_handleScrollButtonClick'));
@@ -1580,6 +1592,57 @@ class ScoreIndicator {
         });
     }
 
+    _handleExportClick(e) {
+        e?.preventDefault();
+        e?.stopPropagation();
+        if (this.isFollowUpPending || isActiveTweetStatus(this.status)) return;
+
+        let objectUrl;
+        let downloadLink;
+        try {
+            let history = this.qaConversationHistory || [];
+            const reasoningByMessage = {};
+            if (history.length === 0 && this.score != null) {
+                // Older cached ratings may predate persisted API message history.
+                const cached = tweetCache.get(this.tweetId) || {};
+                history = [
+                    { role: 'user', content: JSON.stringify({
+                        url: `https://x.com/i/status/${this.tweetId}`,
+                        ...(cached.fullContext || { tweet: cached.tweet || cached.individualTweetText || '' })
+                    }) },
+                    { role: 'assistant', content: JSON.stringify({ Response: this.description, Score: this.score }) }
+                ];
+                reasoningByMessage[1] = this.reasoning;
+            } else {
+                if (this.score != null && history[2]?.role === 'assistant') reasoningByMessage[2] = this.reasoning;
+                for (const turn of this.conversationHistory) {
+                    if (Number.isInteger(turn.qaAssistantIndex)) reasoningByMessage[turn.qaAssistantIndex] = turn.reasoning;
+                }
+            }
+            const model = this.metadata?.model;
+            const data = buildOpenRouterChatExport({
+                tweetId: this.tweetId, history, reasoningByMessage,
+                model: model && model !== 'N/A' ? model : selectedModel
+            });
+            const filename = `TweetFilter-AI-${this.tweetId}-openrouter.json`;
+            objectUrl = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+            downloadLink = document.createElement('a');
+            downloadLink.href = objectUrl;
+            downloadLink.download = filename;
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            window.open('https://openrouter.ai/chat', '_blank', 'noopener,noreferrer');
+            showStatus(`Export downloaded. In a new OpenRouter chat, choose Import and select ${filename}.`);
+        } catch (error) {
+            console.error('[ScoreIndicator] OpenRouter export failed:', error);
+            showStatus(`Could not export to OpenRouter: ${error.message}`, 'error');
+        } finally {
+            downloadLink?.remove();
+            if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 40000);
+        }
+    }
+
     _handleReasoningToggleClick(e) {
         if (e) {
             e.stopPropagation();
@@ -1947,6 +2010,16 @@ class ScoreIndicator {
             }
         }
 
+        if (this.exportButton) {
+            const hasConversation = this.qaConversationHistory?.some(message => message.role === 'assistant');
+            const newDisplay = hasGeneratedRating || hasConversation ? 'inline-flex' : 'none';
+            if (this.exportButton.style.display !== newDisplay) {
+                this.exportButton.style.display = newDisplay;
+                changed = true;
+            }
+            this.exportButton.disabled = !!this.isFollowUpPending || isActiveTweetStatus(this.status);
+        }
+
         return changed;
     }
 
@@ -2295,6 +2368,7 @@ class ScoreIndicator {
         this.tooltipElement = null;
         this.pinButton = null;
         this.copyButton = null;
+        this.exportButton = null;
         this.tooltipCloseButton = null;
         this.reasoningToggle = null;
         this.scrollButton = null;
