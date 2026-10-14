@@ -21,6 +21,7 @@ class ScoreIndicator {
         this.pinButton = null;
         this.copyButton = null;
         this.exportButton = null;
+        this.exportInstructionsElement = null;
         this.tooltipCloseButton = null;
         this.reasoningDropdown = null;
         this.reasoningToggle = null;
@@ -154,7 +155,7 @@ class ScoreIndicator {
         this.exportButton = document.createElement('button');
         this.exportButton.className = 'tooltip-export-button';
         this.exportButton.textContent = '↗';
-        this.exportButton.title = 'Export rating and conversation to OpenRouter Chat';
+        this.exportButton.title = 'Export to OpenRouter: click New chat there before importing';
         this.exportButton.type = 'button';
         this.exportButton.setAttribute('aria-label', this.exportButton.title);
         this.exportButton.style.display = 'none';
@@ -183,6 +184,12 @@ class ScoreIndicator {
         this.tooltipControls.appendChild(this.tooltipCloseButton);
 
         this.tooltipElement.appendChild(this.tooltipControls);
+
+        this.exportInstructionsElement = document.createElement('div');
+        this.exportInstructionsElement.className = 'tooltip-export-instructions';
+        this.exportInstructionsElement.setAttribute('role', 'status');
+        this.exportInstructionsElement.hidden = true;
+        this.tooltipElement.appendChild(this.exportInstructionsElement);
 
         this.tooltipScrollableContentElement = document.createElement('div');
         this.tooltipScrollableContentElement.className = 'tooltip-scrollable-content';
@@ -1632,8 +1639,13 @@ class ScoreIndicator {
             downloadLink.style.display = 'none';
             document.body.appendChild(downloadLink);
             downloadLink.click();
+            const instructions = `Downloaded ${filename}. In OpenRouter, click the New chat button first, then Room settings → Import. The blank landing page has no target room.`;
+            if (this.exportInstructionsElement) {
+                this.exportInstructionsElement.textContent = instructions;
+                this.exportInstructionsElement.hidden = false;
+            }
             window.open('https://openrouter.ai/chat', '_blank', 'noopener,noreferrer');
-            showStatus(`Export downloaded. In a new OpenRouter chat, choose Import and select ${filename}.`);
+            showStatus(instructions);
         } catch (error) {
             console.error('[ScoreIndicator] OpenRouter export failed:', error);
             showStatus(`Could not export to OpenRouter: ${error.message}`, 'error');
@@ -2045,6 +2057,7 @@ class ScoreIndicator {
      * while its replacement rating is generated.
      */
     clearForRating() {
+        if (this.exportInstructionsElement) this.exportInstructionsElement.hidden = true;
         this.status = TweetRatingStatus.PENDING;
         this.score = null;
         this.description = '';
@@ -2369,6 +2382,7 @@ class ScoreIndicator {
         this.pinButton = null;
         this.copyButton = null;
         this.exportButton = null;
+        this.exportInstructionsElement = null;
         this.tooltipCloseButton = null;
         this.reasoningToggle = null;
         this.scrollButton = null;

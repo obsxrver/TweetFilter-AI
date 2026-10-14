@@ -2340,6 +2340,16 @@ input:checked+.toggle-slider:before {
     white-space: nowrap;
 }
 
+.tooltip-export-instructions {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e7e9ea;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    flex-shrink: 0;
+}
+
 .tooltip-pin-button,
 .tooltip-copy-button,
 .tooltip-export-button,

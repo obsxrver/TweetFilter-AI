@@ -6,6 +6,8 @@ const vm = require('node:vm');
 
 const exportSource = fs.readFileSync(path.join(__dirname, '../src/ui/openrouterExport.js'), 'utf8');
 const indicatorSource = fs.readFileSync(path.join(__dirname, '../src/ui/ScoreIndicator.js'), 'utf8');
+const parserSource = fs.readFileSync(path.join(__dirname, '../src/ui/responseParser.js'), 'utf8');
+const configSource = fs.readFileSync(path.join(__dirname, '../src/config.js'), 'utf8');
 
 function setup(overrides = {}) {
     const context = vm.createContext({
@@ -14,7 +16,7 @@ function setup(overrides = {}) {
         TweetRatingStatus: { RATED: 'rated', CACHED: 'cached', BLACKLISTED: 'blacklisted', MANUAL: 'manual' },
         ...overrides
     });
-    vm.runInContext(`${exportSource}\n${indicatorSource}\nglobalThis.Indicator = ScoreIndicator;`, context);
+    vm.runInContext(`${parserSource}\n${exportSource}\n${indicatorSource}\nglobalThis.Indicator = ScoreIndicator;`, context);
     return context;
 }
 
@@ -37,9 +39,9 @@ test('exports rating and conversation as ordered OpenRouter message and item gra
     assert.equal(data.characters['tweetfilter-assistant'].model, 'test/model');
     assert.equal(data.characters['tweetfilter-assistant'].includeDefaultSystemPrompt, false);
     const messages = Object.values(data.messages);
-    assert.deepEqual(messages.map(message => message.type), ['system', 'user', 'assistant', 'user', 'assistant']);
-    assert.equal(messages[0].characterId, 'SYSTEM');
-    assert.equal(messages[1].characterId, 'USER');
+    assert.deepEqual(messages.map(message => message.type), ['user', 'assistant', 'user', 'assistant']);
+    assert.equal(data.characters['tweetfilter-assistant'].description, 'Custom rating preferences');
+    assert.equal(messages[0].characterId, 'USER');
     messages.forEach((message, index) => {
         assert.equal(message.parentMessageId, messages[index - 1]?.id);
         if (index) assert.ok(message.createdAt > messages[index - 1].createdAt);
@@ -47,13 +49,65 @@ test('exports rating and conversation as ordered OpenRouter message and item gra
             const item = data.items[ref.id];
             assert.equal(item.messageId, message.id);
             assert.equal(item.data.type, ref.type);
+            if (message.type === 'assistant') assert.equal(item.data.id, item.id);
         }
     });
-    const ratingItems = messages[2].items.map(ref => data.items[ref.id].data);
+    const ratingItems = messages[1].items.map(ref => data.items[ref.id].data);
     assert.equal(ratingItems[0].summary[0].text, 'Initial trace');
-    assert.equal(ratingItems[1].content[0].text, rawRating);
+    assert.equal(ratingItems[1].content[0].text, 'Insightful 🌟\n\nRating: 8/10\n\nSuggested follow-up questions:\n- Why?');
     assert.equal(ratingItems[1].status, 'completed');
     assert.equal(JSON.stringify(history), original);
+});
+
+test('export removes the actual app JSON-response instructions while preserving custom preferences', () => {
+    const prompt = configSource.match(/const FOLLOW_UP_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1]
+        .replace('{USER_INSTRUCTIONS_PLACEHOLDER}', 'Be concise. Explain JSON code when relevant.');
+    const history = [{ role: 'system', content: [{ type: 'text', text: prompt }] }, { role: 'user', content: 'Tweet' }];
+    const data = build({ history });
+    const exported = data.characters['tweetfilter-assistant'].description;
+    assert.match(exported, /Be concise\. Explain JSON code when relevant\./);
+    assert.match(exported, /Do not rate the tweet unless the user asks you to/);
+    assert.equal(exported, prompt.slice(0, prompt.lastIndexOf('Return only one valid JSON object.')).trim());
+    assert.doesNotMatch(exported, /Return only one valid JSON object|"Response"|"Question1"|"Score"/);
+    assert.equal(history[0].content[0].text, prompt);
+});
+
+test('export removes rating output schema without stripping input-context guidance', () => {
+    const prompt = configSource.match(/const REVIEW_SYSTEM_PROMPT = `([\s\S]*?)`;/)[1];
+    const data = build({ history: [{ role: 'system', content: prompt }, { role: 'user', content: 'Tweet' }] });
+    const exported = data.characters['tweetfilter-assistant'].description;
+    assert.match(exported, /The input is JSON/);
+    assert.match(exported, /assign it an integer score from 0 through 10/);
+    assert.doesNotMatch(exported, /response content should be a json object|"Response"|"Score"|"Question1"/);
+});
+
+test('native character prompt joins leading instructions without duplicating them as chat messages', () => {
+    const data = build({ history: [
+        { role: 'system', content: [{ type: 'text', text: 'First instruction.' }, { type: 'text', text: 'Second instruction.' }] },
+        { role: 'system', content: 'Third instruction.' },
+        { role: 'user', content: 'Tweet' },
+        { role: 'assistant', content: 'Analysis' },
+        { role: 'system', content: 'A later instruction.' },
+        { role: 'user', content: 'Follow-up' }
+    ] });
+    assert.equal(data.characters['tweetfilter-assistant'].description, 'First instruction.\n\nSecond instruction.\n\nThird instruction.');
+    assert.equal(data.characters['tweetfilter-assistant'].includeDefaultSystemPrompt, false);
+    const messages = Object.values(data.messages);
+    assert.deepEqual(messages.map(message => message.type), ['user', 'assistant', 'system', 'user']);
+    assert.equal(messages[0].parentMessageId, undefined);
+    assert.equal(messages[2].parentMessageId, messages[1].id);
+    const laterSystemItem = data.items[messages[2].items[0].id];
+    assert.equal(laterSystemItem.data.content[0].text, 'A later instruction.');
+});
+
+test('export renders fenced replies and zero ratings but preserves prose and unrelated JSON', () => {
+    const context = setup();
+    assert.equal(context.formatOpenRouterAssistantText('```json\n{"Response":"**Answer**\\nSecond line","Question1":"Next?"}\n```'),
+        '**Answer**\nSecond line\n\nSuggested follow-up questions:\n- Next?');
+    assert.equal(context.formatOpenRouterAssistantText('{"Response":"Low quality","Score":0}'), 'Low quality\n\nRating: 0/10');
+    for (const text of ['Plain **Markdown** reply.', '{"example":true}', '{"Response":"unfinished']) {
+        assert.equal(context.formatOpenRouterAssistantText(text), text);
+    }
 });
 
 test('preserves remote images, embedded images, and PDF attachments', () => {
@@ -98,7 +152,8 @@ function setupClick({ failDownload = false } = {}) {
     const instance = Object.assign(Object.create(context.Indicator.prototype), {
         tweetId: '123', status: 'rated', score: 8, description: 'Rating', reasoning: 'Trace',
         qaConversationHistory: [{ role: 'user', content: 'Tweet' }, { role: 'assistant', content: 'Rating' }],
-        conversationHistory: [], metadata: { model: 'original/model', apiKey: 'never-export-this' }
+        conversationHistory: [], metadata: { model: 'original/model', apiKey: 'never-export-this' },
+        exportInstructionsElement: { hidden: true, textContent: '' }
     });
     return { instance, calls, link, getBlob: () => blob };
 }
@@ -113,7 +168,9 @@ test('export click downloads JSON, opens OpenRouter, explains import, and cleans
     assert.ok(!json.includes('never-export-this'));
     assert.ok(calls.indexOf('download') < calls.findIndex(call => call[0] === 'open'));
     assert.deepEqual(calls.find(call => call[0] === 'open'), ['open', 'https://openrouter.ai/chat', '_blank', 'noopener,noreferrer']);
-    assert.match(calls.find(call => call[0] === 'status')[1], /new OpenRouter chat, choose Import/);
+    assert.match(calls.find(call => call[0] === 'status')[1], /click the New chat button first, then Room settings → Import/);
+    assert.equal(instance.exportInstructionsElement.hidden, false);
+    assert.match(instance.exportInstructionsElement.textContent, /blank landing page has no target room/);
     assert.ok(calls.includes('remove'));
     assert.deepEqual(calls.at(-1), ['revoke', 'blob:export']);
 });
@@ -127,7 +184,7 @@ test('legacy cached ratings export tweet context, score, and reasoning', async (
     assert.match(items[0].content[0].text, /Legacy tweet/);
     assert.match(items[0].content[0].text, /https:\/\/x.com\/i\/status\/123/);
     assert.equal(items[1].summary[0].text, 'Trace');
-    assert.equal(JSON.parse(items[2].content[0].text).Score, 8);
+    assert.equal(items[2].content[0].text, 'Rating\n\nRating: 8/10');
 });
 
 test('active streams cannot be exported and download failures leave no tab or link behind', () => {
